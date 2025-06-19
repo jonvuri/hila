@@ -1,12 +1,14 @@
 import type { Component } from 'solid-js'
 
-import Comp from './Comp'
+import ScrollingVirtualizer from './Comp'
+
+import './global.css'
 
 const App: Component = () => {
   return (
     <>
-      <h1>Hello world!!!!</h1>
-      <Comp />
+      <h1>Scrolling Virtualizer Demo</h1>
+      <ScrollingVirtualizer />
     </>
   )
 }

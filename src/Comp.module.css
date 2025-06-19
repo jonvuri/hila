@@ -1,5 +1,65 @@
 $primary-color: red;
 
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.scrollContainer {
+  width: 500px;
+  height: 500px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  overflow: auto;
+  position: relative;
+  background: #f9f9f9;
+}
+
+.content {
+  position: relative;
+  width: 100%;
+}
+
+.item {
+  position: absolute;
+  width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.itemContent {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin: 12px 0;
+  padding: 12px;
+  width: 100%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.itemId {
+  font-weight: 600;
+  color: #333;
+}
+
+.itemHeight {
+  font-size: 12px;
+  color: #666;
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
 .red {
-  color: $primary-color;
+  color: red;
 }

@@ -6,12 +6,33 @@
  * https://npmjs.com/vite-css-modules
  */
 
+const container: string;
+const scrollContainer: string;
+const content: string;
+const item: string;
+const itemContent: string;
+const itemId: string;
+const itemHeight: string;
 const red: string;
 
 export {
+	container,
+	scrollContainer,
+	content,
+	item,
+	itemContent,
+	itemId,
+	itemHeight,
 	red
 };
 
 export default {
+	container,
+	scrollContainer,
+	content,
+	item,
+	itemContent,
+	itemId,
+	itemHeight,
 	red
 };
