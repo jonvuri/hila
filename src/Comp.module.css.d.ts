@@ -8,8 +8,10 @@
 
 const red: string;
 
-export { red }
+export {
+	red
+};
 
 export default {
-  red,
-}
+	red
+};
