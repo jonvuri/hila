@@ -4,14 +4,15 @@
   "description": "",
   "type": "module",
   "scripts": {
-    "start": "vite",
-    "dev": "vite",
     "build": "vite build",
+    "format": "prettier src --write",
     "serve": "vite preview",
+    "start": "vite",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
   "devDependencies": {
+    "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vite-css-modules": "^1.8.7",
