@@ -63,3 +63,18 @@ $primary-color: red;
 .red {
   color: red;
 }
+
+.window {
+  position: absolute;
+  width: 100%;
+  left: 0;
+}
+
+.windowInfo {
+  font-size: 11px;
+  color: #888;
+  background: #e8e8e8;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-family: monospace;
+}
