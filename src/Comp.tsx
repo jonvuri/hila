@@ -15,6 +15,38 @@ function splitmix32(a: number) {
   }
 }
 
+// Simple debounce with leading=true and trailing=true baked in
+function debounce<T extends (...args: unknown[]) => unknown>(func: T, delay: number): T {
+  let timeoutId: number | undefined
+  let lastCallTime = 0
+  let lastArgs: Parameters<T>
+
+  return ((...args: Parameters<T>) => {
+    const now = Date.now()
+    lastArgs = args
+
+    console.log(`🔄 DEBOUNCE: Calling func with args:`, args)
+
+    // Leading edge - call immediately if enough time has passed
+    if (now - lastCallTime >= delay) {
+      lastCallTime = now
+      func(...args)
+    }
+
+    // Clear existing timeout
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
+
+    // Set trailing edge timeout
+    timeoutId = setTimeout(() => {
+      lastCallTime = Date.now()
+      func(...lastArgs)
+      timeoutId = undefined
+    }, delay)
+  }) as T
+}
+
 function areSetsEqual(set1: Set<number>, set2: Set<number>): boolean {
   if (set1.size !== set2.size) {
     return false
@@ -48,6 +80,23 @@ const WINDOW_SIZE = 50 // items per window
 const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
 const ITEM_HEIGHTS = [80, 110, 150, 175] as const
 const CONTAINER_HEIGHT = 500
+const RESIZE_THROTTLE_MS = 50
+const MIN_ITEM_HEIGHT = 80 // Minimum height for any item
+const MIN_WINDOW_HEIGHT = MIN_ITEM_HEIGHT * WINDOW_SIZE // Minimum height for window containers
+// const MAX_WINDOWS = 25 // Maximum number of windows to prevent infinite loops (unused for now)
+
+// Calculate item height deterministically with minimum constraint
+const getItemHeight = (index: number): number => {
+  const rng = splitmix32(index)
+  const height = ITEM_HEIGHTS[Math.floor(rng() * ITEM_HEIGHTS.length)]!
+  return Math.max(height, MIN_ITEM_HEIGHT)
+}
+
+// Calculate which items belong to a window
+const getWindowItems = (windowIndex: number): number[] => {
+  const start = windowIndex * WINDOW_SIZE
+  return Array.from({ length: WINDOW_SIZE }, (_, i) => start + i)
+}
 
 type WindowState = 'SKELETON' | 'GHOST' | 'VISIBLE'
 
@@ -55,17 +104,109 @@ interface WindowData {
   index: number
   state: WindowState
   totalHeight?: number
-  itemHeights?: number[]
   topPosition: number
-  element?: HTMLDivElement
-  observer?: IntersectionObserver
 }
 
-interface ListItem {
+interface ItemData {
   id: number
-  height: number
-  top: number
+  initialHeight: number
+  index: number
+}
+
+function ItemComponent(props: ItemData) {
+  const [height, setHeight] = createSignal(props.initialHeight)
+
+  onMount(() => {
+    console.log(`🔧 ITEM_COMPONENT: Setting up item ${props.id}`)
+  })
+
+  const handleIncreaseHeight = () => {
+    console.log(`🔧 ITEM_COMPONENT: Increasing height of item ${props.id}`)
+    setHeight(height() + 40)
+  }
+
+  return (
+    <div class={styles.item} style={{ height: `${height()}px` }}>
+      <div class={styles.itemContent}>
+        <div class={styles.itemId}>Item #{props.id}</div>
+        <div class={styles.itemHeight}>Height: {height()}px</div>
+        <div class={styles.windowInfo}>Window: {props.index}</div>
+        <button onClick={handleIncreaseHeight}>+40px</button>
+      </div>
+    </div>
+  )
+}
+
+interface WindowComponentProps {
   windowIndex: number
+  onIntersection: (windowIndex: number, isIntersecting: boolean) => void
+  onResize: (windowIndex: number, height: number) => void
+  containerRef: HTMLDivElement | undefined
+  getPosition: (windowIndex: number) => number
+}
+
+// Window component that manages its own observers
+function WindowComponent(props: WindowComponentProps) {
+  let elementRef: HTMLDivElement | undefined
+
+  onMount(() => {
+    if (!elementRef) return
+
+    console.log(`🔧 WINDOW_COMPONENT: Setting up observers for window ${props.windowIndex}`)
+
+    // Create intersection observer
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          console.log(
+            `👁️ WINDOW_INTERSECTION: Window ${props.windowIndex}, intersecting: ${entry.isIntersecting}, ratio: ${entry.intersectionRatio}`,
+          )
+          props.onIntersection(props.windowIndex, entry.isIntersecting)
+        })
+      },
+      {
+        root: props.containerRef,
+      },
+    )
+
+    // Create resize observer
+    const resizeObserver = new ResizeObserver((entries) => {
+      entries.forEach((entry) => {
+        const newHeight = entry.contentRect.height
+        console.log(`📏 WINDOW_RESIZE: Window ${props.windowIndex} height: ${newHeight}px`)
+        props.onResize(props.windowIndex, newHeight)
+      })
+    })
+
+    // Start observing
+    intersectionObserver.observe(elementRef)
+    resizeObserver.observe(elementRef)
+
+    // Cleanup on unmount
+    onCleanup(() => {
+      console.log(`🧹 WINDOW_COMPONENT: Cleaning up observers for window ${props.windowIndex}`)
+      intersectionObserver.disconnect()
+      resizeObserver.disconnect()
+    })
+  })
+
+  return (
+    <div
+      ref={elementRef}
+      data-window-index={props.windowIndex}
+      class={styles.window}
+      style={{
+        transform: `translateY(${props.getPosition(props.windowIndex)}px)`,
+        'min-height': `${MIN_WINDOW_HEIGHT}px`,
+      }}
+    >
+      <For each={getWindowItems(props.windowIndex)}>
+        {(itemId) => (
+          <ItemComponent id={itemId} index={itemId} initialHeight={getItemHeight(itemId)} />
+        )}
+      </For>
+    </div>
+  )
 }
 
 export default function ScrollingVirtualizer() {
@@ -76,12 +217,6 @@ export default function ScrollingVirtualizer() {
   const [latchPair, setLatchPair] = createSignal<[number, number]>([0, 1])
 
   let containerRef: HTMLDivElement | undefined
-
-  // Calculate item height deterministically
-  const getItemHeight = (index: number): number => {
-    const rng = splitmix32(index)
-    return ITEM_HEIGHTS[Math.floor(rng() * ITEM_HEIGHTS.length)]!
-  }
 
   // Pure function to compute full visible range from latch pair
   const computeVisibleRange = (pair: [number, number]): Set<number> => {
@@ -105,50 +240,103 @@ export default function ScrollingVirtualizer() {
     return visibleRange
   }
 
-  // Calculate which items belong to a window
-  const getWindowItems = (windowIndex: number): number[] => {
-    const start = windowIndex * WINDOW_SIZE
-    return Array.from({ length: WINDOW_SIZE }, (_, i) => start + i)
-  }
-
-  // Calculate window height and item positions
-  const calculateWindowHeights = (
-    windowIndex: number,
-  ): { totalHeight: number; itemHeights: number[] } => {
+  // Calculate estimated window height with minimum constraint
+  const calculateEstimatedWindowHeight = (windowIndex: number): number => {
     const items = getWindowItems(windowIndex)
     const itemHeights = items.map(getItemHeight)
-    const totalHeight = itemHeights.reduce((sum, height) => sum + height, 0)
-
-    // Development warning: ensure window height is sufficient
-    if (totalHeight < CONTAINER_HEIGHT) {
-      console.warn(
-        `Window ${windowIndex} height (${totalHeight}px) is less than viewport height (${CONTAINER_HEIGHT}px)`,
-      )
-    }
-
-    return { totalHeight, itemHeights }
+    const estimatedHeight = itemHeights.reduce((sum, height) => sum + height, 0)
+    return Math.max(estimatedHeight, MIN_WINDOW_HEIGHT)
   }
 
-  // Calculate cumulative position for a window
-  const calculateWindowPosition = (
-    windowIndex: number,
-    windowsMapOverride?: Map<number, WindowData>,
-  ): number => {
-    const windowsMap = windowsMapOverride || windows()
-    let position = 0
+  // Validate window position and throw error for infinite loop protection
+  const validateWindowPosition = (windowIndex: number, topPosition: number) => {
+    if (windowIndex > 0 && topPosition === 0) {
+      throw new Error(
+        `Infinite loop detected: Window ${windowIndex} has position 0 (expected minimum: ${
+          MIN_WINDOW_HEIGHT * windowIndex
+        }px)`,
+      )
+    }
+  }
 
-    for (let i = 0; i < windowIndex; i++) {
-      const window = windowsMap.get(i)
-      if (window && (window.state === 'GHOST' || window.state === 'VISIBLE')) {
-        position += window.totalHeight ?? 0
-      } else {
-        // For SKELETON windows, we need to calculate on-demand
-        const { totalHeight } = calculateWindowHeights(i)
-        position += totalHeight
+  // Batch update all window positions - debounced
+  const updateAllWindowPositions = debounce(() => {
+    console.log(`📐 BATCH_UPDATE: Recalculating all window positions`)
+
+    setWindows((prev) => {
+      const newWindows = new Map(prev)
+      let cumulativePosition = 0
+
+      // Sort windows by index to ensure correct position calculation
+      const sortedWindows = Array.from(newWindows.entries()).sort(([a], [b]) => a - b)
+
+      let hasChanges = false
+
+      for (const [windowIndex, window] of sortedWindows) {
+        const newTopPosition = cumulativePosition
+
+        console.log(
+          `🔄 BATCH_UPDATE: Window ${windowIndex} newTopPosition: ${newTopPosition}, oldTopPosition: ${window.topPosition}`,
+        )
+
+        // Validate position for infinite loop protection
+        validateWindowPosition(windowIndex, newTopPosition)
+
+        // Only update if position actually changed
+        if (window.topPosition !== newTopPosition) {
+          console.log(
+            `📐 POSITION_UPDATE: Window ${windowIndex}: ${window.topPosition} → ${newTopPosition}`,
+          )
+          // Mutate in place to keep window object stable
+          window.topPosition = newTopPosition
+          hasChanges = true
+        }
+
+        // Add this window's height to cumulative position
+        if (window.totalHeight) {
+          cumulativePosition += window.totalHeight
+        } else {
+          // Use estimated height for SKELETON windows
+          cumulativePosition += calculateEstimatedWindowHeight(windowIndex)
+        }
       }
+
+      return hasChanges ? newWindows : prev
+    })
+  }, RESIZE_THROTTLE_MS)
+
+  // Handle window resize changes
+  const handleWindowResize = (windowIndex: number, newHeight: number) => {
+    // Ignore 0-height measurements during initial mount/layout
+    if (newHeight === 0) {
+      console.log(`📏 RESIZE: Ignoring 0px height for window ${windowIndex} (initial layout)`)
+      return
     }
 
-    return position
+    // Enforce minimum height constraint
+    const constrainedHeight = Math.max(newHeight, MIN_WINDOW_HEIGHT)
+    console.log(
+      `📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px (constrained to ${constrainedHeight}px)`,
+    )
+
+    setWindows((prev) => {
+      const newWindows = new Map(prev)
+      const window = newWindows.get(windowIndex)
+
+      if (window && window.totalHeight !== constrainedHeight) {
+        console.log(`📏 RESIZE: Updated window ${windowIndex} height: ${constrainedHeight}px`)
+
+        // Mutate in place to keep window object stable
+        window.totalHeight = constrainedHeight
+
+        // Trigger batched position update
+        updateAllWindowPositions()
+
+        return newWindows
+      }
+
+      return prev
+    })
   }
 
   // Handle window intersection changes - pure visibility tracking
@@ -196,14 +384,36 @@ export default function ScrollingVirtualizer() {
         `🔄 LATCH_PAIR: ${currentActuallyVisible.size} windows visible, updating pair to [${newPair[0]}, ${newPair[1]}]`,
       )
     } else if (currentActuallyVisible.size === 1) {
-      // One window visible - keep the same pair as before (retaining the one that just left)
-      newPair = [...currentPair]
+      // Only one window visible
+      const visibleWindow = currentActuallyVisible.values().next().value!
+      if (currentPair[0] === visibleWindow || currentPair[1] === visibleWindow) {
+        // If the current pair still contains the visible window, keep the same pair (retaining the one that just left)
+        newPair = [...currentPair]
 
-      const visibleWindow = Array.from(currentActuallyVisible)[0]!
-      const otherWindow = currentPair[0] === visibleWindow ? currentPair[1] : currentPair[0]
-      console.log(
-        `🔄 LATCH_PAIR: 1 window visible, keeping previous window ${otherWindow} in pair [${newPair[0]}, ${newPair[1]}]`,
-      )
+        console.log(
+          `🔄 LATCH_PAIR: 1 window visible, keeping previous pair [${newPair[0]}, ${newPair[1]}]`,
+        )
+      } else {
+        // Otherwise, fill in the missing window based on position of the visible window
+
+        if (visibleWindow <= 1) {
+          newPair = [0, 1]
+
+          console.log(`🔄 LATCH_PAIR: 1 window visible at start, filling in window [0, 1]`)
+        } else if (visibleWindow <= currentPair[0]) {
+          newPair = [visibleWindow, visibleWindow + 1]
+
+          console.log(
+            `🔄 LATCH_PAIR: 1 window visible before current pair [${currentPair[0]}, ${currentPair[1]}], filling in window [${newPair[0]}, ${newPair[1]}]`,
+          )
+        } else if (visibleWindow >= currentPair[1]) {
+          newPair = [visibleWindow - 1, visibleWindow]
+
+          console.log(
+            `🔄 LATCH_PAIR: 1 window visible after current pair [${currentPair[0]}, ${currentPair[1]}], filling in window [${newPair[0]}, ${newPair[1]}]`,
+          )
+        }
+      }
     } else if (currentActuallyVisible.size === 0) {
       console.error('🔄 LATCH_PAIR: 0 windows visible, min 1 expected')
     }
@@ -222,26 +432,6 @@ export default function ScrollingVirtualizer() {
     updateWindowStates(visibleRange)
   }
 
-  // Create intersection observer for a window
-  const createWindowObserver = (windowIndex: number): IntersectionObserver => {
-    console.log(`👁️ OBSERVER: Creating observer for window ${windowIndex}`)
-
-    return new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          const windowIndex = parseInt(entry.target.getAttribute('data-window-index')!)
-          console.log(
-            `👁️ OBSERVER: Entry for window ${windowIndex}, intersecting: ${entry.isIntersecting}, ratio: ${entry.intersectionRatio}`,
-          )
-          handleWindowIntersection(windowIndex, entry.isIntersecting)
-        })
-      },
-      {
-        root: containerRef,
-      },
-    )
-  }
-
   // Update window states based on computed visible range
   const updateWindowStates = (visibleRange: Set<number>) => {
     console.log(`🔄 UPDATE_STATES: Processing visible range:`, Array.from(visibleRange))
@@ -254,14 +444,14 @@ export default function ScrollingVirtualizer() {
         let window = newWindows.get(windowIndex)
 
         if (!window) {
-          // Create new window in SKELETON state
+          // Create new window in SKELETON state with minimum height
           console.log(`🆕 Creating new SKELETON window ${windowIndex}`)
-          const topPosition = calculateWindowPosition(windowIndex, newWindows)
 
           window = {
             index: windowIndex,
             state: 'SKELETON',
-            topPosition,
+            topPosition: MIN_WINDOW_HEIGHT * windowIndex, // Start with expected minimum position
+            totalHeight: MIN_WINDOW_HEIGHT, // Start with minimum height to prevent 0-height issues
           }
           newWindows.set(windowIndex, window)
         }
@@ -269,18 +459,13 @@ export default function ScrollingVirtualizer() {
         if (window.state === 'SKELETON') {
           // Transition SKELETON → VISIBLE
           console.log(`🟢 SKELETON → VISIBLE: Window ${windowIndex}`)
-          const { totalHeight, itemHeights } = calculateWindowHeights(windowIndex)
           window.state = 'VISIBLE'
-          window.totalHeight = totalHeight
-          window.itemHeights = itemHeights
-          window.topPosition = calculateWindowPosition(windowIndex, newWindows)
+          // Height will be refined by ResizeObserver when element is rendered
         } else if (window.state === 'GHOST') {
           // Transition GHOST → VISIBLE (restore from cache)
-          console.log(
-            `👻 GHOST → VISIBLE: Window ${windowIndex} (observer: ${!!window.observer})`,
-          )
+          console.log(`👻 GHOST → VISIBLE: Window ${windowIndex}`)
           window.state = 'VISIBLE'
-          // Observer will be recreated in ref callback since we cleared it during GHOST transition
+          // Observers will be recreated in ref callback
         }
       })
 
@@ -289,21 +474,13 @@ export default function ScrollingVirtualizer() {
         if (window.state === 'VISIBLE' && !visibleRange.has(windowIndex)) {
           // Transition VISIBLE → GHOST
           console.log(`💀 VISIBLE → GHOST: Window ${windowIndex}`)
-
-          // Clean up intersection observer when becoming GHOST
-          if (window.observer) {
-            console.log(`🧹 Cleaning up observer for GHOST window ${windowIndex}`)
-            window.observer.disconnect()
-            window.observer = undefined
-          }
-
-          // Clear element reference since it will be unmounted
-          window.element = undefined
-
           window.state = 'GHOST'
-          // Heights are already cached
+          // Height remains cached for position calculations
         }
       })
+
+      // Update all window positions after state changes
+      updateAllWindowPositions()
 
       // Debug summary
       const skeletonWindows = Array.from(newWindows.entries())
@@ -329,32 +506,23 @@ export default function ScrollingVirtualizer() {
     return computeVisibleRange(latchPair())
   })
 
-  // Get all visible items across all visible windows
-  const visibleItems = createMemo(() => {
-    const items: ListItem[] = []
+  // Reactive function to get window position (triggers re-render of style only)
+  const getWindowPosition = (windowIndex: number): number => {
     const windowsMap = windows()
-    const visibleRange = currentVisibleRange()
+    const window = windowsMap.get(windowIndex)
+    return window?.topPosition ?? 0
+  }
 
-    visibleRange.forEach((windowIndex) => {
-      const window = windowsMap.get(windowIndex)
-      if (window && window.state === 'VISIBLE' && window.itemHeights) {
-        const windowItems = getWindowItems(windowIndex)
-        let itemTop = window.topPosition
+  // Computed windows with stable objects for reactivity
+  const visibleWindows = createMemo(() => {
+    const range = currentVisibleRange()
+    const windowsMap = windows()
 
-        windowItems.forEach((itemId, itemIndex) => {
-          const height = window.itemHeights![itemIndex]!
-          items.push({
-            id: itemId,
-            height,
-            top: itemTop,
-            windowIndex,
-          })
-          itemTop += height
-        })
-      }
-    })
-
-    return items.sort((a, b) => a.id - b.id)
+    return Array.from(range)
+      .map((windowIndex) => windowsMap.get(windowIndex))
+      .filter(
+        (window): window is WindowData => window !== undefined && window.state === 'VISIBLE',
+      )
   })
 
   // Calculate total content height
@@ -375,71 +543,13 @@ export default function ScrollingVirtualizer() {
         totalHeight += window.totalHeight
       } else {
         // For SKELETON windows, estimate height
-        const { totalHeight: estimatedHeight } = calculateWindowHeights(i)
-        totalHeight += estimatedHeight
+        totalHeight += calculateEstimatedWindowHeight(i)
       }
     }
 
     // Add some buffer for infinite scrolling
     return totalHeight + CONTAINER_HEIGHT * 2
   })
-
-  // Create window element
-  const createWindowElement = (windowIndex: number) => {
-    const windowsMap = windows()
-    const window = windowsMap.get(windowIndex)
-
-    if (!window || window.state !== 'VISIBLE') {
-      return null
-    }
-
-    return (
-      <div
-        ref={(el) => {
-          if (el) {
-            console.log(
-              `🔗 REF: Element attached for window ${windowIndex}, has observer: ${!!window.observer}`,
-            )
-
-            // Set up intersection observer for this window
-            if (!window.observer) {
-              console.log(`🆕 REF: Creating new observer for window ${windowIndex}`)
-              const observer = createWindowObserver(windowIndex)
-              observer.observe(el)
-              window.observer = observer
-            } else {
-              console.log(`♻️ REF: Reusing existing observer for window ${windowIndex}`)
-            }
-            window.element = el
-          }
-        }}
-        data-window-index={windowIndex}
-        class={styles.window}
-        style={{
-          transform: `translateY(${window.topPosition}px)`,
-          height: `${window.totalHeight}px`,
-        }}
-      >
-        <For each={visibleItems().filter((item) => item.windowIndex === windowIndex)}>
-          {(item) => (
-            <div
-              class={styles.item}
-              style={{
-                height: `${item.height}px`,
-                transform: `translateY(${item.top - window.topPosition}px)`,
-              }}
-            >
-              <div class={styles.itemContent}>
-                <div class={styles.itemId}>Item #{item.id}</div>
-                <div class={styles.itemHeight}>Height: {item.height}px</div>
-                <div class={styles.windowInfo}>Window: {windowIndex}</div>
-              </div>
-            </div>
-          )}
-        </For>
-      </div>
-    )
-  }
 
   onMount(() => {
     console.log(`🚀 MOUNT: Initializing virtualizer`)
@@ -451,25 +561,23 @@ export default function ScrollingVirtualizer() {
   })
 
   onCleanup(() => {
-    // Clean up all intersection observers
-    windows().forEach((window) => {
-      if (window.observer) {
-        window.observer.disconnect()
-      }
-    })
+    console.log(`🧹 CLEANUP: Virtualizer cleanup`)
   })
 
   return (
     <div class={styles.container}>
       <div ref={containerRef} class={styles.scrollContainer}>
         <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
-          <For
-            each={Array.from(currentVisibleRange()).filter((windowIndex) => {
-              const window = windows().get(windowIndex)
-              return window && window.state === 'VISIBLE'
-            })}
-          >
-            {(windowIndex) => createWindowElement(windowIndex)}
+          <For each={visibleWindows()}>
+            {(window) => (
+              <WindowComponent
+                windowIndex={window.index}
+                onIntersection={handleWindowIntersection}
+                onResize={handleWindowResize}
+                containerRef={containerRef}
+                getPosition={getWindowPosition}
+              />
+            )}
           </For>
         </div>
       </div>
