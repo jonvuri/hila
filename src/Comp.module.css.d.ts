@@ -11,24 +11,10 @@ const scrollContainer: string
 const content: string
 const item: string
 const itemContent: string
-const itemId: string
-const itemHeight: string
 const red: string
 const window: string
-const windowInfo: string
 
-export {
-  container,
-  scrollContainer,
-  content,
-  item,
-  itemContent,
-  itemId,
-  itemHeight,
-  red,
-  window,
-  windowInfo,
-}
+export { container, scrollContainer, content, item, itemContent, red, window }
 
 export default {
   container,
@@ -36,9 +22,6 @@ export default {
   content,
   item,
   itemContent,
-  itemId,
-  itemHeight,
   red,
   window,
-  windowInfo,
 }

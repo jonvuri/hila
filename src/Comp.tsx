@@ -81,7 +81,7 @@ const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
 const ITEM_HEIGHTS = [80, 110, 150, 175] as const
 const CONTAINER_HEIGHT = 500
 const RESIZE_THROTTLE_MS = 50
-const MIN_ITEM_HEIGHT = 80 // Minimum height for any item
+const MIN_ITEM_HEIGHT = 60 // Minimum height for any item
 const MIN_WINDOW_HEIGHT = MIN_ITEM_HEIGHT * WINDOW_SIZE // Minimum height for window containers
 // const MAX_WINDOWS = 25 // Maximum number of windows to prevent infinite loops (unused for now)
 
@@ -109,29 +109,13 @@ interface WindowData {
 
 interface ItemData {
   id: number
-  initialHeight: number
-  index: number
 }
 
 function ItemComponent(props: ItemData) {
-  const [height, setHeight] = createSignal(props.initialHeight)
-
-  onMount(() => {
-    console.log(`🔧 ITEM_COMPONENT: Setting up item ${props.id}`)
-  })
-
-  const handleIncreaseHeight = () => {
-    console.log(`🔧 ITEM_COMPONENT: Increasing height of item ${props.id}`)
-    setHeight(height() + 40)
-  }
-
   return (
-    <div class={styles.item} style={{ height: `${height()}px` }}>
+    <div class={styles.item}>
       <div class={styles.itemContent}>
-        <div class={styles.itemId}>Item #{props.id}</div>
-        <div class={styles.itemHeight}>Height: {height()}px</div>
-        <div class={styles.windowInfo}>Window: {props.index}</div>
-        <button onClick={handleIncreaseHeight}>+40px</button>
+        <div contentEditable>{props.id}</div>
       </div>
     </div>
   )
@@ -201,9 +185,7 @@ function WindowComponent(props: WindowComponentProps) {
       }}
     >
       <For each={getWindowItems(props.windowIndex)}>
-        {(itemId) => (
-          <ItemComponent id={itemId} index={itemId} initialHeight={getItemHeight(itemId)} />
-        )}
+        {(itemId) => <ItemComponent id={itemId} />}
       </For>
     </div>
   )

@@ -46,19 +46,6 @@ $primary-color: red;
   align-items: center;
 }
 
-.itemId {
-  font-weight: 600;
-  color: #333;
-}
-
-.itemHeight {
-  font-size: 12px;
-  color: #666;
-  background: #f0f0f0;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
 .red {
   color: red;
 }
@@ -69,13 +56,4 @@ $primary-color: red;
   left: 0;
   display: flex;
   flex-direction: column;
-}
-
-.windowInfo {
-  font-size: 11px;
-  color: #888;
-  background: #e8e8e8;
-  padding: 1px 4px;
-  border-radius: 2px;
-  font-family: monospace;
 }
