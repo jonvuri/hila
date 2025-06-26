@@ -1,9 +1,7 @@
 import { createSignal, createMemo, onMount, onCleanup, For } from 'solid-js'
 import { JSX } from 'solid-js/jsx-runtime'
 
-import styles from './Comp.module.css'
-
-// Deterministic pseudo-random number generator - removed as we no longer need item height variation
+import styles from './ScrollVirtualizer.module.css'
 
 // Simple debounce with leading=true and trailing=true baked in
 function debounce<T extends (...args: unknown[]) => unknown>(func: T, delay: number): T {
@@ -159,12 +157,12 @@ function WindowComponent(props: WindowComponentProps) {
   )
 }
 
-interface ScrollingVirtualizerProps {
+interface ScrollVirtualizerProps {
   renderWindow: WindowRendererFunction
   minWindowHeight: number
 }
 
-export default function ScrollingVirtualizer(props: ScrollingVirtualizerProps) {
+export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
   const [windows, setWindows] = createSignal<Map<number, WindowData>>(new Map())
   // Track which windows are actually visible in viewport (pure intersection state)
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())

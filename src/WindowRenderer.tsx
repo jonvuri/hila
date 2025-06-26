@@ -1,6 +1,6 @@
 import { For } from 'solid-js'
 
-import type { WindowRendererFunction } from './Comp'
+import type { WindowRendererFunction } from './ScrollVirtualizer'
 
 export interface ItemData {
   id: number
