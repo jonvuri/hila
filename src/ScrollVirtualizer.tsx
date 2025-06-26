@@ -1,39 +1,8 @@
 import { createSignal, createMemo, onMount, onCleanup, For } from 'solid-js'
+import { debounce } from '@solid-primitives/scheduled'
 import { JSX } from 'solid-js/jsx-runtime'
 
 import styles from './ScrollVirtualizer.module.css'
-
-// Simple debounce with leading=true and trailing=true baked in
-function debounce<T extends (...args: unknown[]) => unknown>(func: T, delay: number): T {
-  let timeoutId: number | undefined
-  let lastCallTime = 0
-  let lastArgs: Parameters<T>
-
-  return ((...args: Parameters<T>) => {
-    const now = Date.now()
-    lastArgs = args
-
-    console.log(`🔄 DEBOUNCE: Calling func with args:`, args)
-
-    // Leading edge - call immediately if enough time has passed
-    if (now - lastCallTime >= delay) {
-      lastCallTime = now
-      func(...args)
-    }
-
-    // Clear existing timeout
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-    }
-
-    // Set trailing edge timeout
-    timeoutId = setTimeout(() => {
-      lastCallTime = Date.now()
-      func(...lastArgs)
-      timeoutId = undefined
-    }, delay)
-  }) as T
-}
 
 function areSetsEqual(set1: Set<number>, set2: Set<number>): boolean {
   if (set1.size !== set2.size) {
@@ -193,25 +162,8 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     return visibleRange
   }
 
-  // Calculate estimated window height with minimum constraint
-  const calculateEstimatedWindowHeight = (_windowIndex: number): number => {
-    // Simplified - just return minimum height since we no longer calculate individual item heights
-    return props.minWindowHeight
-  }
-
-  // Validate window position and throw error for infinite loop protection
-  const validateWindowPosition = (windowIndex: number, topPosition: number) => {
-    if (windowIndex > 0 && topPosition === 0) {
-      throw new Error(
-        `Infinite loop detected: Window ${windowIndex} has position 0 (expected minimum: ${
-          props.minWindowHeight * windowIndex
-        }px)`,
-      )
-    }
-  }
-
   // Batch update all window positions - debounced
-  const updateAllWindowPositions = debounce(() => {
+  const updateAllWindowPositions = debounce((minHeight: number) => {
     console.log(`📐 BATCH_UPDATE: Recalculating all window positions`)
 
     setWindows((prev) => {
@@ -230,9 +182,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
           `🔄 BATCH_UPDATE: Window ${windowIndex} newTopPosition: ${newTopPosition}, oldTopPosition: ${window.topPosition}`,
         )
 
-        // Validate position for infinite loop protection
-        validateWindowPosition(windowIndex, newTopPosition)
-
         // Only update if position actually changed
         if (window.topPosition !== newTopPosition) {
           console.log(
@@ -248,7 +197,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
           cumulativePosition += window.totalHeight
         } else {
           // Use estimated height for SKELETON windows
-          cumulativePosition += calculateEstimatedWindowHeight(windowIndex)
+          cumulativePosition += minHeight
         }
       }
 
@@ -281,7 +230,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         window.totalHeight = constrainedHeight
 
         // Trigger batched position update
-        updateAllWindowPositions()
+        updateAllWindowPositions(props.minWindowHeight)
 
         return newWindows
       }
@@ -431,7 +380,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       })
 
       // Update all window positions after state changes
-      updateAllWindowPositions()
+      updateAllWindowPositions(props.minWindowHeight)
 
       // Debug summary
       const skeletonWindows = Array.from(newWindows.entries())
@@ -510,8 +459,8 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       if (window && window.totalHeight) {
         totalHeight += window.totalHeight
       } else {
-        // For SKELETON windows, estimate height
-        totalHeight += calculateEstimatedWindowHeight(i)
+        // For SKELETON windows, just assume the minimum height
+        totalHeight += props.minWindowHeight
       }
     }
 
