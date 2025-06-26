@@ -1,19 +1,9 @@
 import { createSignal, createMemo, onMount, onCleanup, For } from 'solid-js'
+import { JSX } from 'solid-js/jsx-runtime'
 
 import styles from './Comp.module.css'
 
-// Deterministic pseudo-random number generator
-function splitmix32(a: number) {
-  return function () {
-    a |= 0
-    a = (a + 0x9e3779b9) | 0
-    let t = a ^ (a >>> 16)
-    t = Math.imul(t, 0x21f0aaad)
-    t = t ^ (t >>> 15)
-    t = Math.imul(t, 0x735a2d97)
-    return ((t = t ^ (t >>> 15)) >>> 0) / 4294967296
-  }
-}
+// Deterministic pseudo-random number generator - removed as we no longer need item height variation
 
 // Simple debounce with leading=true and trailing=true baked in
 function debounce<T extends (...args: unknown[]) => unknown>(func: T, delay: number): T {
@@ -76,27 +66,9 @@ function areArraysEqual<T>(arr1: T[], arr2: T[]): boolean {
 }
 
 // Configuration
-const WINDOW_SIZE = 50 // items per window
 const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
-const ITEM_HEIGHTS = [80, 110, 150, 175] as const
 const CONTAINER_HEIGHT = 500
 const RESIZE_THROTTLE_MS = 50
-const MIN_ITEM_HEIGHT = 60 // Minimum height for any item
-const MIN_WINDOW_HEIGHT = MIN_ITEM_HEIGHT * WINDOW_SIZE // Minimum height for window containers
-// const MAX_WINDOWS = 25 // Maximum number of windows to prevent infinite loops (unused for now)
-
-// Calculate item height deterministically with minimum constraint
-const getItemHeight = (index: number): number => {
-  const rng = splitmix32(index)
-  const height = ITEM_HEIGHTS[Math.floor(rng() * ITEM_HEIGHTS.length)]!
-  return Math.max(height, MIN_ITEM_HEIGHT)
-}
-
-// Calculate which items belong to a window
-const getWindowItems = (windowIndex: number): number[] => {
-  const start = windowIndex * WINDOW_SIZE
-  return Array.from({ length: WINDOW_SIZE }, (_, i) => start + i)
-}
 
 type WindowState = 'SKELETON' | 'GHOST' | 'VISIBLE'
 
@@ -107,19 +79,13 @@ interface WindowData {
   topPosition: number
 }
 
-interface ItemData {
-  id: number
+interface WindowRendererProps {
+  windowIndex: number
 }
 
-function ItemComponent(props: ItemData) {
-  return (
-    <div class={styles.item}>
-      <div class={styles.itemContent}>
-        <div contentEditable>{props.id}</div>
-      </div>
-    </div>
-  )
-}
+export type WindowRendererFunction = (props: WindowRendererProps) => JSX.Element
+
+// ItemComponent moved to WindowRenderer module
 
 interface WindowComponentProps {
   windowIndex: number
@@ -127,6 +93,8 @@ interface WindowComponentProps {
   onResize: (windowIndex: number, height: number) => void
   containerRef: HTMLDivElement | undefined
   getPosition: (windowIndex: number) => number
+  renderWindow: WindowRendererFunction
+  minWindowHeight: number
 }
 
 // Window component that manages its own observers
@@ -181,17 +149,22 @@ function WindowComponent(props: WindowComponentProps) {
       class={styles.window}
       style={{
         transform: `translateY(${props.getPosition(props.windowIndex)}px)`,
-        'min-height': `${MIN_WINDOW_HEIGHT}px`,
+        'min-height': `${props.minWindowHeight}px`,
       }}
     >
-      <For each={getWindowItems(props.windowIndex)}>
-        {(itemId) => <ItemComponent id={itemId} />}
-      </For>
+      {props.renderWindow({
+        windowIndex: props.windowIndex,
+      })}
     </div>
   )
 }
 
-export default function ScrollingVirtualizer() {
+interface ScrollingVirtualizerProps {
+  renderWindow: WindowRendererFunction
+  minWindowHeight: number
+}
+
+export default function ScrollingVirtualizer(props: ScrollingVirtualizerProps) {
   const [windows, setWindows] = createSignal<Map<number, WindowData>>(new Map())
   // Track which windows are actually visible in viewport (pure intersection state)
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())
@@ -223,11 +196,9 @@ export default function ScrollingVirtualizer() {
   }
 
   // Calculate estimated window height with minimum constraint
-  const calculateEstimatedWindowHeight = (windowIndex: number): number => {
-    const items = getWindowItems(windowIndex)
-    const itemHeights = items.map(getItemHeight)
-    const estimatedHeight = itemHeights.reduce((sum, height) => sum + height, 0)
-    return Math.max(estimatedHeight, MIN_WINDOW_HEIGHT)
+  const calculateEstimatedWindowHeight = (_windowIndex: number): number => {
+    // Simplified - just return minimum height since we no longer calculate individual item heights
+    return props.minWindowHeight
   }
 
   // Validate window position and throw error for infinite loop protection
@@ -235,7 +206,7 @@ export default function ScrollingVirtualizer() {
     if (windowIndex > 0 && topPosition === 0) {
       throw new Error(
         `Infinite loop detected: Window ${windowIndex} has position 0 (expected minimum: ${
-          MIN_WINDOW_HEIGHT * windowIndex
+          props.minWindowHeight * windowIndex
         }px)`,
       )
     }
@@ -296,7 +267,7 @@ export default function ScrollingVirtualizer() {
     }
 
     // Enforce minimum height constraint
-    const constrainedHeight = Math.max(newHeight, MIN_WINDOW_HEIGHT)
+    const constrainedHeight = Math.max(newHeight, props.minWindowHeight)
     console.log(
       `📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px (constrained to ${constrainedHeight}px)`,
     )
@@ -432,8 +403,8 @@ export default function ScrollingVirtualizer() {
           window = {
             index: windowIndex,
             state: 'SKELETON',
-            topPosition: MIN_WINDOW_HEIGHT * windowIndex, // Start with expected minimum position
-            totalHeight: MIN_WINDOW_HEIGHT, // Start with minimum height to prevent 0-height issues
+            topPosition: props.minWindowHeight * windowIndex, // Start with expected minimum position
+            totalHeight: props.minWindowHeight, // Start with minimum height to prevent 0-height issues
           }
           newWindows.set(windowIndex, window)
         }
@@ -492,7 +463,24 @@ export default function ScrollingVirtualizer() {
   const getWindowPosition = (windowIndex: number): number => {
     const windowsMap = windows()
     const window = windowsMap.get(windowIndex)
-    return window?.topPosition ?? 0
+
+    const windowValues = Array.from(windowsMap.values())
+      .filter((w) => w.index < windowIndex)
+      .sort((a, b) => a.index - b.index)
+
+    const maxWindow =
+      windowValues.length > 0 ? windowValues[windowValues.length - 1] : undefined
+
+    const minTopPosition =
+      maxWindow ?
+        maxWindow.topPosition + Math.max(maxWindow.totalHeight ?? 0, props.minWindowHeight)
+      : windowIndex * props.minWindowHeight
+
+    console.log(
+      `🔄 GET_POSITION: Window ${windowIndex} position: ${window?.topPosition ?? 0}, minTopPosition: ${minTopPosition}`,
+    )
+
+    return Math.max(window?.topPosition ?? 0, minTopPosition)
   }
 
   // Computed windows with stable objects for reactivity
@@ -558,6 +546,8 @@ export default function ScrollingVirtualizer() {
                 onResize={handleWindowResize}
                 containerRef={containerRef}
                 getPosition={getWindowPosition}
+                renderWindow={props.renderWindow}
+                minWindowHeight={props.minWindowHeight}
               />
             )}
           </For>

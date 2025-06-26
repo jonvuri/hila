@@ -7,21 +7,29 @@
  */
 
 const container: string;
-const scrollContainer: string
-const content: string
-const item: string
-const itemContent: string
-const red: string
-const window: string
+const scrollContainer: string;
+const content: string;
+const item: string;
+const itemContent: string;
+const red: string;
+const window: string;
 
-export { container, scrollContainer, content, item, itemContent, red, window }
+export {
+	container,
+	scrollContainer,
+	content,
+	item,
+	itemContent,
+	red,
+	window
+};
 
 export default {
-  container,
-  scrollContainer,
-  content,
-  item,
-  itemContent,
-  red,
-  window,
-}
+	container,
+	scrollContainer,
+	content,
+	item,
+	itemContent,
+	red,
+	window
+};
