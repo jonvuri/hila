@@ -1,5 +1,4 @@
 import { createSignal, createMemo, onMount, onCleanup, For } from 'solid-js'
-import { debounce } from '@solid-primitives/scheduled'
 import { JSX } from 'solid-js/jsx-runtime'
 
 import styles from './ScrollVirtualizer.module.css'
@@ -35,16 +34,8 @@ function areArraysEqual<T>(arr1: T[], arr2: T[]): boolean {
 // Configuration
 const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
 const CONTAINER_HEIGHT = 500
-const RESIZE_THROTTLE_MS = 50
 
-type WindowState = 'SKELETON' | 'GHOST' | 'VISIBLE'
-
-interface WindowData {
-  index: number
-  state: WindowState
-  totalHeight?: number
-  topPosition: number
-}
+type WindowState = 'GHOST' | 'VISIBLE'
 
 interface WindowRendererProps {
   windowIndex: number
@@ -132,17 +123,70 @@ interface ScrollVirtualizerProps {
 }
 
 export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
-  const [windows, setWindows] = createSignal<Map<number, WindowData>>(new Map())
-  // Track which windows are actually visible in viewport (pure intersection state)
+  // Track window states: 'VISIBLE' or 'GHOST' (previously visible but unrendered now)
+  const [windowStates, setWindowStates] = createSignal<Map<number, WindowState>>(new Map())
+
+  // Track current content height for each window
+  const [windowHeights, setWindowHeights] = createSignal<Map<number, number>>(new Map())
+
+  // Track which windows are actually visible in viewport, based on intersection observers
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())
-  // Track stable pair of windows that defines the visible range
+
+  // Track stable pair of windows that defines the visible range.
+  // When 2 or more windows are visible (though windows should be larger than the viewport,
+  // so we expect at most 2, we're pessimistic), this is the outer bound of the visible range,
+  // inclusive. When only one window is visible, this is that window plus the last window
+  // that was visible on either side of it - this is the "latching" behavior.
   const [latchPair, setLatchPair] = createSignal<[number, number]>([0, 1])
 
   let containerRef: HTMLDivElement | undefined
 
+  // Getter for window content height that ensures minimum window height
+  const getTotalHeight = (windowIndex: number): number => {
+    const height = windowHeights().get(windowIndex) ?? 0
+    return Math.max(height, props.minWindowHeight)
+  }
+
+  // Memoized positions based on heights
+  const windowPositions = createMemo(
+    (previousPositions: Map<number, number> | undefined): Map<number, number> => {
+      const heights = windowHeights()
+      const newPositions = new Map<number, number>()
+
+      // Get all window indices from heights and sort them
+      const sortedIndices = Array.from(heights.keys()).sort((a, b) => a - b)
+
+      let hasChanges = false
+
+      let cumulativePosition = 0
+      for (const index of sortedIndices) {
+        const previousPosition = previousPositions?.get(index) ?? 0
+        if (previousPosition !== cumulativePosition) {
+          hasChanges = true
+        }
+
+        newPositions.set(index, cumulativePosition)
+        cumulativePosition += getTotalHeight(index)
+      }
+
+      if (!previousPositions || hasChanges) {
+        console.log(
+          `📐 POSITIONS_UPDATE: Recalculated positions for windows [${sortedIndices.join(',')}]`,
+        )
+        return newPositions
+      } else {
+        console.log(
+          `📐 POSITIONS_UPDATE: No changes to positions for windows [${sortedIndices.join(',')}]`,
+        )
+        return previousPositions
+      }
+    },
+  )
+
   // Pure function to compute full visible range from latch pair
   const computeVisibleRange = (pair: [number, number]): Set<number> => {
     const [min, max] = pair
+
     console.log(`🧮 COMPUTE_RANGE: latchPair=[${min}, ${max}]`)
 
     // Extend threshold distance around the latch pair
@@ -159,87 +203,41 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         .sort((a, b) => a - b)
         .join(',')}] (${rangeStart} to ${rangeEnd})`,
     )
+
     return visibleRange
   }
-
-  // Batch update all window positions - debounced
-  const updateAllWindowPositions = debounce((minHeight: number) => {
-    console.log(`📐 BATCH_UPDATE: Recalculating all window positions`)
-
-    setWindows((prev) => {
-      const newWindows = new Map(prev)
-      let cumulativePosition = 0
-
-      // Sort windows by index to ensure correct position calculation
-      const sortedWindows = Array.from(newWindows.entries()).sort(([a], [b]) => a - b)
-
-      let hasChanges = false
-
-      for (const [windowIndex, window] of sortedWindows) {
-        const newTopPosition = cumulativePosition
-
-        console.log(
-          `🔄 BATCH_UPDATE: Window ${windowIndex} newTopPosition: ${newTopPosition}, oldTopPosition: ${window.topPosition}`,
-        )
-
-        // Only update if position actually changed
-        if (window.topPosition !== newTopPosition) {
-          console.log(
-            `📐 POSITION_UPDATE: Window ${windowIndex}: ${window.topPosition} → ${newTopPosition}`,
-          )
-          // Mutate in place to keep window object stable
-          window.topPosition = newTopPosition
-          hasChanges = true
-        }
-
-        // Add this window's height to cumulative position
-        if (window.totalHeight) {
-          cumulativePosition += window.totalHeight
-        } else {
-          // Use estimated height for SKELETON windows
-          cumulativePosition += minHeight
-        }
-      }
-
-      return hasChanges ? newWindows : prev
-    })
-  }, RESIZE_THROTTLE_MS)
 
   // Handle window resize changes
   const handleWindowResize = (windowIndex: number, newHeight: number) => {
     // Ignore 0-height measurements during initial mount/layout
     if (newHeight === 0) {
-      console.log(`📏 RESIZE: Ignoring 0px height for window ${windowIndex} (initial layout)`)
+      console.error(`📏 RESIZE: Unexpected 0px height for window ${windowIndex}`)
       return
+    }
+
+    if (newHeight < props.minWindowHeight) {
+      console.error(
+        `📏 RESIZE: Window ${windowIndex} height ${newHeight}px is less than minimum ${props.minWindowHeight}px`,
+      )
     }
 
     // Enforce minimum height constraint
     const constrainedHeight = Math.max(newHeight, props.minWindowHeight)
-    console.log(
-      `📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px (constrained to ${constrainedHeight}px)`,
-    )
+    console.log(`📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px`)
 
-    setWindows((prev) => {
-      const newWindows = new Map(prev)
-      const window = newWindows.get(windowIndex)
-
-      if (window && window.totalHeight !== constrainedHeight) {
+    setWindowHeights((prev) => {
+      const current = prev.get(windowIndex)
+      if (current !== constrainedHeight) {
         console.log(`📏 RESIZE: Updated window ${windowIndex} height: ${constrainedHeight}px`)
-
-        // Mutate in place to keep window object stable
-        window.totalHeight = constrainedHeight
-
-        // Trigger batched position update
-        updateAllWindowPositions(props.minWindowHeight)
-
-        return newWindows
+        const newHeights = new Map(prev)
+        newHeights.set(windowIndex, constrainedHeight)
+        return newHeights
       }
-
       return prev
     })
   }
 
-  // Handle window intersection changes - pure visibility tracking
+  // Handle window intersection changes - update the actually visible set and latch pair
   const handleWindowIntersection = (windowIndex: number, isIntersecting: boolean) => {
     console.log(`🔍 INTERSECTION: Window ${windowIndex} isIntersecting=${isIntersecting}`)
 
@@ -276,8 +274,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       const visibleArray = Array.from(currentActuallyVisible).sort((a, b) => a - b)
       newPair = [visibleArray[0]!, visibleArray[visibleArray.length - 1]!]
     } else if (currentActuallyVisible.size === 2) {
-      // Two windows visible - keep the pair
-      const [window1, window2] = Array.from(currentActuallyVisible) as [number, number]
+      // Two windows visible - set them as the latch pair
+      const window1 = currentActuallyVisible.values().next().value!
+      const window2 = currentActuallyVisible.values().next().value!
       newPair = [Math.min(window1, window2), Math.max(window1, window2)]
 
       console.log(
@@ -286,6 +285,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     } else if (currentActuallyVisible.size === 1) {
       // Only one window visible
       const visibleWindow = currentActuallyVisible.values().next().value!
+
       if (currentPair[0] === visibleWindow || currentPair[1] === visibleWindow) {
         // If the current pair still contains the visible window, keep the same pair (retaining the one that just left)
         newPair = [...currentPair]
@@ -315,9 +315,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         }
       }
     } else if (currentActuallyVisible.size === 0) {
+      // If 0 windows visible, keep existing latch pair
       console.error('🔄 LATCH_PAIR: 0 windows visible, min 1 expected')
     }
-    // If 0 windows visible, keep existing latch pair
 
     if (areArraysEqual(newPair, currentPair)) {
       console.log(`🔄 LATCH_PAIR: Pair didn't change, returning early`)
@@ -336,68 +336,71 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
   const updateWindowStates = (visibleRange: Set<number>) => {
     console.log(`🔄 UPDATE_STATES: Processing visible range:`, Array.from(visibleRange))
 
-    setWindows((prev) => {
-      const newWindows = new Map(prev)
+    setWindowStates((prevStates) => {
+      const newStates = new Map(prevStates)
+      let hasChanges = false
 
       // Handle all windows in visible range
       visibleRange.forEach((windowIndex) => {
-        let window = newWindows.get(windowIndex)
+        const currentState = newStates.get(windowIndex)
 
-        if (!window) {
-          // Create new window in SKELETON state with minimum height
-          console.log(`🆕 Creating new SKELETON window ${windowIndex}`)
-
-          window = {
-            index: windowIndex,
-            state: 'SKELETON',
-            topPosition: props.minWindowHeight * windowIndex, // Start with expected minimum position
-            totalHeight: props.minWindowHeight, // Start with minimum height to prevent 0-height issues
-          }
-          newWindows.set(windowIndex, window)
-        }
-
-        if (window.state === 'SKELETON') {
-          // Transition SKELETON → VISIBLE
-          console.log(`🟢 SKELETON → VISIBLE: Window ${windowIndex}`)
-          window.state = 'VISIBLE'
-          // Height will be refined by ResizeObserver when element is rendered
-        } else if (window.state === 'GHOST') {
+        if (!currentState) {
+          // Create new window directly as VISIBLE
+          console.log(`🆕 Creating new VISIBLE window ${windowIndex}`)
+          newStates.set(windowIndex, 'VISIBLE')
+          hasChanges = true
+        } else if (currentState === 'GHOST') {
           // Transition GHOST → VISIBLE (restore from cache)
           console.log(`👻 GHOST → VISIBLE: Window ${windowIndex}`)
-          window.state = 'VISIBLE'
-          // Observers will be recreated in ref callback
+          newStates.set(windowIndex, 'VISIBLE')
+          hasChanges = true
         }
+        // VISIBLE windows in range stay VISIBLE (no change needed)
       })
 
       // Handle windows that should become GHOST
-      newWindows.forEach((window, windowIndex) => {
-        if (window.state === 'VISIBLE' && !visibleRange.has(windowIndex)) {
+      newStates.forEach((state, windowIndex) => {
+        if (state === 'VISIBLE' && !visibleRange.has(windowIndex)) {
           // Transition VISIBLE → GHOST
           console.log(`💀 VISIBLE → GHOST: Window ${windowIndex}`)
-          window.state = 'GHOST'
-          // Height remains cached for position calculations
+          newStates.set(windowIndex, 'GHOST')
+          hasChanges = true
         }
       })
 
-      // Update all window positions after state changes
-      updateAllWindowPositions(props.minWindowHeight)
+      if (hasChanges) {
+        // Debug summary
+        const ghostWindows = Array.from(newStates.entries())
+          .filter(([, state]) => state === 'GHOST')
+          .map(([i]) => i)
+        const visibleWindows = Array.from(newStates.entries())
+          .filter(([, state]) => state === 'VISIBLE')
+          .map(([i]) => i)
 
-      // Debug summary
-      const skeletonWindows = Array.from(newWindows.entries())
-        .filter(([, w]) => w.state === 'SKELETON')
-        .map(([i]) => i)
-      const ghostWindows = Array.from(newWindows.entries())
-        .filter(([, w]) => w.state === 'GHOST')
-        .map(([i]) => i)
-      const visibleWindows = Array.from(newWindows.entries())
-        .filter(([, w]) => w.state === 'VISIBLE')
-        .map(([i]) => i)
+        console.log(
+          `📊 STATE_SUMMARY: GHOST[${ghostWindows.join(',')}] VISIBLE[${visibleWindows.join(',')}]`,
+        )
+      }
 
-      console.log(
-        `📊 STATE_SUMMARY: SKELETON[${skeletonWindows.join(',')}] GHOST[${ghostWindows.join(',')}] VISIBLE[${visibleWindows.join(',')}]`,
-      )
+      return hasChanges ? newStates : prevStates
+    })
 
-      return newWindows
+    // Initialize heights for new VISIBLE windows
+    setWindowHeights((prevHeights) => {
+      const newHeights = new Map(prevHeights)
+      let hasChanges = false
+
+      visibleRange.forEach((windowIndex) => {
+        if (!newHeights.has(windowIndex)) {
+          console.log(
+            `🆕 Initializing height for window ${windowIndex} to min height ${props.minWindowHeight}px`,
+          )
+          newHeights.set(windowIndex, props.minWindowHeight)
+          hasChanges = true
+        }
+      })
+
+      return hasChanges ? newHeights : prevHeights
     })
   }
 
@@ -406,62 +409,36 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     return computeVisibleRange(latchPair())
   })
 
-  // Reactive function to get window position (triggers re-render of style only)
+  // Simplified reactive function to get window position
   const getWindowPosition = (windowIndex: number): number => {
-    const windowsMap = windows()
-    const window = windowsMap.get(windowIndex)
-
-    const windowValues = Array.from(windowsMap.values())
-      .filter((w) => w.index < windowIndex)
-      .sort((a, b) => a.index - b.index)
-
-    const maxWindow =
-      windowValues.length > 0 ? windowValues[windowValues.length - 1] : undefined
-
-    const minTopPosition =
-      maxWindow ?
-        maxWindow.topPosition + Math.max(maxWindow.totalHeight ?? 0, props.minWindowHeight)
-      : windowIndex * props.minWindowHeight
-
-    console.log(
-      `🔄 GET_POSITION: Window ${windowIndex} position: ${window?.topPosition ?? 0}, minTopPosition: ${minTopPosition}`,
-    )
-
-    return Math.max(window?.topPosition ?? 0, minTopPosition)
+    const previousPosition = windowIndex > 0 ? (windowPositions().get(windowIndex - 1) ?? 0) : 0
+    const position =
+      windowPositions().get(windowIndex) ?? previousPosition + getTotalHeight(windowIndex)
+    console.log(`🔄 GET_POSITION: Window ${windowIndex} position: ${position}`)
+    return position
   }
 
-  // Computed windows with stable objects for reactivity
+  // Computed windows for rendering
   const visibleWindows = createMemo(() => {
     const range = currentVisibleRange()
-    const windowsMap = windows()
+    const states = windowStates()
 
     return Array.from(range)
-      .map((windowIndex) => windowsMap.get(windowIndex))
-      .filter(
-        (window): window is WindowData => window !== undefined && window.state === 'VISIBLE',
-      )
+      .filter((windowIndex) => states.get(windowIndex) === 'VISIBLE')
+      .map((windowIndex) => windowIndex)
   })
 
   // Calculate total content height
   const totalContentHeight = createMemo(() => {
-    const windowsMap = windows()
-    let maxWindowIndex = 0
+    const heights = windowHeights()
 
-    // Find the highest window index
-    windowsMap.forEach((_, index) => {
-      maxWindowIndex = Math.max(maxWindowIndex, index)
-    })
+    // Find the highest window index from heights
+    const maxWindowIndex = heights.size > 0 ? Math.max(...heights.keys()) : 0
 
     // Calculate total height up to the last window
     let totalHeight = 0
     for (let i = 0; i <= maxWindowIndex; i++) {
-      const window = windowsMap.get(i)
-      if (window && window.totalHeight) {
-        totalHeight += window.totalHeight
-      } else {
-        // For SKELETON windows, just assume the minimum height
-        totalHeight += props.minWindowHeight
-      }
+      totalHeight += getTotalHeight(i)
     }
 
     // Add some buffer for infinite scrolling
@@ -486,9 +463,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       <div ref={containerRef} class={styles.scrollContainer}>
         <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
           <For each={visibleWindows()}>
-            {(window) => (
+            {(windowIndex) => (
               <WindowComponent
-                windowIndex={window.index}
+                windowIndex={windowIndex}
                 onIntersection={handleWindowIntersection}
                 onResize={handleWindowResize}
                 containerRef={containerRef}

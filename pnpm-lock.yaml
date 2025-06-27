@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@solid-primitives/scheduled':
-        specifier: ^1.5.1
-        version: 1.5.1(solid-js@1.9.7)
       solid-js:
         specifier: ^1.9.7
         version: 1.9.7
@@ -535,11 +532,6 @@ packages:
     resolution: {integrity: sha512-Q2Mgwt+D8hd5FIPUuPDsvPR7Bguza6yTkJxspDGkZj7tBRn2y4KSWYuIXpftFSjBra76TbKerCV7rgFPQrn+wQ==}
     cpu: [x64]
     os: [win32]
-
-  '@solid-primitives/scheduled@1.5.1':
-    resolution: {integrity: sha512-WKg/zvAyDIgQ/Xo48YaUY7ISaPyWTZNDzIVWP2R84CuLH+nZN/2O0aFn/gQlWY6y/Bfi/LdDt6Og2/PRzPY7mA==}
-    peerDependencies:
-      solid-js: ^1.6.12
 
   '@tybys/wasm-util@0.9.0':
     resolution: {integrity: sha512-6+7nlbMVX/PVDCwaIQ8nTOPveOcFLSt8GcXdx8hD0bt39uWxYT88uXzqTd4fTvqta7oeUJqudepapKNt2DYJFw==}
@@ -1987,10 +1979,6 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.44.0':
     optional: true
-
-  '@solid-primitives/scheduled@1.5.1(solid-js@1.9.7)':
-    dependencies:
-      solid-js: 1.9.7
 
   '@tybys/wasm-util@0.9.0':
     dependencies:
