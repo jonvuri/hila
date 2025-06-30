@@ -500,14 +500,15 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       })
 
       // Handle windows that should become GHOST
-      newStates.forEach((state, windowIndex) => {
-        if (state === 'VISIBLE' && !visibleRange.has(windowIndex)) {
+      for (let i = 0; i < newStates.length; i++) {
+        const state = newStates[i]
+        if (state === 'VISIBLE' && !visibleRange.has(i)) {
           // Transition VISIBLE → GHOST
-          console.log(`💀 VISIBLE → GHOST: Window ${windowIndex}`)
-          newStates[windowIndex] = 'GHOST'
+          console.log(`💀 VISIBLE → GHOST: Window ${i}`)
+          newStates[i] = 'GHOST'
           hasChanges = true
         }
-      })
+      }
 
       if (hasChanges) {
         // Debug summary
@@ -562,7 +563,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     if (positions.length === 0) return CONTAINER_HEIGHT * 2
 
     // Find max virtual position and add height of that window
-    const maxIndex = Math.max(...positions)
+    const maxIndex = positions.length - 1
     const maxVirtualPos = positions[maxIndex] ?? 0
     const totalVirtual = maxVirtualPos + getTotalHeight(maxIndex)
 
