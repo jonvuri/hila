@@ -415,8 +415,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       newPair = [visibleArray[0]!, visibleArray[visibleArray.length - 1]!]
     } else if (currentActuallyVisible.size === 2) {
       // Two windows visible - set them as the latch pair
-      const window1 = currentActuallyVisible.values().next().value!
-      const window2 = currentActuallyVisible.values().next().value!
+      const visibleIter = currentActuallyVisible.values()
+      const window1 = visibleIter.next().value!
+      const window2 = visibleIter.next().value!
       newPair = [Math.min(window1, window2), Math.max(window1, window2)]
 
       console.log(
