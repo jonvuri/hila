@@ -226,10 +226,10 @@ interface ScrollVirtualizerProps {
 
 export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
   // Track window states: 'VISIBLE' or 'GHOST' (previously visible but unrendered now)
-  const [windowStates, setWindowStates] = createSignal<Map<number, WindowState>>(new Map())
+  const [windowStates, setWindowStates] = createSignal<WindowState[]>([])
 
   // Track current content height for each window
-  const [windowHeights, setWindowHeights] = createSignal<Map<number, number>>(new Map())
+  const [windowHeights, setWindowHeights] = createSignal<number[]>([])
 
   // Track which windows are actually visible in viewport, based on intersection observers
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())
@@ -244,34 +244,31 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
   // Getter for window content height that ensures minimum window height
   const getTotalHeight = (windowIndex: number): number => {
-    const height = windowHeights().get(windowIndex) ?? 0
+    const height = windowHeights()[windowIndex] ?? 0
     return Math.max(height, props.minWindowHeight)
   }
 
   // Calculate virtual positions of all windows (cumulative from virtual origin 0)
   const virtualPositions = createMemo(() => {
     const heights = windowHeights()
-    const positions = new Map<number, number>()
+    const positions: number[] = []
 
-    // Get all window indices and sort them
-    const sortedIndices = Array.from(heights.keys()).sort((a, b) => a - b)
-
-    if (sortedIndices.length === 0) return positions
+    if (heights.length === 0) return positions
 
     // Calculate cumulative positions from virtual origin
     let cumulativePosition = 0
-    for (const index of sortedIndices) {
-      positions.set(index, cumulativePosition)
+    for (const index of heights) {
+      positions[index] = cumulativePosition
       cumulativePosition += getTotalHeight(index)
     }
 
-    console.log(`📐 VIRTUAL_POSITIONS: Calculated for windows [${sortedIndices.join(',')}]`)
+    console.log(`📐 VIRTUAL_POSITIONS: Calculated for windows [${heights.join(',')}]`)
     return positions
   })
 
   // Convert virtual position to physical position within container
   const getPhysicalPosition = (windowIndex: number): number => {
-    const virtualPos = virtualPositions().get(windowIndex) ?? 0
+    const virtualPos = virtualPositions()[windowIndex] ?? 0
     const offset = containerVirtualOffset()
     const physicalPos = virtualPos - offset
 
@@ -334,7 +331,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     if (blocksToSkip > 0) {
       // Find virtual position of the new start
-      const newStartPosition = positions.get(newStartIndex) ?? 0
+      const newStartPosition = positions[newStartIndex] ?? 0
 
       console.log(`🧮 CONTAINER_OFFSET: New container offset: ${newStartPosition}px`)
       return newStartPosition
@@ -391,11 +388,11 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     console.log(`📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px`)
 
     setWindowHeights((prev) => {
-      const current = prev.get(windowIndex)
+      const current = prev[windowIndex]
       if (current !== constrainedHeight) {
         console.log(`📏 RESIZE: Updated window ${windowIndex} height: ${constrainedHeight}px`)
-        const newHeights = new Map(prev)
-        newHeights.set(windowIndex, constrainedHeight)
+        const newHeights = [...prev]
+        newHeights[windowIndex] = constrainedHeight
         return newHeights
       }
       return prev
@@ -502,22 +499,22 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     console.log(`🔄 UPDATE_STATES: Processing visible range:`, Array.from(visibleRange))
 
     setWindowStates((prevStates) => {
-      const newStates = new Map(prevStates)
+      const newStates = [...prevStates]
       let hasChanges = false
 
       // Handle all windows in visible range
       visibleRange.forEach((windowIndex) => {
-        const currentState = newStates.get(windowIndex)
+        const currentState = newStates[windowIndex]
 
         if (!currentState) {
           // Create new window directly as VISIBLE
           console.log(`🆕 Creating new VISIBLE window ${windowIndex}`)
-          newStates.set(windowIndex, 'VISIBLE')
+          newStates[windowIndex] = 'VISIBLE'
           hasChanges = true
         } else if (currentState === 'GHOST') {
           // Transition GHOST → VISIBLE (restore from cache)
           console.log(`👻 GHOST → VISIBLE: Window ${windowIndex}`)
-          newStates.set(windowIndex, 'VISIBLE')
+          newStates[windowIndex] = 'VISIBLE'
           hasChanges = true
         }
         // VISIBLE windows in range stay VISIBLE (no change needed)
@@ -528,19 +525,15 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         if (state === 'VISIBLE' && !visibleRange.has(windowIndex)) {
           // Transition VISIBLE → GHOST
           console.log(`💀 VISIBLE → GHOST: Window ${windowIndex}`)
-          newStates.set(windowIndex, 'GHOST')
+          newStates[windowIndex] = 'GHOST'
           hasChanges = true
         }
       })
 
       if (hasChanges) {
         // Debug summary
-        const ghostWindows = Array.from(newStates.entries())
-          .filter(([, state]) => state === 'GHOST')
-          .map(([i]) => i)
-        const visibleWindows = Array.from(newStates.entries())
-          .filter(([, state]) => state === 'VISIBLE')
-          .map(([i]) => i)
+        const ghostWindows = newStates.filter((state) => state === 'GHOST')
+        const visibleWindows = newStates.filter((state) => state === 'VISIBLE')
 
         console.log(
           `📊 STATE_SUMMARY: GHOST[${ghostWindows.join(',')}] VISIBLE[${visibleWindows.join(',')}]`,
@@ -552,15 +545,15 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     // Initialize heights for new VISIBLE windows
     setWindowHeights((prevHeights) => {
-      const newHeights = new Map(prevHeights)
+      const newHeights = [...prevHeights]
       let hasChanges = false
 
       visibleRange.forEach((windowIndex) => {
-        if (!newHeights.has(windowIndex)) {
+        if (!newHeights[windowIndex]) {
           console.log(
             `🆕 Initializing height for window ${windowIndex} to min height ${props.minWindowHeight}px`,
           )
-          newHeights.set(windowIndex, props.minWindowHeight)
+          newHeights[windowIndex] = props.minWindowHeight
           hasChanges = true
         }
       })
@@ -579,9 +572,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     const range = currentVisibleRange()
     const states = windowStates()
 
-    return Array.from(range)
-      .filter((windowIndex) => states.get(windowIndex) === 'VISIBLE')
-      .map((windowIndex) => windowIndex)
+    return Array.from(range).filter((windowIndex) => states[windowIndex] === 'VISIBLE')
   })
 
   // Calculate total physical content height based on visible windows
@@ -589,11 +580,11 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     const positions = virtualPositions()
     const offset = containerVirtualOffset()
 
-    if (positions.size === 0) return CONTAINER_HEIGHT * 2
+    if (positions.length === 0) return CONTAINER_HEIGHT * 2
 
     // Find max virtual position and add height of that window
-    const maxIndex = Math.max(...positions.keys())
-    const maxVirtualPos = positions.get(maxIndex) ?? 0
+    const maxIndex = Math.max(...positions)
+    const maxVirtualPos = positions[maxIndex] ?? 0
     const totalVirtual = maxVirtualPos + getTotalHeight(maxIndex)
 
     // Physical height is virtual range that's visible in container
@@ -610,7 +601,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     if (range.size === 0) return 0
 
     const minIndex = Math.min(...range)
-    return positions.get(minIndex) ?? 0
+    return positions[minIndex] ?? 0
   })
 
   const visibleRangeVirtualBottom = createMemo(() => {
@@ -620,7 +611,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     if (range.size === 0) return 0
 
     const maxIndex = Math.max(...range)
-    const maxPos = positions.get(maxIndex) ?? 0
+    const maxPos = positions[maxIndex] ?? 0
     return maxPos + getTotalHeight(maxIndex)
   })
 
