@@ -257,9 +257,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     // Calculate cumulative positions from virtual origin
     let cumulativePosition = 0
-    for (const index of heights) {
-      positions[index] = cumulativePosition
-      cumulativePosition += getTotalHeight(index)
+    for (let i = 0; i < heights.length; i++) {
+      positions[i] = cumulativePosition
+      cumulativePosition += getTotalHeight(i)
     }
 
     console.log(`📐 VIRTUAL_POSITIONS: Calculated for windows [${heights.join(',')}]`)
