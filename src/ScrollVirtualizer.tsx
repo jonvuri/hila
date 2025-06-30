@@ -3,34 +3,6 @@ import { JSX } from 'solid-js/jsx-runtime'
 
 import styles from './ScrollVirtualizer.module.css'
 
-function areSetsEqual(set1: Set<number>, set2: Set<number>): boolean {
-  if (set1.size !== set2.size) {
-    return false
-  }
-
-  for (const value of set1) {
-    if (!set2.has(value)) {
-      return false
-    }
-  }
-
-  return true
-}
-
-function areArraysEqual<T>(arr1: T[], arr2: T[]): boolean {
-  if (arr1.length !== arr2.length) {
-    return false
-  }
-
-  for (let i = 0; i < arr1.length; i++) {
-    if (arr1[i] !== arr2[i]) {
-      return false
-    }
-  }
-
-  return true
-}
-
 // Configuration
 const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
 const CONTAINER_HEIGHT = 500
@@ -408,18 +380,24 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     if (isIntersecting) {
       // Window became actually visible
-      currentActuallyVisible.add(windowIndex)
       console.log(`✅ Window ${windowIndex} became actually visible`)
+
+      if (!currentActuallyVisible.has(windowIndex)) {
+        currentActuallyVisible.add(windowIndex)
+      } else {
+        console.log(`🔄 LATCH_PAIR: Actually visible set didn't change, returning early`)
+        return
+      }
     } else {
       // Window left actual visibility
-      currentActuallyVisible.delete(windowIndex)
       console.log(`➖ Window ${windowIndex} left actual visibility`)
-    }
 
-    // Return early if actually visible set didn't change
-    if (areSetsEqual(currentActuallyVisible, actuallyVisible())) {
-      console.log(`🔄 LATCH_PAIR: Actually visible set didn't change, returning early`)
-      return
+      if (currentActuallyVisible.has(windowIndex)) {
+        currentActuallyVisible.delete(windowIndex)
+      } else {
+        console.log(`🔄 LATCH_PAIR: Actually visible set didn't change, returning early`)
+        return
+      }
     }
 
     setActuallyVisible(currentActuallyVisible)
@@ -481,7 +459,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       console.error('🔄 LATCH_PAIR: 0 windows visible, min 1 expected')
     }
 
-    if (areArraysEqual(newPair, currentPair)) {
+    if (newPair[0] === currentPair[0] && newPair[1] === currentPair[1]) {
       console.log(`🔄 LATCH_PAIR: Pair didn't change, returning early`)
       return
     }
