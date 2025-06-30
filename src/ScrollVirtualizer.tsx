@@ -10,116 +10,13 @@ const BLOCK_SIZE = 4 + THRESHOLD_DISTANCE * 2 // Size of window blocks for repos
 
 type WindowState = 'GHOST' | 'VISIBLE'
 
-interface WindowRendererProps {
+type WindowRendererProps = {
   windowIndex: number
 }
 
 export type WindowRendererFunction = (props: WindowRendererProps) => JSX.Element
 
-// Debug Components
-function HUD(props: {
-  visibleRangeVirtualTop: number
-  visibleRangeVirtualBottom: number
-  containerVirtualOffset: number
-}) {
-  const [isOffsetChanging, setIsOffsetChanging] = createSignal(false)
-  const [prevOffset, setPrevOffset] = createSignal(props.containerVirtualOffset)
-
-  // Detect offset changes and trigger animation
-  createEffect(() => {
-    const currentOffset = props.containerVirtualOffset
-    const previous = prevOffset()
-
-    if (currentOffset !== previous) {
-      console.log(
-        `🎨 HUD: Offset changed from ${previous} to ${currentOffset}, triggering animation`,
-      )
-      setIsOffsetChanging(true)
-      setPrevOffset(currentOffset)
-
-      // Reset animation after 1 second
-      setTimeout(() => {
-        setIsOffsetChanging(false)
-      }, 1000)
-    }
-  })
-
-  return (
-    <div
-      style={{
-        'margin-left': '20px',
-        'margin-top': '0px',
-        background: 'rgba(0, 0, 0, 0.8)',
-        color: 'white',
-        padding: '10px',
-        'border-radius': '4px',
-        'font-family': 'monospace',
-        'font-size': '12px',
-        'z-index': 1000,
-        'min-width': '300px',
-        height: 'fit-content',
-        'flex-shrink': 0,
-      }}
-    >
-      <div>Virtual Visible Range:</div>
-      <div> Top: {props.visibleRangeVirtualTop.toFixed(0)}px</div>
-      <div> Bottom: {props.visibleRangeVirtualBottom.toFixed(0)}px</div>
-      <div style={{ 'margin-top': '8px' }}>Container Virtual Offset:</div>
-      <div
-        style={{
-          color: isOffsetChanging() ? 'magenta' : 'white',
-          transition: 'color 1s ease-out',
-          'font-weight': isOffsetChanging() ? 'bold' : 'normal',
-        }}
-      >
-        {props.containerVirtualOffset.toFixed(0)}px
-      </div>
-    </div>
-  )
-}
-
-function MileMarker(props: {
-  distance: number
-  color: string
-  label: string
-  isVirtual: boolean
-}) {
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        top: `${props.distance}px`,
-        left: '0',
-        right: '0',
-        height: '4px',
-        background: props.color,
-        opacity: '0.7',
-        'z-index': props.isVirtual ? 3 : 2,
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          right: '4px',
-          top: '4px',
-          'font-size': '10px',
-          'font-family': 'monospace',
-          color: props.color,
-          background: 'rgba(255, 255, 255, 0.9)',
-          padding: '1px 3px',
-          'border-radius': '2px',
-          'font-weight': 'bold',
-        }}
-      >
-        {props.label}: {props.distance}px
-      </div>
-    </div>
-  )
-}
-
-// ItemComponent moved to WindowRenderer module
-
-interface WindowComponentProps {
+type WindowComponentProps = {
   windowIndex: number
   onIntersection: (windowIndex: number, isIntersecting: boolean) => void
   onResize: (windowIndex: number, height: number) => void
@@ -136,15 +33,10 @@ function WindowComponent(props: WindowComponentProps) {
   onMount(() => {
     if (!elementRef) return
 
-    console.log(`🔧 WINDOW_COMPONENT: Setting up observers for window ${props.windowIndex}`)
-
     // Create intersection observer
     const intersectionObserver = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          console.log(
-            `👁️ WINDOW_INTERSECTION: Window ${props.windowIndex}, intersecting: ${entry.isIntersecting}, ratio: ${entry.intersectionRatio}`,
-          )
           props.onIntersection(props.windowIndex, entry.isIntersecting)
         })
       },
@@ -157,7 +49,6 @@ function WindowComponent(props: WindowComponentProps) {
     const resizeObserver = new ResizeObserver((entries) => {
       entries.forEach((entry) => {
         const newHeight = entry.contentRect.height
-        console.log(`📏 WINDOW_RESIZE: Window ${props.windowIndex} height: ${newHeight}px`)
         props.onResize(props.windowIndex, newHeight)
       })
     })
@@ -168,7 +59,6 @@ function WindowComponent(props: WindowComponentProps) {
 
     // Cleanup on unmount
     onCleanup(() => {
-      console.log(`🧹 WINDOW_COMPONENT: Cleaning up observers for window ${props.windowIndex}`)
       intersectionObserver.disconnect()
       resizeObserver.disconnect()
     })
@@ -191,10 +81,10 @@ function WindowComponent(props: WindowComponentProps) {
   )
 }
 
-interface ScrollVirtualizerProps {
+type ScrollVirtualizerProps = {
   renderWindow: WindowRendererFunction
   minWindowHeight: number
-}
+} & JSX.HTMLAttributes<HTMLDivElement>
 
 export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
   // Track window states: 'VISIBLE' or 'GHOST' (previously visible but unrendered now)
@@ -234,7 +124,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       cumulativePosition += getTotalHeight(i)
     }
 
-    console.log(`📐 VIRTUAL_POSITIONS: Calculated for windows [${heights.join(',')}]`)
     return positions
   })
 
@@ -244,17 +133,12 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     const offset = containerVirtualOffset()
     const physicalPos = virtualPos - offset
 
-    console.log(
-      `🔄 GET_POSITION: Window ${windowIndex} virtual: ${virtualPos}, physical: ${physicalPos}`,
-    )
     return physicalPos
   }
 
   // Pure function to compute full visible range from latch pair
   const computeVisibleRange = (pair: [number, number]): Set<number> => {
     const [min, max] = pair
-
-    console.log(`🧮 COMPUTE_RANGE: latchPair=[${min}, ${max}]`)
 
     // Extend threshold distance around the latch pair
     const rangeStart = Math.max(0, min - THRESHOLD_DISTANCE)
@@ -264,12 +148,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     for (let i = rangeStart; i <= rangeEnd; i++) {
       visibleRange.add(i)
     }
-
-    console.log(
-      `🧮 COMPUTE_RANGE: Final range: [${Array.from(visibleRange)
-        .sort((a, b) => a - b)
-        .join(',')}] (${rangeStart} to ${rangeEnd})`,
-    )
 
     return visibleRange
   }
@@ -285,32 +163,17 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     // Get the minimum index of the visible range
     const minVisibleIndex = Math.min(...currentRange)
 
-    console.log(`🧮 CONTAINER_OFFSET: Latch pair [${currentPair[0]}, ${currentPair[1]}]`)
-    console.log(
-      `🧮 CONTAINER_OFFSET: Visible range [${Array.from(currentRange)
-        .sort((a, b) => a - b)
-        .join(',')}]`,
-    )
-    console.log(`🧮 CONTAINER_OFFSET: Min visible index: ${minVisibleIndex}`)
-
     // Calculate how many complete blocks are before the visible range
     const blocksToSkip = Math.floor(minVisibleIndex / BLOCK_SIZE)
     const newStartIndex = blocksToSkip * BLOCK_SIZE
 
-    console.log(
-      `🧮 CONTAINER_OFFSET: Blocks to skip: ${blocksToSkip}, new start index: ${newStartIndex}`,
-    )
-
     if (blocksToSkip > 0) {
       // Find virtual position of the new start
       const newStartPosition = positions[newStartIndex] ?? 0
-
-      console.log(`🧮 CONTAINER_OFFSET: New container offset: ${newStartPosition}px`)
       return newStartPosition
     }
 
     // No repositioning needed
-    console.log(`🧮 CONTAINER_OFFSET: No repositioning needed, offset: 0px`)
     return 0
   })
 
@@ -320,8 +183,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     const currentOffset = containerVirtualOffset()
 
     if (newOffset !== currentOffset && containerRef) {
-      console.log(`🔄 REPOSITIONING: Changing offset from ${currentOffset} to ${newOffset}`)
-
       const currentScrollTop = containerRef.scrollTop
       const offsetDelta = newOffset - currentOffset
 
@@ -333,9 +194,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         // Compensate scroll position
         if (containerRef) {
           containerRef.scrollTop = currentScrollTop - offsetDelta
-          console.log(
-            `🔄 REPOSITIONING: Adjusted scrollTop from ${currentScrollTop} to ${containerRef.scrollTop}`,
-          )
         }
       })
     }
@@ -345,24 +203,21 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
   const handleWindowResize = (windowIndex: number, newHeight: number) => {
     // Ignore 0-height measurements during initial mount/layout
     if (newHeight === 0) {
-      console.error(`📏 RESIZE: Unexpected 0px height for window ${windowIndex}`)
       return
     }
 
     if (newHeight < props.minWindowHeight) {
       console.error(
-        `📏 RESIZE: Window ${windowIndex} height ${newHeight}px is less than minimum ${props.minWindowHeight}px`,
+        `RESIZE: Window ${windowIndex} height ${newHeight}px is less than minimum ${props.minWindowHeight}px`,
       )
     }
 
     // Enforce minimum height constraint
     const constrainedHeight = Math.max(newHeight, props.minWindowHeight)
-    console.log(`📏 RESIZE: Window ${windowIndex} height changed to ${newHeight}px`)
 
     setWindowHeights((prev) => {
       const current = prev[windowIndex]
       if (current !== constrainedHeight) {
-        console.log(`📏 RESIZE: Updated window ${windowIndex} height: ${constrainedHeight}px`)
         const newHeights = [...prev]
         newHeights[windowIndex] = constrainedHeight
         return newHeights
@@ -373,29 +228,23 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
   // Handle window intersection changes - update the actually visible set and latch pair
   const handleWindowIntersection = (windowIndex: number, isIntersecting: boolean) => {
-    console.log(`🔍 INTERSECTION: Window ${windowIndex} isIntersecting=${isIntersecting}`)
-
     const currentActuallyVisible = new Set(actuallyVisible())
     const currentPair = latchPair()
 
     if (isIntersecting) {
       // Window became actually visible
-      console.log(`✅ Window ${windowIndex} became actually visible`)
-
       if (!currentActuallyVisible.has(windowIndex)) {
         currentActuallyVisible.add(windowIndex)
       } else {
-        console.log(`🔄 LATCH_PAIR: Actually visible set didn't change, returning early`)
+        // Actually visible set didn't change, return early
         return
       }
     } else {
       // Window left actual visibility
-      console.log(`➖ Window ${windowIndex} left actual visibility`)
-
       if (currentActuallyVisible.has(windowIndex)) {
         currentActuallyVisible.delete(windowIndex)
       } else {
-        console.log(`🔄 LATCH_PAIR: Actually visible set didn't change, returning early`)
+        // Actually visible set didn't change, return early
         return
       }
     }
@@ -407,7 +256,7 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     if (currentActuallyVisible.size > 2) {
       console.error(
-        `🔄 LATCH_PAIR: ${currentActuallyVisible.size} windows visible, max 2 expected`,
+        `LATCH_PAIR: ${currentActuallyVisible.size} windows visible, max 2 expected`,
       )
 
       // More than two windows visible - update pair to min/max of visible
@@ -418,11 +267,8 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       const visibleIter = currentActuallyVisible.values()
       const window1 = visibleIter.next().value!
       const window2 = visibleIter.next().value!
-      newPair = [Math.min(window1, window2), Math.max(window1, window2)]
 
-      console.log(
-        `🔄 LATCH_PAIR: ${currentActuallyVisible.size} windows visible, updating pair to [${newPair[0]}, ${newPair[1]}]`,
-      )
+      newPair = [Math.min(window1, window2), Math.max(window1, window2)]
     } else if (currentActuallyVisible.size === 1) {
       // Only one window visible
       const visibleWindow = currentActuallyVisible.values().next().value!
@@ -430,38 +276,24 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
       if (currentPair[0] === visibleWindow || currentPair[1] === visibleWindow) {
         // If the current pair still contains the visible window, keep the same pair (retaining the one that just left)
         newPair = [...currentPair]
-
-        console.log(
-          `🔄 LATCH_PAIR: 1 window visible, keeping previous pair [${newPair[0]}, ${newPair[1]}]`,
-        )
       } else {
         // Otherwise, fill in the missing window based on position of the visible window
 
         if (visibleWindow <= 1) {
           newPair = [0, 1]
-
-          console.log(`🔄 LATCH_PAIR: 1 window visible at start, filling in window [0, 1]`)
         } else if (visibleWindow <= currentPair[0]) {
           newPair = [visibleWindow, visibleWindow + 1]
-
-          console.log(
-            `🔄 LATCH_PAIR: 1 window visible before current pair [${currentPair[0]}, ${currentPair[1]}], filling in window [${newPair[0]}, ${newPair[1]}]`,
-          )
         } else if (visibleWindow >= currentPair[1]) {
           newPair = [visibleWindow - 1, visibleWindow]
-
-          console.log(
-            `🔄 LATCH_PAIR: 1 window visible after current pair [${currentPair[0]}, ${currentPair[1]}], filling in window [${newPair[0]}, ${newPair[1]}]`,
-          )
         }
       }
     } else if (currentActuallyVisible.size === 0) {
       // If 0 windows visible, keep existing latch pair
-      console.error('🔄 LATCH_PAIR: 0 windows visible, min 1 expected')
+      console.error('LATCH_PAIR: 0 windows visible, min 1 expected')
     }
 
     if (newPair[0] === currentPair[0] && newPair[1] === currentPair[1]) {
-      console.log(`🔄 LATCH_PAIR: Pair didn't change, returning early`)
+      // Pair didn't change, return early
       return
     }
 
@@ -469,14 +301,11 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
     // Compute full visible range and apply state changes
     const visibleRange = computeVisibleRange(newPair)
-    console.log(`📊 Computed visible range:`, Array.from(visibleRange))
     updateWindowStates(visibleRange)
   }
 
   // Update window states based on computed visible range
   const updateWindowStates = (visibleRange: Set<number>) => {
-    console.log(`🔄 UPDATE_STATES: Processing visible range:`, Array.from(visibleRange))
-
     setWindowStates((prevStates) => {
       const newStates = [...prevStates]
       let hasChanges = false
@@ -487,12 +316,10 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
         if (!currentState) {
           // Create new window directly as VISIBLE
-          console.log(`🆕 Creating new VISIBLE window ${windowIndex}`)
           newStates[windowIndex] = 'VISIBLE'
           hasChanges = true
         } else if (currentState === 'GHOST') {
           // Transition GHOST → VISIBLE (restore from cache)
-          console.log(`👻 GHOST → VISIBLE: Window ${windowIndex}`)
           newStates[windowIndex] = 'VISIBLE'
           hasChanges = true
         }
@@ -504,20 +331,9 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
         const state = newStates[i]
         if (state === 'VISIBLE' && !visibleRange.has(i)) {
           // Transition VISIBLE → GHOST
-          console.log(`💀 VISIBLE → GHOST: Window ${i}`)
           newStates[i] = 'GHOST'
           hasChanges = true
         }
-      }
-
-      if (hasChanges) {
-        // Debug summary
-        const ghostWindows = newStates.filter((state) => state === 'GHOST')
-        const visibleWindows = newStates.filter((state) => state === 'VISIBLE')
-
-        console.log(
-          `📊 STATE_SUMMARY: GHOST[${ghostWindows.join(',')}] VISIBLE[${visibleWindows.join(',')}]`,
-        )
       }
 
       return hasChanges ? newStates : prevStates
@@ -530,9 +346,6 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
 
       visibleRange.forEach((windowIndex) => {
         if (!newHeights[windowIndex]) {
-          console.log(
-            `🆕 Initializing height for window ${windowIndex} to min height ${props.minWindowHeight}px`,
-          )
           newHeights[windowIndex] = props.minWindowHeight
           hasChanges = true
         }
@@ -573,104 +386,31 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     return Math.max(physicalHeight + CONTAINER_HEIGHT, CONTAINER_HEIGHT * 2)
   })
 
-  // Debug info for HUD
-  const visibleRangeVirtualTop = createMemo(() => {
-    const range = currentVisibleRange()
-    const positions = virtualPositions()
-
-    if (range.size === 0) return 0
-
-    const minIndex = Math.min(...range)
-    return positions[minIndex] ?? 0
-  })
-
-  const visibleRangeVirtualBottom = createMemo(() => {
-    const range = currentVisibleRange()
-    const positions = virtualPositions()
-
-    if (range.size === 0) return 0
-
-    const maxIndex = Math.max(...range)
-    const maxPos = positions[maxIndex] ?? 0
-    return maxPos + getTotalHeight(maxIndex)
-  })
-
-  // Generate mile markers
-  const mileMarkers = createMemo(() => {
-    const markers: JSX.Element[] = []
-    const contentHeight = totalContentHeight()
-    const offset = containerVirtualOffset()
-
-    // Virtual markers (green) - show virtual coordinates for currently visible physical positions
-    // Every 500px in physical space, but labeled with their virtual coordinates
-    for (let physicalPos = 0; physicalPos <= contentHeight; physicalPos += 500) {
-      const virtualPos = physicalPos + offset // Convert physical position to virtual coordinate
-      markers.push(
-        <MileMarker
-          distance={physicalPos}
-          color="green"
-          label={`V${virtualPos}`}
-          isVirtual={true}
-        />,
-      )
-    }
-
-    // Physical markers (blue) - every 500px in container starting at 250px
-    // Labeled with their actual physical coordinates
-    for (let physicalPos = 250; physicalPos <= contentHeight; physicalPos += 500) {
-      markers.push(
-        <MileMarker
-          distance={physicalPos}
-          color="blue"
-          label={`P${physicalPos}`}
-          isVirtual={false}
-        />,
-      )
-    }
-
-    return markers
-  })
-
   onMount(() => {
-    console.log(`🚀 MOUNT: Initializing virtualizer`)
-
     // Initialize with initial latch pair [0, 1]
     const initialRange = computeVisibleRange([0, 1])
-    console.log(`🚀 MOUNT: Initial range:`, Array.from(initialRange))
     updateWindowStates(initialRange)
   })
 
-  onCleanup(() => {
-    console.log(`🧹 CLEANUP: Virtualizer cleanup`)
-  })
-
   return (
-    <>
-      <div class={styles.container} style={{ position: 'relative', display: 'flex' }}>
-        <div ref={containerRef} class={styles.scrollContainer}>
-          <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
-            {mileMarkers()}
-            <For each={visibleWindows()}>
-              {(windowIndex) => (
-                <WindowComponent
-                  windowIndex={windowIndex}
-                  onIntersection={handleWindowIntersection}
-                  onResize={handleWindowResize}
-                  containerRef={containerRef}
-                  getPosition={getPhysicalPosition}
-                  renderWindow={props.renderWindow}
-                  minWindowHeight={props.minWindowHeight}
-                />
-              )}
-            </For>
-          </div>
+    <div class={styles.container} style={{ position: 'relative', display: 'flex' }}>
+      <div ref={containerRef} class={styles.scrollContainer}>
+        <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
+          <For each={visibleWindows()}>
+            {(windowIndex) => (
+              <WindowComponent
+                windowIndex={windowIndex}
+                onIntersection={handleWindowIntersection}
+                onResize={handleWindowResize}
+                containerRef={containerRef}
+                getPosition={getPhysicalPosition}
+                renderWindow={props.renderWindow}
+                minWindowHeight={props.minWindowHeight}
+              />
+            )}
+          </For>
         </div>
-        <HUD
-          visibleRangeVirtualTop={visibleRangeVirtualTop()}
-          visibleRangeVirtualBottom={visibleRangeVirtualBottom()}
-          containerVirtualOffset={containerVirtualOffset()}
-        />
       </div>
-    </>
+    </div>
   )
 }
