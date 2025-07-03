@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@sqlite.org/sqlite-wasm':
+        specifier: 3.50.1-build1
+        version: 3.50.1-build1
       solid-js:
         specifier: ^1.9.7
         version: 1.9.7
@@ -532,6 +535,10 @@ packages:
     resolution: {integrity: sha512-Q2Mgwt+D8hd5FIPUuPDsvPR7Bguza6yTkJxspDGkZj7tBRn2y4KSWYuIXpftFSjBra76TbKerCV7rgFPQrn+wQ==}
     cpu: [x64]
     os: [win32]
+
+  '@sqlite.org/sqlite-wasm@3.50.1-build1':
+    resolution: {integrity: sha512-yH4M/SHN98NibniIwTVk6rwTJjy7n39l7zwWY3u+qsfZBGTi4lC1uEl2NDvIlkzsFtfCBvHBJJFJ1iuU3UzzEQ==}
+    hasBin: true
 
   '@tybys/wasm-util@0.9.0':
     resolution: {integrity: sha512-6+7nlbMVX/PVDCwaIQ8nTOPveOcFLSt8GcXdx8hD0bt39uWxYT88uXzqTd4fTvqta7oeUJqudepapKNt2DYJFw==}
@@ -1979,6 +1986,8 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.44.0':
     optional: true
+
+  '@sqlite.org/sqlite-wasm@3.50.1-build1': {}
 
   '@tybys/wasm-util@0.9.0':
     dependencies:
