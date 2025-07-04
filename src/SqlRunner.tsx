@@ -6,7 +6,7 @@ import type { SqlResult } from './sql/types'
 const SqlRunner: Component = () => {
   const [sql, setSql] = createSignal('')
   const [results, setResults] = createSignal<SqlResult[]>([])
-  const [errors, setErrors] = createSignal<Error[]>([])
+  const [errors, setErrors] = createSignal<string[]>([])
 
   const runSql = async () => {
     console.log(sql())
@@ -14,11 +14,10 @@ const SqlRunner: Component = () => {
       const result = await executeSql(sql())
       setResults([...results(), result])
     } catch (error: unknown) {
-      console.error(error)
       if (error instanceof Error) {
-        setErrors([...errors(), error])
+        setErrors([...errors(), error.message])
       } else {
-        setErrors([...errors(), new Error(`Unknown error: ${error}`)])
+        setErrors([...errors(), `Unknown error: ${error}`])
       }
     }
   }
