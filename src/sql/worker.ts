@@ -48,43 +48,28 @@ onmessage = (event: MessageEvent<ClientMessage>) => {
     sqlite
       .then((db) => {
         if (!db) {
-          sendError(new Error('SQLite failed to initialize'))
-          return
+          throw new Error('SQLite failed to initialize')
         }
 
-        try {
-          const result = db.exec({
-            sql,
-            bind,
-            returnValue: 'resultRows',
-            rowMode: 'object',
-          })
+        const result = db.exec({
+          sql,
+          bind,
+          returnValue: 'resultRows',
+          rowMode: 'object',
+        })
 
-          const message: WorkerMessage = {
-            type: 'executeResult',
-            sql,
-            result,
-          }
-
-          postMessage(message)
-        } catch (err: unknown) {
-          if (err instanceof Error) {
-            postMessage({ type: 'executeError', sql, error: err })
-          } else {
-            postMessage({
-              type: 'executeError',
-              sql,
-              error: new Error(`Unknown error: ${err}`),
-            })
-          }
+        const message: WorkerMessage = {
+          type: 'executeResult',
+          sql,
+          result,
         }
+
+        postMessage(message)
       })
       .catch((err) => {
-        if (err instanceof Error) {
-          sendError(err)
-        } else {
-          sendError(new Error(`Unknown error: ${err}`))
-        }
+        const error = err instanceof Error ? err : new Error(`Unknown error: ${err}`)
+
+        postMessage({ type: 'executeError', sql, error })
       })
   }
 }
