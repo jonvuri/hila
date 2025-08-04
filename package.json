@@ -9,6 +9,8 @@
     "lint": "eslint --fix --cache",
     "serve": "vite preview",
     "start": "vite",
+    "test": "vitest",
+    "test:run": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "license": "MIT",
@@ -36,6 +38,8 @@
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "3.50.1-build1",
-    "solid-js": "^1.9.7"
+    "rxjs": "^7.8.2",
+    "solid-js": "^1.9.7",
+    "vitest": "^3.2.4"
   }
 }

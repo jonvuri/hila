@@ -4,22 +4,31 @@ export type SqlResult = {
   [column: string]: SqlValue
 }[]
 
-type ExecuteMessage = {
-  type: 'execute'
-  sql: string
-  bind?: (string | number | boolean)[]
+export type QuerySubjectState = {
+  result: SqlResult | null
+  error: Error | null
 }
 
-export type ExecuteResultMessage = {
-  type: 'executeResult'
+export type SubscribeMessage = {
+  type: 'subscribe'
+  sql: string
+}
+
+export type SubscribeResultMessage = {
+  type: 'subscribeResult'
   sql: string
   result: SqlResult
 }
 
-export type ExecuteErrorMessage = {
-  type: 'executeError'
+export type SubscribeErrorMessage = {
+  type: 'subscribeError'
   sql: string
   error: Error
+}
+
+export type UnsubscribeMessage = {
+  type: 'unsubscribe'
+  sql: string
 }
 
 type LogMessage = {
@@ -32,10 +41,10 @@ type ErrorMessage = {
   error: Error
 }
 
-export type ClientMessage = ExecuteMessage
+export type ClientMessage = SubscribeMessage | UnsubscribeMessage
 
 export type WorkerMessage =
-  | ExecuteResultMessage
-  | ExecuteErrorMessage
+  | SubscribeResultMessage
+  | SubscribeErrorMessage
   | LogMessage
   | ErrorMessage
