@@ -1,8 +1,6 @@
 import { createSignal, type Component } from 'solid-js'
-import { firstValueFrom } from 'rxjs'
-import { filter } from 'rxjs/operators'
 
-import { observeSql } from './sql/query'
+import { execQuery } from './sql/query'
 import type { SqlResult } from './sql/types'
 
 const SqlRunner: Component = () => {
@@ -11,21 +9,10 @@ const SqlRunner: Component = () => {
   const [errors, setErrors] = createSignal<string[]>([])
 
   const runSql = async () => {
-    console.log(sql())
     try {
-      const observer = observeSql(sql())
+      const result = await execQuery(sql())
 
-      // Filter out the initial null state to wait for actual results
-      const result = await firstValueFrom(
-        observer.pipe(filter((state) => state.result !== null || state.error !== null)),
-      )
-
-      if (result.result) {
-        setResults([...results(), result.result])
-      }
-      if (result.error) {
-        setErrors([...errors(), result.error.message])
-      }
+      setResults([...results(), result])
     } catch (error: unknown) {
       if (error instanceof Error) {
         setErrors([...errors(), error.message])
