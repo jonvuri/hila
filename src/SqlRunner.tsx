@@ -2,7 +2,7 @@ import { createSignal, type Component } from 'solid-js'
 import { firstValueFrom } from 'rxjs'
 import { filter } from 'rxjs/operators'
 
-import { observeSql } from './sql/client'
+import { observeSql } from './sql/query'
 import type { SqlResult } from './sql/types'
 
 const SqlRunner: Component = () => {

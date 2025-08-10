@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { firstValueFrom } from 'rxjs'
 import { filter, take } from 'rxjs/operators'
 
-import { createQuerySubject } from './querySubject'
-import type { SqlResult, QuerySubjectState } from './types'
+import { createQuerySubject, type SubjectState } from './querySubject'
+import type { SqlResult } from './types'
 
 describe('createQuerySubject', () => {
   let mockEmitResult: (value: SqlResult) => void
@@ -55,10 +55,10 @@ describe('createQuerySubject', () => {
   })
 
   it('should emit results to all subscribers', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
-    const results1: QuerySubjectState[] = []
-    const results2: QuerySubjectState[] = []
+    const results1: SubjectState<SqlResult>[] = []
+    const results2: SubjectState<SqlResult>[] = []
 
     const sub1 = subject.subscribe((state) => results1.push(state))
     const sub2 = subject.subscribe((state) => results2.push(state))
@@ -80,7 +80,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should replay last result to new subscribers (shareReplay behavior)', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     // First subscriber gets the result
     const sub1 = subject.subscribe()
@@ -91,7 +91,7 @@ describe('createQuerySubject', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     // New subscriber should immediately get the last result
-    const newSubResults: QuerySubjectState[] = []
+    const newSubResults: SubjectState<SqlResult>[] = []
     const sub2 = subject.subscribe((state) => newSubResults.push(state))
 
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -104,10 +104,10 @@ describe('createQuerySubject', () => {
   })
 
   it('should emit errors to all subscribers', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
-    const results1: QuerySubjectState[] = []
-    const results2: QuerySubjectState[] = []
+    const results1: SubjectState<SqlResult>[] = []
+    const results2: SubjectState<SqlResult>[] = []
 
     const sub1 = subject.subscribe((state) => results1.push(state))
     const sub2 = subject.subscribe((state) => results2.push(state))
@@ -128,7 +128,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should call cleanup when all subscribers unsubscribe', () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     const sub1 = subject.subscribe()
     const sub2 = subject.subscribe()
@@ -143,7 +143,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should not call cleanup if there are still subscribers', () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     const sub1 = subject.subscribe()
     const sub2 = subject.subscribe()
@@ -159,7 +159,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should re-initialize setup after all subscribers unsubscribe and new subscription occurs', () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     // First round of subscriptions
     const sub1 = subject.subscribe()
@@ -178,7 +178,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should work correctly with firstValueFrom when filtering out null state', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     // This simulates the fix in SqlRunner.tsx
     const resultPromise = firstValueFrom(
@@ -203,7 +203,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should work correctly with firstValueFrom when error occurs', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     const resultPromise = firstValueFrom(
       subject.pipe(filter((state) => state.result !== null || state.error !== null)),
@@ -224,9 +224,9 @@ describe('createQuerySubject', () => {
   })
 
   it('should handle multiple results emitted over time', async () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
-    const allResults: QuerySubjectState[] = []
+    const allResults: SubjectState<SqlResult>[] = []
     const subscription = subject.subscribe((state) => allResults.push(state))
 
     // Emit multiple results
@@ -248,7 +248,7 @@ describe('createQuerySubject', () => {
   })
 
   it('should maintain subscriber count correctly with complex subscription patterns', () => {
-    const subject = createQuerySubject(setupSpy)
+    const subject = createQuerySubject<SqlResult>(setupSpy)
 
     // Start with 2 subscribers
     const sub1 = subject.subscribe()
