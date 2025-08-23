@@ -1,7 +1,32 @@
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database, PreparedStatement } from '@sqlite.org/sqlite-wasm'
+import { Parser } from 'node-sql-parser/build/sqlite'
 
 import type { ClientMessage, WorkerMessage } from './types'
+
+const parser = new Parser()
+
+// Table specifiers from parser.tableList have this format:
+// "{type}::{dbName}::{tableName}"
+// We normalize them to just the table name.
+const normalizeTableName = (tableSpecifier: string) => {
+  const tableName = tableSpecifier.split('::').pop()
+
+  if (!tableName) {
+    throw new Error(`Invalid table specifier: ${tableSpecifier}`)
+  }
+
+  return tableName.toLowerCase()
+}
+
+const tablesVisitedBySql = (sql: string): string[] => {
+  try {
+    const list = parser.tableList(sql)
+    return list.map(normalizeTableName)
+  } catch (_err) {
+    return []
+  }
+}
 
 const post = (message: WorkerMessage) => {
   postMessage(message)
@@ -43,16 +68,19 @@ const sqlite = initSqliteWasm({
     log('Done initializing SQLite')
     post({ type: 'ready' })
 
-    // Register update hook to re-run subscribed statements on any table change.
+    // Register update hook to re-run subscribed statements when tables are changed.
     try {
       // The update hook fires on INSERT/UPDATE/DELETE operations.
-      // We currently ignore table scoping and simply re-run all subscribed SQLs.
       sqlite3.capi.sqlite3_update_hook(
         db,
-        (_bind: number, _op: number, _dbName: string, _table: string, _rowid: bigint) => {
-          for (const sql of preparedStatementsBySql.keys()) {
-            // Fire and forget; errors are reported via subscribeError channel
-            runSubscribedSql(sql)
+        (_bind: number, _op: number, _dbName: string, table: string, _rowid: bigint) => {
+          const normalizedTable = table.toLowerCase()
+          const sqls = subscribersByTable.get(normalizedTable)
+          if (sqls) {
+            for (const sql of sqls) {
+              // Fire and forget; errors are reported via subscribeError channel
+              runSubscribedSql(sql)
+            }
           }
         },
         0,
@@ -74,8 +102,8 @@ type Sql = string
 // type TableName = string
 
 const preparedStatementsBySql: Map<Sql, PreparedStatement> = new Map()
-
-// const subscribersByTable: Map<TableName, Set<Sql>> = new Map()
+const tablesBySql: Map<Sql, Set<string>> = new Map()
+const subscribersByTable: Map<string, Set<Sql>> = new Map()
 
 // Access patterns:
 // - subscribe to a query (by sql and id)
@@ -99,6 +127,18 @@ const subscribe = async (sql: Sql) => {
 
     preparedStatementsBySql.set(sql, preparedStatement)
 
+    // Track tables read by this SQL for selective invalidation
+    const visited = new Set(tablesVisitedBySql(sql))
+    tablesBySql.set(sql, visited)
+    for (const table of visited) {
+      const set = subscribersByTable.get(table)
+      if (set) {
+        set.add(sql)
+      } else {
+        subscribersByTable.set(table, new Set([sql]))
+      }
+    }
+
     log(`Prepared SQL for subscription: ${trimSql(sql)}`)
   } catch (err: unknown) {
     const error = new Error(`Error preparing SQL: ${trimSql(sql)}`, { cause: err })
@@ -120,6 +160,21 @@ const unsubscribe = (sql: Sql) => {
 
   preparedStatement.finalize()
   preparedStatementsBySql.delete(sql)
+
+  // Remove from table indexes
+  const tables = tablesBySql.get(sql)
+  if (tables) {
+    for (const table of tables) {
+      const set = subscribersByTable.get(table)
+      if (set) {
+        set.delete(sql)
+        if (set.size === 0) {
+          subscribersByTable.delete(table)
+        }
+      }
+    }
+    tablesBySql.delete(sql)
+  }
 
   log(`Unsubscribed from SQL: ${trimSql(sql)}`)
 }
