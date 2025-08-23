@@ -30,6 +30,23 @@ export type UnsubscribeMessage = {
   sql: string
 }
 
+export type ExecuteMessage = {
+  type: 'execute'
+  id: string
+  sql: string
+}
+
+export type ExecuteAckMessage = {
+  type: 'executeAck'
+  id: string
+}
+
+export type ExecuteErrorMessage = {
+  type: 'executeError'
+  id: string
+  error: Error
+}
+
 type LogMessage = {
   type: 'log'
   message: string
@@ -40,10 +57,17 @@ type ErrorMessage = {
   error: Error
 }
 
-export type ClientMessage = SubscribeMessage | UnsubscribeMessage
+type ReadyMessage = {
+  type: 'ready'
+}
+
+export type ClientMessage = SubscribeMessage | UnsubscribeMessage | ExecuteMessage
 
 export type WorkerMessage =
   | SubscribeResultMessage
   | SubscribeErrorMessage
+  | ExecuteAckMessage
+  | ExecuteErrorMessage
   | LogMessage
   | ErrorMessage
+  | ReadyMessage

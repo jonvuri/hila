@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import 'vitest/config' // Extends Vite config types
 import solidPlugin from 'vite-plugin-solid'
 import { patchCssModules } from 'vite-css-modules'
 
@@ -13,6 +14,10 @@ export default defineConfig({
     }),
     solidPlugin(),
   ],
+  test: {
+    setupFiles: ['@vitest/web-worker'],
+    environment: 'jsdom',
+  },
   server: {
     port: 3000,
     headers: {

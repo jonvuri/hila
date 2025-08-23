@@ -1,5 +1,5 @@
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
-import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
+import type { Database, PreparedStatement } from '@sqlite.org/sqlite-wasm'
 
 import type { ClientMessage, WorkerMessage } from './types'
 
@@ -26,15 +26,43 @@ const sqlite = initSqliteWasm({
   printErr: logError,
 }).then((sqlite3) => {
   try {
-    if (!('opfs' in sqlite3)) {
-      logError(new Error('OPFS is not available'))
+    let db: Database
+    if ('opfs' in sqlite3) {
+      try {
+        db = new sqlite3.oo1.OpfsDb('/hioa-db.sqlite3')
+      } catch (_) {
+        // Fall back to in-memory in case OPFS is unavailable (e.g., in tests)
+        db = new sqlite3.oo1.DB(':memory:', 'c')
+        log('Fell back to in-memory DB')
+      }
+    } else {
+      db = new sqlite3.oo1.DB(':memory:', 'c')
+      log('Using in-memory DB (no OPFS)')
     }
 
-    const opfsDb = new sqlite3.oo1.OpfsDb('/hioa-db.sqlite3')
-
     log('Done initializing SQLite')
+    post({ type: 'ready' })
 
-    return opfsDb
+    // Register update hook to re-run subscribed statements on any table change.
+    try {
+      // The update hook fires on INSERT/UPDATE/DELETE operations.
+      // We currently ignore table scoping and simply re-run all subscribed SQLs.
+      sqlite3.capi.sqlite3_update_hook(
+        db,
+        (_bind: number, _op: number, _dbName: string, _table: string, _rowid: bigint) => {
+          for (const sql of preparedStatementsBySql.keys()) {
+            // Fire and forget; errors are reported via subscribeError channel
+            runSubscribedSql(sql)
+          }
+        },
+        0,
+      )
+      log('Registered sqlite3_update_hook for write invalidation')
+    } catch (err) {
+      logError(new Error('Failed to register sqlite3_update_hook', { cause: err as Error }))
+    }
+
+    return db
   } catch (err: unknown) {
     throw new Error('SQLite failed to initialize', { cause: err })
   }
@@ -109,6 +137,7 @@ const runSubscribedSql = async (sql: Sql) => {
     while (statement.step()) {
       result.push(statement.get({}))
     }
+    statement.reset()
 
     post({ type: 'subscribeResult', sql, result })
   } catch (err: unknown) {
@@ -118,7 +147,7 @@ const runSubscribedSql = async (sql: Sql) => {
   }
 }
 
-onmessage = async (event: MessageEvent<ClientMessage>) => {
+const handleMessage = async (event: MessageEvent<ClientMessage>) => {
   const { type } = event.data
 
   log(`Received message ${type}: ${JSON.stringify(event.data)}`)
@@ -132,5 +161,24 @@ onmessage = async (event: MessageEvent<ClientMessage>) => {
     const { sql } = event.data
 
     unsubscribe(sql)
+  } else if (type === 'execute') {
+    const { sql, id } = event.data
+
+    try {
+      const db = await sqlite
+      db.exec(sql)
+
+      post({ type: 'executeAck', id })
+    } catch (err: unknown) {
+      post({
+        type: 'executeError',
+        id,
+        error: err instanceof Error ? err : new Error(String(err)),
+      })
+    }
   }
 }
+
+// Support both assignment and explicit event listener to be robust across environments
+onmessage = handleMessage
+addEventListener('message', handleMessage as unknown as EventListener)
