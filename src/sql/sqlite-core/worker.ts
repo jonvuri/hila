@@ -234,6 +234,4 @@ const handleMessage = async (event: MessageEvent<ClientMessage>) => {
   }
 }
 
-// Support both assignment and explicit event listener to be robust across environments
-onmessage = handleMessage
-addEventListener('message', handleMessage as unknown as EventListener)
+self.onmessage = handleMessage
