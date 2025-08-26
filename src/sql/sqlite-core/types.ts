@@ -1,52 +1,7 @@
-import type { SqlValue } from '@sqlite.org/sqlite-wasm'
+import type { SqlClientMessage, SqlWorkerMessage } from './sql-types'
+import type { MatrixClientMessage, MatrixWorkerMessage } from './matrix-types'
 
-export type Sql = string
-
-export type SqlResult = {
-  [column: string]: SqlValue
-}[]
-
-export type SqlObserver = (result: SqlResult | null, error: Error | null) => void
-
-export type SubscribeMessage = {
-  type: 'subscribe'
-  sql: string
-}
-
-export type SubscribeResultMessage = {
-  type: 'subscribeResult'
-  sql: string
-  result: SqlResult
-}
-
-export type SubscribeErrorMessage = {
-  type: 'subscribeError'
-  sql: string
-  error: Error
-}
-
-export type UnsubscribeMessage = {
-  type: 'unsubscribe'
-  sql: string
-}
-
-export type ExecuteMessage = {
-  type: 'execute'
-  id: string
-  sql: string
-}
-
-export type ExecuteAckMessage = {
-  type: 'executeAck'
-  id: string
-}
-
-export type ExecuteErrorMessage = {
-  type: 'executeError'
-  id: string
-  error: Error
-}
-
+// Core worker system messages
 type LogMessage = {
   type: 'log'
   message: string
@@ -61,13 +16,9 @@ type ReadyMessage = {
   type: 'ready'
 }
 
-export type ClientMessage = SubscribeMessage | UnsubscribeMessage | ExecuteMessage
+export type CoreWorkerMessage = LogMessage | ErrorMessage | ReadyMessage
 
-export type WorkerMessage =
-  | SubscribeResultMessage
-  | SubscribeErrorMessage
-  | ExecuteAckMessage
-  | ExecuteErrorMessage
-  | LogMessage
-  | ErrorMessage
-  | ReadyMessage
+// Combined message types for the main worker interface
+export type ClientMessage = SqlClientMessage | MatrixClientMessage
+
+export type WorkerMessage = SqlWorkerMessage | MatrixWorkerMessage | CoreWorkerMessage

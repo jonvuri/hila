@@ -1,10 +1,16 @@
 import { firstValueFrom } from 'rxjs'
 import { filter } from 'rxjs/operators'
 
-import { addObserver, removeObserver } from './sqlite-core/client'
+import {
+  addObserver,
+  removeObserver,
+  createMatrix,
+  addSampleRows,
+  resetDatabase,
+} from './sqlite-core/client'
 import { createQuerySubject } from './querySubject'
 import type { SqlResult } from './types'
-import type { SqlObserver } from './sqlite-core/types'
+import type { SqlObserver } from './sqlite-core/sql-types'
 
 export const observeQuery = (sql: string) =>
   createQuerySubject<SqlResult>((emitResult, emitError) => {
@@ -42,3 +48,6 @@ export const execQuery = async (sql: string) => {
   // Should never happen due to filter above
   throw new Error('Unexpected observer state: null result and null error')
 }
+
+// Matrix operations
+export { createMatrix, addSampleRows, resetDatabase }

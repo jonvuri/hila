@@ -1,34 +1,12 @@
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
-import type { Database, PreparedStatement } from '@sqlite.org/sqlite-wasm'
-import { Parser } from 'node-sql-parser/build/sqlite'
+import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import type { ClientMessage, WorkerMessage } from './types'
+import type { ClientMessage, CoreWorkerMessage } from './types'
+import { initMatrixSchema } from './matrix'
+import { initSqlHandler, handleSqlClientMessage, triggerSubscribedQueries } from './sql-handler'
+import { initMatrixHandler, handleMatrixClientMessage } from './matrix-handler'
 
-const parser = new Parser()
-
-// Table specifiers from parser.tableList have this format:
-// "{type}::{dbName}::{tableName}"
-// We normalize them to just the table name.
-const normalizeTableName = (tableSpecifier: string) => {
-  const tableName = tableSpecifier.split('::').pop()
-
-  if (!tableName) {
-    throw new Error(`Invalid table specifier: ${tableSpecifier}`)
-  }
-
-  return tableName.toLowerCase()
-}
-
-const tablesVisitedBySql = (sql: string): string[] => {
-  try {
-    const list = parser.tableList(sql)
-    return list.map(normalizeTableName)
-  } catch (_err) {
-    return []
-  }
-}
-
-const post = (message: WorkerMessage) => {
+const post = (message: CoreWorkerMessage) => {
   postMessage(message)
 }
 
@@ -40,13 +18,9 @@ const logError = (error: Error | string) => {
   post({ type: 'error', error: error instanceof Error ? error : new Error(error) })
 }
 
-const trimSql = (sql: string) => {
-  return sql.trim().replace(/\s+/g, ' ')
-}
+log('Initializing worker core')
 
-log('Initializing SQLite')
-
-const sqlite = initSqliteWasm({
+initSqliteWasm({
   print: log,
   printErr: logError,
 }).then((sqlite3) => {
@@ -65,7 +39,19 @@ const sqlite = initSqliteWasm({
       log('Using in-memory DB (no OPFS)')
     }
 
-    log('Done initializing SQLite')
+    // Initialize matrix schema
+    try {
+      initMatrixSchema(db)
+      log('Matrix schema initialized')
+    } catch (err: unknown) {
+      logError(new Error('Failed to initialize matrix schema', { cause: err as Error }))
+    }
+
+    // Initialize submodule handlers
+    initSqlHandler(postMessage, Promise.resolve(db))
+    initMatrixHandler(postMessage, Promise.resolve(db), sqlite3)
+
+    log('Done initializing worker core')
     post({ type: 'ready' })
 
     // Register update hook to re-run subscribed statements when tables are changed.
@@ -74,14 +60,7 @@ const sqlite = initSqliteWasm({
       sqlite3.capi.sqlite3_update_hook(
         db,
         (_bind: number, _op: number, _dbName: string, table: string, _rowid: bigint) => {
-          const normalizedTable = table.toLowerCase()
-          const sqls = subscribersByTable.get(normalizedTable)
-          if (sqls) {
-            for (const sql of sqls) {
-              // Fire and forget; errors are reported via subscribeError channel
-              runSubscribedSql(sql)
-            }
-          }
+          triggerSubscribedQueries(table)
         },
         0,
       )
@@ -92,146 +71,28 @@ const sqlite = initSqliteWasm({
 
     return db
   } catch (err: unknown) {
-    throw new Error('SQLite failed to initialize', { cause: err })
+    throw new Error('Worker core failed to initialize', { cause: err })
   }
 })
-
-// Keep track of subscriber queries and their tables, to run queries again when
-// tables update.
-type Sql = string
-// type TableName = string
-
-const preparedStatementsBySql: Map<Sql, PreparedStatement> = new Map()
-const tablesBySql: Map<Sql, Set<string>> = new Map()
-const subscribersByTable: Map<string, Set<Sql>> = new Map()
-
-// Access patterns:
-// - subscribe to a query (by sql and id)
-// - unsubscribe from a query (by sql and id)
-// - send query result to all subscribers for that query (sql to ids)
-// - retrieve all sql queries subscribed to for a given table (table name to sqls)
-
-const subscribe = async (sql: Sql) => {
-  const existing = preparedStatementsBySql.get(sql)
-
-  if (existing) {
-    logError(`Tried to subscribe, but SQL was already subscribed: ${trimSql(sql)}`)
-
-    return
-  }
-
-  const db = await sqlite
-
-  try {
-    const preparedStatement = db.prepare(sql)
-
-    preparedStatementsBySql.set(sql, preparedStatement)
-
-    // Track tables read by this SQL for selective invalidation
-    const visited = new Set(tablesVisitedBySql(sql))
-    tablesBySql.set(sql, visited)
-    for (const table of visited) {
-      const set = subscribersByTable.get(table)
-      if (set) {
-        set.add(sql)
-      } else {
-        subscribersByTable.set(table, new Set([sql]))
-      }
-    }
-
-    log(`Prepared SQL for subscription: ${trimSql(sql)}`)
-  } catch (err: unknown) {
-    const error = new Error(`Error preparing SQL: ${trimSql(sql)}`, { cause: err })
-    post({ type: 'subscribeError', sql, error })
-    throw error
-  }
-}
-
-const unsubscribe = (sql: Sql) => {
-  const preparedStatement = preparedStatementsBySql.get(sql)
-
-  if (!preparedStatement) {
-    logError(
-      `Tried to unsubscribe, but no prepared statement was found for SQL: ${trimSql(sql)}`,
-    )
-
-    return
-  }
-
-  preparedStatement.finalize()
-  preparedStatementsBySql.delete(sql)
-
-  // Remove from table indexes
-  const tables = tablesBySql.get(sql)
-  if (tables) {
-    for (const table of tables) {
-      const set = subscribersByTable.get(table)
-      if (set) {
-        set.delete(sql)
-        if (set.size === 0) {
-          subscribersByTable.delete(table)
-        }
-      }
-    }
-    tablesBySql.delete(sql)
-  }
-
-  log(`Unsubscribed from SQL: ${trimSql(sql)}`)
-}
-
-const runSubscribedSql = async (sql: Sql) => {
-  const statement = preparedStatementsBySql.get(sql)
-
-  if (!statement) {
-    logError(`Tried to run, but no prepared statement was found for SQL: ${trimSql(sql)}`)
-    return
-  }
-
-  try {
-    const result = []
-    while (statement.step()) {
-      result.push(statement.get({}))
-    }
-    statement.reset()
-
-    post({ type: 'subscribeResult', sql, result })
-  } catch (err: unknown) {
-    const error = new Error(`Error running subscribed SQL: ${trimSql(sql)}`, { cause: err })
-
-    post({ type: 'subscribeError', sql, error })
-  }
-}
 
 const handleMessage = async (event: MessageEvent<ClientMessage>) => {
   const { type } = event.data
 
   log(`Received message ${type}: ${JSON.stringify(event.data)}`)
 
-  if (type === 'subscribe') {
-    const { sql } = event.data
-
-    await subscribe(sql)
-    await runSubscribedSql(sql)
-  } else if (type === 'unsubscribe') {
-    const { sql } = event.data
-
-    unsubscribe(sql)
-  } else if (type === 'execute') {
-    const { sql, id } = event.data
-
-    try {
-      const db = await sqlite
-      db.exec(sql)
-
-      post({ type: 'executeAck', id })
-    } catch (err: unknown) {
-      post({
-        type: 'executeError',
-        id,
-        error: err instanceof Error ? err : new Error(String(err)),
-      })
-    }
+  // Route SQL messages to SQL handler
+  if (type === 'subscribe' || type === 'unsubscribe' || type === 'execute') {
+    await handleSqlClientMessage(event.data)
+    return
   }
+
+  // Route Matrix messages to Matrix handler
+  if (type === 'createMatrix' || type === 'addSampleRows' || type === 'resetDatabase') {
+    await handleMatrixClientMessage(event.data)
+    return
+  }
+
+  console.warn('Unknown message type:', type)
 }
 
 self.onmessage = handleMessage
