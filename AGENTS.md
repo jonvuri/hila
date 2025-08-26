@@ -1,4 +1,14 @@
-# Plan
+# Development practices
+
+## Static analysis and tests
+
+Check these tasks after every major change:
+
+- Static types (Typescript): `npm run typecheck`
+- Linter (ESLint): `npm run lint`
+- Tests (Vitest): `npm run test:run`
+
+# Project plan
 
 The long-term, high-level plan for this project:
 
