@@ -5,10 +5,13 @@ import { firstValueFrom } from 'rxjs'
 import { filter, take, skip } from 'rxjs/operators'
 
 import { observeQuery } from './query'
-import { execQuery } from './sqlite-core/client'
+import { execQuery } from './sqlite-core/sql-client'
+import { awaitWorkerReady } from './sqlite-core/worker-client'
 
 describe('write execution invalidates subscriptions', () => {
   beforeAll(async () => {
+    await awaitWorkerReady()
+
     await execQuery(
       `CREATE TABLE IF NOT EXISTS elements(
         id INTEGER PRIMARY KEY,

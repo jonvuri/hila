@@ -1,36 +1,25 @@
-import type { Database, Sqlite3Static } from '@sqlite.org/sqlite-wasm'
-
 import type { MatrixClientMessage, MatrixWorkerMessage } from './matrix-types'
-import { createMatrix as createMatrixImpl, addSampleRowsToMatrix } from './matrix'
+import {
+  initMatrixSchema,
+  createMatrix as createMatrixImpl,
+  addSampleRowsToMatrix,
+} from './matrix'
+import { sqliteWasm } from './worker-db'
 
-// Message posting interface - will be injected by main worker
-type MessagePoster = (message: MatrixWorkerMessage) => void
-
-let postMessage: MessagePoster = () => {
-  throw new Error('Matrix handler not initialized - postMessage not set')
+const postMessage = (message: MatrixWorkerMessage) => {
+  self.postMessage(message)
 }
-let getDatabase: Promise<Database> = Promise.reject(
-  new Error('Matrix handler not initialized - getDatabase not set'),
-)
 
-let sqlite3: Sqlite3Static | null = null
-
-export const initMatrixHandler = (
-  poster: MessagePoster,
-  databaseGetter: Promise<Database>,
-  sqlite3_: Sqlite3Static,
-) => {
-  postMessage = poster
-  getDatabase = databaseGetter
-  sqlite3 = sqlite3_
-}
+sqliteWasm.then(({ db }) => {
+  initMatrixSchema(db)
+})
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
   switch (message.type) {
     case 'createMatrix': {
       const { title, id } = message
       try {
-        const db = await getDatabase
+        const { db } = await sqliteWasm
         const matrixId = createMatrixImpl(db, title)
         postMessage({ type: 'createMatrixSuccess', id, matrixId })
       } catch (err: unknown) {
@@ -46,7 +35,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     case 'addSampleRows': {
       const { matrixId, id } = message
       try {
-        const db = await getDatabase
+        const { db } = await sqliteWasm
         addSampleRowsToMatrix(db, matrixId)
         postMessage({ type: 'addSampleRowsAck', id })
       } catch (err: unknown) {
@@ -61,6 +50,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
 
     case 'resetDatabase': {
       const { id } = message
+      const { db, sqlite3 } = await sqliteWasm
 
       if (!sqlite3) {
         postMessage({
@@ -72,8 +62,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       }
 
       try {
-        const db = await getDatabase
-
         // Reset database using SQLite C-API
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 1, 0)
         sqlite3.capi.sqlite3_exec(db, 'VACUUM', 0, 0, 0)

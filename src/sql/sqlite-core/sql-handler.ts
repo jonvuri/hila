@@ -1,23 +1,13 @@
-import type { Database, PreparedStatement } from '@sqlite.org/sqlite-wasm'
+import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
 import { Parser } from 'node-sql-parser/build/sqlite'
 
+import { sqliteWasm } from './worker-db'
 import type { SqlClientMessage, SqlWorkerMessage } from './sql-types'
 
 const parser = new Parser()
 
-// Message posting interface - will be injected by main worker
-type MessagePoster = (message: SqlWorkerMessage) => void
-
-let postMessage: MessagePoster = () => {
-  throw new Error('SQL handler not initialized - postMessage not set')
-}
-let getDatabase: Promise<Database> = Promise.reject(
-  new Error('SQL handler not initialized - getDatabase not set'),
-)
-
-export const initSqlHandler = (poster: MessagePoster, databaseGetter: Promise<Database>) => {
-  postMessage = poster
-  getDatabase = databaseGetter
+const postMessage = (message: SqlWorkerMessage) => {
+  self.postMessage(message)
 }
 
 // Table specifiers from parser.tableList have this format:
@@ -62,7 +52,7 @@ const subscribe = async (sql: Sql) => {
     return
   }
 
-  const db = await getDatabase
+  const { db } = await sqliteWasm
 
   try {
     const preparedStatement = db.prepare(sql)
@@ -154,6 +144,17 @@ export const triggerSubscribedQueries = (tableName: string) => {
   }
 }
 
+// Register update hook to re-run subscribed statements when tables are changed
+sqliteWasm.then(({ db, sqlite3 }) => {
+  sqlite3.capi.sqlite3_update_hook(
+    db,
+    (_bind: number, _op: number, _dbName: string, table: string, _rowid: bigint) => {
+      triggerSubscribedQueries(table)
+    },
+    0,
+  )
+})
+
 export const handleSqlClientMessage = async (message: SqlClientMessage) => {
   switch (message.type) {
     case 'subscribe': {
@@ -172,7 +173,7 @@ export const handleSqlClientMessage = async (message: SqlClientMessage) => {
     case 'execute': {
       const { sql, id } = message
       try {
-        const db = await getDatabase
+        const { db } = await sqliteWasm
         db.exec(sql)
         postMessage({ type: 'executeAck', id })
       } catch (err: unknown) {
