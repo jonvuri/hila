@@ -1,9 +1,10 @@
+import type { MatrixWorkerMessage } from '../matrix-types'
+
 import {
   pendingMatrixCreations,
   pendingRowAdditions,
   pendingDatabaseResets,
 } from './matrix-client-promises'
-import type { MatrixWorkerMessage } from './matrix-types'
 
 export const handleMatrixWorkerMessage = (message: MatrixWorkerMessage) => {
   const { type } = message

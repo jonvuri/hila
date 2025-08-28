@@ -1,10 +1,11 @@
 import { firstValueFrom } from 'rxjs'
 import { filter } from 'rxjs/operators'
 
-import { addObserver, removeObserver } from './sqlite-core/sql-client'
+import { addObserver, removeObserver } from '../core/client/sql-client'
+import type { SqlObserver } from '../core/sql-types'
+
 import { createQuerySubject } from './querySubject'
 import type { SqlResult } from './types'
-import type { SqlObserver } from './sqlite-core/sql-types'
 
 export const observeQuery = (sql: string) =>
   createQuerySubject<SqlResult>((emitResult, emitError) => {

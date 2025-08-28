@@ -1,4 +1,4 @@
-import type { SqlResult as SqlResultCore } from './sqlite-core/sql-types'
+import type { SqlResult as SqlResultCore } from '../core/sql-types'
 
 export type SqlResult = SqlResultCore
 

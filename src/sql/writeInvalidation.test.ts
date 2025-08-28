@@ -4,9 +4,10 @@ import { describe, it, beforeAll, expect } from 'vitest'
 import { firstValueFrom } from 'rxjs'
 import { filter, take, skip } from 'rxjs/operators'
 
+import { execQuery } from '../core/client/sql-client'
+import { awaitWorkerReady } from '../core/client/worker-client'
+
 import { observeQuery } from './query'
-import { execQuery } from './sqlite-core/sql-client'
-import { awaitWorkerReady } from './sqlite-core/worker-client'
 
 describe('write execution invalidates subscriptions', () => {
   beforeAll(async () => {

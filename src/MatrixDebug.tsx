@@ -1,6 +1,6 @@
 import { createSignal, For, Show, type Component, createComputed, onCleanup } from 'solid-js'
 
-import { createMatrix, addSampleRows, resetDatabase } from './sql/sqlite-core/matrix-client'
+import { createMatrix, addSampleRows, resetDatabase } from './core/client/matrix-client'
 import { observeQuery } from './sql/query'
 
 interface Matrix {

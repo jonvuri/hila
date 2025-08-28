@@ -1,9 +1,10 @@
-import { postMessage } from './worker-client'
 import type {
   CreateMatrixMessage,
   AddSampleRowsMessage,
   ResetDatabaseMessage,
-} from './matrix-types'
+} from '../matrix-types'
+
+import { postMessage } from './worker-client'
 import {
   pendingMatrixCreations,
   pendingRowAdditions,

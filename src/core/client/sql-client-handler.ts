@@ -1,4 +1,5 @@
-import type { SqlWorkerMessage } from './sql-types'
+import type { SqlWorkerMessage } from '../sql-types'
+
 import { pendingExecs, subscribedObservers } from './sql-client-promises'
 
 const trimSql = (sql: string) => {

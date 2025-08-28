@@ -1,7 +1,7 @@
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import type { CoreWorkerMessage } from './types'
+import type { CoreWorkerMessage } from '../types'
 
 const log = (message: string) => {
   self.postMessage({ type: 'log', message } as CoreWorkerMessage)

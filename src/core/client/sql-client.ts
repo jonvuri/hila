@@ -1,6 +1,7 @@
-import type { SqlObserver, ExecuteMessage } from './sql-types'
-import { pendingExecs, subscribedObservers } from './sql-client-promises'
+import type { SqlObserver, ExecuteMessage } from '../sql-types'
+
 import { postMessage } from './worker-client'
+import { pendingExecs, subscribedObservers } from './sql-client-promises'
 
 const trimSql = (sql: string) => {
   return sql.trim().replace(/\s+/g, ' ')

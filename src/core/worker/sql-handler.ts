@@ -1,8 +1,9 @@
 import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
 import { Parser } from 'node-sql-parser/build/sqlite'
 
+import type { SqlClientMessage, SqlWorkerMessage } from '../sql-types'
+
 import { sqliteWasm } from './worker-db'
-import type { SqlClientMessage, SqlWorkerMessage } from './sql-types'
 
 const parser = new Parser()
 

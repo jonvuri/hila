@@ -1,4 +1,4 @@
-import type { Sql, SqlObserver } from './sql-types'
+import type { Sql, SqlObserver } from '../sql-types'
 
 export const subscribedObservers: Map<Sql, Set<SqlObserver>> = new Map()
 

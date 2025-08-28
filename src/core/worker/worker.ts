@@ -1,6 +1,7 @@
-import type { ClientMessage, CoreWorkerMessage } from './types'
-import { handleSqlClientMessage } from './sql-handler'
+import type { ClientMessage, CoreWorkerMessage } from '../types'
+
 import { handleMatrixClientMessage } from './matrix-handler'
+import { handleSqlClientMessage } from './sql-handler'
 
 const post = (message: CoreWorkerMessage) => {
   self.postMessage(message)

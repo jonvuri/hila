@@ -1,8 +1,11 @@
+import type { ClientMessage, WorkerMessage } from '../types'
+
 import { handleMatrixWorkerMessage } from './matrix-client-handler'
 import { handleSqlWorkerMessage } from './sql-client-handler'
-import type { ClientMessage, WorkerMessage } from './types'
 
-export const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
+export const worker = new Worker(new URL('../worker/worker.ts', import.meta.url), {
+  type: 'module',
+})
 
 let workerReady = false
 const pendingMessages: ClientMessage[] = []

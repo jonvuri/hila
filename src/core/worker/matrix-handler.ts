@@ -1,9 +1,10 @@
-import type { MatrixClientMessage, MatrixWorkerMessage } from './matrix-types'
+import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
 import {
   initMatrixSchema,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
-} from './matrix'
+} from '../matrix'
+
 import { sqliteWasm } from './worker-db'
 
 const postMessage = (message: MatrixWorkerMessage) => {
