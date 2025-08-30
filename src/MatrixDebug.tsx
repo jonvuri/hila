@@ -26,6 +26,15 @@ interface ClosureData {
   depth: number
 }
 
+interface OutlineItem {
+  key: Uint8Array
+  element_kind: number
+  element_id: number
+  depth: number
+  data1: string | null
+  data2: string | null
+}
+
 const MatrixDebug: Component = () => {
   const [matrices, setMatrices] = createSignal<Matrix[]>([])
   const [matrixData, setMatrixData] = createSignal<Record<number, MatrixData[]>>({})
@@ -156,6 +165,44 @@ const MatrixDebug: Component = () => {
       .join('')
   }
 
+  const getOutlineStructure = (matrixId: number): OutlineItem[] => {
+    const ordering = orderingData()[matrixId] || []
+    const closure = closureData()[matrixId] || []
+    const data = matrixData()[matrixId] || []
+
+    // Create a map for quick data lookup by element_id
+    const dataMap = new Map<number, MatrixData>()
+    data.forEach((item) => {
+      dataMap.set(item.id, item)
+    })
+
+    // Create a map for depth lookup by descendant_key (as string for comparison)
+    const depthMap = new Map<string, number>()
+    closure.forEach((item) => {
+      const descendantKeyStr = formatKey(item.descendant_key)
+
+      // For each descendant, track its maximum depth (deepest nesting level)
+      const currentDepth = depthMap.get(descendantKeyStr) || 0
+      depthMap.set(descendantKeyStr, Math.max(currentDepth, item.depth))
+    })
+
+    // Combine ordering data with depth and matrix data
+    return ordering.map((orderItem) => {
+      const keyStr = formatKey(orderItem.key)
+      const depth = depthMap.get(keyStr) || 0
+      const elementData = dataMap.get(orderItem.element_id) || { data1: null, data2: null }
+
+      return {
+        key: orderItem.key,
+        element_kind: orderItem.element_kind,
+        element_id: orderItem.element_id,
+        depth,
+        data1: elementData.data1,
+        data2: elementData.data2,
+      }
+    })
+  }
+
   return (
     <div style={{ padding: '20px', font: '14px monospace' }}>
       <h2>Matrix Debug Interface</h2>
@@ -270,7 +317,11 @@ const MatrixDebug: Component = () => {
               </div>
 
               <div
-                style={{ display: 'grid', 'grid-template-columns': '1fr 1fr 1fr', gap: '20px' }}
+                style={{
+                  display: 'grid',
+                  'grid-template-columns': '1fr 1fr 1fr 1fr',
+                  gap: '20px',
+                }}
               >
                 {/* Data Table */}
                 <div>
@@ -467,6 +518,76 @@ const MatrixDebug: Component = () => {
                         </Show>
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Outline View */}
+                <div>
+                  <h4>Outline Structure</h4>
+                  <div style={{ 'overflow-x': 'auto' }}>
+                    <div
+                      style={{
+                        border: '1px solid #dee2e6',
+                        'border-radius': '3px',
+                        'font-size': '12px',
+                        'min-height': '100px',
+                        'background-color': 'white',
+                      }}
+                    >
+                      <Show
+                        when={(orderingData()[matrix.id] || []).length > 0}
+                        fallback={
+                          <div
+                            style={{
+                              'text-align': 'center',
+                              padding: '20px',
+                              'font-style': 'italic',
+                              color: '#666',
+                            }}
+                          >
+                            No items to display
+                          </div>
+                        }
+                      >
+                        <For each={getOutlineStructure(matrix.id)}>
+                          {(item) => (
+                            <div
+                              style={{
+                                padding: '4px 8px',
+                                'border-bottom': '1px solid #f0f0f0',
+                                'padding-left': `${8 + item.depth * 20}px`,
+                                'font-family': 'monospace',
+                                display: 'flex',
+                                'align-items': 'center',
+                                gap: '8px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: '#666',
+                                  'font-size': '10px',
+                                  'min-width': '40px',
+                                }}
+                              >
+                                [{item.element_kind}:{item.element_id}]
+                              </span>
+                              <span style={{ flex: 1 }}>
+                                {item.data1 || item.data2 || 'No data'}
+                              </span>
+                              <span
+                                style={{
+                                  color: '#999',
+                                  'font-size': '10px',
+                                  'font-family': 'monospace',
+                                }}
+                              >
+                                {formatKey(item.key)}
+                              </span>
+                            </div>
+                          )}
+                        </For>
+                      </Show>
+                    </div>
                   </div>
                 </div>
               </div>
