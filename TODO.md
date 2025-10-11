@@ -1,6 +1,6 @@
 ## TODO (next, incremental steps)
 
-- [ ] **Lexorank encoder utilities**
+- [x] **Lexorank encoder utilities**
 
   - Implement 0x00-terminated segment keys with helpers: `makeKey`, `between(a, b)`, `nextPrefix(prefix)`.
   - Test: lexical sort equals intended order; `between` yields a key strictly between; `nextPrefix` defines subtree upper bound.
