@@ -1,3 +1,6 @@
+// Outgoing side of the Matrix client interface. Sends messages to the worker
+// that will resolve the promises once the operations are complete.
+
 import type {
   CreateMatrixMessage,
   AddSampleRowsMessage,

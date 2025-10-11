@@ -1,3 +1,5 @@
+// Handles SQL messages, and also manages subscriptions to SQL statements.
+
 import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
 import { Parser } from 'node-sql-parser/build/sqlite'
 

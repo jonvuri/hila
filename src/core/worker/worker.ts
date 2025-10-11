@@ -1,3 +1,6 @@
+// Main worker entry point - handles all messages coming from the core client
+// and routes them to the appropriate handler.
+
 import type { ClientMessage, CoreWorkerMessage } from '../types'
 
 import { handleMatrixClientMessage } from './matrix-handler'

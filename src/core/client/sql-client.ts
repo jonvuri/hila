@@ -1,3 +1,6 @@
+// Outgoing side of the SQL client interface. Sends messages to the worker
+// that will resolve the promises once results are available.
+
 import type { SqlObserver, ExecuteMessage } from '../sql-types'
 
 import { postMessage } from './worker-client'

@@ -1,3 +1,6 @@
+// Incoming side of the Matrix client interface. Handles the receiving of messages from the worker
+// and resolves the promises once the operations are complete.
+
 import type { MatrixWorkerMessage } from '../matrix-types'
 
 import {

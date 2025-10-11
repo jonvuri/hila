@@ -1,3 +1,6 @@
+// Incoming side of the SQL client interface. Handles the receiving of messages from the worker
+// and resolves the promises once results are available.
+
 import type { SqlWorkerMessage } from '../sql-types'
 
 import { pendingExecs, subscribedObservers } from './sql-client-promises'

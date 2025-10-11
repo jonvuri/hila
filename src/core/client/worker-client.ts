@@ -1,3 +1,5 @@
+// Direct client interface to the worker. Handles the sending and receiving of messages to it.
+
 import type { ClientMessage, WorkerMessage } from '../types'
 
 import { handleMatrixWorkerMessage } from './matrix-client-handler'

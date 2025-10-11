@@ -33,7 +33,7 @@ The long-term, high-level plan for this project:
 
 - The app is built with Solid.js, a lightweight and super-performant reactive UI library, in order to serve the performance objectives.
 
-## Basic concepts
+## Feature concepts
 
 ### Matrix
 
@@ -55,10 +55,6 @@ The long-term, high-level plan for this project:
 
 - A normal, user-expandable SQLite rowid table holding the matrix's data rows. Columns use default settings (no extra constraints), but can otherwise contain any kind of data.
 
-#### Closure table
-
-- A metadata table with one row for every ancestor-descendant relationship in the matrix, including the identity relationship between an element and itself.
-
 #### Ordering table (shared, global)
 
 - Maintains the **global ordering of all elements across all matrixes**.
@@ -78,6 +74,22 @@ The long-term, high-level plan for this project:
   - Variable lengths at the same level do **not** break sorting.
   - No sibling can accidentally be a prefix of another sibling (prefix implies ancestry only).
   - Simple, fast windowed scans and subtree operations.
+
+- Some example access patterns for the ordering table:
+  - Get all elements in order, with a limit and offset
+  - Using a Lexorank prefix, get all descendants of a specific element in order, with a limit and offset (an element focus view)
+  - Add a new element after a specific element (usually, between two existing elements)
+  - Reorder elements
+
+#### Closure table
+
+- A metadata table with one row for every ancestor-descendant relationship in the matrix, including the identity relationship between an element and itself.
+- The closure table is the source of truth for the matrix's outline structure and the depth of each element. However, it must match up with the Lexorank structure in the ordering table, when it comes to ancestor/descendant/sibling relationships. All operations that modify either table should be carefully tested to ensure this invariant, and should use transactions.
+
+- Some example access patterns over the closure table:
+  - Get all ancestors of a specific element up to the root (navigation breadcrumbs)
+  - Look up previous and next siblings of a specific element
+  - (Both ordering and closure table:) Get all elements in order, filtering out elements that are descendants of a set of 'collapsed' elements
 
 ### Face
 

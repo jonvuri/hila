@@ -1,3 +1,5 @@
+// Handles Matrix messages, and also manages the Matrix schema and operations.
+
 import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
 import {
   initMatrixSchema,

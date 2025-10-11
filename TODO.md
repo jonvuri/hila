@@ -19,6 +19,10 @@
 
   - Solid component that lists root children using `ScrollVirtualizer` and `observeQuery(selectSubtreeByKeyRange(rootKey))`.
   - Test (integration/light): inserting via API reflects in the rendered list without reload.
+  - Admin/debug interface - Rows all have:
+    - Data table id (element id)
+    - Ordering table key
+    - Closure table rows
 
 - [ ] **Reorder within parent**
 
