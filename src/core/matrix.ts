@@ -1,5 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import { between, makeKey, nextPrefix, parseKey } from './lexorank'
+
 // Initialize database with the core tables required for matrixes
 export const initMatrixSchema = (db: Database) => {
   // Set pragmas for better behavior and performance
@@ -78,6 +80,271 @@ export const createMatrix = (db: Database, title: string): number => {
     return matrixId
   } catch (error) {
     // Rollback on error
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/**
+ * Insert an element into a matrix with proper ordering and closure relationships.
+ *
+ * @param db - Database instance
+ * @param params - Insert parameters
+ * @param params.matrixId - ID of the matrix to insert into
+ * @param params.parentKey - Key of the parent element (optional for root-level elements)
+ * @param params.prevKey - Key of the element to insert after (optional)
+ * @param params.nextKey - Key of the element to insert before (optional)
+ * @param params.elementKind - 0 for data row, 1 for child matrix reference
+ * @param params.elementId - ID of the element (data row ID or child matrix ID)
+ * @returns The generated ordering key for the new element
+ */
+export const insertElement = (
+  db: Database,
+  params: {
+    matrixId: number
+    parentKey?: Uint8Array
+    prevKey?: Uint8Array
+    nextKey?: Uint8Array
+    elementKind: 0 | 1
+    elementId: number
+  },
+): Uint8Array => {
+  const { matrixId, parentKey, prevKey, nextKey, elementKind, elementId } = params
+
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    // Compute the ordering key
+    let orderingKey: Uint8Array
+
+    if (prevKey && nextKey) {
+      // Insert between two siblings
+      orderingKey = between(prevKey, nextKey)
+    } else if (prevKey) {
+      // Insert after prevKey
+      // Need to find what comes after prevKey to use as upper bound
+      let upperBound = new Uint8Array(0)
+
+      if (parentKey) {
+        // We have a parent, so we need to stay within the parent's subtree
+        const parentUpperBound = nextPrefix(parentKey)
+        const nextSiblingStmt = db.prepare(`
+          SELECT key FROM ordering
+          WHERE matrix_id = ? AND key > ? AND key < ?
+          ORDER BY key ASC
+          LIMIT 1
+        `)
+        nextSiblingStmt.bind([matrixId, prevKey, parentUpperBound])
+
+        if (nextSiblingStmt.step()) {
+          const result = nextSiblingStmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+
+          // Check if this is a direct sibling (same parent)
+          const candidateSegments = parseKey(candidateKey)
+          const parentSegments = parseKey(parentKey)
+          if (candidateSegments.length === parentSegments.length + 1) {
+            // It's a direct child of the same parent
+            upperBound = candidateKey
+          }
+          // Otherwise, upperBound remains empty (insert at end of parent's children)
+        }
+        nextSiblingStmt.finalize()
+      } else {
+        // No parent specified, find next root-level element
+        const nextSiblingStmt = db.prepare(`
+          SELECT key FROM ordering
+          WHERE matrix_id = ? AND key > ?
+          ORDER BY key ASC
+          LIMIT 1
+        `)
+        nextSiblingStmt.bind([matrixId, prevKey])
+
+        if (nextSiblingStmt.step()) {
+          const result = nextSiblingStmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+
+          // Check if prevKey is a parent of candidateKey
+          const prevSegments = parseKey(prevKey)
+          const candidateSegments = parseKey(candidateKey)
+
+          // If candidateKey has more segments, it might be a child of prevKey
+          // We want to skip over all children of prevKey
+          if (candidateSegments.length > prevSegments.length) {
+            // candidateKey might be in prevKey's subtree, use empty upperBound
+            upperBound = new Uint8Array(0)
+          } else {
+            upperBound = candidateKey
+          }
+        }
+        nextSiblingStmt.finalize()
+      }
+
+      orderingKey = between(prevKey, upperBound)
+    } else if (nextKey) {
+      // Insert before nextKey
+      // Need to find what comes before nextKey to use as lower bound
+      let lowerBound = new Uint8Array(0)
+
+      if (parentKey) {
+        // We have a parent, so we need to stay within the parent's subtree
+        const prevSiblingStmt = db.prepare(`
+          SELECT key FROM ordering
+          WHERE matrix_id = ? AND key < ? AND key > ?
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        prevSiblingStmt.bind([matrixId, nextKey, parentKey])
+
+        if (prevSiblingStmt.step()) {
+          const result = prevSiblingStmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+
+          // Check if this is a direct sibling (same parent)
+          const candidateSegments = parseKey(candidateKey)
+          const parentSegments = parseKey(parentKey)
+          if (candidateSegments.length === parentSegments.length + 1) {
+            // It's a direct child of the same parent
+            lowerBound = candidateKey
+          } else {
+            // Use parent key as lower bound (insert as first child)
+            lowerBound = new Uint8Array(parentKey)
+          }
+        } else {
+          // No previous sibling, use parent key as lower bound
+          lowerBound = new Uint8Array(parentKey)
+        }
+        prevSiblingStmt.finalize()
+      } else {
+        // No parent specified, find previous root-level element
+        const prevSiblingStmt = db.prepare(`
+          SELECT key FROM ordering
+          WHERE matrix_id = ? AND key < ?
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        prevSiblingStmt.bind([matrixId, nextKey])
+
+        if (prevSiblingStmt.step()) {
+          const result = prevSiblingStmt.get({}) as { key: Uint8Array }
+          lowerBound = new Uint8Array(result.key)
+
+          // Check if this previous element might have children between it and nextKey
+          const lowerBoundSegments = parseKey(lowerBound)
+          const nextKeySegments = parseKey(nextKey)
+
+          // If they have different numbers of segments, we might be crossing levels
+          if (lowerBoundSegments.length !== nextKeySegments.length) {
+            // Use empty lower bound to be safe
+            lowerBound = new Uint8Array(0)
+          }
+        }
+        prevSiblingStmt.finalize()
+      }
+
+      orderingKey = between(lowerBound, nextKey)
+    } else if (parentKey) {
+      // Insert as first child of parent
+      // Find first existing child
+      const firstChildStmt = db.prepare(`
+        SELECT key FROM ordering
+        WHERE matrix_id = ? AND key > ? AND key < ?
+        ORDER BY key ASC
+        LIMIT 1
+      `)
+      const upperBound = nextPrefix(parentKey)
+      firstChildStmt.bind([matrixId, parentKey, upperBound])
+
+      if (firstChildStmt.step()) {
+        // There's an existing first child, insert before it
+        const result = firstChildStmt.get({}) as { key: Uint8Array }
+        const nextChild = new Uint8Array(result.key)
+        firstChildStmt.finalize()
+        orderingKey = between(parentKey, nextChild)
+      } else {
+        // No existing children, create first child by extending parent key
+        firstChildStmt.finalize()
+        // Parse parent key segments and add a new segment
+        const parentSegments = parseKey(parentKey)
+        const newSegment = new Uint8Array([0x80]) // Midpoint value for first child
+        orderingKey = makeKey([...parentSegments, newSegment])
+      }
+    } else {
+      // Insert at root level with no siblings specified
+      // Find the last root-level element (elements with only one segment)
+      const lastRootStmt = db.prepare(`
+        SELECT key FROM ordering
+        WHERE matrix_id = ?
+        ORDER BY key DESC
+        LIMIT 1
+      `)
+      lastRootStmt.bind([matrixId])
+
+      let lastKey = new Uint8Array(0)
+      if (lastRootStmt.step()) {
+        const result = lastRootStmt.get({}) as { key: Uint8Array }
+        lastKey = new Uint8Array(result.key)
+      }
+      lastRootStmt.finalize()
+
+      orderingKey = between(lastKey, new Uint8Array(0))
+    }
+
+    // Insert into ordering table
+    db.exec(
+      `
+      INSERT INTO ordering (key, matrix_id, element_kind, element_id)
+      VALUES (?, ?, ?, ?)
+    `,
+      {
+        bind: [orderingKey, matrixId, elementKind, elementId],
+      },
+    )
+
+    // Insert into closure table
+    // 1. Self-reference (depth 0)
+    db.exec(
+      `
+      INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+      VALUES (?, ?, 0)
+    `,
+      {
+        bind: [orderingKey, orderingKey],
+      },
+    )
+
+    // 2. If there's a parent, add closure entries for all ancestors
+    if (parentKey) {
+      // Get all ancestors of the parent
+      const ancestorsStmt = db.prepare(`
+        SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+        WHERE descendant_key = ?
+      `)
+
+      const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
+      ancestorsStmt.bind([parentKey])
+      while (ancestorsStmt.step()) {
+        ancestors.push(ancestorsStmt.get({}) as { ancestor_key: Uint8Array; depth: number })
+      }
+      ancestorsStmt.finalize()
+
+      // Add closure entries for each ancestor -> this new node
+      for (const ancestor of ancestors) {
+        db.exec(
+          `
+          INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+          VALUES (?, ?, ?)
+        `,
+          {
+            bind: [ancestor.ancestor_key, orderingKey, ancestor.depth + 1],
+          },
+        )
+      }
+    }
+
+    db.exec('COMMIT')
+    return orderingKey
+  } catch (error) {
     db.exec('ROLLBACK')
     throw error
   }
