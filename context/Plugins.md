@@ -7,7 +7,7 @@ Plugins are the agents that compose core matrixes and structural primitives to p
 A plugin can:
 - Create and manage matrixes (with schemas of its choosing).
 - Request structural primitives (rank, closure, joins) for its matrixes.
-- Register faces that present and interact with data.
+- Register faces that present and interact with data via query expressions.
 - Run lifecycle code on init and teardown (e.g. start a background scheduler, set up timers).
 - Interact with other plugins' data through the join table and shared matrix registry.
 
@@ -49,11 +49,13 @@ Some plugins will also need runtime behavior that can't be expressed declarative
 
 ### Route primitive operations through named core functions
 
-Plugins should call named, parameterized core functions for all primitive operations (e.g. `core.rank.insertBetween(scope, prev, next, entry)`), not construct raw SQL. Each named function is a well-defined operation with clear inputs and outputs.
+Plugins should call named, parameterized core functions for all primitive operations (e.g. `core.rank.insertBetween(scope, prev, next, row)`), not construct raw SQL. Each named function is a well-defined operation with clear inputs and outputs.
 
 ### Keep face configuration data-driven
 
 Faces should be instantiated from plain, serializable configuration objects -- not from imperative composition. If a face config can be expressed as a simple data structure, it can be stored, shared, inspected, and composed by other tools.
+
+A face's configuration includes at minimum a **query expression** (its data source) and a **face type** (how to render the results). Additional settings (sort, grouping, visible columns) are part of the configuration.
 
 ### Register plugins as data, not just code
 
@@ -78,7 +80,7 @@ Since a plugin is essentially a declarative recipe (matrixes + primitives + quer
 ### Known challenges
 
 - **Expression ceiling.** Data-flow composition (query → primitive → face) covers many use cases. Event-driven logic (triggers, automations) is much harder to express visually and may require a scripting layer.
-- **Security.** User-authored queries need sandboxing: read-only enforcement, scoped table access, resource limits.
+- **Security.** User-authored queries are already sandboxed by the query engine (read-only, scoped, resource-limited). Dynamic plugins that define new matrixes or faces will need additional guardrails.
 - **Performance.** Dynamic/interpreted plugin logic adds overhead against the 50ms target. Manageable for simple plugins, but needs budgeting.
 - **Bootstrap.** Core plugins (outline, tags) must exist before the system can display anything. There will always be a two-tier system: compiled bootstrap plugins and dynamic user plugins.
 - **Two-audience UX.** Developers and end users need very different interfaces. Progressive disclosure (simple surface, power underneath) is the proven approach.
@@ -95,16 +97,16 @@ The outline plugin provides the main scrollable outline view -- the primary way 
 
 **What it manages:**
 - A "workspace" concept: which matrixes the user has placed in their outline and their top-level order.
-- A rank scope (Lexorank) for the global outline entry order.
+- A rank scope (Lexorank) for the global outline row order.
 - Closure scopes for hierarchy tracking within outlined matrixes.
 
 **Faces it provides:**
-- The main outline face: a scrollable, keyboard-navigable view of all outlined matrixes and their entries.
-- Entry focus view: a zoomed-in view of a subtree rooted at a specific entry.
+- The main outline face: a scrollable, keyboard-navigable view of all outlined matrixes and their rows.
+- Focus view: a zoomed-in view of a subtree rooted at a specific row.
 
 **Key behavior:**
-- Matrixes appear in the outline only when explicitly placed there by the user (or by another plugin offering to place its matrix).
-- The outline plugin does not know about tags, tasks, or any other domain concept. It just ranks and displays entries.
+- Matrixes appear in the outline through their identity faces, placed explicitly by the user or by a plugin.
+- The outline plugin does not know about tags, tasks, or any other domain concept. It just ranks and displays rows and matrixes.
 
 ### Tags plugin
 
@@ -112,13 +114,13 @@ The tags plugin provides inline tagging of note text, where each tag type is a m
 
 **What it manages:**
 - Tag type matrixes (e.g. a `#task` matrix with `due_date` and `priority` columns, a `#person` matrix with `name` and `email` columns).
-- Join table entries linking note rows to tag rows.
+- Join table rows linking note rows to tag rows.
 - A lightweight registry of tag types (possibly metadata in the matrix table, or its own table).
 
 **Faces it provides:**
-- Tag browser: list all tag types and their entries.
+- Tag browser: list all tag types and their rows (a query face over the tag registry).
 - Tag autocomplete: inline suggestions when the user types `#` in a note.
-- Tag property editor: inline or sidebar editing of a tag row's properties.
+- Tag property editor: inline or sidebar editing of a tag row's properties. This face shows hydrated columns from the tag matrix, making them live-editable from wherever the tag appears.
 
 **Inline tag design:**
 
@@ -137,14 +139,14 @@ This means:
 
 **Tag instances are shared entities.** When two notes reference `#task:42`, they reference the same row in the task matrix. Changing the due date updates it everywhere. The join table expresses the many-to-many relationship.
 
-**Tag type creation is inline.** When a user types a tag type that doesn't exist yet (e.g. `#project`), the tags plugin creates a new matrix for it. The new matrix exists in the registry but is not placed in any outline. It is surfaced through the tag browser face or can be optionally pinned into the outline by the user.
+**Tag type creation is inline.** When a user types a tag type that doesn't exist yet (e.g. `#project`), the tags plugin creates a new matrix for it. The new matrix (and its identity face) exists in the registry but is not placed in any outline. It is surfaced through the tag browser face or can be optionally pinned into the outline by the user.
 
 ### Cross-plugin interaction example: rendering a tagged note
 
-1. The **outline plugin** renders a note entry. It sees text content with `[[tag:8:42]]` markers.
+1. The **outline plugin** renders a note row. It sees text content with `[[tag:8:42]]` markers.
 2. It delegates marker rendering to the **tags plugin**, which resolves matrix 8, row 42 and returns the tag data (name, properties).
-3. The outline face renders the tag inline with its properties, using a component provided by the tags plugin's face library.
-4. If the user clicks the inline tag, the tags plugin's property editor face opens.
+3. The outline face renders the tag inline with its properties, using a component provided by the tags plugin's face library. The tag's columns are hydrated -- they flow from the tag matrix unmodified -- so they are live-editable in place.
+4. If the user clicks the inline tag, the tags plugin's property editor face opens, showing the tag row's full properties.
 5. Edits to the tag row propagate through the shared matrix -- any other note referencing the same tag row sees the update.
 
 All of this happens through data (join table queries, matrix reads) and face composition, not through a direct coupling between the outline and tags plugin code.

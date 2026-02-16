@@ -51,9 +51,9 @@
 
 - [ ] **Implement named and renameable columns for all matrixes**
 
-- [ ] **Rename `element` → `entry` and `ordering` → `rank` in code**
+- [ ] **Rename `element` → `row` and `ordering` → `rank` in code**
 
-  - Rename `element_kind` → `entry_kind`, `element_id` → `entry_id` in schema, types, and queries.
+  - Rename `element_kind` → `row_kind`, `element_id` → `row_id` in schema, types, and queries.
   - Rename `ordering` table → `rank` table, and related variables/functions.
   - Update all tests to match.
 
