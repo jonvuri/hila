@@ -68,7 +68,7 @@ The system is organized in four layers, from bottom to top:
 │  │ + data tables  │ │ + face reg.  │ │  engine  │ │
 │  └────────────────┘ └──────────────┘ └──────────┘ │
 ├───────────────────────────────────────────────────┤
-│  SQLite (storage)                                 │
+│  SQLite (storage + computation)                   │
 └───────────────────────────────────────────────────┘
 ```
 
@@ -102,6 +102,40 @@ Faces can represent:
 - Aggregations, computed results, or dashboards.
 - Forms to insert new rows.
 - Lightweight always-on surfaces (e.g. a notification tray that reactively shows fired reminders or status updates). Not every face is a full panel -- a face can be as small as a badge or toast.
+
+## Execution model
+
+SQLite is not just the storage layer -- it is the primary computation and data manipulation substrate. All relational logic (reads, writes, structural operations) is expressed in SQL and executes inside the SQLite engine. TypeScript serves as a thin orchestration layer that routes user actions to the appropriate SQL operations and wires results to the UI.
+
+### Three tiers
+
+| Tier | What lives here | Examples |
+|---|---|---|
+| **Custom SQLite functions** | Byte-level algorithms that are procedural by nature, registered as deterministic SQLite functions at init. They execute inside the SQLite engine and can be called from any SQL statement. | `lexo_between(prev, next)` for Lexorank key computation, `lexo_next_prefix(key)` for subtree bounds |
+| **Prepared SQL transactions** | All relational operations: queries, data mutations, structural primitive operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use. | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
+| **TypeScript orchestration** | Routing: which prepared statement to execute for a given user action. Binding parameters. Error handling. UI event dispatch. No data manipulation logic. | Determining which insert case applies (after sibling? first child? at end?), binding the parameters, executing the prepared transaction |
+
+### Why SQL-first
+
+**Atomic transactions.** Operations that span multiple related tables (ordering + closure + data) execute as a single SQL transaction. No partial states, no JS-interleaved failure modes.
+
+**Prepared statements.** Frequently executed operations (insert row, reorder, query visible rows) are prepared once and reused with different bound parameters. The SQLite engine skips parsing and planning on reuse. The worker can keep statements warm and send reactive updates immediately when subscribed queries are invalidated.
+
+**Minimal round trips.** Set-based SQL operations replace fetch-loop-insert patterns. For example, creating closure relationships for a new child row is a single `INSERT ... SELECT` that generates all ancestor rows inside the engine, rather than querying ancestors to JavaScript, looping, and inserting one at a time.
+
+**One computational substrate.** The same SQL that powers user-facing query expressions (formula columns, live searches, face data sources) also powers core operations (rank, closure, joins). Plugins compose SQL for both reads and writes. There is one language for data, not two.
+
+### Boundary: what stays in TypeScript
+
+TypeScript handles things that are not relational:
+
+- **UI rendering and interaction** (Solid.js components, event handlers).
+- **Routing logic** (determining which operation to execute based on user intent).
+- **Worker communication** (message passing between the main thread and the SQLite worker).
+- **Lifecycle management** (plugin init/destroy, scheduling).
+- **Non-relational algorithms** that are registered as custom SQLite functions (the functions themselves are authored in TypeScript but execute inside SQLite).
+
+The guiding principle: **prefer SQL** whenever it is nearly as simple as the TypeScript alternative and the benefits (atomicity, prepared statements, fewer round trips) apply well. SQL is a strong default, not a strict requirement. If an operation would be significantly simpler or more maintainable in TypeScript outside the SQL engine, do it in TypeScript -- the goal is clarity and fitness, not purity. TypeScript is the orchestrator; SQL is the preferred operator.
 
 ## Core concepts
 
@@ -143,7 +177,7 @@ The query engine resolves human-readable matrix names to their underlying tables
 
 #### Reactive updates
 
-All data mutations flow through named core functions. When a matrix's data changes, the query engine invalidates and re-evaluates any currently visible face whose query reads from that matrix. Faces that are off-screen are marked stale and re-evaluated lazily when scrolled into view.
+All data mutations flow through prepared SQL transactions in the worker. When a mutation touches a table, the worker invalidates and re-evaluates any prepared subscription whose query reads from that table. Subscriptions for currently visible faces fire immediately; off-screen faces are marked stale and re-evaluated lazily when scrolled into view.
 
 ### Identity face
 
