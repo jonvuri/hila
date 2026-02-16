@@ -5,6 +5,7 @@ import {
   initMatrixSchema,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
+  ensureRootMatrix,
 } from '../matrix'
 
 import { sqliteWasm } from './worker-db'
@@ -15,6 +16,7 @@ const postMessage = (message: MatrixWorkerMessage) => {
 
 sqliteWasm.then(({ db }) => {
   initMatrixSchema(db)
+  ensureRootMatrix(db)
 })
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
@@ -69,6 +71,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 1, 0)
         sqlite3.capi.sqlite3_exec(db, 'VACUUM', 0, 0, 0)
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 0, 0)
+
+        // Reinitialize schema and root matrix after reset
+        initMatrixSchema(db)
+        ensureRootMatrix(db)
 
         postMessage({ type: 'resetDatabaseAck', id })
       } catch (err: unknown) {

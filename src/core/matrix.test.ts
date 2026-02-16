@@ -2,8 +2,98 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, createMatrix, addSampleRowsToMatrix, insertElement } from './matrix'
+import {
+  initMatrixSchema,
+  createMatrix,
+  addSampleRowsToMatrix,
+  insertElement,
+  ensureRootMatrix,
+} from './matrix'
 import { compareKeys } from './lexorank'
+
+describe('Root Matrix Initialization', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {}, // Suppress logs in tests
+      printErr: () => {},
+    })
+
+    // Use in-memory database for tests
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+
+    // Initialize the matrix schema
+    initMatrixSchema(db)
+  })
+
+  test('ensureRootMatrix should create root matrix with ID = 1', () => {
+    const rootId = ensureRootMatrix(db)
+
+    // Verify root matrix has ID = 1
+    expect(rootId).toBe(1)
+
+    // Verify the matrix exists in the database
+    const checkStmt = db.prepare('SELECT id, title FROM matrix WHERE id = 1')
+    expect(checkStmt.step()).toBe(true)
+    const result = checkStmt.get({}) as { id: number; title: string }
+    expect(result.id).toBe(1)
+    expect(result.title).toBe('Root')
+    checkStmt.finalize()
+  })
+
+  test('ensureRootMatrix should create data table with only title column', () => {
+    ensureRootMatrix(db)
+
+    // Verify data table exists
+    const dataTableExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_1_data'`,
+    )
+    expect(dataTableExists.step()).toBe(true)
+    dataTableExists.finalize()
+
+    // Verify data table schema has 'id' and 'title' columns
+    const schemaStmt = db.prepare(`PRAGMA table_info(mx_1_data)`)
+    const columns: { name: string; type: string }[] = []
+    while (schemaStmt.step()) {
+      const col = schemaStmt.get({}) as { name: string; type: string }
+      columns.push({ name: col.name, type: col.type })
+    }
+    schemaStmt.finalize()
+
+    expect(columns).toHaveLength(2)
+    expect(columns[0]).toEqual({ name: 'id', type: 'INTEGER' })
+    expect(columns[1]).toEqual({ name: 'title', type: 'TEXT' })
+  })
+
+  test('ensureRootMatrix should create closure table', () => {
+    ensureRootMatrix(db)
+
+    // Verify closure table exists
+    const closureTableExists = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_1_closure'`,
+    )
+    expect(closureTableExists.step()).toBe(true)
+    closureTableExists.finalize()
+  })
+
+  test('ensureRootMatrix should be idempotent', () => {
+    // Call ensureRootMatrix twice
+    const rootId1 = ensureRootMatrix(db)
+    const rootId2 = ensureRootMatrix(db)
+
+    // Both should return ID = 1
+    expect(rootId1).toBe(1)
+    expect(rootId2).toBe(1)
+
+    // Verify only one matrix with ID = 1 exists
+    const countStmt = db.prepare('SELECT COUNT(*) as count FROM matrix WHERE id = 1')
+    countStmt.step()
+    const count = (countStmt.get({}) as { count: number }).count
+    expect(count).toBe(1)
+    countStmt.finalize()
+  })
+})
 
 describe('Matrix Operations', () => {
   let db: Database
@@ -142,7 +232,7 @@ describe('insertElement API', () => {
 
     // Create a data row
     const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['First row'])
     dataStmt.step()
@@ -192,7 +282,7 @@ describe('insertElement API', () => {
 
     // Create and insert first element
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['First'])
     dataStmt.step()
@@ -206,7 +296,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert second element after first
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
     const elementId2 = (dataStmt.get({}) as { id: number }).id
@@ -220,7 +310,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert third element after second
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Third'])
     dataStmt.step()
     const elementId3 = (dataStmt.get({}) as { id: number }).id
@@ -262,7 +352,7 @@ describe('insertElement API', () => {
 
     // Create and insert first element
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Third'])
     dataStmt.step()
@@ -276,7 +366,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert second element before third
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
     const elementId2 = (dataStmt.get({}) as { id: number }).id
@@ -290,7 +380,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert first element before second
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['First'])
     dataStmt.step()
     const elementId1 = (dataStmt.get({}) as { id: number }).id
@@ -332,7 +422,7 @@ describe('insertElement API', () => {
 
     // Create and insert first element
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['First'])
     dataStmt.step()
@@ -346,7 +436,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert third element
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Third'])
     dataStmt.step()
     const elementId3 = (dataStmt.get({}) as { id: number }).id
@@ -360,7 +450,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert middle element
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
     const elementId2 = (dataStmt.get({}) as { id: number }).id
@@ -403,7 +493,7 @@ describe('insertElement API', () => {
 
     // Create and insert parent element
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Parent'])
     dataStmt.step()
@@ -417,7 +507,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert first child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 1'])
     dataStmt.step()
     const childElementId1 = (dataStmt.get({}) as { id: number }).id
@@ -431,7 +521,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert second child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 2'])
     dataStmt.step()
     const childElementId2 = (dataStmt.get({}) as { id: number }).id
@@ -498,7 +588,7 @@ describe('insertElement API', () => {
 
     // Create and insert root element
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Root'])
     dataStmt.step()
@@ -512,7 +602,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert child element
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child'])
     dataStmt.step()
     const childElementId = (dataStmt.get({}) as { id: number }).id
@@ -526,7 +616,7 @@ describe('insertElement API', () => {
     })
 
     // Create and insert grandchild element
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Grandchild'])
     dataStmt.step()
     const grandchildElementId = (dataStmt.get({}) as { id: number }).id
@@ -576,7 +666,7 @@ describe('insertElement API', () => {
 
     // Create parent
     let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Parent'])
     dataStmt.step()
@@ -590,7 +680,7 @@ describe('insertElement API', () => {
     })
 
     // Create first child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 1'])
     dataStmt.step()
     const child1Id = (dataStmt.get({}) as { id: number }).id
@@ -604,7 +694,7 @@ describe('insertElement API', () => {
     })
 
     // Create second child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`)
+    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 2'])
     dataStmt.step()
     const child2Id = (dataStmt.get({}) as { id: number }).id
@@ -649,7 +739,7 @@ describe('insertElement API', () => {
 
     // Create root level elements
     const dataStmt1 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt1.bind(['Root 1'])
     dataStmt1.step()
@@ -663,7 +753,7 @@ describe('insertElement API', () => {
     })
 
     const dataStmt2 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt2.bind(['Root 2'])
     dataStmt2.step()
@@ -679,7 +769,7 @@ describe('insertElement API', () => {
 
     // Create children for Root 1
     const dataStmt3 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt3.bind(['Child 1.1'])
     dataStmt3.step()
@@ -694,7 +784,7 @@ describe('insertElement API', () => {
     })
 
     const dataStmt4 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (data1) VALUES (?) RETURNING id`,
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt4.bind(['Child 1.2'])
     dataStmt4.step()

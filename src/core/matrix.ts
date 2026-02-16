@@ -36,8 +36,18 @@ export const initMatrixSchema = (db: Database) => {
   `)
 }
 
+// Column definition for matrix data tables
+export type ColumnDefinition = {
+  name: string
+  type: string
+}
+
 // Create a new matrix with its associated per-matrix tables
-export const createMatrix = (db: Database, title: string): number => {
+export const createMatrix = (
+  db: Database,
+  title: string,
+  columns: ColumnDefinition[] = [{ name: 'title', type: 'TEXT' }],
+): number => {
   db.exec('BEGIN TRANSACTION')
 
   try {
@@ -52,12 +62,14 @@ export const createMatrix = (db: Database, title: string): number => {
     const matrixId = result.id
     insertStmt.finalize()
 
-    // Create per-matrix data table with sample columns
+    // Build column definitions SQL
+    const columnDefs = columns.map((col) => `${col.name} ${col.type}`).join(',\n        ')
+
+    // Create per-matrix data table with specified columns
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
         id INTEGER PRIMARY KEY,
-        data1 TEXT,
-        data2 TEXT
+        ${columnDefs}
       ) STRICT;
     `)
 
@@ -80,6 +92,62 @@ export const createMatrix = (db: Database, title: string): number => {
     return matrixId
   } catch (error) {
     // Rollback on error
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+// Ensure the root matrix exists (creates it if it doesn't)
+export const ensureRootMatrix = (db: Database): number => {
+  // Check if matrix with ID = 1 exists
+  const checkStmt = db.prepare('SELECT id FROM matrix WHERE id = 1')
+  const exists = checkStmt.step()
+  checkStmt.finalize()
+
+  if (exists) {
+    // Root matrix already exists
+    return 1
+  }
+
+  // Create root matrix with a single 'title' column
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    // Insert the root matrix record with fixed ID = 1
+    const insertStmt = db.prepare('INSERT INTO matrix (id, title) VALUES (1, ?) RETURNING id')
+    insertStmt.bind(['Root'])
+    if (!insertStmt.step()) {
+      insertStmt.finalize()
+      throw new Error('Failed to insert root matrix record')
+    }
+    insertStmt.finalize()
+
+    const matrixId = 1
+
+    // Create per-matrix data table with single 'title' column
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
+        id INTEGER PRIMARY KEY,
+        title TEXT
+      ) STRICT;
+    `)
+
+    // Create per-matrix closure table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
+        ancestor_key    BLOB NOT NULL,
+        descendant_key  BLOB NOT NULL,
+        depth           INTEGER NOT NULL CHECK (depth >= 0),
+        PRIMARY KEY (ancestor_key, descendant_key)
+      ) STRICT;
+
+      CREATE INDEX IF NOT EXISTS "mx_${matrixId}_closure_by_descendant"
+        ON "mx_${matrixId}_closure"(descendant_key);
+    `)
+
+    db.exec('COMMIT')
+    return matrixId
+  } catch (error) {
     db.exec('ROLLBACK')
     throw error
   }
@@ -390,15 +458,14 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
     for (let i = 0; i < rowsToAdd; i++) {
       // Generate random data for the matrix data table
       const randomSuffix = Math.floor(Math.random() * 1000)
-      const data1 = `Sample data 1 - ${randomSuffix}`
-      const data2 = `Sample data 2 - ${randomSuffix}`
+      const title = `Sample row ${randomSuffix}`
 
       // Insert into matrix data table
       const dataInsertStmt = db.prepare(`
-        INSERT INTO "mx_${matrixId}_data" (data1, data2) 
-        VALUES (?, ?) RETURNING id
+        INSERT INTO "mx_${matrixId}_data" (title) 
+        VALUES (?) RETURNING id
       `)
-      dataInsertStmt.bind([data1, data2])
+      dataInsertStmt.bind([title])
       if (!dataInsertStmt.step()) {
         dataInsertStmt.finalize()
         throw new Error('Failed to insert data row')
