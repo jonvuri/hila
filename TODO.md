@@ -10,19 +10,21 @@
   - JS helper `insertElement({ matrixId, parentKey?, prevKey?, nextKey?, elementKind, elementId })` that computes a key and performs the insert + closure rows.
   - Test: inserting with only `prevKey` or only `nextKey` works; children appear in order by `key`.
 
-- [ ] **Subtree query helper**
+- [x] **Create root matrix on init, with one TEXT column in data table**
 
-  - Provide `selectSubtreeByKeyRange(parentKey)` that emits `[key >= P AND key < nextPrefix(P))` SQL.
-  - Test: adding grandchildren returns in subtree query; boundary cases covered.
+  - Ensure the root matrix is created on init, with a single TEXT column named 'title' defined in its data table.
 
 - [ ] **Root outline Face (first UI)**
 
-  - Solid component that lists root children using `ScrollVirtualizer` and `observeQuery(selectSubtreeByKeyRange(rootKey))`.
+  - Solid component that lists all root matrix elements using `ScrollVirtualizer` and `observeQuery`.
   - Test (integration/light): inserting via API reflects in the rendered list without reload.
-  - Admin/debug interface - Rows all have:
-    - Data table id (element id)
+
+- [ ] **Root outline Face - admin / debug interfaces**
+
+  - Outline rows all have:
+    - Element ID from data table
     - Ordering table key
-    - Closure table rows
+    - Closure table rows, as breadcrumbs
 
 - [ ] **Reorder within parent**
 
@@ -43,5 +45,16 @@
 
   - Reconfigure the worker core to set onmessage to a function that queues up messages while the worker core is still initializing. Only set onmessage to the main message handler once the sqlite DB and handlers are set up and ready to act. At that time, also send all the queued up messages to the handlers right away.
 
-- [ ] Debug UI for virtualizer windows
+- [ ] **Debug UI for virtualizer windows**
+
   - Show all relevant info for virtualizer windows and events with subtle identifiers on the UI, when in debug / admin mode.
+
+- [ ] **Implement named and renameable columns for all matrixes**
+
+- [ ] **Rename `element` → `entry` and `ordering` → `rank` in code**
+
+  - Rename `element_kind` → `entry_kind`, `element_id` → `entry_id` in schema, types, and queries.
+  - Rename `ordering` table → `rank` table, and related variables/functions.
+  - Update all tests to match.
+
+- [ ] **Figure out what to extract and import from old coastline project (~/Development/coastline folder)**
