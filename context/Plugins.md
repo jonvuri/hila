@@ -8,6 +8,7 @@ A plugin can:
 - Create and manage matrixes (with schemas of its choosing).
 - Request structural primitives (rank, closure, joins) for its matrixes.
 - Register faces that present and interact with data.
+- Run lifecycle code on init and teardown (e.g. start a background scheduler, set up timers).
 - Interact with other plugins' data through the join table and shared matrix registry.
 
 ## Key principles
@@ -43,6 +44,8 @@ These principles cost nothing in complexity today but keep the architecture clea
 ### Keep plugin definitions declarative
 
 A plugin should read like a recipe: "I need a matrix with this schema, a rank scope, a closure scope, and this face." Favor declaring *what* over prescribing *how*. Declarative definitions are easier to reason about, test, and -- if needed in the future -- represent as data.
+
+Some plugins will also need runtime behavior that can't be expressed declaratively (e.g. an effects plugin that runs a scheduler to fire reminders at specific times). This is what lifecycle hooks (`init` / `destroy`) are for. The declarative recipe describes the plugin's data and faces; lifecycle hooks handle imperative startup and teardown.
 
 ### Route primitive operations through named core functions
 

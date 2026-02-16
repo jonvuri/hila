@@ -97,6 +97,7 @@ Faces always interact with matrixes somehow but don't necessarily correspond to 
 - Forms to insert new entries.
 - Arbitrary SQLite queries over data tables.
 - Composite views that span multiple plugins' data.
+- Lightweight always-on surfaces (e.g. a notification tray that reactively shows fired reminders or status updates). Not every face is a full panel -- a face can be as small as a badge or toast.
 
 ## Core concepts
 
