@@ -33,6 +33,20 @@ export const initMatrixSchema = (db: Database) => {
       -- minimal key validity: must end with a single terminator
       CHECK (length(key) > 0 AND substr(key, length(key), 1) = x'00')
     ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Global join table (cross-matrix row references)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS joins (
+      source_matrix_id  INTEGER NOT NULL,
+      source_row_id     INTEGER NOT NULL,
+      target_matrix_id  INTEGER NOT NULL,
+      target_row_id     INTEGER NOT NULL,
+      PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS joins_by_target
+      ON joins(target_matrix_id, target_row_id);
   `)
 }
 
@@ -612,4 +626,89 @@ export const getMatrixDebugData = (db: Database, matrixId: number) => {
   closureStmt.finalize()
 
   return { data, rank, closure }
+}
+
+// -- Join operations ----------------------------------------------------------
+
+export type JoinRow = {
+  source_matrix_id: number
+  source_row_id: number
+  target_matrix_id: number
+  target_row_id: number
+}
+
+/**
+ * Insert a join (cross-matrix row reference). Uses INSERT OR IGNORE so
+ * re-inserting the same link is a silent no-op.
+ */
+export const insertJoin = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  db.exec(
+    `INSERT OR IGNORE INTO joins (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
+     VALUES (?, ?, ?, ?)`,
+    { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId] },
+  )
+}
+
+/** Delete a specific join. */
+export const deleteJoin = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  db.exec(
+    `DELETE FROM joins
+     WHERE source_matrix_id = ? AND source_row_id = ?
+       AND target_matrix_id = ? AND target_row_id = ?`,
+    { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId] },
+  )
+}
+
+/** Forward lookup: all targets for a source row. */
+export const getTargets = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+): { targetMatrixId: number; targetRowId: number }[] => {
+  const stmt = db.prepare(
+    `SELECT target_matrix_id, target_row_id FROM joins
+     WHERE source_matrix_id = ? AND source_row_id = ?`,
+  )
+  stmt.bind([sourceMatrixId, sourceRowId])
+
+  const results: { targetMatrixId: number; targetRowId: number }[] = []
+  while (stmt.step()) {
+    const row = stmt.get({}) as { target_matrix_id: number; target_row_id: number }
+    results.push({ targetMatrixId: row.target_matrix_id, targetRowId: row.target_row_id })
+  }
+  stmt.finalize()
+  return results
+}
+
+/** Reverse lookup: all sources referencing a target row. */
+export const getSources = (
+  db: Database,
+  targetMatrixId: number,
+  targetRowId: number,
+): { sourceMatrixId: number; sourceRowId: number }[] => {
+  const stmt = db.prepare(
+    `SELECT source_matrix_id, source_row_id FROM joins
+     WHERE target_matrix_id = ? AND target_row_id = ?`,
+  )
+  stmt.bind([targetMatrixId, targetRowId])
+
+  const results: { sourceMatrixId: number; sourceRowId: number }[] = []
+  while (stmt.step()) {
+    const row = stmt.get({}) as { source_matrix_id: number; source_row_id: number }
+    results.push({ sourceMatrixId: row.source_matrix_id, sourceRowId: row.source_row_id })
+  }
+  stmt.finalize()
+  return results
 }

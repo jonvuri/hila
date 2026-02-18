@@ -8,6 +8,10 @@ import {
   addSampleRowsToMatrix,
   insertRow,
   ensureRootMatrix,
+  insertJoin,
+  deleteJoin,
+  getTargets,
+  getSources,
 } from './matrix'
 import { compareKeys } from './lexorank'
 
@@ -804,5 +808,150 @@ describe('insertRow API', () => {
 
     expect(rankStmt.step()).toBe(false)
     rankStmt.finalize()
+  })
+})
+
+describe('Join table', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('joins table and index exist after schema init', () => {
+    const tableStmt = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='joins'`,
+    )
+    expect(tableStmt.step()).toBe(true)
+    tableStmt.finalize()
+
+    const indexStmt = db.prepare(
+      `SELECT name FROM sqlite_master WHERE type='index' AND name='joins_by_target'`,
+    )
+    expect(indexStmt.step()).toBe(true)
+    indexStmt.finalize()
+  })
+
+  test('insertJoin creates a join and getTargets returns it', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
+  })
+
+  test('getTargets returns empty array when no joins exist', () => {
+    const m1 = createMatrix(db, 'Source')
+    expect(getTargets(db, m1, 1)).toEqual([])
+  })
+
+  test('getSources returns reverse lookup results', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+
+    const sources = getSources(db, m2, 10)
+    expect(sources).toEqual([{ sourceMatrixId: m1, sourceRowId: 1 }])
+  })
+
+  test('getSources returns empty array when no joins exist', () => {
+    const m2 = createMatrix(db, 'Target')
+    expect(getSources(db, m2, 10)).toEqual([])
+  })
+
+  test('deleteJoin removes a join', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+    expect(getTargets(db, m1, 1)).toHaveLength(1)
+
+    deleteJoin(db, m1, 1, m2, 10)
+    expect(getTargets(db, m1, 1)).toEqual([])
+    expect(getSources(db, m2, 10)).toEqual([])
+  })
+
+  test('deleteJoin on non-existent join is a no-op', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    // Should not throw
+    deleteJoin(db, m1, 1, m2, 10)
+  })
+
+  test('duplicate insertJoin is idempotent (no error, single row)', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+    insertJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
+  })
+
+  test('many-to-many: one source row can reference multiple targets', () => {
+    const m1 = createMatrix(db, 'Notes')
+    const m2 = createMatrix(db, 'Tags')
+    const m3 = createMatrix(db, 'People')
+
+    insertJoin(db, m1, 1, m2, 10)
+    insertJoin(db, m1, 1, m2, 20)
+    insertJoin(db, m1, 1, m3, 5)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toHaveLength(3)
+    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 10 })
+    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 20 })
+    expect(targets).toContainEqual({ targetMatrixId: m3, targetRowId: 5 })
+  })
+
+  test('many-to-many: one target row can be referenced by multiple sources', () => {
+    const m1 = createMatrix(db, 'Notes A')
+    const m2 = createMatrix(db, 'Notes B')
+    const mTag = createMatrix(db, 'Tags')
+
+    insertJoin(db, m1, 1, mTag, 10)
+    insertJoin(db, m1, 2, mTag, 10)
+    insertJoin(db, m2, 5, mTag, 10)
+
+    const sources = getSources(db, mTag, 10)
+    expect(sources).toHaveLength(3)
+    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 1 })
+    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 2 })
+    expect(sources).toContainEqual({ sourceMatrixId: m2, sourceRowId: 5 })
+  })
+
+  test('deleting one join does not affect other joins from the same source', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+    insertJoin(db, m1, 1, m2, 20)
+
+    deleteJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 20 }])
+  })
+
+  test('joins between different source rows are independent', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+    insertJoin(db, m1, 2, m2, 20)
+
+    expect(getTargets(db, m1, 1)).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
+    expect(getTargets(db, m1, 2)).toEqual([{ targetMatrixId: m2, targetRowId: 20 }])
   })
 })

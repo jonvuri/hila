@@ -24,7 +24,7 @@ Align code vocabulary with architecture docs before other changes land.
 
 Global `joins` table per the [Primitives spec](Primitives.md#join).
 
-- [ ] Create `joins` table in `initMatrixSchema()`:
+- [x] Create `joins` table in `initMatrixSchema()`:
   ```sql
   CREATE TABLE IF NOT EXISTS joins (
     source_matrix_id  INTEGER NOT NULL,
@@ -34,10 +34,10 @@ Global `joins` table per the [Primitives spec](Primitives.md#join).
     PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
   ) STRICT;
   ```
-- [ ] Add reverse-lookup index: `CREATE INDEX joins_by_target ON joins(target_matrix_id, target_row_id)`
-- [ ] Implement operations: `insertJoin`, `deleteJoin`, `getTargets(sourceMatrixId, sourceRowId)`, `getSources(targetMatrixId, targetRowId)`
-- [ ] Tests: insert, delete, forward lookup, reverse lookup, duplicate insert is idempotent or errors cleanly, cascading behavior when a matrix or row is deleted
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Add reverse-lookup index: `CREATE INDEX joins_by_target ON joins(target_matrix_id, target_row_id)`
+- [x] Implement operations: `insertJoin`, `deleteJoin`, `getTargets(sourceMatrixId, sourceRowId)`, `getSources(targetMatrixId, targetRowId)`
+- [x] Tests: insert, delete, forward lookup, reverse lookup, duplicate insert is idempotent or errors cleanly, cascading behavior when a matrix or row is deleted
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Worker resilience
 
