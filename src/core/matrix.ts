@@ -22,13 +22,13 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     -- ------------------------------------------------------------
-    -- Global ordering table
+    -- Global rank table
     -- ------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS ordering (
+    CREATE TABLE IF NOT EXISTS rank (
       key           BLOB PRIMARY KEY,  -- global sort key, or position id
       matrix_id     INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
-      element_kind  INTEGER NOT NULL CHECK (element_kind IN (0,1)),  -- 0=row, 1=child_matrix_ref
-      element_id    INTEGER NOT NULL,  -- rowid of the element in the matrix data table, or matrix id of the child matrix
+      row_kind      INTEGER NOT NULL CHECK (row_kind IN (0,1)),  -- 0=row, 1=child_matrix_ref
+      row_id        INTEGER NOT NULL,  -- rowid in the matrix data table, or matrix id of the child matrix
 
       -- minimal key validity: must end with a single terminator
       CHECK (length(key) > 0 AND substr(key, length(key), 1) = x'00')
@@ -76,8 +76,8 @@ export const createMatrix = (
     // Create per-matrix closure table
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
-        ancestor_key    BLOB NOT NULL,   -- key from ordering (must belong to this matrix)
-        descendant_key  BLOB NOT NULL,   -- key from ordering (must belong to this matrix)
+        ancestor_key    BLOB NOT NULL,   -- key from rank (must belong to this matrix)
+        descendant_key  BLOB NOT NULL,   -- key from rank (must belong to this matrix)
         depth           INTEGER NOT NULL CHECK (depth >= 0),
         PRIMARY KEY (ancestor_key, descendant_key)
       ) STRICT;
@@ -154,40 +154,40 @@ export const ensureRootMatrix = (db: Database): number => {
 }
 
 /**
- * Insert an element into a matrix with proper ordering and closure relationships.
+ * Insert a row into a matrix with proper rank and closure relationships.
  *
  * @param db - Database instance
  * @param params - Insert parameters
  * @param params.matrixId - ID of the matrix to insert into
- * @param params.parentKey - Key of the parent element (optional for root-level elements)
- * @param params.prevKey - Key of the element to insert after (optional)
- * @param params.nextKey - Key of the element to insert before (optional)
- * @param params.elementKind - 0 for data row, 1 for child matrix reference
- * @param params.elementId - ID of the element (data row ID or child matrix ID)
- * @returns The generated ordering key for the new element
+ * @param params.parentKey - Key of the parent row (optional for root-level rows)
+ * @param params.prevKey - Key of the row to insert after (optional)
+ * @param params.nextKey - Key of the row to insert before (optional)
+ * @param params.rowKind - 0 for data row, 1 for child matrix reference
+ * @param params.rowId - ID of the row (data row ID or child matrix ID)
+ * @returns The generated rank key for the new row
  */
-export const insertElement = (
+export const insertRow = (
   db: Database,
   params: {
     matrixId: number
     parentKey?: Uint8Array
     prevKey?: Uint8Array
     nextKey?: Uint8Array
-    elementKind: 0 | 1
-    elementId: number
+    rowKind: 0 | 1
+    rowId: number
   },
 ): Uint8Array => {
-  const { matrixId, parentKey, prevKey, nextKey, elementKind, elementId } = params
+  const { matrixId, parentKey, prevKey, nextKey, rowKind, rowId } = params
 
   db.exec('BEGIN TRANSACTION')
 
   try {
-    // Compute the ordering key
-    let orderingKey: Uint8Array
+    // Compute the rank key
+    let rankKey: Uint8Array
 
     if (prevKey && nextKey) {
       // Insert between two siblings
-      orderingKey = between(prevKey, nextKey)
+      rankKey = between(prevKey, nextKey)
     } else if (prevKey) {
       // Insert after prevKey
       // Need to find what comes after prevKey to use as upper bound
@@ -197,7 +197,7 @@ export const insertElement = (
         // We have a parent, so we need to stay within the parent's subtree
         const parentUpperBound = nextPrefix(parentKey)
         const nextSiblingStmt = db.prepare(`
-          SELECT key FROM ordering
+          SELECT key FROM rank
           WHERE matrix_id = ? AND key > ? AND key < ?
           ORDER BY key ASC
           LIMIT 1
@@ -219,9 +219,9 @@ export const insertElement = (
         }
         nextSiblingStmt.finalize()
       } else {
-        // No parent specified, find next root-level element
+        // No parent specified, find next root-level row
         const nextSiblingStmt = db.prepare(`
-          SELECT key FROM ordering
+          SELECT key FROM rank
           WHERE matrix_id = ? AND key > ?
           ORDER BY key ASC
           LIMIT 1
@@ -248,7 +248,7 @@ export const insertElement = (
         nextSiblingStmt.finalize()
       }
 
-      orderingKey = between(prevKey, upperBound)
+      rankKey = between(prevKey, upperBound)
     } else if (nextKey) {
       // Insert before nextKey
       // Need to find what comes before nextKey to use as lower bound
@@ -257,7 +257,7 @@ export const insertElement = (
       if (parentKey) {
         // We have a parent, so we need to stay within the parent's subtree
         const prevSiblingStmt = db.prepare(`
-          SELECT key FROM ordering
+          SELECT key FROM rank
           WHERE matrix_id = ? AND key < ? AND key > ?
           ORDER BY key DESC
           LIMIT 1
@@ -284,9 +284,9 @@ export const insertElement = (
         }
         prevSiblingStmt.finalize()
       } else {
-        // No parent specified, find previous root-level element
+        // No parent specified, find previous root-level row
         const prevSiblingStmt = db.prepare(`
-          SELECT key FROM ordering
+          SELECT key FROM rank
           WHERE matrix_id = ? AND key < ?
           ORDER BY key DESC
           LIMIT 1
@@ -297,7 +297,7 @@ export const insertElement = (
           const result = prevSiblingStmt.get({}) as { key: Uint8Array }
           lowerBound = new Uint8Array(result.key)
 
-          // Check if this previous element might have children between it and nextKey
+          // Check if this previous row might have children between it and nextKey
           const lowerBoundSegments = parseKey(lowerBound)
           const nextKeySegments = parseKey(nextKey)
 
@@ -310,12 +310,12 @@ export const insertElement = (
         prevSiblingStmt.finalize()
       }
 
-      orderingKey = between(lowerBound, nextKey)
+      rankKey = between(lowerBound, nextKey)
     } else if (parentKey) {
       // Insert as first child of parent
       // Find first existing child
       const firstChildStmt = db.prepare(`
-        SELECT key FROM ordering
+        SELECT key FROM rank
         WHERE matrix_id = ? AND key > ? AND key < ?
         ORDER BY key ASC
         LIMIT 1
@@ -328,20 +328,19 @@ export const insertElement = (
         const result = firstChildStmt.get({}) as { key: Uint8Array }
         const nextChild = new Uint8Array(result.key)
         firstChildStmt.finalize()
-        orderingKey = between(parentKey, nextChild)
+        rankKey = between(parentKey, nextChild)
       } else {
         // No existing children, create first child by extending parent key
         firstChildStmt.finalize()
         // Parse parent key segments and add a new segment
         const parentSegments = parseKey(parentKey)
         const newSegment = new Uint8Array([0x80]) // Midpoint value for first child
-        orderingKey = makeKey([...parentSegments, newSegment])
+        rankKey = makeKey([...parentSegments, newSegment])
       }
     } else {
       // Insert at root level with no siblings specified
-      // Find the last root-level element (elements with only one segment)
       const lastRootStmt = db.prepare(`
-        SELECT key FROM ordering
+        SELECT key FROM rank
         WHERE matrix_id = ?
         ORDER BY key DESC
         LIMIT 1
@@ -355,17 +354,17 @@ export const insertElement = (
       }
       lastRootStmt.finalize()
 
-      orderingKey = between(lastKey, new Uint8Array(0))
+      rankKey = between(lastKey, new Uint8Array(0))
     }
 
-    // Insert into ordering table
+    // Insert into rank table
     db.exec(
       `
-      INSERT INTO ordering (key, matrix_id, element_kind, element_id)
+      INSERT INTO rank (key, matrix_id, row_kind, row_id)
       VALUES (?, ?, ?, ?)
     `,
       {
-        bind: [orderingKey, matrixId, elementKind, elementId],
+        bind: [rankKey, matrixId, rowKind, rowId],
       },
     )
 
@@ -377,7 +376,7 @@ export const insertElement = (
       VALUES (?, ?, 0)
     `,
       {
-        bind: [orderingKey, orderingKey],
+        bind: [rankKey, rankKey],
       },
     )
 
@@ -404,23 +403,22 @@ export const insertElement = (
           VALUES (?, ?, ?)
         `,
           {
-            bind: [ancestor.ancestor_key, orderingKey, ancestor.depth + 1],
+            bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
           },
         )
       }
     }
 
     db.exec('COMMIT')
-    return orderingKey
+    return rankKey
   } catch (error) {
     db.exec('ROLLBACK')
     throw error
   }
 }
 
-// Simple utility to generate ordering keys (lexicographic BLOB order)
-// For now, using a simple counter-based approach with proper termination
-const generateOrderingKey = (prefix: string = '', counter: number = 1): Uint8Array => {
+// Simple utility to generate rank keys (lexicographic BLOB order)
+const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering
   const prefixBytes = new TextEncoder().encode(prefix)
   const counterStr = counter.toString().padStart(8, '0')
@@ -442,8 +440,8 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
   try {
     // Get existing rows count to determine if we should create children
     const existingRowsStmt = db.prepare(`
-      SELECT COUNT(*) as count FROM ordering 
-      WHERE matrix_id = ? AND element_kind = 0
+      SELECT COUNT(*) as count FROM rank 
+      WHERE matrix_id = ? AND row_kind = 0
     `)
     existingRowsStmt.bind([matrixId])
     if (!existingRowsStmt.step()) {
@@ -475,14 +473,14 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       dataInsertStmt.finalize()
 
       // Determine if this should be a child of an existing row
-      let orderingKey: Uint8Array
+      let rankKey: Uint8Array
       let parentKey: Uint8Array | null = null
 
       if (existingCount > 0 && i === rowsToAdd - 1) {
         // Make the last row a child of an existing row
         const parentStmt = db.prepare(`
-          SELECT key FROM ordering 
-          WHERE matrix_id = ? AND element_kind = 0 
+          SELECT key FROM rank 
+          WHERE matrix_id = ? AND row_kind = 0 
           ORDER BY RANDOM() LIMIT 1
         `)
         parentStmt.bind([matrixId])
@@ -496,23 +494,23 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
           parentKey = parentResult.key
           // Create child key by extending parent key
           const parentKeyStr = new TextDecoder().decode(parentResult.key.slice(0, -1)) // remove terminator
-          orderingKey = generateOrderingKey(parentKeyStr + '_', i + 1)
+          rankKey = generateRankKey(parentKeyStr + '_', i + 1)
         } else {
-          orderingKey = generateOrderingKey('root_', existingCount + i + 1)
+          rankKey = generateRankKey('root_', existingCount + i + 1)
         }
       } else {
         // Create root-level entry
-        orderingKey = generateOrderingKey('root_', existingCount + i + 1)
+        rankKey = generateRankKey('root_', existingCount + i + 1)
       }
 
-      // Insert into ordering table
+      // Insert into rank table
       db.exec(
         `
-        INSERT INTO ordering (key, matrix_id, element_kind, element_id)
+        INSERT INTO rank (key, matrix_id, row_kind, row_id)
         VALUES (?, ?, 0, ?)
       `,
         {
-          bind: [orderingKey, matrixId, dataRowId],
+          bind: [rankKey, matrixId, dataRowId],
         },
       )
 
@@ -523,7 +521,7 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
         VALUES (?, ?, 0)
       `,
         {
-          bind: [orderingKey, orderingKey],
+          bind: [rankKey, rankKey],
         },
       )
 
@@ -552,7 +550,7 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
             VALUES (?, ?, ?)
           `,
             {
-              bind: [ancestor.ancestor_key, orderingKey, ancestor.depth + 1],
+              bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
             },
           )
         }
@@ -588,18 +586,18 @@ export const getMatrixDebugData = (db: Database, matrixId: number) => {
   }
   dataStmt.finalize()
 
-  const orderingStmt = db.prepare(`
-    SELECT key, element_kind, element_id 
-    FROM ordering 
+  const rankStmt = db.prepare(`
+    SELECT key, row_kind, row_id 
+    FROM rank 
     WHERE matrix_id = ? 
     ORDER BY key
   `)
-  const ordering: unknown[] = []
-  orderingStmt.bind([matrixId])
-  while (orderingStmt.step()) {
-    ordering.push(orderingStmt.get({}))
+  const rank: unknown[] = []
+  rankStmt.bind([matrixId])
+  while (rankStmt.step()) {
+    rank.push(rankStmt.get({}))
   }
-  orderingStmt.finalize()
+  rankStmt.finalize()
 
   const closureStmt = db.prepare(`
     SELECT ancestor_key, descendant_key, depth 
@@ -613,5 +611,5 @@ export const getMatrixDebugData = (db: Database, matrixId: number) => {
   }
   closureStmt.finalize()
 
-  return { data, ordering, closure }
+  return { data, rank, closure }
 }

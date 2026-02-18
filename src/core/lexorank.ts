@@ -1,7 +1,7 @@
 /**
  * Lexorank Encoder Utilities
  *
- * Implements 0x00-terminated, variable-length segment keys for global element ordering.
+ * Implements 0x00-terminated, variable-length segment keys for global row ranking.
  *
  * Key properties:
  * - Segment content bytes: 0x01..0xFF (never 0x00)

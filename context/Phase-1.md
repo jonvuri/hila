@@ -10,15 +10,15 @@ Ordered to minimize conflicts: rename first (wide but mechanical), then independ
 
 Align code vocabulary with architecture docs before other changes land.
 
-- [ ] Schema: rename `ordering` table → `rank`
-- [ ] Schema: rename `element_kind` column → `row_kind`, `element_id` → `row_id`
-- [ ] Rename `insertElement()` → `insertRow()` and update its parameter names (`elementKind` → `rowKind`, `elementId` → `rowId`)
-- [ ] Rename `addSampleRowsToMatrix()` internals (references to `element_kind`, `element_id`)
-- [ ] Rename `getMatrixDebugData()` query aliases (`element_kind`, `element_id` in the ordering query)
-- [ ] Update `MatrixDebug.tsx` -- all references to `ordering`, `element_kind`, `element_id`
-- [ ] Update `matrix-types.ts` and `matrix-handler.ts` if they reference old names
-- [ ] Update all tests in `matrix.test.ts`
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Schema: rename `ordering` table → `rank`
+- [x] Schema: rename `element_kind` column → `row_kind`, `element_id` → `row_id`
+- [x] Rename `insertElement()` → `insertRow()` and update its parameter names (`elementKind` → `rowKind`, `elementId` → `rowId`)
+- [x] Rename `addSampleRowsToMatrix()` internals (references to `element_kind`, `element_id`)
+- [x] Rename `getMatrixDebugData()` query aliases (`element_kind`, `element_id` in the ordering query)
+- [x] Update `MatrixDebug.tsx` -- all references to `ordering`, `element_kind`, `element_id`
+- [x] Update `matrix-types.ts` and `matrix-handler.ts` if they reference old names
+- [x] Update all tests in `matrix.test.ts`
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Implement the join table
 

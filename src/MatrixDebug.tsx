@@ -14,10 +14,10 @@ interface MatrixData {
   data2: string | null
 }
 
-interface OrderingData {
+interface RankData {
   key: Uint8Array
-  element_kind: number
-  element_id: number
+  row_kind: number
+  row_id: number
 }
 
 interface ClosureData {
@@ -28,8 +28,8 @@ interface ClosureData {
 
 interface OutlineItem {
   key: Uint8Array
-  element_kind: number
-  element_id: number
+  row_kind: number
+  row_id: number
   depth: number
   data1: string | null
   data2: string | null
@@ -38,7 +38,7 @@ interface OutlineItem {
 const MatrixDebug: Component = () => {
   const [matrices, setMatrices] = createSignal<Matrix[]>([])
   const [matrixData, setMatrixData] = createSignal<Record<number, MatrixData[]>>({})
-  const [orderingData, setOrderingData] = createSignal<Record<number, OrderingData[]>>({})
+  const [rankData, setRankData] = createSignal<Record<number, RankData[]>>({})
   const [closureData, setClosureData] = createSignal<Record<number, ClosureData[]>>({})
   const [newMatrixTitle, setNewMatrixTitle] = createSignal('')
   const [loading, setLoading] = createSignal<Record<number, boolean>>({})
@@ -79,22 +79,22 @@ const MatrixDebug: Component = () => {
       })
       subscriptions.push(() => dataSubscription.unsubscribe())
 
-      // Watch ordering table for this matrix
-      const orderingQuery = observeQuery(`
-        SELECT key, element_kind, element_id 
-        FROM ordering 
+      // Watch rank table for this matrix
+      const rankQuery = observeQuery(`
+        SELECT key, row_kind, row_id 
+        FROM rank 
         WHERE matrix_id = ${matrix.id} 
         ORDER BY key
       `)
-      const orderingSubscription = orderingQuery.subscribe((state) => {
+      const rankSubscription = rankQuery.subscribe((state) => {
         if (state.result) {
-          setOrderingData((prev) => ({
+          setRankData((prev) => ({
             ...prev,
-            [matrix.id]: state.result as unknown as OrderingData[],
+            [matrix.id]: state.result as unknown as RankData[],
           }))
         }
       })
-      subscriptions.push(() => orderingSubscription.unsubscribe())
+      subscriptions.push(() => rankSubscription.unsubscribe())
 
       // Watch closure table for this matrix
       const closureQuery = observeQuery(`
@@ -166,11 +166,10 @@ const MatrixDebug: Component = () => {
   }
 
   const getOutlineStructure = (matrixId: number): OutlineItem[] => {
-    const ordering = orderingData()[matrixId] || []
+    const rankRows = rankData()[matrixId] || []
     const closure = closureData()[matrixId] || []
     const data = matrixData()[matrixId] || []
 
-    // Create a map for quick data lookup by element_id
     const dataMap = new Map<number, MatrixData>()
     data.forEach((item) => {
       dataMap.set(item.id, item)
@@ -186,19 +185,18 @@ const MatrixDebug: Component = () => {
       depthMap.set(descendantKeyStr, Math.max(currentDepth, item.depth))
     })
 
-    // Combine ordering data with depth and matrix data
-    return ordering.map((orderItem) => {
-      const keyStr = formatKey(orderItem.key)
+    return rankRows.map((rankItem) => {
+      const keyStr = formatKey(rankItem.key)
       const depth = depthMap.get(keyStr) || 0
-      const elementData = dataMap.get(orderItem.element_id) || { data1: null, data2: null }
+      const rowData = dataMap.get(rankItem.row_id) || { data1: null, data2: null }
 
       return {
-        key: orderItem.key,
-        element_kind: orderItem.element_kind,
-        element_id: orderItem.element_id,
+        key: rankItem.key,
+        row_kind: rankItem.row_kind,
+        row_id: rankItem.row_id,
         depth,
-        data1: elementData.data1,
-        data2: elementData.data2,
+        data1: rowData.data1,
+        data2: rowData.data2,
       }
     })
   }
@@ -380,9 +378,9 @@ const MatrixDebug: Component = () => {
                   </div>
                 </div>
 
-                {/* Ordering Table */}
+                {/* Rank Table */}
                 <div>
-                  <h4>Ordering Table</h4>
+                  <h4>Rank Table</h4>
                   <div style={{ 'overflow-x': 'auto' }}>
                     <table
                       style={{
@@ -396,13 +394,13 @@ const MatrixDebug: Component = () => {
                           <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Key</th>
                           <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Kind</th>
                           <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                            Elem ID
+                            Row ID
                           </th>
                         </tr>
                       </thead>
                       <tbody>
                         <Show
-                          when={(orderingData()[matrix.id] || []).length > 0}
+                          when={(rankData()[matrix.id] || []).length > 0}
                           fallback={
                             <tr>
                               <td
@@ -413,12 +411,12 @@ const MatrixDebug: Component = () => {
                                   'font-style': 'italic',
                                 }}
                               >
-                                No ordering
+                                No rank data
                               </td>
                             </tr>
                           }
                         >
-                          <For each={orderingData()[matrix.id] || []}>
+                          <For each={rankData()[matrix.id] || []}>
                             {(row) => (
                               <tr>
                                 <td
@@ -432,10 +430,10 @@ const MatrixDebug: Component = () => {
                                   {formatKey(row.key)}
                                 </td>
                                 <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.element_kind}
+                                  {row.row_kind}
                                 </td>
                                 <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.element_id}
+                                  {row.row_id}
                                 </td>
                               </tr>
                             )}
@@ -535,7 +533,7 @@ const MatrixDebug: Component = () => {
                       }}
                     >
                       <Show
-                        when={(orderingData()[matrix.id] || []).length > 0}
+                        when={(rankData()[matrix.id] || []).length > 0}
                         fallback={
                           <div
                             style={{
@@ -569,7 +567,7 @@ const MatrixDebug: Component = () => {
                                   'min-width': '40px',
                                 }}
                               >
-                                [{item.element_kind}:{item.element_id}]
+                                [{item.row_kind}:{item.row_id}]
                               </span>
                               <span style={{ flex: 1 }}>
                                 {item.data1 || item.data2 || 'No data'}

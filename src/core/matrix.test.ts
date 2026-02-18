@@ -6,7 +6,7 @@ import {
   initMatrixSchema,
   createMatrix,
   addSampleRowsToMatrix,
-  insertElement,
+  insertRow,
   ensureRootMatrix,
 } from './matrix'
 import { compareKeys } from './lexorank'
@@ -171,15 +171,13 @@ describe('Matrix Operations', () => {
     expect(dataCount).toBeLessThanOrEqual(3)
     dataStmt.finalize()
 
-    // Verify ordering entries were created
-    const orderingStmt = db.prepare(
-      `SELECT COUNT(*) as count FROM ordering WHERE matrix_id = ?`,
-    )
-    orderingStmt.bind([matrixId])
-    orderingStmt.step()
-    const orderingCount = (orderingStmt.get({}) as { count: number }).count
-    expect(orderingCount).toBe(dataCount)
-    orderingStmt.finalize()
+    // Verify rank entries were created
+    const rankStmt = db.prepare(`SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?`)
+    rankStmt.bind([matrixId])
+    rankStmt.step()
+    const rankCount = (rankStmt.get({}) as { count: number }).count
+    expect(rankCount).toBe(dataCount)
+    rankStmt.finalize()
 
     // Verify closure table has self-references (minimum)
     const closureStmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
@@ -211,7 +209,7 @@ describe('Matrix Operations', () => {
   })
 })
 
-describe('insertElement API', () => {
+describe('insertRow API', () => {
   let db: Database
 
   beforeEach(async () => {
@@ -227,7 +225,7 @@ describe('insertElement API', () => {
     initMatrixSchema(db)
   })
 
-  test('should insert element at root level with no existing elements', () => {
+  test('should insert row at root level with no existing rows', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
     // Create a data row
@@ -236,31 +234,31 @@ describe('insertElement API', () => {
     )
     dataStmt.bind(['First row'])
     dataStmt.step()
-    const elementId = (dataStmt.get({}) as { id: number }).id
+    const dataRowId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    // Insert element
-    const key = insertElement(db, {
+    // Insert row
+    const key = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId,
+      rowKind: 0,
+      rowId: dataRowId,
     })
 
-    // Verify ordering entry was created
-    const orderingStmt = db.prepare('SELECT * FROM ordering WHERE matrix_id = ?')
-    orderingStmt.bind([matrixId])
-    expect(orderingStmt.step()).toBe(true)
-    const orderingRow = orderingStmt.get({}) as {
+    // Verify rank entry was created
+    const rankStmt = db.prepare('SELECT * FROM rank WHERE matrix_id = ?')
+    rankStmt.bind([matrixId])
+    expect(rankStmt.step()).toBe(true)
+    const rankRow = rankStmt.get({}) as {
       key: Uint8Array
       matrix_id: number
-      element_kind: number
-      element_id: number
+      row_kind: number
+      row_id: number
     }
-    expect(orderingRow.matrix_id).toBe(matrixId)
-    expect(orderingRow.element_kind).toBe(0)
-    expect(orderingRow.element_id).toBe(elementId)
-    expect(compareKeys(orderingRow.key, key)).toBe(0)
-    orderingStmt.finalize()
+    expect(rankRow.matrix_id).toBe(matrixId)
+    expect(rankRow.row_kind).toBe(0)
+    expect(rankRow.row_id).toBe(dataRowId)
+    expect(compareKeys(rankRow.key, key)).toBe(0)
+    rankStmt.finalize()
 
     // Verify closure entry was created (self-reference)
     const closureStmt = db.prepare(`SELECT * FROM "mx_${matrixId}_closure"`)
@@ -277,50 +275,49 @@ describe('insertElement API', () => {
     closureStmt.finalize()
   })
 
-  test('should insert multiple elements in order with only prevKey', () => {
+  test('should insert multiple rows in order with only prevKey', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create and insert first element
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['First'])
     dataStmt.step()
-    const elementId1 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key1 = insertElement(db, {
+    const key1 = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: elementId1,
+      rowKind: 0,
+      rowId: dataRowId1,
     })
 
-    // Create and insert second element after first
+    // Insert second row after first
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
-    const elementId2 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key2 = insertElement(db, {
+    const key2 = insertRow(db, {
       matrixId,
       prevKey: key1,
-      elementKind: 0,
-      elementId: elementId2,
+      rowKind: 0,
+      rowId: dataRowId2,
     })
 
-    // Create and insert third element after second
+    // Insert third row after second
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Third'])
     dataStmt.step()
-    const elementId3 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key3 = insertElement(db, {
+    const key3 = insertRow(db, {
       matrixId,
       prevKey: key2,
-      elementKind: 0,
-      elementId: elementId3,
+      rowKind: 0,
+      rowId: dataRowId3,
     })
 
     // Verify ordering: key1 < key2 < key3
@@ -328,69 +325,66 @@ describe('insertElement API', () => {
     expect(compareKeys(key2, key3)).toBe(-1)
     expect(compareKeys(key1, key3)).toBe(-1)
 
-    // Verify elements appear in order in the database
-    const orderingStmt = db.prepare(
-      'SELECT element_id FROM ordering WHERE matrix_id = ? ORDER BY key',
-    )
-    orderingStmt.bind([matrixId])
+    // Verify rows appear in order in the database
+    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId1)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId2)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId3)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
 
-    expect(orderingStmt.step()).toBe(false)
-    orderingStmt.finalize()
+    expect(rankStmt.step()).toBe(false)
+    rankStmt.finalize()
   })
 
-  test('should insert multiple elements in order with only nextKey', () => {
+  test('should insert multiple rows in order with only nextKey', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create and insert first element
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Third'])
     dataStmt.step()
-    const elementId3 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key3 = insertElement(db, {
+    const key3 = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: elementId3,
+      rowKind: 0,
+      rowId: dataRowId3,
     })
 
-    // Create and insert second element before third
+    // Insert second row before third
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
-    const elementId2 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key2 = insertElement(db, {
+    const key2 = insertRow(db, {
       matrixId,
       nextKey: key3,
-      elementKind: 0,
-      elementId: elementId2,
+      rowKind: 0,
+      rowId: dataRowId2,
     })
 
-    // Create and insert first element before second
+    // Insert first row before second
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['First'])
     dataStmt.step()
-    const elementId1 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key1 = insertElement(db, {
+    const key1 = insertRow(db, {
       matrixId,
       nextKey: key2,
-      elementKind: 0,
-      elementId: elementId1,
+      rowKind: 0,
+      rowId: dataRowId1,
     })
 
     // Verify ordering: key1 < key2 < key3
@@ -398,70 +392,67 @@ describe('insertElement API', () => {
     expect(compareKeys(key2, key3)).toBe(-1)
     expect(compareKeys(key1, key3)).toBe(-1)
 
-    // Verify elements appear in order in the database
-    const orderingStmt = db.prepare(
-      'SELECT element_id FROM ordering WHERE matrix_id = ? ORDER BY key',
-    )
-    orderingStmt.bind([matrixId])
+    // Verify rows appear in order in the database
+    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId1)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId2)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId3)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
 
-    expect(orderingStmt.step()).toBe(false)
-    orderingStmt.finalize()
+    expect(rankStmt.step()).toBe(false)
+    rankStmt.finalize()
   })
 
-  test('should insert element between two existing elements', () => {
+  test('should insert row between two existing rows', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create and insert first element
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['First'])
     dataStmt.step()
-    const elementId1 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key1 = insertElement(db, {
+    const key1 = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: elementId1,
+      rowKind: 0,
+      rowId: dataRowId1,
     })
 
-    // Create and insert third element
+    // Insert third row
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Third'])
     dataStmt.step()
-    const elementId3 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key3 = insertElement(db, {
+    const key3 = insertRow(db, {
       matrixId,
       prevKey: key1,
-      elementKind: 0,
-      elementId: elementId3,
+      rowKind: 0,
+      rowId: dataRowId3,
     })
 
-    // Create and insert middle element
+    // Insert middle row
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Second'])
     dataStmt.step()
-    const elementId2 = (dataStmt.get({}) as { id: number }).id
+    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const key2 = insertElement(db, {
+    const key2 = insertRow(db, {
       matrixId,
       prevKey: key1,
       nextKey: key3,
-      elementKind: 0,
-      elementId: elementId2,
+      rowKind: 0,
+      rowId: dataRowId2,
     })
 
     // Verify ordering: key1 < key2 < key3
@@ -469,70 +460,68 @@ describe('insertElement API', () => {
     expect(compareKeys(key2, key3)).toBe(-1)
     expect(compareKeys(key1, key3)).toBe(-1)
 
-    // Verify elements appear in order in the database
-    const orderingStmt = db.prepare(
-      'SELECT element_id FROM ordering WHERE matrix_id = ? ORDER BY key',
-    )
-    orderingStmt.bind([matrixId])
+    // Verify rows appear in order in the database
+    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId1)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId2)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(elementId3)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
 
-    expect(orderingStmt.step()).toBe(false)
-    orderingStmt.finalize()
+    expect(rankStmt.step()).toBe(false)
+    rankStmt.finalize()
   })
 
-  test('should insert child elements with parentKey', () => {
+  test('should insert child rows with parentKey', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create and insert parent element
+    // Create and insert parent row
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Parent'])
     dataStmt.step()
-    const parentElementId = (dataStmt.get({}) as { id: number }).id
+    const parentRowId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const parentKey = insertElement(db, {
+    const parentKey = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: parentElementId,
+      rowKind: 0,
+      rowId: parentRowId,
     })
 
     // Create and insert first child
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 1'])
     dataStmt.step()
-    const childElementId1 = (dataStmt.get({}) as { id: number }).id
+    const childRowId1 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const childKey1 = insertElement(db, {
+    const childKey1 = insertRow(db, {
       matrixId,
       parentKey,
-      elementKind: 0,
-      elementId: childElementId1,
+      rowKind: 0,
+      rowId: childRowId1,
     })
 
     // Create and insert second child
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child 2'])
     dataStmt.step()
-    const childElementId2 = (dataStmt.get({}) as { id: number }).id
+    const childRowId2 = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const childKey2 = insertElement(db, {
+    const childKey2 = insertRow(db, {
       matrixId,
       parentKey,
       prevKey: childKey1,
-      elementKind: 0,
-      elementId: childElementId2,
+      rowKind: 0,
+      rowId: childRowId2,
     })
 
     // Verify ordering: parentKey < childKey1 < childKey2
@@ -586,47 +575,47 @@ describe('insertElement API', () => {
   test('should handle nested parent-child relationships', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create and insert root element
+    // Create and insert root row
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
     dataStmt.bind(['Root'])
     dataStmt.step()
-    const rootElementId = (dataStmt.get({}) as { id: number }).id
+    const rootRowId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const rootKey = insertElement(db, {
+    const rootKey = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: rootElementId,
+      rowKind: 0,
+      rowId: rootRowId,
     })
 
-    // Create and insert child element
+    // Create and insert child row
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Child'])
     dataStmt.step()
-    const childElementId = (dataStmt.get({}) as { id: number }).id
+    const childRowId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const childKey = insertElement(db, {
+    const childKey = insertRow(db, {
       matrixId,
       parentKey: rootKey,
-      elementKind: 0,
-      elementId: childElementId,
+      rowKind: 0,
+      rowId: childRowId,
     })
 
-    // Create and insert grandchild element
+    // Create and insert grandchild row
     dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
     dataStmt.bind(['Grandchild'])
     dataStmt.step()
-    const grandchildElementId = (dataStmt.get({}) as { id: number }).id
+    const grandchildRowId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const grandchildKey = insertElement(db, {
+    const grandchildKey = insertRow(db, {
       matrixId,
       parentKey: childKey,
-      elementKind: 0,
-      elementId: grandchildElementId,
+      rowKind: 0,
+      rowId: grandchildRowId,
     })
 
     // Verify ordering: rootKey < childKey < grandchildKey
@@ -673,10 +662,10 @@ describe('insertElement API', () => {
     const parentId = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const parentKey = insertElement(db, {
+    const parentKey = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: parentId,
+      rowKind: 0,
+      rowId: parentId,
     })
 
     // Create first child
@@ -686,11 +675,11 @@ describe('insertElement API', () => {
     const child1Id = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const child1Key = insertElement(db, {
+    const child1Key = insertRow(db, {
       matrixId,
       parentKey,
-      elementKind: 0,
-      elementId: child1Id,
+      rowKind: 0,
+      rowId: child1Id,
     })
 
     // Create second child
@@ -700,12 +689,12 @@ describe('insertElement API', () => {
     const child2Id = (dataStmt.get({}) as { id: number }).id
     dataStmt.finalize()
 
-    const child2Key = insertElement(db, {
+    const child2Key = insertRow(db, {
       matrixId,
       parentKey,
       prevKey: child1Key,
-      elementKind: 0,
-      elementId: child2Id,
+      rowKind: 0,
+      rowId: child2Id,
     })
 
     // Verify keys are different
@@ -716,28 +705,26 @@ describe('insertElement API', () => {
     expect(compareKeys(parentKey, child2Key)).toBe(-1)
 
     // Verify they appear in order in the database
-    const orderingStmt = db.prepare(
-      'SELECT element_id FROM ordering WHERE matrix_id = ? ORDER BY key',
-    )
-    orderingStmt.bind([matrixId])
+    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(parentId)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(parentId)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(child1Id)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(child1Id)
 
-    expect(orderingStmt.step()).toBe(true)
-    expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(child2Id)
+    expect(rankStmt.step()).toBe(true)
+    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(child2Id)
 
-    expect(orderingStmt.step()).toBe(false)
-    orderingStmt.finalize()
+    expect(rankStmt.step()).toBe(false)
+    rankStmt.finalize()
   })
 
   test('should maintain correct ordering with multiple inserts at different levels', () => {
     const matrixId = createMatrix(db, 'Test Matrix')
 
-    // Create root level elements
+    // Create root level rows
     const dataStmt1 = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
     )
@@ -746,10 +733,10 @@ describe('insertElement API', () => {
     const rootId1 = (dataStmt1.get({}) as { id: number }).id
     dataStmt1.finalize()
 
-    const rootKey1 = insertElement(db, {
+    const rootKey1 = insertRow(db, {
       matrixId,
-      elementKind: 0,
-      elementId: rootId1,
+      rowKind: 0,
+      rowId: rootId1,
     })
 
     const dataStmt2 = db.prepare(
@@ -760,11 +747,11 @@ describe('insertElement API', () => {
     const rootId2 = (dataStmt2.get({}) as { id: number }).id
     dataStmt2.finalize()
 
-    const rootKey2 = insertElement(db, {
+    const rootKey2 = insertRow(db, {
       matrixId,
       prevKey: rootKey1,
-      elementKind: 0,
-      elementId: rootId2,
+      rowKind: 0,
+      rowId: rootId2,
     })
 
     // Create children for Root 1
@@ -776,11 +763,11 @@ describe('insertElement API', () => {
     const childId1_1 = (dataStmt3.get({}) as { id: number }).id
     dataStmt3.finalize()
 
-    const childKey1_1 = insertElement(db, {
+    const childKey1_1 = insertRow(db, {
       matrixId,
       parentKey: rootKey1,
-      elementKind: 0,
-      elementId: childId1_1,
+      rowKind: 0,
+      rowId: childId1_1,
     })
 
     const dataStmt4 = db.prepare(
@@ -791,12 +778,12 @@ describe('insertElement API', () => {
     const childId1_2 = (dataStmt4.get({}) as { id: number }).id
     dataStmt4.finalize()
 
-    const childKey1_2 = insertElement(db, {
+    const childKey1_2 = insertRow(db, {
       matrixId,
       parentKey: rootKey1,
       prevKey: childKey1_1,
-      elementKind: 0,
-      elementId: childId1_2,
+      rowKind: 0,
+      rowId: childId1_2,
     })
 
     // Verify all keys are in correct order
@@ -806,18 +793,16 @@ describe('insertElement API', () => {
     }
 
     // Verify they appear in order in the database
-    const orderingStmt = db.prepare(
-      'SELECT element_id FROM ordering WHERE matrix_id = ? ORDER BY key',
-    )
-    orderingStmt.bind([matrixId])
+    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
 
     const expectedOrder = [rootId1, childId1_1, childId1_2, rootId2]
     for (const expectedId of expectedOrder) {
-      expect(orderingStmt.step()).toBe(true)
-      expect((orderingStmt.get({}) as { element_id: number }).element_id).toBe(expectedId)
+      expect(rankStmt.step()).toBe(true)
+      expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(expectedId)
     }
 
-    expect(orderingStmt.step()).toBe(false)
-    orderingStmt.finalize()
+    expect(rankStmt.step()).toBe(false)
+    rankStmt.finalize()
   })
 })

@@ -4,16 +4,18 @@
 
 Check these tasks after every major change:
 
-- Static types (Typescript): `npm run typecheck`
+- Formatter (Prettier): `npm run format`
 - Linter (ESLint): `npm run lint`
+- Static types (Typescript): `npm run typecheck`
 - Tests (Vitest): `npm run test:run`
 
 # Project plan
 
-See the `context/` directory for the full architecture documentation:
+See the `context/` directory for documentation on architecture and planning. In particular:
 
 - [Architecture](context/Architecture.md) -- layered architecture, core concepts, objectives
 - [Primitives](context/Primitives.md) -- rank, closure, and join table specs
+- [Plan](context/Plan.md) -- the current implementation plan in depth
 - [Plugins](context/Plugins.md) -- plugin model and concrete examples (outline, tags)
 
 ## Development principles
