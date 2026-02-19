@@ -12,6 +12,10 @@ import {
   deleteJoin,
   getTargets,
   getSources,
+  getColumns,
+  addColumn,
+  removeColumn,
+  renameColumn,
 } from './matrix'
 import { compareKeys } from './lexorank'
 
@@ -953,5 +957,303 @@ describe('Join table', () => {
 
     expect(getTargets(db, m1, 1)).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
     expect(getTargets(db, m1, 2)).toEqual([{ targetMatrixId: m2, targetRowId: 20 }])
+  })
+})
+
+describe('Column schema management', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  // -- getColumns / createMatrix integration ----------------------------------
+
+  test('createMatrix stores column definitions in registry', () => {
+    const id = createMatrix(db, 'M')
+    const cols = getColumns(db, id)
+
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+  })
+
+  test('createMatrix with custom columns stores them correctly', () => {
+    const id = createMatrix(db, 'Custom', [
+      { name: 'name', type: 'TEXT' },
+      { name: 'score', type: 'INTEGER' },
+      { name: 'active', type: 'INTEGER' },
+    ])
+
+    const cols = getColumns(db, id)
+    expect(cols).toEqual([
+      { name: 'name', type: 'TEXT', order: 0 },
+      { name: 'score', type: 'INTEGER', order: 1 },
+      { name: 'active', type: 'INTEGER', order: 2 },
+    ])
+  })
+
+  test('createMatrix data table schema matches registry', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'INTEGER' },
+    ])
+
+    const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
+    const tableCols: { name: string; type: string }[] = []
+    while (pragmaStmt.step()) {
+      const row = pragmaStmt.get({}) as { name: string; type: string }
+      tableCols.push({ name: row.name, type: row.type })
+    }
+    pragmaStmt.finalize()
+
+    expect(tableCols).toEqual([
+      { name: 'id', type: 'INTEGER' },
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'INTEGER' },
+    ])
+  })
+
+  test('ensureRootMatrix stores column definitions', () => {
+    ensureRootMatrix(db)
+    const cols = getColumns(db, 1)
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+  })
+
+  test('getColumns throws for non-existent matrix', () => {
+    expect(() => getColumns(db, 999)).toThrow('Matrix 999 not found')
+  })
+
+  test('getColumns returns columns sorted by order', () => {
+    const id = createMatrix(db, 'M')
+
+    // Manually write out-of-order JSON to verify sorting
+    db.exec('UPDATE matrix SET columns = ? WHERE id = ?', {
+      bind: [
+        JSON.stringify([
+          { name: 'z', type: 'TEXT', order: 2 },
+          { name: 'a', type: 'TEXT', order: 0 },
+          { name: 'm', type: 'TEXT', order: 1 },
+        ]),
+        id,
+      ],
+    })
+
+    const cols = getColumns(db, id)
+    expect(cols.map((c) => c.name)).toEqual(['a', 'm', 'z'])
+  })
+
+  // -- addColumn --------------------------------------------------------------
+
+  test('addColumn adds column to data table and registry', () => {
+    const id = createMatrix(db, 'M')
+
+    addColumn(db, id, { name: 'notes', type: 'TEXT' })
+
+    const cols = getColumns(db, id)
+    expect(cols).toEqual([
+      { name: 'title', type: 'TEXT', order: 0 },
+      { name: 'notes', type: 'TEXT', order: 1 },
+    ])
+
+    // Verify actual table schema
+    const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
+    const names: string[] = []
+    while (pragmaStmt.step()) {
+      names.push((pragmaStmt.get({}) as { name: string }).name)
+    }
+    pragmaStmt.finalize()
+
+    expect(names).toContain('notes')
+  })
+
+  test('addColumn preserves existing data', () => {
+    const id = createMatrix(db, 'M')
+
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('hello')`)
+
+    addColumn(db, id, { name: 'extra', type: 'TEXT' })
+
+    const stmt = db.prepare(`SELECT title, extra FROM "mx_${id}_data"`)
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { title: string; extra: string | null }
+    expect(row.title).toBe('hello')
+    expect(row.extra).toBeNull()
+    stmt.finalize()
+  })
+
+  test('addColumn throws on duplicate column name', () => {
+    const id = createMatrix(db, 'M')
+
+    expect(() => addColumn(db, id, { name: 'title', type: 'TEXT' })).toThrow(
+      'Column "title" already exists',
+    )
+  })
+
+  // -- removeColumn -----------------------------------------------------------
+
+  test('removeColumn removes column from data table and registry', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'INTEGER' },
+      { name: 'c', type: 'TEXT' },
+    ])
+
+    removeColumn(db, id, 'b')
+
+    const cols = getColumns(db, id)
+    expect(cols.map((c) => c.name)).toEqual(['a', 'c'])
+
+    // Verify actual table schema
+    const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
+    const names: string[] = []
+    while (pragmaStmt.step()) {
+      names.push((pragmaStmt.get({}) as { name: string }).name)
+    }
+    pragmaStmt.finalize()
+
+    expect(names).toContain('a')
+    expect(names).toContain('c')
+    expect(names).not.toContain('b')
+  })
+
+  test('removeColumn preserves data in remaining columns', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'keep', type: 'TEXT' },
+      { name: 'drop', type: 'TEXT' },
+    ])
+
+    db.exec(`INSERT INTO "mx_${id}_data" ("keep", "drop") VALUES ('yes', 'no')`)
+
+    removeColumn(db, id, 'drop')
+
+    const stmt = db.prepare(`SELECT "keep" FROM "mx_${id}_data"`)
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { keep: string }).keep).toBe('yes')
+    stmt.finalize()
+  })
+
+  test('removeColumn throws for non-existent column', () => {
+    const id = createMatrix(db, 'M')
+
+    expect(() => removeColumn(db, id, 'nope')).toThrow('Column "nope" not found')
+  })
+
+  // -- renameColumn -----------------------------------------------------------
+
+  test('renameColumn renames column in data table and registry', () => {
+    const id = createMatrix(db, 'M')
+
+    renameColumn(db, id, 'title', 'name')
+
+    const cols = getColumns(db, id)
+    expect(cols).toEqual([{ name: 'name', type: 'TEXT', order: 0 }])
+
+    // Verify actual table schema
+    const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
+    const names: string[] = []
+    while (pragmaStmt.step()) {
+      names.push((pragmaStmt.get({}) as { name: string }).name)
+    }
+    pragmaStmt.finalize()
+
+    expect(names).toContain('name')
+    expect(names).not.toContain('title')
+  })
+
+  test('renameColumn preserves data', () => {
+    const id = createMatrix(db, 'M')
+
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('kept')`)
+
+    renameColumn(db, id, 'title', 'label')
+
+    const stmt = db.prepare(`SELECT label FROM "mx_${id}_data"`)
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { label: string }).label).toBe('kept')
+    stmt.finalize()
+  })
+
+  test('renameColumn preserves order', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'TEXT' },
+      { name: 'c', type: 'TEXT' },
+    ])
+
+    renameColumn(db, id, 'b', 'beta')
+
+    const cols = getColumns(db, id)
+    expect(cols.map((c) => c.name)).toEqual(['a', 'beta', 'c'])
+    expect(cols[1]!.order).toBe(1)
+  })
+
+  test('renameColumn throws for non-existent old name', () => {
+    const id = createMatrix(db, 'M')
+
+    expect(() => renameColumn(db, id, 'nope', 'x')).toThrow('Column "nope" not found')
+  })
+
+  test('renameColumn throws when new name already exists', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'TEXT' },
+    ])
+
+    expect(() => renameColumn(db, id, 'a', 'b')).toThrow('Column "b" already exists')
+  })
+
+  // -- Combined operations ----------------------------------------------------
+
+  test('add then remove column round-trips cleanly', () => {
+    const id = createMatrix(db, 'M')
+
+    addColumn(db, id, { name: 'temp', type: 'INTEGER' })
+    expect(getColumns(db, id)).toHaveLength(2)
+
+    removeColumn(db, id, 'temp')
+    expect(getColumns(db, id)).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+  })
+
+  test('multiple addColumn calls assign incrementing order', () => {
+    const id = createMatrix(db, 'M')
+
+    addColumn(db, id, { name: 'x', type: 'TEXT' })
+    addColumn(db, id, { name: 'y', type: 'INTEGER' })
+    addColumn(db, id, { name: 'z', type: 'REAL' })
+
+    const cols = getColumns(db, id)
+    expect(cols.map((c) => c.order)).toEqual([0, 1, 2, 3])
+    expect(cols.map((c) => c.name)).toEqual(['title', 'x', 'y', 'z'])
+  })
+
+  test('data survives add, insert, rename, remove sequence', () => {
+    const id = createMatrix(db, 'M')
+
+    addColumn(db, id, { name: 'score', type: 'INTEGER' })
+    db.exec(`INSERT INTO "mx_${id}_data" (title, score) VALUES ('row1', 42)`)
+
+    renameColumn(db, id, 'score', 'points')
+
+    const stmt1 = db.prepare(`SELECT title, points FROM "mx_${id}_data"`)
+    expect(stmt1.step()).toBe(true)
+    const r1 = stmt1.get({}) as { title: string; points: number }
+    expect(r1.title).toBe('row1')
+    expect(r1.points).toBe(42)
+    stmt1.finalize()
+
+    addColumn(db, id, { name: 'tag', type: 'TEXT' })
+    removeColumn(db, id, 'tag')
+
+    const stmt2 = db.prepare(`SELECT title, points FROM "mx_${id}_data"`)
+    expect(stmt2.step()).toBe(true)
+    const r2 = stmt2.get({}) as { title: string; points: number }
+    expect(r2.title).toBe('row1')
+    expect(r2.points).toBe(42)
+    stmt2.finalize()
   })
 })

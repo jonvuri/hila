@@ -81,21 +81,21 @@ Replace the Observable-based query system with Solid signals. This also provides
 
 Matrix registry tracks column definitions. Support add/remove/rename column operations.
 
-- [ ] Extend the `matrix` registry table with a `columns` field (JSON text storing an array of `{ name, type, order }`), or create a separate `matrix_columns` table. Decide which is simpler.
-- [ ] Update `createMatrix()` to store column definitions in the registry alongside creating the data table columns
-- [ ] Implement `addColumn(matrixId, column: { name, type })`:
+- [x] Extend the `matrix` registry table with a `columns` field (JSON text storing an array of `{ name, type, order }`), or create a separate `matrix_columns` table. Decide which is simpler.
+- [x] Update `createMatrix()` to store column definitions in the registry alongside creating the data table columns
+- [x] Implement `addColumn(matrixId, column: { name, type })`:
   - `ALTER TABLE mx_{id}_data ADD COLUMN {name} {type}`
   - Update the column definitions in the registry
-- [ ] Implement `removeColumn(matrixId, columnName)`:
+- [x] Implement `removeColumn(matrixId, columnName)`:
   - SQLite doesn't support `DROP COLUMN` in older versions; for the WASM build (3.50.x), `ALTER TABLE ... DROP COLUMN` should work. Verify.
   - Update the column definitions in the registry
-- [ ] Implement `renameColumn(matrixId, oldName, newName)`:
+- [x] Implement `renameColumn(matrixId, oldName, newName)`:
   - `ALTER TABLE mx_{id}_data RENAME COLUMN {oldName} TO {newName}`
   - Update the column definitions in the registry
-- [ ] Implement `getColumns(matrixId)` -- return the ordered column definitions for a matrix
-- [ ] Update `ensureRootMatrix()` to store column definitions for the root matrix
-- [ ] Tests: create matrix with custom columns, add column, remove column, rename column, verify data table schema matches registry, verify existing data survives column operations
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Implement `getColumns(matrixId)` -- return the ordered column definitions for a matrix
+- [x] Update `ensureRootMatrix()` to store column definitions for the root matrix
+- [x] Tests: create matrix with custom columns, add column, remove column, rename column, verify data table schema matches registry, verify existing data survives column operations
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ---
 
