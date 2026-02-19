@@ -40,9 +40,10 @@ export type SubscribeErrorMessage = {
   error: Error
 }
 
-export type ExecuteAckMessage = {
-  type: 'executeAck'
+export type ExecuteResultMessage = {
+  type: 'executeResult'
   id: string
+  result: SqlResult
 }
 
 export type ExecuteErrorMessage = {
@@ -54,5 +55,5 @@ export type ExecuteErrorMessage = {
 export type SqlWorkerMessage =
   | SubscribeResultMessage
   | SubscribeErrorMessage
-  | ExecuteAckMessage
+  | ExecuteResultMessage
   | ExecuteErrorMessage

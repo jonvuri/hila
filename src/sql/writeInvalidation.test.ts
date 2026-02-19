@@ -1,19 +1,53 @@
 /* @vitest-environment jsdom */
 
 import { describe, it, beforeAll, expect } from 'vitest'
-import { firstValueFrom } from 'rxjs'
-import { filter, take, skip } from 'rxjs/operators'
 
-import { execQuery } from '../core/client/sql-client'
+import { addObserver, removeObserver, execMutation } from '../core/client/sql-client'
+import type { SqlObserver } from '../core/sql-types'
 import { awaitWorkerReady } from '../core/client/worker-client'
 
-import { observeQuery } from './query'
+import type { SqlResult } from './types'
+
+/**
+ * Creates a subscription that collects results into an async queue.
+ * Each call to nextResult() returns a promise resolving with the next emission.
+ */
+function observeResults(sql: string) {
+  const pending: ((result: SqlResult) => void)[] = []
+  const buffered: SqlResult[] = []
+
+  const observer: SqlObserver = (result) => {
+    if (result !== null) {
+      const waiter = pending.shift()
+      if (waiter) {
+        waiter(result)
+      } else {
+        buffered.push(result)
+      }
+    }
+  }
+
+  addObserver(sql, observer)
+
+  return {
+    nextResult: () =>
+      new Promise<SqlResult>((resolve) => {
+        const item = buffered.shift()
+        if (item) {
+          resolve(item)
+        } else {
+          pending.push(resolve)
+        }
+      }),
+    cleanup: () => removeObserver(sql, observer),
+  }
+}
 
 describe('write execution invalidates subscriptions', () => {
   beforeAll(async () => {
     await awaitWorkerReady()
 
-    await execQuery(
+    await execMutation(
       `CREATE TABLE IF NOT EXISTS elements(
         id INTEGER PRIMARY KEY,
         parent_id INTEGER,
@@ -22,45 +56,37 @@ describe('write execution invalidates subscriptions', () => {
         payload TEXT
       )`,
     )
-    await execQuery(`DELETE FROM elements`)
-    await execQuery(
+    await execMutation(`DELETE FROM elements`)
+    await execMutation(
       `CREATE TABLE IF NOT EXISTS metadata(
         id INTEGER PRIMARY KEY,
         note TEXT
       )`,
     )
-    await execQuery(`DELETE FROM metadata`)
+    await execMutation(`DELETE FROM metadata`)
   })
 
   it(
     'should emit an updated result after a write execute',
     async () => {
       const sql = `SELECT COUNT(*) AS n FROM elements`
-      const observable = observeQuery(sql)
+      const { nextResult, cleanup } = observeResults(sql)
 
-      const first = await firstValueFrom(
-        observable.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          take(1),
-        ),
-      )
-      const initial = first.result?.[0]?.n as number
+      try {
+        const first = await nextResult()
+        const initial = first[0]?.n as number
 
-      await execQuery(
-        `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'00', 'test', '{}')`,
-      )
+        await execMutation(
+          `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'00', 'test', '{}')`,
+        )
 
-      const second = await firstValueFrom(
-        observable.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          // Skip the replay of the last non-null emission; wait for the next one
-          skip(1),
-          take(1),
-        ),
-      )
-      const next = second.result?.[0]?.n as number
+        const second = await nextResult()
+        const next = second[0]?.n as number
 
-      expect(next).toBe(initial + 1)
+        expect(next).toBe(initial + 1)
+      } finally {
+        cleanup()
+      }
     },
     { timeout: 3000 },
   )
@@ -68,59 +94,41 @@ describe('write execution invalidates subscriptions', () => {
   it(
     'should not re-emit for queries unrelated to the written table',
     async () => {
-      // Observe a query on metadata table
       const metaSql = `SELECT COUNT(*) AS c FROM metadata`
-      const meta$ = observeQuery(metaSql)
-
-      // Observe a query on elements table
       const elemSql = `SELECT COUNT(*) AS e FROM elements`
-      const elem$ = observeQuery(elemSql)
 
-      // Prime both observables to first non-null emission
-      const metaFirst = await firstValueFrom(
-        meta$.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          take(1),
-        ),
-      )
-      const metaInitial = metaFirst.result?.[0]?.c as number
+      const meta = observeResults(metaSql)
+      const elem = observeResults(elemSql)
 
-      const elemFirst = await firstValueFrom(
-        elem$.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          take(1),
-        ),
-      )
-      const elemInitial = elemFirst.result?.[0]?.e as number
+      try {
+        const metaFirst = await meta.nextResult()
+        const metaInitial = metaFirst[0]?.c as number
 
-      // Perform a write affecting only elements
-      await execQuery(
-        `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'01', 'test', '{}')`,
-      )
+        const elemFirst = await elem.nextResult()
+        const elemInitial = elemFirst[0]?.e as number
 
-      // elements observer should see a change
-      const elemSecond = await firstValueFrom(
-        elem$.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          skip(1),
-          take(1),
-        ),
-      )
-      const elemNext = elemSecond.result?.[0]?.e as number
-      expect(elemNext).toBe(elemInitial + 1)
+        await execMutation(
+          `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'01', 'test', '{}')`,
+        )
 
-      // metadata observer should NOT emit a new result; to assert this, we race a timeout
-      // However, to keep it deterministic in this environment, we check that the last known
-      // result remains the same after giving the event loop a brief tick.
-      await new Promise((resolve) => setTimeout(resolve, 10))
-      const metaLatest = await firstValueFrom(
-        meta$.pipe(
-          filter((s) => s.result !== null || s.error !== null),
-          take(1),
-        ),
-      )
-      const metaNext = metaLatest.result?.[0]?.c as number
-      expect(metaNext).toBe(metaInitial)
+        const elemSecond = await elem.nextResult()
+        const elemNext = elemSecond[0]?.e as number
+        expect(elemNext).toBe(elemInitial + 1)
+
+        // metadata observer should NOT have received a new result.
+        // Give the event loop a tick and verify the buffer is still empty.
+        await new Promise((resolve) => setTimeout(resolve, 50))
+
+        // Re-subscribe to metadata to get its current value and confirm it hasn't changed
+        const metaCheck = observeResults(metaSql)
+        const metaLatest = await metaCheck.nextResult()
+        const metaNext = metaLatest[0]?.c as number
+        expect(metaNext).toBe(metaInitial)
+        metaCheck.cleanup()
+      } finally {
+        meta.cleanup()
+        elem.cleanup()
+      }
     },
     { timeout: 3000 },
   )

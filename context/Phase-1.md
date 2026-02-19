@@ -55,7 +55,7 @@ Queue messages during worker init; replay when ready.
 
 Replace the Observable-based query system with Solid signals. This also provides parameterized queries for free.
 
-- [ ] Create `useQuery` hook in `src/sql/useQuery.ts`:
+- [x] Create `useQuery` hook in `src/sql/useQuery.ts`:
   ```typescript
   function useQuery(sql: () => string): { result: Accessor<SqlResult | null>, error: Accessor<Error | null> }
   ```
@@ -63,19 +63,19 @@ Replace the Observable-based query system with Solid signals. This also provides
   - Uses `onCleanup` to unsubscribe (via `removeObserver`)
   - When `sql()` changes, automatically unsubscribes from old query, subscribes to new one
   - Returns Solid signals for result and error
-- [ ] Extend worker-side `execQuery` to return results (currently returns `Promise<void>` via `executeAck`):
+- [x] Extend worker-side `execQuery` to return results (currently returns `Promise<void>` via `executeAck`):
   - Add a new message type `executeResult` that carries the query result
   - Update `sql-handler.ts` to send results back
   - Update `sql-client.ts` `execQuery` to resolve with the result
-- [ ] Create `execMutation` (or keep the void-returning version) for write operations that don't need results
-- [ ] Update `MatrixDebug.tsx` to use `useQuery` instead of manual Observable subscriptions
-- [ ] Update `SqlRunner.tsx` to use the new `execQuery` that returns results
-- [ ] Remove `src/sql/querySubject.ts`
-- [ ] Remove `src/sql/query.ts` (replaced by `useQuery` hook and promise-based `execQuery`)
-- [ ] Update `src/sql/writeInvalidation.test.ts` to test the new reactive system
-- [ ] Update `src/sql/querySubject.test.ts` → replace or remove (the behavior it tests should be covered by `useQuery` tests)
-- [ ] Remove `rxjs` from `package.json` dependencies
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Create `execMutation` (or keep the void-returning version) for write operations that don't need results
+- [x] Update `MatrixDebug.tsx` to use `useQuery` instead of manual Observable subscriptions
+- [x] Update `SqlRunner.tsx` to use the new `execQuery` that returns results
+- [x] Remove `src/sql/querySubject.ts`
+- [x] Remove `src/sql/query.ts` (replaced by `useQuery` hook and promise-based `execQuery`)
+- [x] Update `src/sql/writeInvalidation.test.ts` to test the new reactive system
+- [x] Update `src/sql/querySubject.test.ts` → replace or remove (the behavior it tests should be covered by `useQuery` tests)
+- [x] Remove `rxjs` from `package.json` dependencies
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 5. Column schema management
 

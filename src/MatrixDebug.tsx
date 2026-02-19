@@ -1,7 +1,7 @@
-import { createSignal, For, Show, type Component, createComputed, onCleanup } from 'solid-js'
+import { createSignal, For, Show, type Component } from 'solid-js'
 
 import { createMatrix, addSampleRows, resetDatabase } from './core/client/matrix-client'
-import { observeQuery } from './sql/query'
+import { useQuery } from './sql/useQuery'
 
 interface Matrix {
   id: number
@@ -35,88 +35,389 @@ interface OutlineItem {
   data2: string | null
 }
 
+const formatKey = (key: Uint8Array | string): string => {
+  if (typeof key === 'string') return key
+  const bytes = Array.from(key)
+  return bytes
+    .map((b) =>
+      b === 0 ? '\\0'
+      : b >= 32 && b <= 126 ? String.fromCharCode(b)
+      : `\\x${b.toString(16).padStart(2, '0')}`,
+    )
+    .join('')
+}
+
+const getOutlineStructure = (
+  rankRows: RankData[],
+  closure: ClosureData[],
+  data: MatrixData[],
+): OutlineItem[] => {
+  const dataMap = new Map<number, MatrixData>()
+  data.forEach((item) => {
+    dataMap.set(item.id, item)
+  })
+
+  const depthMap = new Map<string, number>()
+  closure.forEach((item) => {
+    const descendantKeyStr = formatKey(item.descendant_key)
+    const currentDepth = depthMap.get(descendantKeyStr) || 0
+    depthMap.set(descendantKeyStr, Math.max(currentDepth, item.depth))
+  })
+
+  return rankRows.map((rankItem) => {
+    const keyStr = formatKey(rankItem.key)
+    const depth = depthMap.get(keyStr) || 0
+    const rowData = dataMap.get(rankItem.row_id) || { data1: null, data2: null }
+
+    return {
+      key: rankItem.key,
+      row_kind: rankItem.row_kind,
+      row_id: rankItem.row_id,
+      depth,
+      data1: rowData.data1,
+      data2: rowData.data2,
+    }
+  })
+}
+
+const MatrixPanel: Component<{
+  matrix: Matrix
+  loading: boolean
+  onAddSampleRows: () => void
+}> = (props) => {
+  const { result: dataResult } = useQuery(
+    () => `SELECT * FROM "mx_${props.matrix.id}_data" ORDER BY id`,
+  )
+  const { result: rankResult } = useQuery(
+    () =>
+      `SELECT key, row_kind, row_id FROM rank WHERE matrix_id = ${props.matrix.id} ORDER BY key`,
+  )
+  const { result: closureResult } = useQuery(
+    () =>
+      `SELECT ancestor_key, descendant_key, depth FROM "mx_${props.matrix.id}_closure" ORDER BY ancestor_key, depth`,
+  )
+
+  const matrixData = () => (dataResult() as unknown as MatrixData[]) ?? []
+  const rankData = () => (rankResult() as unknown as RankData[]) ?? []
+  const closureData = () => (closureResult() as unknown as ClosureData[]) ?? []
+  const outlineStructure = () => getOutlineStructure(rankData(), closureData(), matrixData())
+
+  return (
+    <div
+      style={{
+        'margin-bottom': '40px',
+        padding: '20px',
+        border: '2px solid #333',
+        'border-radius': '8px',
+        'background-color': '#fdfdfd',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          'justify-content': 'space-between',
+          'align-items': 'center',
+          'margin-bottom': '15px',
+        }}
+      >
+        <h3>
+          Matrix {props.matrix.id}: "{props.matrix.title}"
+        </h3>
+        <button
+          onClick={() => props.onAddSampleRows()}
+          disabled={props.loading}
+          style={{
+            padding: '8px 16px',
+            'background-color': '#28a745',
+            color: 'white',
+            border: 'none',
+            'border-radius': '3px',
+            cursor: props.loading ? 'not-allowed' : 'pointer',
+            opacity: props.loading ? '0.6' : '1',
+          }}
+        >
+          {props.loading ? 'Adding...' : 'Add Sample Rows'}
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          'grid-template-columns': '1fr 1fr 1fr 1fr',
+          gap: '20px',
+        }}
+      >
+        {/* Data Table */}
+        <div>
+          <h4>Data Table (mx_{props.matrix.id}_data)</h4>
+          <div style={{ 'overflow-x': 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                'border-collapse': 'collapse',
+                'font-size': '12px',
+              }}
+            >
+              <thead>
+                <tr style={{ 'background-color': '#e9ecef' }}>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>ID</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data1</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data2</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Show
+                  when={matrixData().length > 0}
+                  fallback={
+                    <tr>
+                      <td
+                        colspan={3}
+                        style={{
+                          'text-align': 'center',
+                          padding: '10px',
+                          'font-style': 'italic',
+                        }}
+                      >
+                        No data
+                      </td>
+                    </tr>
+                  }
+                >
+                  <For each={matrixData()}>
+                    {(row) => (
+                      <tr>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.id}
+                        </td>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.data1 || 'NULL'}
+                        </td>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.data2 || 'NULL'}
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </Show>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Rank Table */}
+        <div>
+          <h4>Rank Table</h4>
+          <div style={{ 'overflow-x': 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                'border-collapse': 'collapse',
+                'font-size': '12px',
+              }}
+            >
+              <thead>
+                <tr style={{ 'background-color': '#e9ecef' }}>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Key</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Kind</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Row ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Show
+                  when={rankData().length > 0}
+                  fallback={
+                    <tr>
+                      <td
+                        colspan={3}
+                        style={{
+                          'text-align': 'center',
+                          padding: '10px',
+                          'font-style': 'italic',
+                        }}
+                      >
+                        No rank data
+                      </td>
+                    </tr>
+                  }
+                >
+                  <For each={rankData()}>
+                    {(row) => (
+                      <tr>
+                        <td
+                          style={{
+                            border: '1px solid #dee2e6',
+                            padding: '8px',
+                            'max-width': '120px',
+                            'word-break': 'break-all',
+                          }}
+                        >
+                          {formatKey(row.key)}
+                        </td>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.row_kind}
+                        </td>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.row_id}
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </Show>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Closure Table */}
+        <div>
+          <h4>Closure Table (mx_{props.matrix.id}_closure)</h4>
+          <div style={{ 'overflow-x': 'auto' }}>
+            <table
+              style={{
+                width: '100%',
+                'border-collapse': 'collapse',
+                'font-size': '12px',
+              }}
+            >
+              <thead>
+                <tr style={{ 'background-color': '#e9ecef' }}>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Ancestor</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Descendant</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Depth</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Show
+                  when={closureData().length > 0}
+                  fallback={
+                    <tr>
+                      <td
+                        colspan={3}
+                        style={{
+                          'text-align': 'center',
+                          padding: '10px',
+                          'font-style': 'italic',
+                        }}
+                      >
+                        No closure
+                      </td>
+                    </tr>
+                  }
+                >
+                  <For each={closureData()}>
+                    {(row) => (
+                      <tr>
+                        <td
+                          style={{
+                            border: '1px solid #dee2e6',
+                            padding: '8px',
+                            'max-width': '100px',
+                            'word-break': 'break-all',
+                          }}
+                        >
+                          {formatKey(row.ancestor_key)}
+                        </td>
+                        <td
+                          style={{
+                            border: '1px solid #dee2e6',
+                            padding: '8px',
+                            'max-width': '100px',
+                            'word-break': 'break-all',
+                          }}
+                        >
+                          {formatKey(row.descendant_key)}
+                        </td>
+                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
+                          {row.depth}
+                        </td>
+                      </tr>
+                    )}
+                  </For>
+                </Show>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Outline View */}
+        <div>
+          <h4>Outline Structure</h4>
+          <div style={{ 'overflow-x': 'auto' }}>
+            <div
+              style={{
+                border: '1px solid #dee2e6',
+                'border-radius': '3px',
+                'font-size': '12px',
+                'min-height': '100px',
+                'background-color': 'white',
+              }}
+            >
+              <Show
+                when={rankData().length > 0}
+                fallback={
+                  <div
+                    style={{
+                      'text-align': 'center',
+                      padding: '20px',
+                      'font-style': 'italic',
+                      color: '#666',
+                    }}
+                  >
+                    No items to display
+                  </div>
+                }
+              >
+                <For each={outlineStructure()}>
+                  {(item) => (
+                    <div
+                      style={{
+                        padding: '4px 8px',
+                        'border-bottom': '1px solid #f0f0f0',
+                        'padding-left': `${8 + item.depth * 20}px`,
+                        'font-family': 'monospace',
+                        display: 'flex',
+                        'align-items': 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: '#666',
+                          'font-size': '10px',
+                          'min-width': '40px',
+                        }}
+                      >
+                        [{item.row_kind}:{item.row_id}]
+                      </span>
+                      <span style={{ flex: 1 }}>{item.data1 || item.data2 || 'No data'}</span>
+                      <span
+                        style={{
+                          color: '#999',
+                          'font-size': '10px',
+                          'font-family': 'monospace',
+                        }}
+                      >
+                        {formatKey(item.key)}
+                      </span>
+                    </div>
+                  )}
+                </For>
+              </Show>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const MatrixDebug: Component = () => {
-  const [matrices, setMatrices] = createSignal<Matrix[]>([])
-  const [matrixData, setMatrixData] = createSignal<Record<number, MatrixData[]>>({})
-  const [rankData, setRankData] = createSignal<Record<number, RankData[]>>({})
-  const [closureData, setClosureData] = createSignal<Record<number, ClosureData[]>>({})
   const [newMatrixTitle, setNewMatrixTitle] = createSignal('')
   const [loading, setLoading] = createSignal<Record<number, boolean>>({})
   const [resetLoading, setResetLoading] = createSignal(false)
 
-  // Watch for matrices changes
-  createComputed(() => {
-    const matricesQuery = observeQuery('SELECT id, title FROM matrix ORDER BY id')
-    const subscription = matricesQuery.subscribe((state) => {
-      if (state.result) {
-        setMatrices(state.result as unknown as Matrix[])
-      }
-      if (state.error) {
-        console.error('Error loading matrices:', state.error)
-      }
-    })
-
-    onCleanup(() => {
-      subscription.unsubscribe()
-    })
-  })
-
-  // For each matrix, watch its data tables
-  createComputed(() => {
-    const currentMatrices = matrices()
-    const subscriptions: (() => void)[] = []
-
-    currentMatrices.forEach((matrix) => {
-      // Watch matrix data table
-      const dataQuery = observeQuery(`SELECT * FROM "mx_${matrix.id}_data" ORDER BY id`)
-      const dataSubscription = dataQuery.subscribe((state) => {
-        if (state.result) {
-          setMatrixData((prev) => ({
-            ...prev,
-            [matrix.id]: state.result as unknown as MatrixData[],
-          }))
-        }
-      })
-      subscriptions.push(() => dataSubscription.unsubscribe())
-
-      // Watch rank table for this matrix
-      const rankQuery = observeQuery(`
-        SELECT key, row_kind, row_id 
-        FROM rank 
-        WHERE matrix_id = ${matrix.id} 
-        ORDER BY key
-      `)
-      const rankSubscription = rankQuery.subscribe((state) => {
-        if (state.result) {
-          setRankData((prev) => ({
-            ...prev,
-            [matrix.id]: state.result as unknown as RankData[],
-          }))
-        }
-      })
-      subscriptions.push(() => rankSubscription.unsubscribe())
-
-      // Watch closure table for this matrix
-      const closureQuery = observeQuery(`
-        SELECT ancestor_key, descendant_key, depth 
-        FROM "mx_${matrix.id}_closure" 
-        ORDER BY ancestor_key, depth
-      `)
-      const closureSubscription = closureQuery.subscribe((state) => {
-        if (state.result) {
-          setClosureData((prev) => ({
-            ...prev,
-            [matrix.id]: state.result as unknown as ClosureData[],
-          }))
-        }
-      })
-      subscriptions.push(() => closureSubscription.unsubscribe())
-    })
-
-    onCleanup(() => {
-      subscriptions.forEach((unsub) => unsub())
-    })
-  })
+  const { result: matricesResult } = useQuery(() => 'SELECT id, title FROM matrix ORDER BY id')
+  const matrices = () => (matricesResult() as unknown as Matrix[]) ?? []
 
   const handleCreateMatrix = async () => {
     const title = newMatrixTitle().trim()
@@ -150,55 +451,6 @@ const MatrixDebug: Component = () => {
     } finally {
       setResetLoading(false)
     }
-  }
-
-  const formatKey = (key: Uint8Array | string): string => {
-    if (typeof key === 'string') return key
-    // Convert Uint8Array to readable string, showing hex for non-printable bytes
-    const bytes = Array.from(key)
-    return bytes
-      .map((b) =>
-        b === 0 ? '\\0'
-        : b >= 32 && b <= 126 ? String.fromCharCode(b)
-        : `\\x${b.toString(16).padStart(2, '0')}`,
-      )
-      .join('')
-  }
-
-  const getOutlineStructure = (matrixId: number): OutlineItem[] => {
-    const rankRows = rankData()[matrixId] || []
-    const closure = closureData()[matrixId] || []
-    const data = matrixData()[matrixId] || []
-
-    const dataMap = new Map<number, MatrixData>()
-    data.forEach((item) => {
-      dataMap.set(item.id, item)
-    })
-
-    // Create a map for depth lookup by descendant_key (as string for comparison)
-    const depthMap = new Map<string, number>()
-    closure.forEach((item) => {
-      const descendantKeyStr = formatKey(item.descendant_key)
-
-      // For each descendant, track its maximum depth (deepest nesting level)
-      const currentDepth = depthMap.get(descendantKeyStr) || 0
-      depthMap.set(descendantKeyStr, Math.max(currentDepth, item.depth))
-    })
-
-    return rankRows.map((rankItem) => {
-      const keyStr = formatKey(rankItem.key)
-      const depth = depthMap.get(keyStr) || 0
-      const rowData = dataMap.get(rankItem.row_id) || { data1: null, data2: null }
-
-      return {
-        key: rankItem.key,
-        row_kind: rankItem.row_kind,
-        row_id: rankItem.row_id,
-        depth,
-        data1: rowData.data1,
-        data2: rowData.data2,
-      }
-    })
   }
 
   return (
@@ -277,319 +529,11 @@ const MatrixDebug: Component = () => {
       <Show when={matrices().length > 0} fallback={<p>No matrices found. Create one above!</p>}>
         <For each={matrices()}>
           {(matrix) => (
-            <div
-              style={{
-                'margin-bottom': '40px',
-                padding: '20px',
-                border: '2px solid #333',
-                'border-radius': '8px',
-                'background-color': '#fdfdfd',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  'justify-content': 'space-between',
-                  'align-items': 'center',
-                  'margin-bottom': '15px',
-                }}
-              >
-                <h3>
-                  Matrix {matrix.id}: "{matrix.title}"
-                </h3>
-                <button
-                  onClick={() => handleAddSampleRows(matrix.id)}
-                  disabled={loading()[matrix.id]}
-                  style={{
-                    padding: '8px 16px',
-                    'background-color': '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    'border-radius': '3px',
-                    cursor: loading()[matrix.id] ? 'not-allowed' : 'pointer',
-                    opacity: loading()[matrix.id] ? '0.6' : '1',
-                  }}
-                >
-                  {loading()[matrix.id] ? 'Adding...' : 'Add Sample Rows'}
-                </button>
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  'grid-template-columns': '1fr 1fr 1fr 1fr',
-                  gap: '20px',
-                }}
-              >
-                {/* Data Table */}
-                <div>
-                  <h4>Data Table (mx_{matrix.id}_data)</h4>
-                  <div style={{ 'overflow-x': 'auto' }}>
-                    <table
-                      style={{
-                        width: '100%',
-                        'border-collapse': 'collapse',
-                        'font-size': '12px',
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ 'background-color': '#e9ecef' }}>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>ID</th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data1</th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data2</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <Show
-                          when={(matrixData()[matrix.id] || []).length > 0}
-                          fallback={
-                            <tr>
-                              <td
-                                colspan={3}
-                                style={{
-                                  'text-align': 'center',
-                                  padding: '10px',
-                                  'font-style': 'italic',
-                                }}
-                              >
-                                No data
-                              </td>
-                            </tr>
-                          }
-                        >
-                          <For each={matrixData()[matrix.id] || []}>
-                            {(row) => (
-                              <tr>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.id}
-                                </td>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.data1 || 'NULL'}
-                                </td>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.data2 || 'NULL'}
-                                </td>
-                              </tr>
-                            )}
-                          </For>
-                        </Show>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Rank Table */}
-                <div>
-                  <h4>Rank Table</h4>
-                  <div style={{ 'overflow-x': 'auto' }}>
-                    <table
-                      style={{
-                        width: '100%',
-                        'border-collapse': 'collapse',
-                        'font-size': '12px',
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ 'background-color': '#e9ecef' }}>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Key</th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Kind</th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                            Row ID
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <Show
-                          when={(rankData()[matrix.id] || []).length > 0}
-                          fallback={
-                            <tr>
-                              <td
-                                colspan={3}
-                                style={{
-                                  'text-align': 'center',
-                                  padding: '10px',
-                                  'font-style': 'italic',
-                                }}
-                              >
-                                No rank data
-                              </td>
-                            </tr>
-                          }
-                        >
-                          <For each={rankData()[matrix.id] || []}>
-                            {(row) => (
-                              <tr>
-                                <td
-                                  style={{
-                                    border: '1px solid #dee2e6',
-                                    padding: '8px',
-                                    'max-width': '120px',
-                                    'word-break': 'break-all',
-                                  }}
-                                >
-                                  {formatKey(row.key)}
-                                </td>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.row_kind}
-                                </td>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.row_id}
-                                </td>
-                              </tr>
-                            )}
-                          </For>
-                        </Show>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Closure Table */}
-                <div>
-                  <h4>Closure Table (mx_{matrix.id}_closure)</h4>
-                  <div style={{ 'overflow-x': 'auto' }}>
-                    <table
-                      style={{
-                        width: '100%',
-                        'border-collapse': 'collapse',
-                        'font-size': '12px',
-                      }}
-                    >
-                      <thead>
-                        <tr style={{ 'background-color': '#e9ecef' }}>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                            Ancestor
-                          </th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                            Descendant
-                          </th>
-                          <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Depth</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <Show
-                          when={(closureData()[matrix.id] || []).length > 0}
-                          fallback={
-                            <tr>
-                              <td
-                                colspan={3}
-                                style={{
-                                  'text-align': 'center',
-                                  padding: '10px',
-                                  'font-style': 'italic',
-                                }}
-                              >
-                                No closure
-                              </td>
-                            </tr>
-                          }
-                        >
-                          <For each={closureData()[matrix.id] || []}>
-                            {(row) => (
-                              <tr>
-                                <td
-                                  style={{
-                                    border: '1px solid #dee2e6',
-                                    padding: '8px',
-                                    'max-width': '100px',
-                                    'word-break': 'break-all',
-                                  }}
-                                >
-                                  {formatKey(row.ancestor_key)}
-                                </td>
-                                <td
-                                  style={{
-                                    border: '1px solid #dee2e6',
-                                    padding: '8px',
-                                    'max-width': '100px',
-                                    'word-break': 'break-all',
-                                  }}
-                                >
-                                  {formatKey(row.descendant_key)}
-                                </td>
-                                <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                                  {row.depth}
-                                </td>
-                              </tr>
-                            )}
-                          </For>
-                        </Show>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Outline View */}
-                <div>
-                  <h4>Outline Structure</h4>
-                  <div style={{ 'overflow-x': 'auto' }}>
-                    <div
-                      style={{
-                        border: '1px solid #dee2e6',
-                        'border-radius': '3px',
-                        'font-size': '12px',
-                        'min-height': '100px',
-                        'background-color': 'white',
-                      }}
-                    >
-                      <Show
-                        when={(rankData()[matrix.id] || []).length > 0}
-                        fallback={
-                          <div
-                            style={{
-                              'text-align': 'center',
-                              padding: '20px',
-                              'font-style': 'italic',
-                              color: '#666',
-                            }}
-                          >
-                            No items to display
-                          </div>
-                        }
-                      >
-                        <For each={getOutlineStructure(matrix.id)}>
-                          {(item) => (
-                            <div
-                              style={{
-                                padding: '4px 8px',
-                                'border-bottom': '1px solid #f0f0f0',
-                                'padding-left': `${8 + item.depth * 20}px`,
-                                'font-family': 'monospace',
-                                display: 'flex',
-                                'align-items': 'center',
-                                gap: '8px',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color: '#666',
-                                  'font-size': '10px',
-                                  'min-width': '40px',
-                                }}
-                              >
-                                [{item.row_kind}:{item.row_id}]
-                              </span>
-                              <span style={{ flex: 1 }}>
-                                {item.data1 || item.data2 || 'No data'}
-                              </span>
-                              <span
-                                style={{
-                                  color: '#999',
-                                  'font-size': '10px',
-                                  'font-family': 'monospace',
-                                }}
-                              >
-                                {formatKey(item.key)}
-                              </span>
-                            </div>
-                          )}
-                        </For>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <MatrixPanel
+              matrix={matrix}
+              loading={loading()[matrix.id] ?? false}
+              onAddSampleRows={() => handleAddSampleRows(matrix.id)}
+            />
           )}
         </For>
       </Show>

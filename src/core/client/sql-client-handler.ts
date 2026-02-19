@@ -42,11 +42,11 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
     }
 
     // Executed queries, that run and return a result once
-    case 'executeAck': {
-      const { id } = message
+    case 'executeResult': {
+      const { id, result } = message
       const resolver = pendingExecs.get(id)
       if (resolver) {
-        resolver.resolve()
+        resolver.resolve(result)
         pendingExecs.delete(id)
       }
       break

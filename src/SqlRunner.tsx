@@ -1,6 +1,6 @@
 import { createSignal, type Component } from 'solid-js'
 
-import { execQuery } from './sql/query'
+import { execQuery } from './core/client/sql-client'
 import type { SqlResult } from './sql/types'
 
 const SqlRunner: Component = () => {

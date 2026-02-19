@@ -56,7 +56,7 @@ worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       return
     case 'subscribeResult':
     case 'subscribeError':
-    case 'executeAck':
+    case 'executeResult':
     case 'executeError':
       handleSqlWorkerMessage(message)
       return

@@ -2,7 +2,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 
-import { execQuery } from '../client/sql-client'
+import { execMutation } from '../client/sql-client'
 import { createMatrix, resetDatabase } from '../client/matrix-client'
 import { awaitWorkerReady } from '../client/worker-client'
 
@@ -11,7 +11,7 @@ describe('worker message queuing', () => {
   // ready. These are queued on the client side and forwarded to the worker,
   // which must process them correctly after its own init completes.
   const earlyMatrix = createMatrix('pre-ready-matrix')
-  const earlyExec = execQuery(
+  const earlyExec = execMutation(
     `CREATE TABLE IF NOT EXISTS queue_test (id INTEGER PRIMARY KEY, value TEXT)`,
   )
 
@@ -24,15 +24,14 @@ describe('worker message queuing', () => {
     expect(matrixId).toBeGreaterThan(0)
   }, 5000)
 
-  it('resolves an execQuery issued before ready', async () => {
+  it('resolves an execMutation issued before ready', async () => {
     await expect(earlyExec).resolves.toBeUndefined()
   }, 5000)
 
   it('processes pre-ready and post-ready operations in order', async () => {
-    // Insert a row using the table created by the pre-ready execQuery
     await earlyExec
-    await execQuery(`INSERT INTO queue_test (value) VALUES ('first')`)
-    await execQuery(`INSERT INTO queue_test (value) VALUES ('second')`)
+    await execMutation(`INSERT INTO queue_test (value) VALUES ('first')`)
+    await execMutation(`INSERT INTO queue_test (value) VALUES ('second')`)
 
     // Verify via a fresh worker round-trip that data is intact
     const readMatrix = createMatrix('post-ready-matrix')

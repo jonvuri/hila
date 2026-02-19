@@ -178,8 +178,16 @@ export const handleSqlClientMessage = async (message: SqlClientMessage) => {
       const { sql, id } = message
       try {
         const { db } = await sqliteWasm
-        db.exec(sql)
-        postMessage({ type: 'executeAck', id })
+        const stmt = db.prepare(sql)
+        const result = []
+        try {
+          while (stmt.step()) {
+            result.push(stmt.get({}))
+          }
+        } finally {
+          stmt.finalize()
+        }
+        postMessage({ type: 'executeResult', id, result })
       } catch (err: unknown) {
         postMessage({
           type: 'executeError',

@@ -1,7 +1,7 @@
 // Outgoing side of the SQL client interface. Sends messages to the worker
 // that will resolve the promises once results are available.
 
-import type { SqlObserver, ExecuteMessage } from '../sql-types'
+import type { SqlObserver, SqlResult, ExecuteMessage } from '../sql-types'
 
 import { postMessage } from './worker-client'
 import { pendingExecs, subscribedObservers } from './sql-client-promises'
@@ -42,9 +42,13 @@ export const removeObserver = (sql: string, observer: SqlObserver) => {
 }
 
 export const execQuery = (sql: string) =>
-  new Promise<void>((resolve, reject) => {
+  new Promise<SqlResult>((resolve, reject) => {
     const id = crypto.randomUUID()
     pendingExecs.set(id, { resolve, reject })
     const message: ExecuteMessage = { type: 'execute', id, sql }
     postMessage(message)
   })
+
+export const execMutation = async (sql: string): Promise<void> => {
+  await execQuery(sql)
+}
