@@ -33,9 +33,6 @@ export const sqliteWasm = initSqliteWasm({
       log('Using in-memory DB (no OPFS)')
     }
 
-    log('Done initializing worker core')
-    self.postMessage({ type: 'ready' } as CoreWorkerMessage)
-
     return {
       db,
       sqlite3,

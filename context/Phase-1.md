@@ -43,13 +43,13 @@ Global `joins` table per the [Primitives spec](Primitives.md#join).
 
 Queue messages during worker init; replay when ready.
 
-- [ ] In the worker, replace the direct `onmessage` assignment with a queuing wrapper:
+- [x] In the worker, replace the direct `onmessage` assignment with a queuing wrapper:
   - On load, `onmessage` pushes incoming messages into a queue
   - Once SQLite DB and all handlers are initialized, drain the queue through the real handler
   - Then replace `onmessage` with the real handler for all subsequent messages
-- [ ] The client side (`worker-client.ts`) should not need changes -- the queuing is internal to the worker
-- [ ] Test: send messages before the worker signals ready; verify they are processed correctly after init completes
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] The client side (`worker-client.ts`) should not need changes -- the queuing is internal to the worker
+- [x] Test: send messages before the worker signals ready; verify they are processed correctly after init completes
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Replace RxJS with Solid reactive primitives
 

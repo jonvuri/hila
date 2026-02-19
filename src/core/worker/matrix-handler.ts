@@ -1,5 +1,7 @@
 // Handles Matrix messages, and also manages the Matrix schema and operations.
 
+import type { Database } from '@sqlite.org/sqlite-wasm'
+
 import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
 import {
   initMatrixSchema,
@@ -14,10 +16,10 @@ const postMessage = (message: MatrixWorkerMessage) => {
   self.postMessage(message)
 }
 
-sqliteWasm.then(({ db }) => {
+export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
   ensureRootMatrix(db)
-})
+}
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
   switch (message.type) {

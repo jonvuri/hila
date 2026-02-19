@@ -147,8 +147,9 @@ export const triggerSubscribedQueries = (tableName: string) => {
   }
 }
 
-// Register update hook to re-run subscribed statements when tables are changed
-sqliteWasm.then(({ db, sqlite3 }) => {
+type SqliteWasm = Awaited<typeof sqliteWasm>
+
+export const initSqlHandler = (db: SqliteWasm['db'], sqlite3: SqliteWasm['sqlite3']) => {
   sqlite3.capi.sqlite3_update_hook(
     db,
     (_bind: number, _op: number, _dbName: string, table: string, _rowid: bigint) => {
@@ -156,7 +157,7 @@ sqliteWasm.then(({ db, sqlite3 }) => {
     },
     0,
   )
-})
+}
 
 export const handleSqlClientMessage = async (message: SqlClientMessage) => {
   switch (message.type) {
