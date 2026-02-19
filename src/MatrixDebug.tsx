@@ -10,8 +10,7 @@ interface Matrix {
 
 interface MatrixData {
   id: number
-  data1: string | null
-  data2: string | null
+  title: string | null
 }
 
 interface RankData {
@@ -31,8 +30,7 @@ interface OutlineItem {
   row_kind: number
   row_id: number
   depth: number
-  data1: string | null
-  data2: string | null
+  title: string | null
 }
 
 const formatKey = (key: Uint8Array | string): string => {
@@ -67,15 +65,14 @@ const getOutlineStructure = (
   return rankRows.map((rankItem) => {
     const keyStr = formatKey(rankItem.key)
     const depth = depthMap.get(keyStr) || 0
-    const rowData = dataMap.get(rankItem.row_id) || { data1: null, data2: null }
+    const rowData = dataMap.get(rankItem.row_id) || { title: null }
 
     return {
       key: rankItem.key,
       row_kind: rankItem.row_kind,
       row_id: rankItem.row_id,
       depth,
-      data1: rowData.data1,
-      data2: rowData.data2,
+      title: rowData.title,
     }
   })
 }
@@ -161,8 +158,7 @@ const MatrixPanel: Component<{
               <thead>
                 <tr style={{ 'background-color': '#e9ecef' }}>
                   <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>ID</th>
-                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data1</th>
-                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Data2</th>
+                  <th style={{ border: '1px solid #dee2e6', padding: '8px' }}>Title</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,7 +167,7 @@ const MatrixPanel: Component<{
                   fallback={
                     <tr>
                       <td
-                        colspan={3}
+                        colspan={2}
                         style={{
                           'text-align': 'center',
                           padding: '10px',
@@ -190,10 +186,7 @@ const MatrixPanel: Component<{
                           {row.id}
                         </td>
                         <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                          {row.data1 || 'NULL'}
-                        </td>
-                        <td style={{ border: '1px solid #dee2e6', padding: '8px' }}>
-                          {row.data2 || 'NULL'}
+                          {row.title || 'NULL'}
                         </td>
                       </tr>
                     )}
@@ -389,7 +382,7 @@ const MatrixPanel: Component<{
                       >
                         [{item.row_kind}:{item.row_id}]
                       </span>
-                      <span style={{ flex: 1 }}>{item.data1 || item.data2 || 'No data'}</span>
+                      <span style={{ flex: 1 }}>{item.title || 'No data'}</span>
                       <span
                         style={{
                           color: '#999',
