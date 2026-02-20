@@ -29,7 +29,9 @@ These threads run across multiple use cases and should be built as shared infras
 
 Each phase delivers something usable, proves specific architectural concepts, and builds on the previous phase.
 
-### Phase 1 -- Foundation hardening
+### Phase 1 -- Foundation hardening (COMPLETE)
+
+> Detailed task list: [Phase-1.md](Phase-1.md)
 
 Clean up the existing codebase and fill the gaps needed before real features. End state: a solid, tested core with all three structural primitives working.
 
@@ -46,6 +48,8 @@ Clean up the existing codebase and fill the gaps needed before real features. En
 ---
 
 ### Phase 2 -- Outline with rich text
+
+> Detailed task list: [Phase-2.md](Phase-2.md)
 
 The first real user-facing feature. This is where the system becomes an app someone would actually use.
 
