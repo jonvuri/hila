@@ -18,8 +18,18 @@ export const initMatrixSchema = (db: Database) => {
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix (
       id         INTEGER PRIMARY KEY,
-      title      TEXT NOT NULL DEFAULT '',
-      columns    TEXT NOT NULL DEFAULT '[]'
+      title      TEXT NOT NULL DEFAULT ''
+    ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Column definitions (normalized, one row per column)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS matrix_columns (
+      matrix_id  INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
+      name       TEXT    NOT NULL,
+      type       TEXT    NOT NULL,
+      "order"    INTEGER NOT NULL,
+      PRIMARY KEY (matrix_id, name)
     ) STRICT;
 
     -- ------------------------------------------------------------
@@ -69,17 +79,8 @@ export const createMatrix = (
   db.exec('BEGIN TRANSACTION')
 
   try {
-    const storedColumns: ColumnDefinition[] = columns.map((col, i) => ({
-      name: col.name,
-      type: col.type,
-      order: i,
-    }))
-
-    // Insert the matrix record with column definitions and get the new ID
-    const insertStmt = db.prepare(
-      'INSERT INTO matrix (title, columns) VALUES (?, ?) RETURNING id',
-    )
-    insertStmt.bind([title, JSON.stringify(storedColumns)])
+    const insertStmt = db.prepare('INSERT INTO matrix (title) VALUES (?) RETURNING id')
+    insertStmt.bind([title])
     if (!insertStmt.step()) {
       insertStmt.finalize()
       throw new Error('Failed to insert matrix record')
@@ -88,11 +89,21 @@ export const createMatrix = (
     const matrixId = result.id
     insertStmt.finalize()
 
+    // Store column definitions in the normalized table
+    const colStmt = db.prepare(
+      'INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, ?, ?, ?)',
+    )
+    for (let i = 0; i < columns.length; i++) {
+      colStmt.bind([matrixId, columns[i]!.name, columns[i]!.type, i])
+      colStmt.step()
+      colStmt.reset()
+    }
+    colStmt.finalize()
+
     const columnDefs = columns
       .map((col) => `${quoteIdent(col.name)} ${col.type}`)
       .join(',\n        ')
 
-    // Create per-matrix data table with specified columns
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
         id INTEGER PRIMARY KEY,
@@ -100,25 +111,21 @@ export const createMatrix = (
       ) STRICT;
     `)
 
-    // Create per-matrix closure table
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
-        ancestor_key    BLOB NOT NULL,   -- key from rank (must belong to this matrix)
-        descendant_key  BLOB NOT NULL,   -- key from rank (must belong to this matrix)
+        ancestor_key    BLOB NOT NULL,
+        descendant_key  BLOB NOT NULL,
         depth           INTEGER NOT NULL CHECK (depth >= 0),
         PRIMARY KEY (ancestor_key, descendant_key)
       ) STRICT;
 
-      -- Index for descendant lookups
       CREATE INDEX IF NOT EXISTS "mx_${matrixId}_closure_by_descendant"
         ON "mx_${matrixId}_closure"(descendant_key);
     `)
 
-    // Commit transaction
     db.exec('COMMIT')
     return matrixId
   } catch (error) {
-    // Rollback on error
     db.exec('ROLLBACK')
     throw error
   }
@@ -136,25 +143,23 @@ export const ensureRootMatrix = (db: Database): number => {
     return 1
   }
 
-  // Create root matrix with a single 'title' column
   db.exec('BEGIN TRANSACTION')
 
   try {
-    // Insert the root matrix record with fixed ID = 1
-    const rootColumns: ColumnDefinition[] = [{ name: 'title', type: 'TEXT', order: 0 }]
-    const insertStmt = db.prepare(
-      'INSERT INTO matrix (id, title, columns) VALUES (1, ?, ?) RETURNING id',
-    )
-    insertStmt.bind(['Root', JSON.stringify(rootColumns)])
+    const insertStmt = db.prepare('INSERT INTO matrix (id, title) VALUES (1, ?) RETURNING id')
+    insertStmt.bind(['Root'])
     if (!insertStmt.step()) {
       insertStmt.finalize()
       throw new Error('Failed to insert root matrix record')
     }
     insertStmt.finalize()
 
+    db.exec(
+      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (1, 'title', 'TEXT', 0)`,
+    )
+
     const matrixId = 1
 
-    // Create per-matrix data table with single 'title' column
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
         id INTEGER PRIMARY KEY,
@@ -162,7 +167,6 @@ export const ensureRootMatrix = (db: Database): number => {
       ) STRICT;
     `)
 
-    // Create per-matrix closure table
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
         ancestor_key    BLOB NOT NULL,
@@ -648,17 +652,26 @@ export const getMatrixDebugData = (db: Database, matrixId: number) => {
 
 /** Return the ordered column definitions for a matrix. */
 export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] => {
-  const stmt = db.prepare('SELECT columns FROM matrix WHERE id = ?')
-  stmt.bind([matrixId])
-
-  if (!stmt.step()) {
-    stmt.finalize()
+  // Verify the matrix exists
+  const existsStmt = db.prepare('SELECT 1 FROM matrix WHERE id = ?')
+  existsStmt.bind([matrixId])
+  if (!existsStmt.step()) {
+    existsStmt.finalize()
     throw new Error(`Matrix ${matrixId} not found`)
   }
+  existsStmt.finalize()
 
-  const row = stmt.get({}) as { columns: string }
+  const stmt = db.prepare(
+    'SELECT name, type, "order" FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+  )
+  stmt.bind([matrixId])
+
+  const cols: ColumnDefinition[] = []
+  while (stmt.step()) {
+    cols.push(stmt.get({}) as ColumnDefinition)
+  }
   stmt.finalize()
-  return (JSON.parse(row.columns) as ColumnDefinition[]).sort((a, b) => a.order - b.order)
+  return cols
 }
 
 /** Add a column to a matrix's data table and registry. */
@@ -681,9 +694,8 @@ export const addColumn = (
     )
 
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
-    const updated = [...current, { name: column.name, type: column.type, order: nextOrder }]
-    db.exec('UPDATE matrix SET columns = ? WHERE id = ?', {
-      bind: [JSON.stringify(updated), matrixId],
+    db.exec('INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, ?, ?, ?)', {
+      bind: [matrixId, column.name, column.type, nextOrder],
     })
 
     db.exec('COMMIT')
@@ -706,9 +718,8 @@ export const removeColumn = (db: Database, matrixId: number, columnName: string)
 
     db.exec(`ALTER TABLE "mx_${matrixId}_data" DROP COLUMN ${quoteIdent(columnName)}`)
 
-    const updated = current.filter((c) => c.name !== columnName)
-    db.exec('UPDATE matrix SET columns = ? WHERE id = ?', {
-      bind: [JSON.stringify(updated), matrixId],
+    db.exec('DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?', {
+      bind: [matrixId, columnName],
     })
 
     db.exec('COMMIT')
@@ -741,9 +752,8 @@ export const renameColumn = (
       `ALTER TABLE "mx_${matrixId}_data" RENAME COLUMN ${quoteIdent(oldName)} TO ${quoteIdent(newName)}`,
     )
 
-    const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
-    db.exec('UPDATE matrix SET columns = ? WHERE id = ?', {
-      bind: [JSON.stringify(updated), matrixId],
+    db.exec('UPDATE matrix_columns SET name = ? WHERE matrix_id = ? AND name = ?', {
+      bind: [newName, matrixId, oldName],
     })
 
     db.exec('COMMIT')

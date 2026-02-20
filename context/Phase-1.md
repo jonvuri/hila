@@ -57,7 +57,7 @@ Replace the Observable-based query system with Solid signals. This also provides
 
 - [x] Create `useQuery` hook in `src/sql/useQuery.ts`:
   ```typescript
-  function useQuery(sql: () => string): { result: Accessor<SqlResult | null>, error: Accessor<Error | null> }
+  function useQuery(sql: Accessor<string>): { result: Accessor<SqlResult | null>, error: Accessor<Error | null> }
   ```
   - Uses `createEffect` to subscribe to the SQL query (via `addObserver`)
   - Uses `onCleanup` to unsubscribe (via `removeObserver`)
@@ -95,6 +95,16 @@ Matrix registry tracks column definitions. Support add/remove/rename column oper
 - [x] Implement `getColumns(matrixId)` -- return the ordered column definitions for a matrix
 - [x] Update `ensureRootMatrix()` to store column definitions for the root matrix
 - [x] Tests: create matrix with custom columns, add column, remove column, rename column, verify data table schema matches registry, verify existing data survives column operations
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+
+## 6. Switch column schema storage to a separate table
+
+The `columns` JSON field on the `matrix` table works but stores relational data as an opaque blob, at odds with the SQL-first execution model. As column metadata grows (formula expressions, default values, display config), a normalized `matrix_columns` table gives queryable, indexable, individually-mutable column definitions. Cross-matrix column queries -- needed for tag type discovery (Phase 4), formula column introspection (Phase 3), and default value application (Phase 5) -- become simple JOINs instead of fetch-all-parse-in-JS workarounds.
+
+- [x] Create `matrix_columns` table (`matrix_id`, `name`, `type`, `order`, PK on `(matrix_id, name)`, FK cascade from `matrix`)
+- [x] Migrate `createMatrix`, `ensureRootMatrix`, `addColumn`, `removeColumn`, `renameColumn`, `getColumns` to use the new table
+- [x] Remove the `columns` JSON field from the `matrix` registry table
+- [x] Update tests
 - [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ---

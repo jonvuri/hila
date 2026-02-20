@@ -1031,17 +1031,20 @@ describe('Column schema management', () => {
   test('getColumns returns columns sorted by order', () => {
     const id = createMatrix(db, 'M')
 
-    // Manually write out-of-order JSON to verify sorting
-    db.exec('UPDATE matrix SET columns = ? WHERE id = ?', {
-      bind: [
-        JSON.stringify([
-          { name: 'z', type: 'TEXT', order: 2 },
-          { name: 'a', type: 'TEXT', order: 0 },
-          { name: 'm', type: 'TEXT', order: 1 },
-        ]),
-        id,
-      ],
-    })
+    // Clear default column and insert out-of-order rows to verify sorting
+    db.exec('DELETE FROM matrix_columns WHERE matrix_id = ?', { bind: [id] })
+    db.exec(
+      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, 'z', 'TEXT', 2)`,
+      { bind: [id] },
+    )
+    db.exec(
+      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, 'a', 'TEXT', 0)`,
+      { bind: [id] },
+    )
+    db.exec(
+      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, 'm', 'TEXT', 1)`,
+      { bind: [id] },
+    )
 
     const cols = getColumns(db, id)
     expect(cols.map((c) => c.name)).toEqual(['a', 'm', 'z'])
