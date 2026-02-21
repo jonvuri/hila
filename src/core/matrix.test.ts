@@ -10,6 +10,8 @@ import {
   reparentRow,
   deleteRow,
   deleteSubtree,
+  getChildren,
+  getParent,
   ensureRootMatrix,
   insertJoin,
   deleteJoin,
@@ -1602,6 +1604,205 @@ describe('deleteSubtree', () => {
     // Original row is untouched
     expect(getRankOrder()).toEqual([row.rowId])
     expect(getDataRowCount()).toBe(1)
+  })
+})
+
+describe('getChildren', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
+  ) => {
+    const dataStmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    )
+    dataStmt.bind([title])
+    dataStmt.step()
+    const rowId = (dataStmt.get({}) as { id: number }).id
+    dataStmt.finalize()
+
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      nextKey: opts.nextKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Test')
+  })
+
+  test('returns empty array for a leaf node', () => {
+    const leaf = makeRow('Leaf')
+    expect(getChildren(db, matrixId, leaf.key)).toEqual([])
+  })
+
+  test('returns direct children in rank order', () => {
+    const parent = makeRow('Parent')
+    const child1 = makeRow('Child 1', { parentKey: parent.key })
+    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
+    const child3 = makeRow('Child 3', { parentKey: parent.key, prevKey: child2.key })
+
+    const children = getChildren(db, matrixId, parent.key)
+
+    expect(children).toHaveLength(3)
+    expect(compareKeys(children[0]!, child1.key)).toBe(0)
+    expect(compareKeys(children[1]!, child2.key)).toBe(0)
+    expect(compareKeys(children[2]!, child3.key)).toBe(0)
+  })
+
+  test('does not include grandchildren (only depth=1)', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parentKey: root.key })
+    makeRow('Grandchild', { parentKey: child.key })
+
+    const children = getChildren(db, matrixId, root.key)
+
+    expect(children).toHaveLength(1)
+    expect(compareKeys(children[0]!, child.key)).toBe(0)
+  })
+
+  test('returns empty array for a root node with no children', () => {
+    const root = makeRow('Root')
+    makeRow('Sibling', { prevKey: root.key })
+
+    expect(getChildren(db, matrixId, root.key)).toEqual([])
+  })
+
+  test('returns correct children after reparenting', () => {
+    const parent1 = makeRow('Parent 1')
+    const parent2 = makeRow('Parent 2', { prevKey: parent1.key })
+    const child = makeRow('Child', { parentKey: parent1.key })
+
+    // Initially parent1 has one child, parent2 has none
+    expect(getChildren(db, matrixId, parent1.key)).toHaveLength(1)
+    expect(getChildren(db, matrixId, parent2.key)).toHaveLength(0)
+
+    // Reparent child under parent2
+    reparentRow(db, {
+      matrixId,
+      nodeKey: child.key,
+      newParentKey: parent2.key,
+    })
+
+    // Now parent1 has no children, parent2 has one
+    expect(getChildren(db, matrixId, parent1.key)).toHaveLength(0)
+    expect(getChildren(db, matrixId, parent2.key)).toHaveLength(1)
+  })
+})
+
+describe('getParent', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
+  ) => {
+    const dataStmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    )
+    dataStmt.bind([title])
+    dataStmt.step()
+    const rowId = (dataStmt.get({}) as { id: number }).id
+    dataStmt.finalize()
+
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      nextKey: opts.nextKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Test')
+  })
+
+  test('returns null for a root-level row', () => {
+    const root = makeRow('Root')
+    expect(getParent(db, matrixId, root.key)).toBeNull()
+  })
+
+  test('returns parent key for a child row', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+
+    const result = getParent(db, matrixId, child.key)
+
+    expect(result).not.toBeNull()
+    expect(compareKeys(result!, parent.key)).toBe(0)
+  })
+
+  test('returns immediate parent (not grandparent) for nested rows', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parentKey: root.key })
+    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+
+    const gcParent = getParent(db, matrixId, grandchild.key)
+    expect(gcParent).not.toBeNull()
+    expect(compareKeys(gcParent!, child.key)).toBe(0)
+
+    const childParent = getParent(db, matrixId, child.key)
+    expect(childParent).not.toBeNull()
+    expect(compareKeys(childParent!, root.key)).toBe(0)
+  })
+
+  test('returns null after reparenting to root', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+
+    // Initially has a parent
+    expect(getParent(db, matrixId, child.key)).not.toBeNull()
+
+    // Reparent to root
+    const newKey = reparentRow(db, {
+      matrixId,
+      nodeKey: child.key,
+    })
+
+    // Now at root level, no parent
+    expect(getParent(db, matrixId, newKey)).toBeNull()
+  })
+
+  test('returns new parent after reparenting', () => {
+    const parent1 = makeRow('Parent 1')
+    const parent2 = makeRow('Parent 2', { prevKey: parent1.key })
+    const child = makeRow('Child', { parentKey: parent1.key })
+
+    // Initially child's parent is parent1
+    expect(compareKeys(getParent(db, matrixId, child.key)!, parent1.key)).toBe(0)
+
+    // Reparent child under parent2
+    const newKey = reparentRow(db, {
+      matrixId,
+      nodeKey: child.key,
+      newParentKey: parent2.key,
+    })
+
+    // Now child's parent is parent2
+    expect(compareKeys(getParent(db, matrixId, newKey)!, parent2.key)).toBe(0)
   })
 })
 

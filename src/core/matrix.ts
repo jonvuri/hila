@@ -867,6 +867,63 @@ export const deleteSubtree = (
   }
 }
 
+/**
+ * Get direct children of a node in rank order.
+ * Queries the closure table for depth=1 descendants and joins with the rank
+ * table for ordering.
+ *
+ * @returns Array of child keys in rank (display) order, empty if no children
+ */
+export const getChildren = (
+  db: Database,
+  matrixId: number,
+  parentKey: Uint8Array,
+): Uint8Array[] => {
+  const stmt = db.prepare(`
+    SELECT c.descendant_key
+    FROM "mx_${matrixId}_closure" c
+    JOIN rank r ON r.key = c.descendant_key AND r.matrix_id = ?
+    WHERE c.ancestor_key = ? AND c.depth = 1
+    ORDER BY r.key
+  `)
+  stmt.bind([matrixId, parentKey])
+
+  const children: Uint8Array[] = []
+  while (stmt.step()) {
+    const row = stmt.get({}) as { descendant_key: Uint8Array }
+    children.push(new Uint8Array(row.descendant_key))
+  }
+  stmt.finalize()
+  return children
+}
+
+/**
+ * Get the parent key of a node, or null if the node is at root level.
+ * Queries the closure table for the ancestor at depth=1.
+ */
+export const getParent = (
+  db: Database,
+  matrixId: number,
+  childKey: Uint8Array,
+): Uint8Array | null => {
+  const stmt = db.prepare(`
+    SELECT ancestor_key
+    FROM "mx_${matrixId}_closure"
+    WHERE descendant_key = ? AND depth = 1
+  `)
+  stmt.bind([childKey])
+
+  if (stmt.step()) {
+    const row = stmt.get({}) as { ancestor_key: Uint8Array }
+    const result = new Uint8Array(row.ancestor_key)
+    stmt.finalize()
+    return result
+  }
+
+  stmt.finalize()
+  return null
+}
+
 // Simple utility to generate rank keys (lexicographic BLOB order)
 const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering

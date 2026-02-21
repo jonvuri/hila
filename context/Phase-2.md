@@ -26,10 +26,10 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
   - Deletes the row and all its descendants (rank, closure, data table entries)
   - Uses subtree range query (`[key, nextPrefix(key))`) for the rank table
   - Deletes all closure entries referencing any key in the subtree
-- [ ] Implement `getChildren(db, matrixId, parentKey)`:
+- [x] Implement `getChildren(db, matrixId, parentKey)`:
   - Returns direct children (depth=1 in closure) in rank order
   - Needed for collapse/expand UI and for re-parenting children on single-row delete
-- [ ] Implement `getParent(db, matrixId, childKey)`:
+- [x] Implement `getParent(db, matrixId, childKey)`:
   - Returns the parent key (ancestor at depth=1) or null for root rows
   - Needed for backspace-at-start (outdent to parent's level), breadcrumbs, and reparent logic
 - [ ] Implement `getDepth(db, matrixId, key)`:
