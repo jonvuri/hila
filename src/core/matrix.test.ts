@@ -8,6 +8,7 @@ import {
   addSampleRowsToMatrix,
   insertRow,
   reparentRow,
+  deleteRow,
   ensureRootMatrix,
   insertJoin,
   deleteJoin,
@@ -1199,6 +1200,202 @@ describe('reparentRow', () => {
     expect(cAncestors[2]!.depth).toBe(2)
     expect(compareKeys(cAncestors[3]!.ancestor_key, root2.key)).toBe(0)
     expect(cAncestors[3]!.depth).toBe(3)
+  })
+})
+
+describe('deleteRow', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
+  ) => {
+    const dataStmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    )
+    dataStmt.bind([title])
+    dataStmt.step()
+    const rowId = (dataStmt.get({}) as { id: number }).id
+    dataStmt.finalize()
+
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      nextKey: opts.nextKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  const getRankOrder = () => {
+    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    stmt.bind([matrixId])
+    const ids: number[] = []
+    while (stmt.step()) {
+      ids.push((stmt.get({}) as { row_id: number }).row_id)
+    }
+    stmt.finalize()
+    return ids
+  }
+
+  const getClosureCount = () => {
+    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
+    stmt.step()
+    const count = (stmt.get({}) as { count: number }).count
+    stmt.finalize()
+    return count
+  }
+
+  const getDataRowCount = () => {
+    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)
+    stmt.step()
+    const count = (stmt.get({}) as { count: number }).count
+    stmt.finalize()
+    return count
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Test')
+  })
+
+  test('delete a leaf row removes rank, closure, and data entries', () => {
+    const row = makeRow('Only row')
+
+    deleteRow(db, { matrixId, key: row.key })
+
+    expect(getRankOrder()).toEqual([])
+    expect(getClosureCount()).toBe(0)
+    expect(getDataRowCount()).toBe(0)
+  })
+
+  test('delete one of several root rows leaves others intact', () => {
+    const row1 = makeRow('Row 1')
+    const row2 = makeRow('Row 2', { prevKey: row1.key })
+    const row3 = makeRow('Row 3', { prevKey: row2.key })
+
+    deleteRow(db, { matrixId, key: row2.key })
+
+    expect(getRankOrder()).toEqual([row1.rowId, row3.rowId])
+    expect(getDataRowCount()).toBe(2)
+  })
+
+  test('delete a leaf child removes only that child', () => {
+    const parent = makeRow('Parent')
+    const child1 = makeRow('Child 1', { parentKey: parent.key })
+    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
+
+    deleteRow(db, { matrixId, key: child1.key })
+
+    expect(getRankOrder()).toEqual([parent.rowId, child2.rowId])
+    expect(getDataRowCount()).toBe(2)
+
+    // child2 still has parent in its closure
+    const closureStmt = db.prepare(`
+      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+      WHERE descendant_key = ?
+      ORDER BY depth
+    `)
+    closureStmt.bind([child2.key])
+
+    expect(closureStmt.step()).toBe(true)
+    const self = closureStmt.get({}) as { depth: number }
+    expect(self.depth).toBe(0)
+
+    expect(closureStmt.step()).toBe(true)
+    const parentLink = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
+    expect(compareKeys(parentLink.ancestor_key, parent.key)).toBe(0)
+    expect(parentLink.depth).toBe(1)
+
+    expect(closureStmt.step()).toBe(false)
+    closureStmt.finalize()
+  })
+
+  test('delete parent does NOT delete children (orphan policy)', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+
+    deleteRow(db, { matrixId, key: parent.key })
+
+    // Children remain in rank and data tables
+    expect(getRankOrder()).toEqual([child.rowId, grandchild.rowId])
+    expect(getDataRowCount()).toBe(2)
+
+    // But the closure links from parent are gone -- child no longer has
+    // parent as ancestor, only self-reference remains for child
+    const closureStmt = db.prepare(`
+      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+      WHERE descendant_key = ?
+      ORDER BY depth
+    `)
+    closureStmt.bind([child.key])
+
+    expect(closureStmt.step()).toBe(true)
+    const self = closureStmt.get({}) as { depth: number }
+    expect(self.depth).toBe(0)
+
+    // child→parent link at depth 1 was deleted (parent was ancestor)
+    // Only self-ref and child→grandchild internal links remain
+    expect(closureStmt.step()).toBe(false)
+    closureStmt.finalize()
+  })
+
+  test('delete removes closure entries where key is ancestor', () => {
+    const parent = makeRow('Parent')
+    makeRow('Child', { parentKey: parent.key })
+
+    // Before delete: closure has parent→child link
+    const beforeStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
+      WHERE ancestor_key = ?
+    `)
+    beforeStmt.bind([parent.key])
+    beforeStmt.step()
+    const beforeCount = (beforeStmt.get({}) as { count: number }).count
+    beforeStmt.finalize()
+    expect(beforeCount).toBeGreaterThan(0)
+
+    deleteRow(db, { matrixId, key: parent.key })
+
+    // After delete: no closure entries with parent as ancestor
+    const afterStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
+      WHERE ancestor_key = ?
+    `)
+    afterStmt.bind([parent.key])
+    afterStmt.step()
+    const afterCount = (afterStmt.get({}) as { count: number }).count
+    afterStmt.finalize()
+    expect(afterCount).toBe(0)
+  })
+
+  test('throws when deleting a non-existent key', () => {
+    const fakeKey = new Uint8Array([0x42, 0x00])
+
+    expect(() => deleteRow(db, { matrixId, key: fakeKey })).toThrow('Row not found in rank table')
+  })
+
+  test('delete is transactional -- failure rolls back', () => {
+    const row = makeRow('Row')
+
+    // Verify the row exists
+    expect(getRankOrder()).toEqual([row.rowId])
+
+    // Attempt to delete with a bad matrixId -- the rank lookup will fail
+    expect(() => deleteRow(db, { matrixId: 9999, key: row.key })).toThrow()
+
+    // Original row is untouched
+    expect(getRankOrder()).toEqual([row.rowId])
+    expect(getDataRowCount()).toBe(1)
   })
 })
 

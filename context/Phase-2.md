@@ -17,7 +17,7 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
   - All in one transaction
   - Follow the SQL patterns from the Primitives spec (`DELETE` old external links, then `INSERT ... SELECT` cross-join for new ancestors)
   - Handle edge cases: reparent to root (no parent), reparent as first child vs. between existing children
-- [ ] Implement `deleteRow(db, matrixId, key)`:
+- [x] Implement `deleteRow(db, matrixId, key)`:
   - Deletes the row from the rank table
   - Deletes all closure entries where the key is ancestor or descendant
   - Deletes the row from the data table (`mx_{id}_data`)

@@ -729,6 +729,67 @@ export const reparentRow = (
   }
 }
 
+/**
+ * Delete a single row from a matrix. Removes the rank entry, all closure
+ * relationships involving the key, and the data table row.
+ *
+ * Does NOT delete children -- orphan handling is a policy decision for the
+ * caller. The outline will re-parent children to the deleted row's parent
+ * before calling delete.
+ */
+export const deleteRow = (
+  db: Database,
+  params: {
+    matrixId: number
+    key: Uint8Array
+  },
+): void => {
+  const { matrixId, key } = params
+
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    // Look up row_id so we can delete from the data table
+    const rowStmt = db.prepare(
+      'SELECT row_id, row_kind FROM rank WHERE matrix_id = ? AND key = ?',
+    )
+    rowStmt.bind([matrixId, key])
+    if (!rowStmt.step()) {
+      rowStmt.finalize()
+      throw new Error('Row not found in rank table')
+    }
+    const { row_id: rowId, row_kind: rowKind } = rowStmt.get({}) as {
+      row_id: number
+      row_kind: number
+    }
+    rowStmt.finalize()
+
+    // 1. Delete from rank table
+    db.exec('DELETE FROM rank WHERE matrix_id = ? AND key = ?', {
+      bind: [matrixId, key],
+    })
+
+    // 2. Delete all closure entries where key is ancestor or descendant
+    db.exec(
+      `DELETE FROM "mx_${matrixId}_closure"
+       WHERE ancestor_key = ? OR descendant_key = ?`,
+      { bind: [key, key] },
+    )
+
+    // 3. Delete from data table (only for data rows, not child matrix refs)
+    if (rowKind === 0) {
+      db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
+        bind: [rowId],
+      })
+    }
+
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 // Simple utility to generate rank keys (lexicographic BLOB order)
 const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering
