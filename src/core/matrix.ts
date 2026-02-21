@@ -790,6 +790,83 @@ export const deleteRow = (
   }
 }
 
+/**
+ * Delete a row and all its descendants from a matrix. Removes rank entries,
+ * all closure relationships involving any subtree key, and data table rows.
+ *
+ * Uses the subtree range query [key, nextPrefix(key)) for efficient bulk deletion.
+ */
+export const deleteSubtree = (
+  db: Database,
+  params: {
+    matrixId: number
+    key: Uint8Array
+  },
+): void => {
+  const { matrixId, key } = params
+  const upperBound = nextPrefix(key)
+
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    // 1. Collect row_ids for data rows in the subtree (need these before deleting rank)
+    const subtreeStmt = db.prepare(`
+      SELECT row_id, row_kind FROM rank
+      WHERE matrix_id = ? AND key >= ? AND key < ?
+    `)
+    subtreeStmt.bind([matrixId, key, upperBound])
+
+    const dataRowIds: number[] = []
+    while (subtreeStmt.step()) {
+      const row = subtreeStmt.get({}) as { row_id: number; row_kind: number }
+      if (row.row_kind === 0) {
+        dataRowIds.push(row.row_id)
+      }
+    }
+    subtreeStmt.finalize()
+
+    if (dataRowIds.length === 0) {
+      // No rows found in subtree -- check if the key itself doesn't exist
+      const existsStmt = db.prepare('SELECT 1 FROM rank WHERE matrix_id = ? AND key = ?')
+      existsStmt.bind([matrixId, key])
+      if (!existsStmt.step()) {
+        existsStmt.finalize()
+        throw new Error('Row not found in rank table')
+      }
+      existsStmt.finalize()
+    }
+
+    // 2. Delete all closure entries where ancestor or descendant is in the subtree
+    db.exec(
+      `DELETE FROM "mx_${matrixId}_closure"
+       WHERE ancestor_key >= ? AND ancestor_key < ?`,
+      { bind: [key, upperBound] },
+    )
+    db.exec(
+      `DELETE FROM "mx_${matrixId}_closure"
+       WHERE descendant_key >= ? AND descendant_key < ?`,
+      { bind: [key, upperBound] },
+    )
+
+    // 3. Delete from rank table (all rows in subtree range)
+    db.exec('DELETE FROM rank WHERE matrix_id = ? AND key >= ? AND key < ?', {
+      bind: [matrixId, key, upperBound],
+    })
+
+    // 4. Delete from data table
+    for (const rowId of dataRowIds) {
+      db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
+        bind: [rowId],
+      })
+    }
+
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 // Simple utility to generate rank keys (lexicographic BLOB order)
 const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering

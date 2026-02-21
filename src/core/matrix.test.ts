@@ -9,6 +9,7 @@ import {
   insertRow,
   reparentRow,
   deleteRow,
+  deleteSubtree,
   ensureRootMatrix,
   insertJoin,
   deleteJoin,
@@ -1381,7 +1382,9 @@ describe('deleteRow', () => {
   test('throws when deleting a non-existent key', () => {
     const fakeKey = new Uint8Array([0x42, 0x00])
 
-    expect(() => deleteRow(db, { matrixId, key: fakeKey })).toThrow('Row not found in rank table')
+    expect(() => deleteRow(db, { matrixId, key: fakeKey })).toThrow(
+      'Row not found in rank table',
+    )
   })
 
   test('delete is transactional -- failure rolls back', () => {
@@ -1392,6 +1395,209 @@ describe('deleteRow', () => {
 
     // Attempt to delete with a bad matrixId -- the rank lookup will fail
     expect(() => deleteRow(db, { matrixId: 9999, key: row.key })).toThrow()
+
+    // Original row is untouched
+    expect(getRankOrder()).toEqual([row.rowId])
+    expect(getDataRowCount()).toBe(1)
+  })
+})
+
+describe('deleteSubtree', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
+  ) => {
+    const dataStmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    )
+    dataStmt.bind([title])
+    dataStmt.step()
+    const rowId = (dataStmt.get({}) as { id: number }).id
+    dataStmt.finalize()
+
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      nextKey: opts.nextKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  const getRankOrder = () => {
+    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
+    stmt.bind([matrixId])
+    const ids: number[] = []
+    while (stmt.step()) {
+      ids.push((stmt.get({}) as { row_id: number }).row_id)
+    }
+    stmt.finalize()
+    return ids
+  }
+
+  const getClosureCount = () => {
+    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
+    stmt.step()
+    const count = (stmt.get({}) as { count: number }).count
+    stmt.finalize()
+    return count
+  }
+
+  const getDataRowCount = () => {
+    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)
+    stmt.step()
+    const count = (stmt.get({}) as { count: number }).count
+    stmt.finalize()
+    return count
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Test')
+  })
+
+  test('delete a single leaf row (no descendants)', () => {
+    const row = makeRow('Only row')
+
+    deleteSubtree(db, { matrixId, key: row.key })
+
+    expect(getRankOrder()).toEqual([])
+    expect(getClosureCount()).toBe(0)
+    expect(getDataRowCount()).toBe(0)
+  })
+
+  test('delete subtree removes parent and all descendants', () => {
+    const parent = makeRow('Parent')
+    const child1 = makeRow('Child 1', { parentKey: parent.key })
+    makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
+    makeRow('Grandchild', { parentKey: child1.key })
+
+    deleteSubtree(db, { matrixId, key: parent.key })
+
+    expect(getRankOrder()).toEqual([])
+    expect(getClosureCount()).toBe(0)
+    expect(getDataRowCount()).toBe(0)
+  })
+
+  test('delete subtree of a child leaves sibling subtrees intact', () => {
+    const root = makeRow('Root')
+    const child1 = makeRow('Child 1', { parentKey: root.key })
+    const child2 = makeRow('Child 2', { parentKey: root.key, prevKey: child1.key })
+    makeRow('GC 1', { parentKey: child1.key })
+
+    // Delete child1's subtree (child1 + GC 1)
+    deleteSubtree(db, { matrixId, key: child1.key })
+
+    expect(getRankOrder()).toEqual([root.rowId, child2.rowId])
+    expect(getDataRowCount()).toBe(2)
+
+    // child2 still has root as ancestor
+    const closureStmt = db.prepare(`
+      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+      WHERE descendant_key = ?
+      ORDER BY depth
+    `)
+    closureStmt.bind([child2.key])
+
+    expect(closureStmt.step()).toBe(true)
+    const self = closureStmt.get({}) as { depth: number }
+    expect(self.depth).toBe(0)
+
+    expect(closureStmt.step()).toBe(true)
+    const parentLink = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
+    expect(compareKeys(parentLink.ancestor_key, root.key)).toBe(0)
+    expect(parentLink.depth).toBe(1)
+
+    expect(closureStmt.step()).toBe(false)
+    closureStmt.finalize()
+  })
+
+  test('delete subtree of a middle node preserves unrelated rows', () => {
+    const root1 = makeRow('Root 1')
+    const child = makeRow('Child', { parentKey: root1.key })
+    makeRow('Grandchild', { parentKey: child.key })
+    const root2 = makeRow('Root 2', { prevKey: root1.key })
+
+    // Delete child's subtree (child + grandchild), root1 and root2 remain
+    deleteSubtree(db, { matrixId, key: child.key })
+
+    expect(getRankOrder()).toEqual([root1.rowId, root2.rowId])
+    expect(getDataRowCount()).toBe(2)
+  })
+
+  test('delete subtree cleans up all closure entries for subtree keys', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parentKey: root.key })
+    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+
+    // Before: closure has root→child, root→grandchild, child→grandchild, plus self-refs
+    deleteSubtree(db, { matrixId, key: child.key })
+
+    // After: no closure entries should reference child or grandchild
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
+      WHERE ancestor_key = ? OR descendant_key = ?
+         OR ancestor_key = ? OR descendant_key = ?
+    `)
+    stmt.bind([child.key, child.key, grandchild.key, grandchild.key])
+    stmt.step()
+    const count = (stmt.get({}) as { count: number }).count
+    stmt.finalize()
+    expect(count).toBe(0)
+
+    // Root should only have self-reference remaining
+    const rootStmt = db.prepare(`
+      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
+      WHERE descendant_key = ?
+    `)
+    rootStmt.bind([root.key])
+    rootStmt.step()
+    const rootClosureCount = (rootStmt.get({}) as { count: number }).count
+    rootStmt.finalize()
+    expect(rootClosureCount).toBe(1)
+  })
+
+  test('delete deep subtree (3+ levels)', () => {
+    const root = makeRow('Root')
+    const a = makeRow('A', { parentKey: root.key })
+    const b = makeRow('B', { parentKey: a.key })
+    const c = makeRow('C', { parentKey: b.key })
+    makeRow('D', { parentKey: c.key })
+
+    deleteSubtree(db, { matrixId, key: a.key })
+
+    expect(getRankOrder()).toEqual([root.rowId])
+    expect(getDataRowCount()).toBe(1)
+    expect(getClosureCount()).toBe(1) // only root's self-ref
+  })
+
+  test('throws when deleting a non-existent key', () => {
+    const fakeKey = new Uint8Array([0x42, 0x00])
+
+    expect(() => deleteSubtree(db, { matrixId, key: fakeKey })).toThrow(
+      'Row not found in rank table',
+    )
+  })
+
+  test('delete is transactional -- failure rolls back', () => {
+    const row = makeRow('Row')
+
+    expect(getRankOrder()).toEqual([row.rowId])
+
+    // Attempt to delete with a non-existent key triggers rollback
+    expect(() =>
+      deleteSubtree(db, { matrixId: 9999, key: new Uint8Array([0x42, 0x00]) }),
+    ).toThrow()
 
     // Original row is untouched
     expect(getRankOrder()).toEqual([row.rowId])

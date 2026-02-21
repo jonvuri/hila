@@ -22,7 +22,7 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
   - Deletes all closure entries where the key is ancestor or descendant
   - Deletes the row from the data table (`mx_{id}_data`)
   - Does NOT delete children -- orphan handling is a policy decision for the caller. The outline will re-parent children to the deleted row's parent before calling delete.
-- [ ] Implement `deleteSubtree(db, matrixId, key)`:
+- [x] Implement `deleteSubtree(db, matrixId, key)`:
   - Deletes the row and all its descendants (rank, closure, data table entries)
   - Uses subtree range query (`[key, nextPrefix(key))`) for the rank table
   - Deletes all closure entries referencing any key in the subtree
