@@ -18,30 +18,20 @@ const post = (message: CoreWorkerMessage) => {
 post({ type: 'log', message: 'Initializing worker core' })
 
 const handleMessage = async (event: MessageEvent<ClientMessage>) => {
-  const { type } = event.data
+  const message = event.data
 
-  post({ type: 'log', message: `Received message ${type}: ${JSON.stringify(event.data)}` })
+  post({ type: 'log', message: `Received message ${message.type}: ${JSON.stringify(message)}` })
 
-  if (type === 'subscribe' || type === 'unsubscribe' || type === 'execute') {
-    await handleSqlClientMessage(event.data)
-    return
+  switch (message.type) {
+    case 'subscribe':
+    case 'unsubscribe':
+    case 'execute':
+      await handleSqlClientMessage(message)
+      return
+    default:
+      await handleMatrixClientMessage(message)
+      return
   }
-
-  if (
-    type === 'createMatrix' ||
-    type === 'addSampleRows' ||
-    type === 'resetDatabase' ||
-    type === 'insertRow' ||
-    type === 'updateRow' ||
-    type === 'deleteRow' ||
-    type === 'reparentRow' ||
-    type === 'deleteSubtree'
-  ) {
-    await handleMatrixClientMessage(event.data)
-    return
-  }
-
-  console.warn('Unknown message type:', type)
 }
 
 // Queue messages until init completes

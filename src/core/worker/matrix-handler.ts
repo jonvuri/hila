@@ -1,5 +1,3 @@
-// Handles Matrix messages, and also manages the Matrix schema and operations.
-
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
@@ -38,7 +36,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
         const matrixId = createMatrixImpl(db, title)
-        postMessage({ type: 'createMatrixSuccess', id, matrixId })
+        postMessage({ type: 'createMatrixSuccess', id, result: matrixId })
       } catch (err: unknown) {
         postMessage({ type: 'createMatrixError', id, error: toError(err) })
       }
@@ -50,7 +48,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
         addSampleRowsToMatrix(db, matrixId)
-        postMessage({ type: 'addSampleRowsAck', id })
+        postMessage({ type: 'addSampleRowsSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'addSampleRowsError', id, error: toError(err) })
       }
@@ -71,16 +69,14 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       }
 
       try {
-        // Reset database using SQLite C-API
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 1, 0)
         sqlite3.capi.sqlite3_exec(db, 'VACUUM', 0, 0, 0)
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 0, 0)
 
-        // Reinitialize schema and root matrix after reset
         initMatrixSchema(db)
         ensureRootMatrix(db)
 
-        postMessage({ type: 'resetDatabaseAck', id })
+        postMessage({ type: 'resetDatabaseSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'resetDatabaseError', id, error: toError(err) })
       }
@@ -100,7 +96,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           rowKind: 0,
           rowId,
         })
-        postMessage({ type: 'insertRowSuccess', id, key, rowId })
+        postMessage({ type: 'insertRowSuccess', id, result: { key, rowId } })
       } catch (err: unknown) {
         postMessage({ type: 'insertRowError', id, error: toError(err) })
       }
@@ -112,7 +108,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
         updateRowImpl(db, { matrixId, rowId, values })
-        postMessage({ type: 'updateRowAck', id })
+        postMessage({ type: 'updateRowSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'updateRowError', id, error: toError(err) })
       }
@@ -124,7 +120,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
 
-        // Re-parent children to the deleted row's parent before deleting
         const parentKey = getParent(db, matrixId, key)
         const children = getChildren(db, matrixId, key)
 
@@ -140,7 +135,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         }
 
         deleteRowImpl(db, { matrixId, key })
-        postMessage({ type: 'deleteRowAck', id })
+        postMessage({ type: 'deleteRowSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteRowError', id, error: toError(err) })
       }
@@ -158,7 +153,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           prevSiblingKey,
           nextSiblingKey,
         })
-        postMessage({ type: 'reparentRowSuccess', id, newKey })
+        postMessage({ type: 'reparentRowSuccess', id, result: newKey })
       } catch (err: unknown) {
         postMessage({ type: 'reparentRowError', id, error: toError(err) })
       }
@@ -170,7 +165,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
         deleteSubtreeImpl(db, { matrixId, key })
-        postMessage({ type: 'deleteSubtreeAck', id })
+        postMessage({ type: 'deleteSubtreeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteSubtreeError', id, error: toError(err) })
       }

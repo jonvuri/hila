@@ -1,180 +1,71 @@
-// Matrix Client Messages (from client to worker)
-export type CreateMatrixMessage = {
-  type: 'createMatrix'
-  id: string
-  title: string
+// Matrix operation registry: maps operation names to request params and response results.
+// All message types and the protocol shape are derived from this single declaration.
+
+export type MatrixOperationMap = {
+  createMatrix: {
+    params: { title: string }
+    result: number
+  }
+  addSampleRows: {
+    params: { matrixId: number }
+    result: void
+  }
+  resetDatabase: {
+    params: Record<string, never>
+    result: void
+  }
+  insertRow: {
+    params: {
+      matrixId: number
+      parentKey?: Uint8Array
+      prevKey?: Uint8Array
+      nextKey?: Uint8Array
+      values?: Record<string, unknown>
+    }
+    result: { key: Uint8Array; rowId: number }
+  }
+  updateRow: {
+    params: { matrixId: number; rowId: number; values: Record<string, unknown> }
+    result: void
+  }
+  deleteRow: {
+    params: { matrixId: number; key: Uint8Array }
+    result: void
+  }
+  reparentRow: {
+    params: {
+      matrixId: number
+      nodeKey: Uint8Array
+      newParentKey?: Uint8Array
+      prevSiblingKey?: Uint8Array
+      nextSiblingKey?: Uint8Array
+    }
+    result: Uint8Array
+  }
+  deleteSubtree: {
+    params: { matrixId: number; key: Uint8Array }
+    result: void
+  }
 }
 
-export type AddSampleRowsMessage = {
-  type: 'addSampleRows'
-  id: string
-  matrixId: number
-}
+export type MatrixOperationType = keyof MatrixOperationMap
 
-export type ResetDatabaseMessage = {
-  type: 'resetDatabase'
-  id: string
-}
+// Request messages (client → worker): { type, id, ...params }
+export type MatrixClientMessage = {
+  [K in MatrixOperationType]: { type: K; id: string } & MatrixOperationMap[K]['params']
+}[MatrixOperationType]
 
-export type InsertRowMessage = {
-  type: 'insertRow'
-  id: string
-  matrixId: number
-  parentKey?: Uint8Array
-  prevKey?: Uint8Array
-  nextKey?: Uint8Array
-  values?: Record<string, unknown>
-}
+// Response messages (worker → client)
+export type MatrixSuccessMessage = {
+  [K in MatrixOperationType]: {
+    type: `${K}Success`
+    id: string
+    result: MatrixOperationMap[K]['result']
+  }
+}[MatrixOperationType]
 
-export type UpdateRowMessage = {
-  type: 'updateRow'
-  id: string
-  matrixId: number
-  rowId: number
-  values: Record<string, unknown>
-}
+export type MatrixErrorMessage = {
+  [K in MatrixOperationType]: { type: `${K}Error`; id: string; error: Error }
+}[MatrixOperationType]
 
-export type DeleteRowMessage = {
-  type: 'deleteRow'
-  id: string
-  matrixId: number
-  key: Uint8Array
-}
-
-export type ReparentRowMessage = {
-  type: 'reparentRow'
-  id: string
-  matrixId: number
-  nodeKey: Uint8Array
-  newParentKey?: Uint8Array
-  prevSiblingKey?: Uint8Array
-  nextSiblingKey?: Uint8Array
-}
-
-export type DeleteSubtreeMessage = {
-  type: 'deleteSubtree'
-  id: string
-  matrixId: number
-  key: Uint8Array
-}
-
-export type MatrixClientMessage =
-  | CreateMatrixMessage
-  | AddSampleRowsMessage
-  | ResetDatabaseMessage
-  | InsertRowMessage
-  | UpdateRowMessage
-  | DeleteRowMessage
-  | ReparentRowMessage
-  | DeleteSubtreeMessage
-
-// Matrix Worker Messages (from worker to client)
-export type CreateMatrixSuccessMessage = {
-  type: 'createMatrixSuccess'
-  id: string
-  matrixId: number
-}
-
-export type CreateMatrixErrorMessage = {
-  type: 'createMatrixError'
-  id: string
-  error: Error
-}
-
-export type AddSampleRowsAckMessage = {
-  type: 'addSampleRowsAck'
-  id: string
-}
-
-export type AddSampleRowsErrorMessage = {
-  type: 'addSampleRowsError'
-  id: string
-  error: Error
-}
-
-export type ResetDatabaseAckMessage = {
-  type: 'resetDatabaseAck'
-  id: string
-}
-
-export type ResetDatabaseErrorMessage = {
-  type: 'resetDatabaseError'
-  id: string
-  error: Error
-}
-
-export type InsertRowSuccessMessage = {
-  type: 'insertRowSuccess'
-  id: string
-  key: Uint8Array
-  rowId: number
-}
-
-export type InsertRowErrorMessage = {
-  type: 'insertRowError'
-  id: string
-  error: Error
-}
-
-export type UpdateRowAckMessage = {
-  type: 'updateRowAck'
-  id: string
-}
-
-export type UpdateRowErrorMessage = {
-  type: 'updateRowError'
-  id: string
-  error: Error
-}
-
-export type DeleteRowAckMessage = {
-  type: 'deleteRowAck'
-  id: string
-}
-
-export type DeleteRowErrorMessage = {
-  type: 'deleteRowError'
-  id: string
-  error: Error
-}
-
-export type ReparentRowSuccessMessage = {
-  type: 'reparentRowSuccess'
-  id: string
-  newKey: Uint8Array
-}
-
-export type ReparentRowErrorMessage = {
-  type: 'reparentRowError'
-  id: string
-  error: Error
-}
-
-export type DeleteSubtreeAckMessage = {
-  type: 'deleteSubtreeAck'
-  id: string
-}
-
-export type DeleteSubtreeErrorMessage = {
-  type: 'deleteSubtreeError'
-  id: string
-  error: Error
-}
-
-export type MatrixWorkerMessage =
-  | CreateMatrixSuccessMessage
-  | CreateMatrixErrorMessage
-  | AddSampleRowsAckMessage
-  | AddSampleRowsErrorMessage
-  | ResetDatabaseAckMessage
-  | ResetDatabaseErrorMessage
-  | InsertRowSuccessMessage
-  | InsertRowErrorMessage
-  | UpdateRowAckMessage
-  | UpdateRowErrorMessage
-  | DeleteRowAckMessage
-  | DeleteRowErrorMessage
-  | ReparentRowSuccessMessage
-  | ReparentRowErrorMessage
-  | DeleteSubtreeAckMessage
-  | DeleteSubtreeErrorMessage
+export type MatrixWorkerMessage = MatrixSuccessMessage | MatrixErrorMessage

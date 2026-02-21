@@ -37,9 +37,8 @@ export const postMessage = (message: ClientMessage) => {
 
 worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const message = event.data
-  const { type } = message
 
-  switch (type) {
+  switch (message.type) {
     case 'ready':
       workerReady = true
       flushPending()
@@ -60,25 +59,8 @@ worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
     case 'executeError':
       handleSqlWorkerMessage(message)
       return
-    case 'createMatrixSuccess':
-    case 'createMatrixError':
-    case 'addSampleRowsAck':
-    case 'addSampleRowsError':
-    case 'resetDatabaseAck':
-    case 'resetDatabaseError':
-    case 'insertRowSuccess':
-    case 'insertRowError':
-    case 'updateRowAck':
-    case 'updateRowError':
-    case 'deleteRowAck':
-    case 'deleteRowError':
-    case 'reparentRowSuccess':
-    case 'reparentRowError':
-    case 'deleteSubtreeAck':
-    case 'deleteSubtreeError':
+    default:
       handleMatrixWorkerMessage(message)
       return
-    default:
-      throw type satisfies never
   }
 }
