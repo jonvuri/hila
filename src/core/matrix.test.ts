@@ -7,6 +7,8 @@ import {
   createMatrix,
   addSampleRowsToMatrix,
   insertRow,
+  insertDataRow,
+  updateRow,
   reparentRow,
   deleteRow,
   deleteSubtree,
@@ -2345,5 +2347,422 @@ describe('Column schema management', () => {
     expect(r2.title).toBe('row1')
     expect(r2.points).toBe(42)
     stmt2.finalize()
+  })
+})
+
+describe('insertDataRow', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('inserts a row with values and returns rowId', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Hello' })
+
+    expect(rowId).toBeTypeOf('number')
+
+    const stmt = db.prepare(`SELECT id, title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { id: number; title: string }
+    expect(row.id).toBe(rowId)
+    expect(row.title).toBe('Hello')
+    stmt.finalize()
+  })
+
+  test('inserts a row with no values (DEFAULT VALUES)', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId)
+
+    expect(rowId).toBeTypeOf('number')
+
+    const stmt = db.prepare(`SELECT id, title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { id: number; title: string | null }
+    expect(row.id).toBe(rowId)
+    expect(row.title).toBeNull()
+    stmt.finalize()
+  })
+
+  test('inserts a row with empty values object (DEFAULT VALUES)', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, {})
+
+    expect(rowId).toBeTypeOf('number')
+  })
+
+  test('inserts multiple rows with incrementing IDs', () => {
+    const matrixId = createMatrix(db, 'M')
+    const id1 = insertDataRow(db, matrixId, { title: 'First' })
+    const id2 = insertDataRow(db, matrixId, { title: 'Second' })
+    const id3 = insertDataRow(db, matrixId, { title: 'Third' })
+
+    expect(id2).toBeGreaterThan(id1)
+    expect(id3).toBeGreaterThan(id2)
+  })
+})
+
+describe('updateRow', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('updates a single column value', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Original' })
+
+    updateRow(db, { matrixId, rowId, values: { title: 'Updated' } })
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string }).title).toBe('Updated')
+    stmt.finalize()
+  })
+
+  test('updates multiple columns', () => {
+    const matrixId = createMatrix(db, 'M', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'score', type: 'INTEGER' },
+    ])
+    const rowId = insertDataRow(db, matrixId, { title: 'Row', score: 10 })
+
+    updateRow(db, { matrixId, rowId, values: { title: 'New', score: 99 } })
+
+    const stmt = db.prepare(`SELECT title, score FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { title: string; score: number }
+    expect(row.title).toBe('New')
+    expect(row.score).toBe(99)
+    stmt.finalize()
+  })
+
+  test('no-ops with empty values', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Stays' })
+
+    updateRow(db, { matrixId, rowId, values: {} })
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string }).title).toBe('Stays')
+    stmt.finalize()
+  })
+
+  test('does not affect other rows', () => {
+    const matrixId = createMatrix(db, 'M')
+    const row1 = insertDataRow(db, matrixId, { title: 'One' })
+    const row2 = insertDataRow(db, matrixId, { title: 'Two' })
+
+    updateRow(db, { matrixId, rowId: row2, values: { title: 'Changed' } })
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([row1])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string }).title).toBe('One')
+    stmt.finalize()
+  })
+
+  test('can set a column to null', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Has value' })
+
+    updateRow(db, { matrixId, rowId, values: { title: null } })
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string | null }).title).toBeNull()
+    stmt.finalize()
+  })
+
+  test('partial update leaves other columns unchanged', () => {
+    const matrixId = createMatrix(db, 'M', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'score', type: 'INTEGER' },
+      { name: 'tag', type: 'TEXT' },
+    ])
+    const rowId = insertDataRow(db, matrixId, { title: 'Row', score: 10, tag: 'a' })
+
+    updateRow(db, { matrixId, rowId, values: { score: 42 } })
+
+    const stmt = db.prepare(`SELECT title, score, tag FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { title: string; score: number; tag: string }
+    expect(row.title).toBe('Row')
+    expect(row.score).toBe(42)
+    expect(row.tag).toBe('a')
+    stmt.finalize()
+  })
+})
+
+describe('Row operations round-trip', () => {
+  let db: Database
+  let matrixId: number
+
+  /**
+   * Simulates the handler's deleteRow logic: re-parent children to the
+   * deleted row's parent (preserving order), then delete the row.
+   */
+  const handlerDeleteRow = (key: Uint8Array) => {
+    const parentKey = getParent(db, matrixId, key)
+    const children = getChildren(db, matrixId, key)
+
+    let prevSiblingKey: Uint8Array | undefined = undefined
+    for (const childKey of children) {
+      const newKey = reparentRow(db, {
+        matrixId,
+        nodeKey: childKey,
+        newParentKey: parentKey ?? undefined,
+        prevSiblingKey,
+      })
+      prevSiblingKey = newKey
+    }
+    deleteRow(db, { matrixId, key })
+  }
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
+  ) => {
+    const rowId = insertDataRow(db, matrixId, { title })
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  const queryTitles = (): string[] => {
+    const stmt = db.prepare(`
+      SELECT d.title
+      FROM rank r
+      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
+      WHERE r.matrix_id = ?
+      ORDER BY r.key
+    `)
+    stmt.bind([matrixId])
+    const titles: string[] = []
+    while (stmt.step()) {
+      titles.push((stmt.get({}) as { title: string }).title)
+    }
+    stmt.finalize()
+    return titles
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'M')
+  })
+
+  test('insert data row + rank row, then query both', () => {
+    const rowId = insertDataRow(db, matrixId, { title: 'Test entry' })
+    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+
+    const stmt = db.prepare(`
+      SELECT d.id, d.title, r.key, r.row_kind
+      FROM rank r
+      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
+      WHERE r.matrix_id = ?
+      ORDER BY r.key
+    `)
+    stmt.bind([matrixId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { id: number; title: string; key: Uint8Array; row_kind: number }
+    expect(row.id).toBe(rowId)
+    expect(row.title).toBe('Test entry')
+    expect(compareKeys(new Uint8Array(row.key), key)).toBe(0)
+    expect(row.row_kind).toBe(0)
+    expect(stmt.step()).toBe(false)
+    stmt.finalize()
+  })
+
+  test('insert → update → query reflects updated value', () => {
+    const rowId = insertDataRow(db, matrixId, { title: 'Before' })
+    insertRow(db, { matrixId, rowKind: 0, rowId })
+
+    updateRow(db, { matrixId, rowId, values: { title: 'After' } })
+
+    expect(queryTitles()).toEqual(['After'])
+  })
+
+  test('insert → reparent → query reflects new structure', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { prevKey: parent.key })
+
+    reparentRow(db, { matrixId, nodeKey: child.key, newParentKey: parent.key })
+
+    expect(queryTitles()).toEqual(['Parent', 'Child'])
+
+    // Verify child is now nested under parent
+    const children = getChildren(db, matrixId, parent.key)
+    expect(children).toHaveLength(1)
+  })
+
+  // -- deleteRow (handler pattern: re-parent children then delete) --
+
+  test('deleteRow on a leaf node just removes it', () => {
+    const row1 = makeRow('Row 1')
+    makeRow('Row 2', { prevKey: row1.key })
+
+    handlerDeleteRow(row1.key)
+
+    expect(queryTitles()).toEqual(['Row 2'])
+  })
+
+  test('deleteRow re-parents children to root when deleting root parent', () => {
+    const parent = makeRow('Parent')
+    const child1 = makeRow('C1', { parentKey: parent.key })
+    makeRow('C2', { parentKey: parent.key, prevKey: child1.key })
+
+    handlerDeleteRow(parent.key)
+
+    expect(queryTitles()).toEqual(['C1', 'C2'])
+
+    // Both children should now be root-level (no parent)
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as cnt FROM "mx_${matrixId}_closure" WHERE depth = 1
+    `)
+    stmt.step()
+    expect((stmt.get({}) as { cnt: number }).cnt).toBe(0)
+    stmt.finalize()
+  })
+
+  test('deleteRow re-parents children to grandparent when deleting mid-level node', () => {
+    // grandparent → parent → (child1, child2)
+    const grandparent = makeRow('GP')
+    const parent = makeRow('P', { parentKey: grandparent.key })
+    const child1 = makeRow('C1', { parentKey: parent.key })
+    makeRow('C2', { parentKey: parent.key, prevKey: child1.key })
+
+    handlerDeleteRow(parent.key)
+
+    expect(queryTitles()).toEqual(['GP', 'C1', 'C2'])
+
+    // Children should now be direct children of grandparent
+    const gpChildren = getChildren(db, matrixId, grandparent.key)
+    expect(gpChildren).toHaveLength(2)
+
+    // Verify depth: children should be at depth 1 from grandparent
+    const stmt = db.prepare(`
+      SELECT r.row_id
+      FROM "mx_${matrixId}_closure" c
+      JOIN rank r ON r.key = c.descendant_key AND r.matrix_id = ?
+      WHERE c.ancestor_key = ? AND c.depth = 1
+      ORDER BY r.key
+    `)
+    stmt.bind([matrixId, grandparent.key])
+    const childRowIds: number[] = []
+    while (stmt.step()) {
+      childRowIds.push((stmt.get({}) as { row_id: number }).row_id)
+    }
+    stmt.finalize()
+    expect(childRowIds).toHaveLength(2)
+  })
+
+  test('deleteRow re-parents preserve children order with many children', () => {
+    const parent = makeRow('P')
+    const c1 = makeRow('C1', { parentKey: parent.key })
+    const c2 = makeRow('C2', { parentKey: parent.key, prevKey: c1.key })
+    const c3 = makeRow('C3', { parentKey: parent.key, prevKey: c2.key })
+    makeRow('C4', { parentKey: parent.key, prevKey: c3.key })
+
+    handlerDeleteRow(parent.key)
+
+    expect(queryTitles()).toEqual(['C1', 'C2', 'C3', 'C4'])
+  })
+
+  test('deleteRow on mid-level node preserves grandchildren under children', () => {
+    // GP → P → C → GC
+    const gp = makeRow('GP')
+    const p = makeRow('P', { parentKey: gp.key })
+    const c = makeRow('C', { parentKey: p.key })
+    makeRow('GC', { parentKey: c.key })
+
+    handlerDeleteRow(p.key)
+
+    expect(queryTitles()).toEqual(['GP', 'C', 'GC'])
+
+    // C should now be a child of GP
+    const gpChildren = getChildren(db, matrixId, gp.key)
+    expect(gpChildren).toHaveLength(1)
+
+    // GC should still be a child of C (the reparented version of C)
+    const stmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
+    stmt.bind([matrixId, c.rowId])
+    stmt.step()
+    const newCKey = new Uint8Array((stmt.get({}) as { key: Uint8Array }).key)
+    stmt.finalize()
+
+    const cChildren = getChildren(db, matrixId, newCKey)
+    expect(cChildren).toHaveLength(1)
+  })
+
+  test('deleteRow on node with no children and a parent leaves parent intact', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+
+    handlerDeleteRow(child.key)
+
+    expect(queryTitles()).toEqual(['Parent'])
+    expect(getChildren(db, matrixId, parent.key)).toHaveLength(0)
+  })
+
+  // -- deleteSubtree round-trips --
+
+  test('insert → deleteSubtree → query reflects subtree removal', () => {
+    const root1 = makeRow('Root 1')
+    makeRow('Child', { parentKey: root1.key })
+    makeRow('Root 2', { prevKey: root1.key })
+
+    deleteSubtree(db, { matrixId, key: root1.key })
+
+    expect(queryTitles()).toEqual(['Root 2'])
+  })
+
+  // -- Worker integration: insertRow + query pattern --
+
+  test('multiple inserts with positioning produce correct query order', () => {
+    const r1 = makeRow('A')
+    const r2 = makeRow('B', { prevKey: r1.key })
+    makeRow('A.5', { prevKey: r1.key })
+    makeRow('C', { prevKey: r2.key })
+
+    expect(queryTitles()).toEqual(['A', 'A.5', 'B', 'C'])
+  })
+
+  test('insert child rows appear in correct query order', () => {
+    const parent = makeRow('P')
+    const c1 = makeRow('C1', { parentKey: parent.key })
+    makeRow('C2', { parentKey: parent.key, prevKey: c1.key })
+    makeRow('Sibling', { prevKey: parent.key })
+
+    expect(queryTitles()).toEqual(['P', 'C1', 'C2', 'Sibling'])
   })
 })

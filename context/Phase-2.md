@@ -42,17 +42,17 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
 
 The current worker protocol only exposes `createMatrix`, `addSampleRows`, and `resetDatabase`. The outline needs fine-grained row operations. While reactive queries (`subscribe`) handle reads, structural mutations need dedicated messages because they involve rank + closure transactions that can't be expressed as a single SQL `execute` call.
 
-- [ ] Add worker message types for row operations:
+- [x] Add worker message types for row operations:
   - `insertRow` -- creates a new row with positioning (parent, prev/next sibling). Returns the new row's rank key and rowid.
   - `updateRow` -- updates column values for a row by rowid. For the outline, this stores the ProseMirror document JSON.
   - `deleteRow` -- deletes a single row (re-parents its children first).
   - `reparentRow` -- moves a row (and its subtree) to a new parent/position.
   - `deleteSubtree` -- deletes a row and all its descendants.
-- [ ] Add corresponding handlers in `matrix-handler.ts` that call the `matrix.ts` functions
-- [ ] Add client-side functions in `matrix-client.ts` that send messages and return promises
-- [ ] Ensure mutations trigger write invalidation so subscribed queries update reactively
-- [ ] Tests: round-trip insert → query → verify via reactive subscription update
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Add corresponding handlers in `matrix-handler.ts` that call the `matrix.ts` functions
+- [x] Add client-side functions in `matrix-client.ts` that send messages and return promises
+- [x] Ensure mutations trigger write invalidation so subscribed queries update reactively
+- [x] Tests: round-trip insert → query → verify via reactive subscription update
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Content column and row data model
 

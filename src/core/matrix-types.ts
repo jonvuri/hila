@@ -16,10 +16,57 @@ export type ResetDatabaseMessage = {
   id: string
 }
 
+export type InsertRowMessage = {
+  type: 'insertRow'
+  id: string
+  matrixId: number
+  parentKey?: Uint8Array
+  prevKey?: Uint8Array
+  nextKey?: Uint8Array
+  values?: Record<string, unknown>
+}
+
+export type UpdateRowMessage = {
+  type: 'updateRow'
+  id: string
+  matrixId: number
+  rowId: number
+  values: Record<string, unknown>
+}
+
+export type DeleteRowMessage = {
+  type: 'deleteRow'
+  id: string
+  matrixId: number
+  key: Uint8Array
+}
+
+export type ReparentRowMessage = {
+  type: 'reparentRow'
+  id: string
+  matrixId: number
+  nodeKey: Uint8Array
+  newParentKey?: Uint8Array
+  prevSiblingKey?: Uint8Array
+  nextSiblingKey?: Uint8Array
+}
+
+export type DeleteSubtreeMessage = {
+  type: 'deleteSubtree'
+  id: string
+  matrixId: number
+  key: Uint8Array
+}
+
 export type MatrixClientMessage =
   | CreateMatrixMessage
   | AddSampleRowsMessage
   | ResetDatabaseMessage
+  | InsertRowMessage
+  | UpdateRowMessage
+  | DeleteRowMessage
+  | ReparentRowMessage
+  | DeleteSubtreeMessage
 
 // Matrix Worker Messages (from worker to client)
 export type CreateMatrixSuccessMessage = {
@@ -56,6 +103,64 @@ export type ResetDatabaseErrorMessage = {
   error: Error
 }
 
+export type InsertRowSuccessMessage = {
+  type: 'insertRowSuccess'
+  id: string
+  key: Uint8Array
+  rowId: number
+}
+
+export type InsertRowErrorMessage = {
+  type: 'insertRowError'
+  id: string
+  error: Error
+}
+
+export type UpdateRowAckMessage = {
+  type: 'updateRowAck'
+  id: string
+}
+
+export type UpdateRowErrorMessage = {
+  type: 'updateRowError'
+  id: string
+  error: Error
+}
+
+export type DeleteRowAckMessage = {
+  type: 'deleteRowAck'
+  id: string
+}
+
+export type DeleteRowErrorMessage = {
+  type: 'deleteRowError'
+  id: string
+  error: Error
+}
+
+export type ReparentRowSuccessMessage = {
+  type: 'reparentRowSuccess'
+  id: string
+  newKey: Uint8Array
+}
+
+export type ReparentRowErrorMessage = {
+  type: 'reparentRowError'
+  id: string
+  error: Error
+}
+
+export type DeleteSubtreeAckMessage = {
+  type: 'deleteSubtreeAck'
+  id: string
+}
+
+export type DeleteSubtreeErrorMessage = {
+  type: 'deleteSubtreeError'
+  id: string
+  error: Error
+}
+
 export type MatrixWorkerMessage =
   | CreateMatrixSuccessMessage
   | CreateMatrixErrorMessage
@@ -63,3 +168,13 @@ export type MatrixWorkerMessage =
   | AddSampleRowsErrorMessage
   | ResetDatabaseAckMessage
   | ResetDatabaseErrorMessage
+  | InsertRowSuccessMessage
+  | InsertRowErrorMessage
+  | UpdateRowAckMessage
+  | UpdateRowErrorMessage
+  | DeleteRowAckMessage
+  | DeleteRowErrorMessage
+  | ReparentRowSuccessMessage
+  | ReparentRowErrorMessage
+  | DeleteSubtreeAckMessage
+  | DeleteSubtreeErrorMessage

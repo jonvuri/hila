@@ -27,7 +27,16 @@ const handleMessage = async (event: MessageEvent<ClientMessage>) => {
     return
   }
 
-  if (type === 'createMatrix' || type === 'addSampleRows' || type === 'resetDatabase') {
+  if (
+    type === 'createMatrix' ||
+    type === 'addSampleRows' ||
+    type === 'resetDatabase' ||
+    type === 'insertRow' ||
+    type === 'updateRow' ||
+    type === 'deleteRow' ||
+    type === 'reparentRow' ||
+    type === 'deleteSubtree'
+  ) {
     await handleMatrixClientMessage(event.data)
     return
   }

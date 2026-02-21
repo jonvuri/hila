@@ -66,6 +66,16 @@ worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
     case 'addSampleRowsError':
     case 'resetDatabaseAck':
     case 'resetDatabaseError':
+    case 'insertRowSuccess':
+    case 'insertRowError':
+    case 'updateRowAck':
+    case 'updateRowError':
+    case 'deleteRowAck':
+    case 'deleteRowError':
+    case 'reparentRowSuccess':
+    case 'reparentRowError':
+    case 'deleteSubtreeAck':
+    case 'deleteSubtreeError':
       handleMatrixWorkerMessage(message)
       return
     default:

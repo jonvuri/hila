@@ -68,6 +68,8 @@ export type ColumnDefinition = {
   order: number
 }
 
+type SqlValue = string | number | null | Uint8Array | bigint
+
 const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 
 // Create a new matrix with its associated per-matrix tables
@@ -449,6 +451,67 @@ export const insertRow = (
     db.exec('ROLLBACK')
     throw error
   }
+}
+
+/**
+ * Insert a new data row into a matrix's data table.
+ *
+ * @returns The new row's id
+ */
+export const insertDataRow = (
+  db: Database,
+  matrixId: number,
+  values?: Record<string, unknown>,
+): number => {
+  const entries = Object.entries(values || {})
+
+  if (entries.length > 0) {
+    const columns = entries.map(([name]) => quoteIdent(name)).join(', ')
+    const placeholders = entries.map(() => '?').join(', ')
+    const stmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (${columns}) VALUES (${placeholders}) RETURNING id`,
+    )
+    stmt.bind(entries.map(([, value]) => value as SqlValue))
+    if (!stmt.step()) {
+      stmt.finalize()
+      throw new Error('Failed to insert data row')
+    }
+    const rowId = (stmt.get({}) as { id: number }).id
+    stmt.finalize()
+    return rowId
+  } else {
+    const stmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" DEFAULT VALUES RETURNING id`)
+    if (!stmt.step()) {
+      stmt.finalize()
+      throw new Error('Failed to insert data row')
+    }
+    const rowId = (stmt.get({}) as { id: number }).id
+    stmt.finalize()
+    return rowId
+  }
+}
+
+/**
+ * Update column values for a data row in a matrix.
+ */
+export const updateRow = (
+  db: Database,
+  params: {
+    matrixId: number
+    rowId: number
+    values: Record<string, unknown>
+  },
+): void => {
+  const { matrixId, rowId, values } = params
+  const entries = Object.entries(values)
+  if (entries.length === 0) return
+
+  const setClauses = entries.map(([name]) => `${quoteIdent(name)} = ?`).join(', ')
+  const bindValues = [...entries.map(([, value]) => value as SqlValue), rowId]
+
+  db.exec(`UPDATE "mx_${matrixId}_data" SET ${setClauses} WHERE id = ?`, {
+    bind: bindValues,
+  })
 }
 
 /**
@@ -930,11 +993,7 @@ export const getParent = (
  * Root nodes return 0 (only the self-reference at depth 0 exists).
  * Returns null if the key has no closure entries (not found).
  */
-export const getDepth = (
-  db: Database,
-  matrixId: number,
-  key: Uint8Array,
-): number | null => {
+export const getDepth = (db: Database, matrixId: number, key: Uint8Array): number | null => {
   const stmt = db.prepare(`
     SELECT MAX(depth) as max_depth
     FROM "mx_${matrixId}_closure"

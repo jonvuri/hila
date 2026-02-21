@@ -7,7 +7,36 @@ import {
   pendingMatrixCreations,
   pendingRowAdditions,
   pendingDatabaseResets,
+  pendingRowInserts,
+  pendingRowUpdates,
+  pendingRowDeletes,
+  pendingRowReparents,
+  pendingSubtreeDeletes,
 } from './matrix-client-promises'
+
+const resolve = <T>(
+  map: Map<string, { resolve: (v: T) => void; reject: (e: unknown) => void }>,
+  id: string,
+  value: T,
+) => {
+  const r = map.get(id)
+  if (r) {
+    r.resolve(value)
+    map.delete(id)
+  }
+}
+
+const reject = (
+  map: Map<string, { resolve: (...args: never[]) => void; reject: (e: unknown) => void }>,
+  id: string,
+  error: unknown,
+) => {
+  const r = map.get(id)
+  if (r) {
+    r.reject(error)
+    map.delete(id)
+  }
+}
 
 export const handleMatrixWorkerMessage = (message: MatrixWorkerMessage) => {
   const { type } = message
@@ -15,61 +44,81 @@ export const handleMatrixWorkerMessage = (message: MatrixWorkerMessage) => {
   switch (type) {
     // Matrix creation operations
     case 'createMatrixSuccess': {
-      const { id, matrixId } = message
-      const resolver = pendingMatrixCreations.get(id)
-      if (resolver) {
-        resolver.resolve(matrixId)
-        pendingMatrixCreations.delete(id)
-      }
+      resolve(pendingMatrixCreations, message.id, message.matrixId)
       break
     }
     case 'createMatrixError': {
-      const { id, error } = message
-      const resolver = pendingMatrixCreations.get(id)
-      if (resolver) {
-        resolver.reject(error)
-        pendingMatrixCreations.delete(id)
-      }
+      reject(pendingMatrixCreations, message.id, message.error)
       break
     }
 
     // Sample row addition operations
     case 'addSampleRowsAck': {
-      const { id } = message
-      const resolver = pendingRowAdditions.get(id)
-      if (resolver) {
-        resolver.resolve()
-        pendingRowAdditions.delete(id)
-      }
+      resolve(pendingRowAdditions, message.id, undefined)
       break
     }
     case 'addSampleRowsError': {
-      const { id, error } = message
-      const resolver = pendingRowAdditions.get(id)
-      if (resolver) {
-        resolver.reject(error)
-        pendingRowAdditions.delete(id)
-      }
+      reject(pendingRowAdditions, message.id, message.error)
       break
     }
 
     // Database reset operations
     case 'resetDatabaseAck': {
-      const { id } = message
-      const resolver = pendingDatabaseResets.get(id)
-      if (resolver) {
-        resolver.resolve()
-        pendingDatabaseResets.delete(id)
-      }
+      resolve(pendingDatabaseResets, message.id, undefined)
       break
     }
     case 'resetDatabaseError': {
-      const { id, error } = message
-      const resolver = pendingDatabaseResets.get(id)
-      if (resolver) {
-        resolver.reject(error)
-        pendingDatabaseResets.delete(id)
-      }
+      reject(pendingDatabaseResets, message.id, message.error)
+      break
+    }
+
+    // Row insert operations
+    case 'insertRowSuccess': {
+      resolve(pendingRowInserts, message.id, { key: message.key, rowId: message.rowId })
+      break
+    }
+    case 'insertRowError': {
+      reject(pendingRowInserts, message.id, message.error)
+      break
+    }
+
+    // Row update operations
+    case 'updateRowAck': {
+      resolve(pendingRowUpdates, message.id, undefined)
+      break
+    }
+    case 'updateRowError': {
+      reject(pendingRowUpdates, message.id, message.error)
+      break
+    }
+
+    // Row delete operations
+    case 'deleteRowAck': {
+      resolve(pendingRowDeletes, message.id, undefined)
+      break
+    }
+    case 'deleteRowError': {
+      reject(pendingRowDeletes, message.id, message.error)
+      break
+    }
+
+    // Row reparent operations
+    case 'reparentRowSuccess': {
+      resolve(pendingRowReparents, message.id, message.newKey)
+      break
+    }
+    case 'reparentRowError': {
+      reject(pendingRowReparents, message.id, message.error)
+      break
+    }
+
+    // Subtree delete operations
+    case 'deleteSubtreeAck': {
+      resolve(pendingSubtreeDeletes, message.id, undefined)
+      break
+    }
+    case 'deleteSubtreeError': {
+      reject(pendingSubtreeDeletes, message.id, message.error)
       break
     }
   }
