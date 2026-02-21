@@ -35,8 +35,8 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
 - [x] Implement `getDepth(db, matrixId, key)`:
   - Returns the depth of a row (max depth in closure where descendant = key)
   - Needed for indentation rendering
-- [ ] Tests: reparent to new parent (verify rank key prefixes, closure integrity, data table unaffected), reparent to root, reparent with children, delete leaf row, delete subtree, getChildren ordering, getParent for root/nested rows, depth computation
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: reparent to new parent (verify rank key prefixes, closure integrity, data table unaffected), reparent to root, reparent with children, delete leaf row, delete subtree, getChildren ordering, getParent for root/nested rows, depth computation
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Worker protocol: row-level operations
 
