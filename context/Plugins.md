@@ -49,7 +49,7 @@ These principles cost nothing in complexity today but keep the architecture clea
 
 ### Keep plugin definitions declarative
 
-A plugin should read like a recipe: "I need these matrixes, these primitives, these named queries, and these face bindings." Favor declaring *what* over prescribing *how*. Declarative definitions are easier to reason about, test, and represent as data.
+A plugin should read like a recipe: "I need these matrixes, these primitives, these named queries, and these face bindings." Favor declaring _what_ over prescribing _how_. Declarative definitions are easier to reason about, test, and represent as data.
 
 Some plugins will also need runtime behavior that can't be expressed declaratively (e.g. an effects plugin that runs a scheduler to fire reminders at specific times). This is what lifecycle hooks (`init` / `destroy`) are for. The declarative recipe describes the plugin's data and faces; lifecycle hooks handle imperative startup and teardown.
 
@@ -76,6 +76,7 @@ A plugin should register itself with an identity (ID, name, metadata) in the plu
 The outline plugin provides the main scrollable outline view -- the primary way users organize and navigate their data.
 
 **Matrixes and primitives:**
+
 - A "workspace" concept: which matrixes the user has placed in their outline and their top-level order.
 - A rank scope (Lexorank) for the global outline row order.
 - Closure scopes for hierarchy tracking within outlined matrixes.
@@ -123,10 +124,12 @@ ORDER BY c.depth DESC;
 ```
 
 **Faces:**
+
 - The main outline face: a scrollable, keyboard-navigable view bound to the visible-rows query.
 - Focus view: bound to the subtree query, rooted at a specific row.
 
 **Key behavior:**
+
 - Matrixes appear in the outline through their identity faces, placed explicitly by the user or by a plugin.
 - The outline plugin does not know about tags, tasks, or any other domain concept. It just ranks and displays rows and matrixes.
 
@@ -135,6 +138,7 @@ ORDER BY c.depth DESC;
 The tags plugin provides inline tagging of note text, where each tag type is a matrix with its own schema (properties).
 
 **Matrixes and primitives:**
+
 - Tag type matrixes (e.g. a `#task` matrix with `due_date` and `priority` columns, a `#person` matrix with `name` and `email` columns).
 - Join table rows linking note rows to tag rows.
 - A lightweight registry of tag types (possibly metadata in the matrix table, or its own table).
@@ -158,6 +162,7 @@ WHERE j.target_matrix_id = :tag_mid AND j.target_row_id = :tag_rid;
 ```
 
 **Faces:**
+
 - Tag browser: list all tag types and their rows (bound to the all-tags query).
 - Tag autocomplete: inline suggestions when the user types `#` in a note.
 - Tag property editor: inline or sidebar editing of a tag row's properties. This face shows hydrated columns from the tag matrix, making them live-editable from wherever the tag appears.
@@ -173,6 +178,7 @@ Buy groceries [[tag:8:42]] before Friday
 Where `8` is the tag matrix ID and `42` is the tag row ID. The join table is maintained as a **materialized index** of these markers for fast querying, not as an independent source of truth.
 
 This means:
+
 - Text edits naturally move tags around without offset bookkeeping.
 - The join table can be rebuilt from text content if needed.
 - Queries like "all notes referencing task X" go through the join table for speed.

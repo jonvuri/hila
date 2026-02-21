@@ -57,7 +57,10 @@ Replace the Observable-based query system with Solid signals. This also provides
 
 - [x] Create `useQuery` hook in `src/sql/useQuery.ts`:
   ```typescript
-  function useQuery(sql: Accessor<string>): { result: Accessor<SqlResult | null>, error: Accessor<Error | null> }
+  function useQuery(sql: Accessor<string>): {
+    result: Accessor<SqlResult | null>
+    error: Accessor<Error | null>
+  }
   ```
   - Uses `createEffect` to subscribe to the SQL query (via `addObserver`)
   - Uses `onCleanup` to unsubscribe (via `removeObserver`)

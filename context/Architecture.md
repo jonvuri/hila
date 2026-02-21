@@ -109,11 +109,11 @@ SQLite is not just the storage layer -- it is the primary computation and data m
 
 ### Three tiers
 
-| Tier | What lives here | Examples |
-|---|---|---|
-| **Custom SQLite functions** | Byte-level algorithms that are procedural by nature, registered as deterministic SQLite functions at init. They execute inside the SQLite engine and can be called from any SQL statement. | `lexo_between(prev, next)` for Lexorank key computation, `lexo_next_prefix(key)` for subtree bounds |
-| **Prepared SQL transactions** | All relational operations: queries, data mutations, structural primitive operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use. | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
-| **TypeScript orchestration** | Routing: which prepared statement to execute for a given user action. Binding parameters. Error handling. UI event dispatch. No data manipulation logic. | Determining which insert case applies (after sibling? first child? at end?), binding the parameters, executing the prepared transaction |
+| Tier                          | What lives here                                                                                                                                                                            | Examples                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Custom SQLite functions**   | Byte-level algorithms that are procedural by nature, registered as deterministic SQLite functions at init. They execute inside the SQLite engine and can be called from any SQL statement. | `lexo_between(prev, next)` for Lexorank key computation, `lexo_next_prefix(key)` for subtree bounds                                         |
+| **Prepared SQL transactions** | All relational operations: queries, data mutations, structural primitive operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use.        | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
+| **TypeScript orchestration**  | Routing: which prepared statement to execute for a given user action. Binding parameters. Error handling. UI event dispatch. No data manipulation logic.                                   | Determining which insert case applies (after sibling? first child? at end?), binding the parameters, executing the prepared transaction     |
 
 ### Why SQL-first
 
@@ -224,14 +224,14 @@ This does not mean deletion is absolutely never available outside the identity f
 
 #### Summary
 
-| Operation | Any face (hydrated) | Identity face |
-|---|---|---|
-| Edit a literal column value | ✓ | ✓ |
-| Edit a join reference | ✓ (if column visible) | ✓ |
-| Add a new row | ✓ (if source unambiguous) | ✓ |
-| Delete a row | ✗ (default) | ✓ |
-| Modify schema | ✗ | ✓ |
-| Delete the matrix | ✗ | ✓ |
+| Operation                   | Any face (hydrated)       | Identity face |
+| --------------------------- | ------------------------- | ------------- |
+| Edit a literal column value | ✓                         | ✓             |
+| Edit a join reference       | ✓ (if column visible)     | ✓             |
+| Add a new row               | ✓ (if source unambiguous) | ✓             |
+| Delete a row                | ✗ (default)               | ✓             |
+| Modify schema               | ✗                         | ✓             |
+| Delete the matrix           | ✗                         | ✓             |
 
 ## UI concepts
 

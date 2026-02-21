@@ -4,13 +4,13 @@
 
 Five use cases serve as a north star. Each one proves out different slices of the architecture; together they validate the full system.
 
-| Use case | What it proves |
-|---|---|
-| **Outline with rich text** | Core data loop (SQLite → reactive query → UI → edit → SQLite), ProseMirror integration, rank + closure, virtualization, keyboard-driven UX |
-| **Tasks** (due dates, priority, reminders) | Supertag pattern, scheduling infrastructure, notification system, structured data in spreadsheet view |
-| **Movie reviews** (name, rating, auto-filled date) | Supertag pattern, auto-fill/default values, custom cell renderers, lightweight structured data |
-| **Spaced-repetition flashcards** | Custom face types with unique interaction models, time-based scheduling, join-based card sources |
-| **Micro-journaling** (timed prompts) | Form-based faces, timed notification triggers, configurable schedules, aggregate/timeline views |
+| Use case                                           | What it proves                                                                                                                             |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Outline with rich text**                         | Core data loop (SQLite → reactive query → UI → edit → SQLite), ProseMirror integration, rank + closure, virtualization, keyboard-driven UX |
+| **Tasks** (due dates, priority, reminders)         | Supertag pattern, scheduling infrastructure, notification system, structured data in spreadsheet view                                      |
+| **Movie reviews** (name, rating, auto-filled date) | Supertag pattern, auto-fill/default values, custom cell renderers, lightweight structured data                                             |
+| **Spaced-repetition flashcards**                   | Custom face types with unique interaction models, time-based scheduling, join-based card sources                                           |
+| **Micro-journaling** (timed prompts)               | Form-based faces, timed notification triggers, configurable schedules, aggregate/timeline views                                            |
 
 ### Common capability threads
 
@@ -56,12 +56,14 @@ The first real user-facing feature. This is where the system becomes an app some
 **Work:**
 
 - **ProseMirror integration.**
+
   - Port and adapt the ProseMirror setup from `coastline`: `@prosemirror-adapter/solid`, custom node views as Solid components, per-row independent editor instances.
   - Schema: `doc > paragraph | heading`, marks for bold / italic / code / link. Headings with level attribute (h1-h6).
   - Store ProseMirror document state as JSON in each row's content column.
   - Custom keymap: Enter creates new sibling row, Shift-Enter is soft newline within a row.
 
 - **Outline face.**
+
   - Virtualized scrolling list of ProseMirror editors (leverage existing `ScrollVirtualizer`). Consider adding a debug overlay for virtualizer window state (visible ranges, estimated sizes, scroll events) as a dev aid during development.
   - Depth-based indentation derived from closure table depth.
   - Each row is a "bullet" in the outline. Core outlining interactions:
@@ -73,6 +75,7 @@ The first real user-facing feature. This is where the system becomes an app some
   - Focus view: zoom into a subtree, breadcrumb navigation back out.
 
 - **Drag-and-drop reordering.**
+
   - Within-parent reorder (rank key rewrite, no closure changes).
   - Cross-parent reparent (rank key prefix rewrite + closure table update, atomic transaction).
 
@@ -81,8 +84,9 @@ The first real user-facing feature. This is where the system becomes an app some
 **Testing:** This phase introduces Playwright E2E tests alongside Vitest. The outlining interactions (Enter to create row, Tab/Shift-Tab to indent/outdent, Backspace to merge/delete, arrow key navigation, collapse/expand, drag-and-drop) are nontrivial UI behaviors that need E2E coverage. Vitest continues to cover the data layer (reparent transactions, rank key correctness, closure table integrity). ProseMirror document serialization round-trips (JSON ↔ editor state) can also be tested at the unit level.
 
 **Decisions:**
-- *Rich text scope:* Paragraphs, headings, and basic marks (bold/italic/code/link). Images, embeds, code blocks with syntax highlighting, and tables are future extensions.
-- *Full-text search:* Deferred. The ProseMirror JSON structure supports simple text extraction, so FTS5 indexing can be added later without schema changes.
+
+- _Rich text scope:_ Paragraphs, headings, and basic marks (bold/italic/code/link). Images, embeds, code blocks with syntax highlighting, and tables are future extensions.
+- _Full-text search:_ Deferred. The ProseMirror JSON structure supports simple text extraction, so FTS5 indexing can be added later without schema changes.
 
 ---
 
@@ -93,6 +97,7 @@ Formalize the plugin model from the outline's patterns. Define what faces are an
 **Work:**
 
 - **Plugin system.**
+
   - Formalize registration: plugin ID, name, metadata, stored in a `plugins` table.
   - Declarative plugin definition: matrixes it creates, primitives it requests, named queries, named mutations, face bindings.
   - Lifecycle hooks: `init` (called on app start or plugin enable), `destroy` (cleanup).
@@ -100,12 +105,14 @@ Formalize the plugin model from the outline's patterns. Define what faces are an
   - Keep the API well-defined but fluid -- it will evolve as Phase 4 (tags) reveals cross-plugin interaction needs.
 
 - **Face system.**
+
   - Define the face interface: the contract between a query (data source) and a renderer (presentation). A face binds a named query to a face type with configuration. The face type determines how query results are rendered and what interactions are available.
   - Face configuration as serializable data: named query, face type, settings (visible columns, sort, grouping, etc.).
   - Face rendering dispatch: given a face config, render the appropriate component with the query results.
   - The key principle is separation of data and presentation. Plugins own how they surface their data to users -- the face system provides the mechanism, not the policy.
 
 - **Table face type.**
+
   - A general-purpose spreadsheet-like face for viewing and editing matrix data.
   - Column headers with name and type. Click to rename, drag to reorder.
   - Inline cell editing: click a cell to edit, type to confirm.
@@ -115,6 +122,7 @@ Formalize the plugin model from the outline's patterns. Define what faces are an
   - The outline plugin uses this as the identity face for matrixes it manages (showing all rows and columns with full-authority editing). Other plugins may use it differently or not at all -- it is a face type, not a universal requirement.
 
 - **Admin / debug matrix browser.**
+
   - A built-in view (not a plugin face -- an admin surface) that lists all matrixes in the registry as simple tables.
   - Filter by plugin (which plugin created the matrix), by matrix name, or other metadata.
   - Shows raw data, rank, closure, and join state for each matrix.
@@ -138,25 +146,30 @@ The second plugin, proving cross-plugin composition through SQL and the join tab
 **Work:**
 
 - **Tag type creation.**
+
   - Each tag type is a matrix with a user-defined schema (columns/types).
   - Tag type registry: metadata indicating which matrixes are tag types (could be a flag in the matrix registry or a separate tags plugin table).
   - Creating a new tag type (e.g. `#task`) creates a new matrix with default columns.
 
 - **Inline tag markers in ProseMirror.**
+
   - Custom ProseMirror inline node for tags: `{ type: 'tag', attrs: { matrixId, rowId } }`.
   - Rendered inline with the tag name and optionally key properties (e.g. "Buy groceries `#task` ⏰ Friday").
   - Tag autocomplete: typing `#` opens a search/create dropdown. Selecting a tag type either creates a new row in that tag's matrix and inserts the marker, or links to an existing row.
 
 - **Join table wiring.**
+
   - On ProseMirror doc save, sync inline tag markers → join table rows. The join table is a materialized index; the PM document is the source of truth for which tags appear in which notes.
   - Forward lookup (note → its tags) and reverse lookup (tag → all notes referencing it) via prepared queries.
 
 - **Tag property panel.**
+
   - Clicking an inline tag opens a property editor (popover or sidebar).
   - Shows the tag row's columns as editable fields (hydrated columns from the tag matrix).
   - Edits write back to the tag matrix; changes propagate to all notes referencing the same tag row.
 
 - **Tag browser face.**
+
   - A face listing all tag types and their instances.
   - Each tag type can open a table face showing all its rows (the tag matrix as a spreadsheet).
   - Reverse lookup: select a tag row to see all notes that reference it.
@@ -176,17 +189,20 @@ Concrete use of the tag system for two different real-world patterns.
 **Work:**
 
 - **Task tag type.**
+
   - Predefined columns: `status` (select: todo/in-progress/done), `due_date` (date), `priority` (select: low/medium/high/urgent), `notes` (text).
   - Task-specific face: a filtered/sorted view of all tasks. Sort by due date, group by status, filter by priority.
   - Inline status toggling: click a checkbox-like control on the inline tag to toggle status.
   - Due date picker: click the date to open a date picker.
 
 - **Movie review tag type.**
+
   - Predefined columns: `movie_name` (text), `star_rating` (number, 1-5), `entry_date` (date, auto-filled).
   - Auto-fill: `entry_date` defaults to the current date when a new review row is created. This is the first use of default/computed values on row creation.
   - Star rating widget: a custom cell renderer showing clickable stars.
 
 - **Default values on row creation.**
+
   - Core support for column-level defaults (literal values or expressions like `date('now')`).
   - Applied automatically when a new row is created in any matrix that defines defaults.
 
@@ -207,6 +223,7 @@ Core capability layer for all time-based features.
 **Work:**
 
 - **Scheduler service.**
+
   - A core service that runs while the app is open.
   - Schedule table in SQLite: `(id, fire_at, plugin_id, payload, status, recurrence)`.
   - The scheduler queries for upcoming events and uses `setTimeout` to fire them.
@@ -214,12 +231,14 @@ Core capability layer for all time-based features.
   - Plugin API for scheduling: `schedule(fireAt, payload)`, `scheduleRecurring(cron, payload)`, `cancel(id)`, `reschedule(id, newFireAt)`.
 
 - **Notification system.**
+
   - Notification queue and face.
   - Toast notifications for immediate alerts.
   - Notification tray face (lightweight, always-accessible) for history and pending items.
   - Each notification links back to its source (a specific matrix row).
 
 - **Task reminders.**
+
   - When a task's `due_date` is set or changed, schedule a notification.
   - Configurable reminder timing (e.g. "remind me 1 hour before", "remind me the morning of").
   - First real consumer of both the scheduler and notification system.
@@ -241,15 +260,18 @@ A custom face type with a unique interaction model, proving that faces can be fa
 **Work:**
 
 - **SRS plugin.**
+
   - Card matrix with columns: `front` (rich text), `back` (rich text), `next_review` (datetime), `interval` (number, days), `ease_factor` (number), `repetitions` (number), `status` (select: new/learning/review/suspended).
   - Cards can be standalone or created from any matrix row via a join reference (e.g. "make a flashcard from this note"). The join links the card to its source material.
 
 - **SM-2 scheduling algorithm.**
+
   - Implemented as named mutations that update `interval`, `ease_factor`, `repetitions`, and `next_review` based on the user's rating.
   - Ratings: again (0), hard (1), good (2), easy (3).
   - Could be implemented as a custom SQLite function for self-contained computation, or as TypeScript orchestration. Prefer SQLite function if the math maps cleanly.
 
 - **Flashcard review face.**
+
   - Shows the front of the next due card.
   - Tap/click/keyboard to reveal the back.
   - Rate buttons that trigger the SM-2 mutation and advance to the next card.
@@ -274,15 +296,18 @@ Form-based faces and timed prompts, completing the use case set.
 **Work:**
 
 - **Journal plugin.**
+
   - Journal entry matrix: `timestamp` (datetime, auto-filled), `mood` (select: great/good/okay/rough/bad), `energy` (number, 1-5 scale), `text` (rich text), `location` (text, optional).
   - Prompt template: configurable questions that appear in the quick-entry form. Stored as plugin configuration.
 
 - **Timed prompt system.**
+
   - Uses the scheduler from Phase 6 to fire prompts at configured intervals.
   - Configurable schedule: every N hours, specific times of day, or N times per day evenly spaced.
   - On prompt fire: notification with "Journal now" action that opens the quick-entry face.
 
 - **Quick-entry form face.**
+
   - A compact, focused form optimized for fast input.
   - Mood picker (emoji or icon grid), energy slider, free-text field, optional tag input.
   - Submit creates a new row in the journal matrix and dismisses the form.
@@ -311,6 +336,7 @@ Two testing layers, chosen by what they're best at:
 - **Playwright E2E** for nontrivial UI interactions that exercise the full stack: outline keyboard navigation (Enter/Tab/Backspace/arrow keys), drag-and-drop reordering, ProseMirror editing, inline tag insertion and autocomplete, cell editing in table faces, flashcard review flow, form submission. Introduced in **Phase 2** when the first real UI interactions land.
 
 General guidelines:
+
 - Prefer Vitest when a behavior can be verified by calling a function and checking the return value or database state. Don't test UI rendering when you can test the underlying operation.
 - Use Playwright when the behavior is inherently about user interaction: keystroke sequences, focus management, drag-and-drop, visual state transitions.
 - Each phase's testing notes indicate which layer covers what.
@@ -328,6 +354,7 @@ Basic responsiveness from the start. At a mobile-sized breakpoint (~600px), layo
 ### Keyboard shortcuts
 
 Every operation should be keyboard-accessible. Build a shortcut system early (Phase 2) and extend it per phase:
+
 - Phase 2: Outline navigation, editing, reorder, indent/outdent.
 - Phase 3: Table navigation (arrow keys between cells), column operations.
 - Phase 4: Tag insertion (`#` trigger), tag property navigation.
@@ -338,6 +365,7 @@ Every operation should be keyboard-accessible. Build a shortcut system early (Ph
 This is a significant cross-cutting concern. ProseMirror has built-in undo for text edits, but structural operations (reorder, reparent, delete row) and data mutations (edit a cell in a spreadsheet) need their own undo mechanism.
 
 Options:
+
 - **Transaction log.** Record each operation's inverse in an undo stack. Undo replays inverses.
 - **SQLite savepoints.** Use `SAVEPOINT` / `ROLLBACK TO` for within-session undo.
 - **Per-face undo.** Each face maintains its own undo stack. Simpler but doesn't compose across faces.
@@ -347,6 +375,7 @@ Recommendation: Defer a general solution. Start with ProseMirror's built-in undo
 ### Search
 
 Full-text search across all matrix content. SQLite FTS5 is the natural choice:
+
 - Maintain an FTS5 index over text content from all matrixes.
 - Update the index on writes (trigger-based or explicit).
 - Search face: a global search bar that queries FTS5 and presents results with context.
@@ -390,27 +419,27 @@ Phases 3 and 6 can proceed in parallel after Phase 2. Phase 5 (tasks and movie r
 
 What we have and its status relative to this plan:
 
-| Module | Status | Plan disposition |
-|---|---|---|
-| `lexorank.ts` + tests | Complete, tested | **Keep.** Rename variables per Phase 1. |
-| `matrix.ts` + tests | Working, needs rename | **Evolve.** Rename element→row, extend with column schema management. |
-| Worker (`worker.ts`, `worker-db.ts`, handlers) | Working, fragile startup | **Evolve.** Add message queuing (Phase 1), extend with new operations per phase. |
-| Client layer (`worker-client.ts`, `*-client.ts`) | Working | **Evolve.** Extend with new message types per phase. |
-| SQL query system (`sql/`) | Working, no params | **Evolve.** Add parameterized queries (Phase 1). |
-| `ScrollVirtualizer` | Working | **Evolve.** Integrate with ProseMirror editors (Phase 2). |
-| `App.tsx`, `MatrixDebug.tsx`, `SqlRunner.tsx` | Debug UI | **Evolve.** `MatrixDebug` evolves into the admin matrix browser (Phase 3). `SqlRunner` stays as a dev tool. `App.tsx` will be restructured as the real UI takes shape (Phase 2). |
-| `node-sql-parser` dependency | Used for table extraction | **Evaluate.** May keep for query analysis or replace with SQLite-native approach. |
-| `rxjs` dependency | Used for query observables | **Remove in Phase 1.** Replace with Solid reactive primitives (`createSignal`, `createEffect`, `onCleanup`). The underlying worker subscribe/unsubscribe protocol stays; only the client-side reactive layer changes. |
+| Module                                           | Status                     | Plan disposition                                                                                                                                                                                                      |
+| ------------------------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lexorank.ts` + tests                            | Complete, tested           | **Keep.** Rename variables per Phase 1.                                                                                                                                                                               |
+| `matrix.ts` + tests                              | Working, needs rename      | **Evolve.** Rename element→row, extend with column schema management.                                                                                                                                                 |
+| Worker (`worker.ts`, `worker-db.ts`, handlers)   | Working, fragile startup   | **Evolve.** Add message queuing (Phase 1), extend with new operations per phase.                                                                                                                                      |
+| Client layer (`worker-client.ts`, `*-client.ts`) | Working                    | **Evolve.** Extend with new message types per phase.                                                                                                                                                                  |
+| SQL query system (`sql/`)                        | Working, no params         | **Evolve.** Add parameterized queries (Phase 1).                                                                                                                                                                      |
+| `ScrollVirtualizer`                              | Working                    | **Evolve.** Integrate with ProseMirror editors (Phase 2).                                                                                                                                                             |
+| `App.tsx`, `MatrixDebug.tsx`, `SqlRunner.tsx`    | Debug UI                   | **Evolve.** `MatrixDebug` evolves into the admin matrix browser (Phase 3). `SqlRunner` stays as a dev tool. `App.tsx` will be restructured as the real UI takes shape (Phase 2).                                      |
+| `node-sql-parser` dependency                     | Used for table extraction  | **Evaluate.** May keep for query analysis or replace with SQLite-native approach.                                                                                                                                     |
+| `rxjs` dependency                                | Used for query observables | **Remove in Phase 1.** Replace with Solid reactive primitives (`createSignal`, `createEffect`, `onCleanup`). The underlying worker subscribe/unsubscribe protocol stays; only the client-side reactive layer changes. |
 
 ### From coastline (ProseMirror reference)
 
-| Module | Disposition |
-|---|---|
-| ProseMirror setup (`createEditorView.ts`) | **Port and adapt.** Core editor creation, keymap, node view factories. |
-| Custom node views (`Paragraph.tsx`, `Heading.tsx`) | **Port and adapt.** Solid component-based node views. |
-| `@prosemirror-adapter/solid` integration | **Adopt.** The bridge between ProseMirror and Solid.js. |
-| Widget views (`Hashes.tsx`) | **Reference.** Pattern for ProseMirror decorations; adapt for tag markers. |
-| Custom commands (`commands.ts`) | **Port selectively.** Enter handling, heading cycling. Extend for outline operations. |
+| Module                                             | Disposition                                                                           |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| ProseMirror setup (`createEditorView.ts`)          | **Port and adapt.** Core editor creation, keymap, node view factories.                |
+| Custom node views (`Paragraph.tsx`, `Heading.tsx`) | **Port and adapt.** Solid component-based node views.                                 |
+| `@prosemirror-adapter/solid` integration           | **Adopt.** The bridge between ProseMirror and Solid.js.                               |
+| Widget views (`Hashes.tsx`)                        | **Reference.** Pattern for ProseMirror decorations; adapt for tag markers.            |
+| Custom commands (`commands.ts`)                    | **Port selectively.** Enter handling, heading cycling. Extend for outline operations. |
 
 ---
 

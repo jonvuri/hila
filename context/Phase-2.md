@@ -132,6 +132,7 @@ The atomic unit of the outline: a single row with a ProseMirror editor, depth-ba
 The main outline surface that composes `OutlineRow` components in a virtualized scroll container.
 
 - [ ] Create `OutlineFace` component (`src/outline/OutlineFace.tsx`):
+
   - The primary outline surface, combining paginated data fetching and rendering through the `ScrollVirtualizer`.
   - Filters out collapsed subtrees (task 8) and scopes to the focus root (task 9).
 
@@ -142,6 +143,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   **Why one level is sufficient:** ProseMirror `EditorView` instances are lightweight enough to handle a few hundred simultaneously. The page size is chosen so that at minimum row height (~30px for a single line of text), each page comfortably exceeds viewport height (~3000px vs. ~800-1200px viewport). This means the latch pair model (expecting 1-2 windows in the viewport) works correctly. With `THRESHOLD_DISTANCE = 2`, ~6 live pages = ~600 mounted editors -- well within budget.
 
   **How it maps to `ScrollVirtualizer`:**
+
   - Each window = one page of ~100 rows.
   - A VISIBLE window subscribes to a paginated reactive query for its chunk of rows and renders an `OutlineRow` for each. All rows in the page are mounted with PM editors.
   - A GHOST window retains its remembered height (for scroll positioning) but its content is unmounted (editors destroyed, pending saves flushed) and query data released.
@@ -149,6 +151,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   - Write invalidation re-runs only the subscriptions for affected pages, not a monolithic query.
 
   **`ScrollVirtualizer` modifications needed:**
+
   - **`totalWindows` signal.** Derived from `ceil(totalVisibleRows / pageSize)`. Tells the virtualizer where content ends and enables shrinking when rows are deleted or subtrees collapsed. The total visible row count comes from a lightweight `COUNT(*)` subscription (fast, no content transfer).
   - **Window cleanup.** When `totalWindows` decreases, windows beyond the new total should be removed (currently the window array only grows).
 
@@ -156,6 +159,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   OFFSET-based pagination is problematic at scale: with the outline query's JOINs (data table for content, closure subquery for depth), `OFFSET N` evaluates the full JOIN for all N skipped rows -- at 100K rows that's ~100K unnecessary content reads. Keyset pagination avoids this entirely: `WHERE key > :boundary ORDER BY key LIMIT :page_size` seeks directly to the boundary in the B-tree index and reads only the page's rows.
 
   Each page's lower bound is the previous page's last key, propagated as a Solid signal:
+
   - Page 0: no lower bound. `ORDER BY key LIMIT :page_size`. Exposes its last key as a signal.
   - Page 1: lower bound = page 0's last key signal. `WHERE key > :prev_last_key ORDER BY key LIMIT :page_size`. Exposes its last key.
   - Page N: lower bound = page N-1's last key signal. Etc.
@@ -170,6 +174,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
 - [ ] **Outline page query design.**
 
   Per-page query:
+
   ```sql
   SELECT r.key, r.row_id, d.content,
          COALESCE(c.depth, 0) as depth
@@ -186,6 +191,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   ORDER BY r.key
   LIMIT :page_size                  -- omitted for single-page start
   ```
+
 - [ ] **Row identity and PM editor reuse.**
 
   The page renderer must use `<For each={rows()}>` keyed by `row_id`, not by array index. This is critical: when a page's query result changes (row inserted/deleted, boundary shift), Solid's `<For>` diffs the old and new row ID lists and reuses existing `OutlineRow` component instances for rows that remain. Only rows that enter or leave the page's result set trigger editor mount/unmount. If keyed by index instead, every row in the page after the mutation point gets a fresh `OutlineRow` -- destroying and recreating PM editors unnecessarily.
@@ -195,17 +201,20 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   The interaction between page pagination, reactive query updates, and PM editor lifecycle is a high-risk area for subtle bugs. Add debug logging and visual overlays, each controlled by a flag (e.g., a debug signals object or `localStorage` flags) so they can be toggled at runtime without code changes.
 
   **PM lifecycle tracking (`OutlineRow`):**
+
   - On mount: log `[PM] mount row={rowId} page={pageIndex}`. Increment a global `pmMountCount` signal.
   - On unmount: log `[PM] unmount row={rowId} page={pageIndex}`. Increment a global `pmUnmountCount` signal.
   - On content update from query (row data changed while editor is mounted): log `[PM] content-sync row={rowId}` with whether the editor state was replaced or already matched.
   - These counters and logs are the primary tool for verifying that mutations cause minimal PM churn.
 
   **Page boundary overlay (visual):**
+
   - When enabled, render a thin colored line at the top of each page's rendered output, labeled with the page index and its boundary key (hex-truncated).
   - Also show the page's row count and row ID range (first and last `row_id`).
   - This makes page boundaries visible during development and testing, so boundary shifts can be observed directly.
 
   **Mutation log overlay (visual):**
+
   - A small floating panel (bottom-right corner, toggleable) showing the last ~10 high-level operations.
   - Each entry: operation type (insert, delete, reparent, collapse, expand), timestamp, and the resulting page impact:
     - Pages affected (which pages re-queried and returned different results).
@@ -362,6 +371,7 @@ Phase 2 introduces Playwright alongside Vitest. The outlining interactions are t
   - **Collapse large subtree spanning pages**: create a parent with enough children to span page 0 and page 1. Collapse the parent. Verify: PM unmount count matches the number of hidden children (they're removed from the query result), and no spurious mount/unmount cycles on rows in pages that weren't affected by the collapse.
   - **Expand subtree**: reverse of collapse. Expand and verify mount count matches the revealed children, with no churn on unrelated rows.
   - **Insert in the middle of a page (control test)**: insert a row in the middle of page 0 (far from any boundary). Verify: exactly 1 PM mount (the new row), 0 PM unmounts. This confirms that within-page inserts cause no boundary effects at all.
+
 - [ ] Run `npx playwright test` -- all pass
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
 
