@@ -12,6 +12,7 @@ import {
   deleteSubtree,
   getChildren,
   getParent,
+  getDepth,
   ensureRootMatrix,
   insertJoin,
   deleteJoin,
@@ -1803,6 +1804,101 @@ describe('getParent', () => {
 
     // Now child's parent is parent2
     expect(compareKeys(getParent(db, matrixId, newKey)!, parent2.key)).toBe(0)
+  })
+})
+
+describe('getDepth', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeRow = (
+    title: string,
+    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
+  ) => {
+    const dataStmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    )
+    dataStmt.bind([title])
+    dataStmt.step()
+    const rowId = (dataStmt.get({}) as { id: number }).id
+    dataStmt.finalize()
+
+    const key = insertRow(db, {
+      matrixId,
+      parentKey: opts.parentKey,
+      prevKey: opts.prevKey,
+      rowKind: 0,
+      rowId,
+    })
+    return { key, rowId }
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Test')
+  })
+
+  test('returns 0 for a root-level row', () => {
+    const root = makeRow('Root')
+    expect(getDepth(db, matrixId, root.key)).toBe(0)
+  })
+
+  test('returns 1 for a direct child', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+    expect(getDepth(db, matrixId, child.key)).toBe(1)
+  })
+
+  test('returns correct depth for deeply nested rows', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parentKey: root.key })
+    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+    const greatGrandchild = makeRow('Great-grandchild', { parentKey: grandchild.key })
+
+    expect(getDepth(db, matrixId, root.key)).toBe(0)
+    expect(getDepth(db, matrixId, child.key)).toBe(1)
+    expect(getDepth(db, matrixId, grandchild.key)).toBe(2)
+    expect(getDepth(db, matrixId, greatGrandchild.key)).toBe(3)
+  })
+
+  test('returns updated depth after reparenting to root', () => {
+    const parent = makeRow('Parent')
+    const child = makeRow('Child', { parentKey: parent.key })
+
+    expect(getDepth(db, matrixId, child.key)).toBe(1)
+
+    const newKey = reparentRow(db, {
+      matrixId,
+      nodeKey: child.key,
+    })
+
+    expect(getDepth(db, matrixId, newKey)).toBe(0)
+  })
+
+  test('returns updated depth after reparenting deeper', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parentKey: root.key })
+    const sibling = makeRow('Sibling', { prevKey: root.key })
+
+    expect(getDepth(db, matrixId, sibling.key)).toBe(0)
+
+    const newKey = reparentRow(db, {
+      matrixId,
+      nodeKey: sibling.key,
+      newParentKey: child.key,
+    })
+
+    expect(getDepth(db, matrixId, newKey)).toBe(2)
+  })
+
+  test('returns null for a non-existent key', () => {
+    const fakeKey = new Uint8Array([0xff, 0xff, 0xff])
+    expect(getDepth(db, matrixId, fakeKey)).toBeNull()
   })
 })
 

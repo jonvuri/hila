@@ -32,7 +32,7 @@ The `insertRow` function handles row creation with rank + closure, but reparenti
 - [x] Implement `getParent(db, matrixId, childKey)`:
   - Returns the parent key (ancestor at depth=1) or null for root rows
   - Needed for backspace-at-start (outdent to parent's level), breadcrumbs, and reparent logic
-- [ ] Implement `getDepth(db, matrixId, key)`:
+- [x] Implement `getDepth(db, matrixId, key)`:
   - Returns the depth of a row (max depth in closure where descendant = key)
   - Needed for indentation rendering
 - [ ] Tests: reparent to new parent (verify rank key prefixes, closure integrity, data table unaffected), reparent to root, reparent with children, delete leaf row, delete subtree, getChildren ordering, getParent for root/nested rows, depth computation

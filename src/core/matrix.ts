@@ -924,6 +924,34 @@ export const getParent = (
   return null
 }
 
+/**
+ * Get the depth of a node in the hierarchy.
+ * Returns the max depth in the closure table where descendant_key = key.
+ * Root nodes return 0 (only the self-reference at depth 0 exists).
+ * Returns null if the key has no closure entries (not found).
+ */
+export const getDepth = (
+  db: Database,
+  matrixId: number,
+  key: Uint8Array,
+): number | null => {
+  const stmt = db.prepare(`
+    SELECT MAX(depth) as max_depth
+    FROM "mx_${matrixId}_closure"
+    WHERE descendant_key = ?
+  `)
+  stmt.bind([key])
+
+  if (stmt.step()) {
+    const row = stmt.get({}) as { max_depth: number | null }
+    stmt.finalize()
+    return row.max_depth
+  }
+
+  stmt.finalize()
+  return null
+}
+
 // Simple utility to generate rank keys (lexicographic BLOB order)
 const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering
