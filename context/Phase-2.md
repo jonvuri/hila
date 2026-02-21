@@ -10,7 +10,7 @@ Ordered to build incrementally: data layer gaps first, then ProseMirror setup, t
 
 The `insertRow` function handles row creation with rank + closure, but reparenting and deletion are not implemented. Both are required before the outline can support indent/outdent, drag-and-drop reparenting, or row deletion.
 
-- [ ] Implement `reparentRow(db, matrixId, nodeKey, newParentKey, prevSiblingKey?, nextSiblingKey?)`:
+- [x] Implement `reparentRow(db, matrixId, nodeKey, newParentKey, prevSiblingKey?, nextSiblingKey?)`:
   - Rewrites rank keys for the node and all its descendants (new prefix replaces old prefix)
   - Deletes old closure relationships (external-to-subtree links, preserving subtree-internal ones)
   - Grafts onto new parent (cross-join of new parent's ancestors with subtree descendants)

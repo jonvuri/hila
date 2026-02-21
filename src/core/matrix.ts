@@ -451,6 +451,284 @@ export const insertRow = (
   }
 }
 
+/**
+ * Reparent a row (and its subtree) to a new parent/position.
+ *
+ * This rewrites rank keys for the entire subtree, updates the closure table
+ * (removes old ancestor links, grafts onto new parent), all in one transaction.
+ *
+ * @param db - Database instance
+ * @param params - Reparent parameters
+ * @param params.matrixId - ID of the matrix
+ * @param params.nodeKey - Current rank key of the node to reparent
+ * @param params.newParentKey - Key of the new parent (omit to reparent to root)
+ * @param params.prevSiblingKey - Key of the sibling to place after (at destination)
+ * @param params.nextSiblingKey - Key of the sibling to place before (at destination)
+ * @returns The new rank key for the reparented node
+ */
+export const reparentRow = (
+  db: Database,
+  params: {
+    matrixId: number
+    nodeKey: Uint8Array
+    newParentKey?: Uint8Array
+    prevSiblingKey?: Uint8Array
+    nextSiblingKey?: Uint8Array
+  },
+): Uint8Array => {
+  const { matrixId, nodeKey, newParentKey, prevSiblingKey, nextSiblingKey } = params
+
+  db.exec('BEGIN TRANSACTION')
+
+  try {
+    const oldKey = nodeKey
+    const oldUpperBound = nextPrefix(oldKey)
+
+    // Guard: cannot reparent a node under one of its own descendants
+    if (newParentKey) {
+      const cycleStmt = db.prepare(`
+        SELECT 1 FROM "mx_${matrixId}_closure"
+        WHERE ancestor_key = ? AND descendant_key = ? AND depth > 0
+      `)
+      cycleStmt.bind([oldKey, newParentKey])
+      if (cycleStmt.step()) {
+        cycleStmt.finalize()
+        throw new Error('Cannot reparent a node under one of its own descendants')
+      }
+      cycleStmt.finalize()
+    }
+
+    // --- Step 1: Compute new rank key at destination ---
+    let newKey: Uint8Array
+
+    if (prevSiblingKey && nextSiblingKey) {
+      newKey = between(prevSiblingKey, nextSiblingKey)
+    } else if (prevSiblingKey) {
+      let upperBound = new Uint8Array(0)
+
+      if (newParentKey) {
+        const parentUpper = nextPrefix(newParentKey)
+        const stmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE matrix_id = ? AND key > ? AND key < ?
+            AND NOT (key >= ? AND key < ?)
+          ORDER BY key ASC
+          LIMIT 1
+        `)
+        stmt.bind([matrixId, prevSiblingKey, parentUpper, oldKey, oldUpperBound])
+
+        if (stmt.step()) {
+          const result = stmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+          const candidateSegments = parseKey(candidateKey)
+          const parentSegments = parseKey(newParentKey)
+          if (candidateSegments.length === parentSegments.length + 1) {
+            upperBound = candidateKey
+          }
+        }
+        stmt.finalize()
+      } else {
+        const stmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE matrix_id = ? AND key > ?
+            AND NOT (key >= ? AND key < ?)
+          ORDER BY key ASC
+          LIMIT 1
+        `)
+        stmt.bind([matrixId, prevSiblingKey, oldKey, oldUpperBound])
+
+        if (stmt.step()) {
+          const result = stmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+          const prevSegments = parseKey(prevSiblingKey)
+          const candidateSegments = parseKey(candidateKey)
+          if (candidateSegments.length > prevSegments.length) {
+            upperBound = new Uint8Array(0)
+          } else {
+            upperBound = candidateKey
+          }
+        }
+        stmt.finalize()
+      }
+
+      newKey = between(prevSiblingKey, upperBound)
+    } else if (nextSiblingKey) {
+      let lowerBound = new Uint8Array(0)
+
+      if (newParentKey) {
+        const stmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE matrix_id = ? AND key < ? AND key > ?
+            AND NOT (key >= ? AND key < ?)
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        stmt.bind([matrixId, nextSiblingKey, newParentKey, oldKey, oldUpperBound])
+
+        if (stmt.step()) {
+          const result = stmt.get({}) as { key: Uint8Array }
+          const candidateKey = new Uint8Array(result.key)
+          const candidateSegments = parseKey(candidateKey)
+          const parentSegments = parseKey(newParentKey)
+          if (candidateSegments.length === parentSegments.length + 1) {
+            lowerBound = candidateKey
+          } else {
+            lowerBound = new Uint8Array(newParentKey)
+          }
+        } else {
+          lowerBound = new Uint8Array(newParentKey)
+        }
+        stmt.finalize()
+      } else {
+        const stmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE matrix_id = ? AND key < ?
+            AND NOT (key >= ? AND key < ?)
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        stmt.bind([matrixId, nextSiblingKey, oldKey, oldUpperBound])
+
+        if (stmt.step()) {
+          const result = stmt.get({}) as { key: Uint8Array }
+          lowerBound = new Uint8Array(result.key)
+        }
+        stmt.finalize()
+      }
+
+      newKey = between(lowerBound, nextSiblingKey)
+    } else if (newParentKey) {
+      // Insert as first/only child of new parent
+      const parentUpper = nextPrefix(newParentKey)
+      const stmt = db.prepare(`
+        SELECT key FROM rank
+        WHERE matrix_id = ? AND key > ? AND key < ?
+          AND NOT (key >= ? AND key < ?)
+        ORDER BY key ASC
+        LIMIT 1
+      `)
+      stmt.bind([matrixId, newParentKey, parentUpper, oldKey, oldUpperBound])
+
+      if (stmt.step()) {
+        const result = stmt.get({}) as { key: Uint8Array }
+        const nextChild = new Uint8Array(result.key)
+        stmt.finalize()
+        newKey = between(newParentKey, nextChild)
+      } else {
+        stmt.finalize()
+        const parentSegments = parseKey(newParentKey)
+        const newSegment = new Uint8Array([0x80])
+        newKey = makeKey([...parentSegments, newSegment])
+      }
+    } else {
+      // Reparent to root level, no positioning: insert at end
+      const stmt = db.prepare(`
+        SELECT key FROM rank
+        WHERE matrix_id = ?
+          AND NOT (key >= ? AND key < ?)
+        ORDER BY key DESC
+        LIMIT 1
+      `)
+      stmt.bind([matrixId, oldKey, oldUpperBound])
+
+      let lastKey = new Uint8Array(0)
+      if (stmt.step()) {
+        const result = stmt.get({}) as { key: Uint8Array }
+        lastKey = new Uint8Array(result.key)
+      }
+      stmt.finalize()
+
+      newKey = between(lastKey, new Uint8Array(0))
+    }
+
+    // --- Step 2: Delete old external closure relationships ---
+    // Preserves subtree-internal links (where both ancestor and descendant are in the subtree)
+    db.exec(
+      `
+      DELETE FROM "mx_${matrixId}_closure"
+      WHERE descendant_key IN (
+          SELECT descendant_key FROM "mx_${matrixId}_closure" WHERE ancestor_key = ?
+        )
+        AND ancestor_key NOT IN (
+          SELECT descendant_key FROM "mx_${matrixId}_closure" WHERE ancestor_key = ?
+        )
+    `,
+      { bind: [oldKey, oldKey] },
+    )
+
+    // --- Step 3: Graft onto new parent ---
+    // Cross-join: new parent's ancestors × node's subtree descendants
+    if (newParentKey) {
+      db.exec(
+        `
+        INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+        SELECT a.ancestor_key, d.descendant_key, a.depth + d.depth + 1
+        FROM "mx_${matrixId}_closure" a
+        CROSS JOIN "mx_${matrixId}_closure" d
+        WHERE a.descendant_key = ?
+          AND d.ancestor_key = ?
+      `,
+        { bind: [newParentKey, oldKey] },
+      )
+    }
+
+    // --- Step 4: Rewrite rank keys for the subtree ---
+    // SQLite's || operator always produces TEXT, even with BLOB operands.
+    // Round-trip through HEX/UNHEX to get proper BLOB concatenation in STRICT tables.
+    const substrStart = oldKey.length + 1
+    db.exec(
+      `
+      UPDATE rank
+      SET key = UNHEX(HEX(?) || HEX(substr(key, ?)))
+      WHERE matrix_id = ? AND key >= ? AND key < ?
+    `,
+      { bind: [newKey, substrStart, matrixId, oldKey, oldUpperBound] },
+    )
+
+    // --- Step 5: Rewrite closure keys for the subtree ---
+    // Entries where both keys are in the subtree (subtree-internal)
+    db.exec(
+      `
+      UPDATE "mx_${matrixId}_closure"
+      SET ancestor_key = UNHEX(HEX(?) || HEX(substr(ancestor_key, ?))),
+          descendant_key = UNHEX(HEX(?) || HEX(substr(descendant_key, ?)))
+      WHERE (ancestor_key >= ? AND ancestor_key < ?)
+        AND (descendant_key >= ? AND descendant_key < ?)
+    `,
+      {
+        bind: [
+          newKey,
+          substrStart,
+          newKey,
+          substrStart,
+          oldKey,
+          oldUpperBound,
+          oldKey,
+          oldUpperBound,
+        ],
+      },
+    )
+    // Entries where only descendant_key is in the subtree (graft entries from step 3)
+    db.exec(
+      `
+      UPDATE "mx_${matrixId}_closure"
+      SET descendant_key = UNHEX(HEX(?) || HEX(substr(descendant_key, ?)))
+      WHERE (descendant_key >= ? AND descendant_key < ?)
+        AND NOT (ancestor_key >= ? AND ancestor_key < ?)
+    `,
+      {
+        bind: [newKey, substrStart, oldKey, oldUpperBound, oldKey, oldUpperBound],
+      },
+    )
+
+    db.exec('COMMIT')
+    return newKey
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 // Simple utility to generate rank keys (lexicographic BLOB order)
 const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
   // Convert prefix and counter to bytes, ensuring lexicographic ordering
