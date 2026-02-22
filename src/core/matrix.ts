@@ -157,7 +157,7 @@ export const ensureRootMatrix = (db: Database): number => {
     insertStmt.finalize()
 
     db.exec(
-      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (1, 'title', 'TEXT', 0)`,
+      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (1, 'content', 'TEXT', 0)`,
     )
 
     const matrixId = 1
@@ -165,7 +165,7 @@ export const ensureRootMatrix = (db: Database): number => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
         id INTEGER PRIMARY KEY,
-        title TEXT
+        content TEXT
       ) STRICT;
     `)
 

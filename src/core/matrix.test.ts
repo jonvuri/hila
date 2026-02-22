@@ -58,7 +58,7 @@ describe('Root Matrix Initialization', () => {
     checkStmt.finalize()
   })
 
-  test('ensureRootMatrix should create data table with only title column', () => {
+  test('ensureRootMatrix should create data table with content column', () => {
     ensureRootMatrix(db)
 
     // Verify data table exists
@@ -68,7 +68,7 @@ describe('Root Matrix Initialization', () => {
     expect(dataTableExists.step()).toBe(true)
     dataTableExists.finalize()
 
-    // Verify data table schema has 'id' and 'title' columns
+    // Verify data table schema has 'id' and 'content' columns
     const schemaStmt = db.prepare(`PRAGMA table_info(mx_1_data)`)
     const columns: { name: string; type: string }[] = []
     while (schemaStmt.step()) {
@@ -79,7 +79,7 @@ describe('Root Matrix Initialization', () => {
 
     expect(columns).toHaveLength(2)
     expect(columns[0]).toEqual({ name: 'id', type: 'INTEGER' })
-    expect(columns[1]).toEqual({ name: 'title', type: 'TEXT' })
+    expect(columns[1]).toEqual({ name: 'content', type: 'TEXT' })
   })
 
   test('ensureRootMatrix should create closure table', () => {
@@ -2110,7 +2110,7 @@ describe('Column schema management', () => {
   test('ensureRootMatrix stores column definitions', () => {
     ensureRootMatrix(db)
     const cols = getColumns(db, 1)
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'content', type: 'TEXT', order: 0 }])
   })
 
   test('getColumns throws for non-existent matrix', () => {

@@ -58,7 +58,7 @@ The current worker protocol only exposes `createMatrix`, `addSampleRows`, and `r
 
 The outline stores ProseMirror document state as JSON in each row. This needs a well-defined content column.
 
-- [ ] Update `ensureRootMatrix` to create the root matrix with a `content` column (type `TEXT`, stores JSON-serialized ProseMirror document). Keep the existing `title` column -- it will be derived from content for display (e.g. first line of text) or removed later.
+- [x] Update `ensureRootMatrix` to create the root matrix with a `content` column (type `TEXT`, stores JSON-serialized ProseMirror document).
 - [ ] Implement `updateRow(db, matrixId, rowId, values: Record<string, unknown>)`:
   - Generic column update: `UPDATE mx_{id}_data SET col1=?, col2=? WHERE id=?`
   - Validates column names against the matrix schema
