@@ -2512,6 +2512,120 @@ describe('updateRow', () => {
     expect(row.tag).toBe('a')
     stmt.finalize()
   })
+
+  test('throws on unknown column name', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row' })
+
+    expect(() => updateRow(db, { matrixId, rowId, values: { nonexistent: 'x' } })).toThrow(
+      'Column "nonexistent" does not exist in matrix',
+    )
+  })
+
+  test('throws when any one of multiple columns is unknown', () => {
+    const matrixId = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row' })
+
+    expect(() =>
+      updateRow(db, { matrixId, rowId, values: { title: 'ok', ghost: 'bad' } }),
+    ).toThrow('Column "ghost" does not exist in matrix')
+  })
+})
+
+describe('Content column and row data model', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    ensureRootMatrix(db)
+  })
+
+  const EMPTY_DOC = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
+
+  test('insertDataRow with no content produces null content', () => {
+    const rowId = insertDataRow(db, 1)
+
+    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { content: string | null }).content).toBeNull()
+    stmt.finalize()
+  })
+
+  test('insertDataRow with explicit content stores it correctly', () => {
+    const doc = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
+    }
+    const rowId = insertDataRow(db, 1, { content: JSON.stringify(doc) })
+
+    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const stored = (stmt.get({}) as { content: string }).content
+    stmt.finalize()
+
+    expect(JSON.parse(stored)).toEqual(doc)
+  })
+
+  test('updateRow on content column persists JSON and round-trips', () => {
+    const rowId = insertDataRow(db, 1)
+    const doc = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Updated' }] }],
+    }
+
+    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc) } })
+
+    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    const stored = (stmt.get({}) as { content: string }).content
+    stmt.finalize()
+
+    expect(JSON.parse(stored)).toEqual(doc)
+  })
+
+  test('updateRow with invalid column throws, leaving content unchanged', () => {
+    const rowId = insertDataRow(db, 1, { content: EMPTY_DOC })
+
+    expect(() => updateRow(db, { matrixId: 1, rowId, values: { badcol: 'x' } })).toThrow(
+      'Column "badcol" does not exist in matrix',
+    )
+
+    // Content should be unchanged
+    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { content: string }).content).toBe(EMPTY_DOC)
+    stmt.finalize()
+  })
+
+  test('multiple update round-trips preserve latest value', () => {
+    const rowId = insertDataRow(db, 1, { content: EMPTY_DOC })
+    const doc1 = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'v1' }] }],
+    }
+    const doc2 = {
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'v2' }] }],
+    }
+
+    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc1) } })
+    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc2) } })
+
+    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    stmt.bind([rowId])
+    expect(stmt.step()).toBe(true)
+    expect(JSON.parse((stmt.get({}) as { content: string }).content)).toEqual(doc2)
+    stmt.finalize()
+  })
 })
 
 describe('Row operations round-trip', () => {

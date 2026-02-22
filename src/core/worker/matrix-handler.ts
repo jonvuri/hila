@@ -14,9 +14,12 @@ import {
   reparentRow as reparentRowImpl,
   getParent,
   getChildren,
+  getColumns,
 } from '../matrix'
 
 import { sqliteWasm } from './worker-db'
+
+const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
 
 const postMessage = (message: MatrixWorkerMessage) => {
   self.postMessage(message)
@@ -87,7 +90,17 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       const { matrixId, id, parentKey, prevKey, nextKey, values } = message
       try {
         const { db } = await sqliteWasm
-        const rowId = insertDataRow(db, matrixId, values)
+
+        // If the matrix has a content column and no content is provided, set the empty-doc default
+        let resolvedValues = values
+        if (resolvedValues === undefined || !('content' in resolvedValues)) {
+          const columns = getColumns(db, matrixId)
+          if (columns.some((c) => c.name === 'content')) {
+            resolvedValues = { ...resolvedValues, content: EMPTY_DOC_JSON }
+          }
+        }
+
+        const rowId = insertDataRow(db, matrixId, resolvedValues)
         const key = insertRowImpl(db, {
           matrixId,
           parentKey,

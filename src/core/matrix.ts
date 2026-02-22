@@ -374,7 +374,10 @@ export const insertRow = (
         rankKey = makeKey([...parentSegments, newSegment])
       }
     } else {
-      // Insert at root level with no siblings specified
+      // Insert at root level with no siblings specified.
+      // First check this matrix's last key; if the matrix is empty, fall back
+      // to the global last single-segment key to avoid rank key collisions
+      // when multiple matrices are inserted into with no positioning.
       const lastRootStmt = db.prepare(`
         SELECT key FROM rank
         WHERE matrix_id = ?
@@ -389,6 +392,23 @@ export const insertRow = (
         lastKey = new Uint8Array(result.key)
       }
       lastRootStmt.finalize()
+
+      if (lastKey.length === 0) {
+        // No rows in this matrix yet. Find the global last single-segment key
+        // (single-segment = no 0x00 byte except the final terminator) so the
+        // new key stays in root-level key space and is globally unique.
+        const globalLastStmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE instr(substr(key, 1, length(key) - 1), X'00') = 0
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        if (globalLastStmt.step()) {
+          const result = globalLastStmt.get({}) as { key: Uint8Array }
+          lastKey = new Uint8Array(result.key)
+        }
+        globalLastStmt.finalize()
+      }
 
       rankKey = between(lastKey, new Uint8Array(0))
     }
@@ -493,6 +513,7 @@ export const insertDataRow = (
 
 /**
  * Update column values for a data row in a matrix.
+ * Validates column names against the matrix schema before executing.
  */
 export const updateRow = (
   db: Database,
@@ -505,6 +526,14 @@ export const updateRow = (
   const { matrixId, rowId, values } = params
   const entries = Object.entries(values)
   if (entries.length === 0) return
+
+  const columns = getColumns(db, matrixId)
+  const validNames = new Set(columns.map((c) => c.name))
+  for (const [name] of entries) {
+    if (!validNames.has(name)) {
+      throw new Error(`Column "${name}" does not exist in matrix ${matrixId}`)
+    }
+  }
 
   const setClauses = entries.map(([name]) => `${quoteIdent(name)} = ?`).join(', ')
   const bindValues = [...entries.map(([, value]) => value as SqlValue), rowId]

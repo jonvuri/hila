@@ -59,14 +59,14 @@ The current worker protocol only exposes `createMatrix`, `addSampleRows`, and `r
 The outline stores ProseMirror document state as JSON in each row. This needs a well-defined content column.
 
 - [x] Update `ensureRootMatrix` to create the root matrix with a `content` column (type `TEXT`, stores JSON-serialized ProseMirror document).
-- [ ] Implement `updateRow(db, matrixId, rowId, values: Record<string, unknown>)`:
+- [x] Implement `updateRow(db, matrixId, rowId, values: Record<string, unknown>)`:
   - Generic column update: `UPDATE mx_{id}_data SET col1=?, col2=? WHERE id=?`
   - Validates column names against the matrix schema
   - Used by the worker's `updateRow` handler
-- [ ] Add empty-document default for new rows: when `insertRow` creates a data table row, set `content` to a minimal ProseMirror doc JSON (`{"type":"doc","content":[{"type":"paragraph"}]}`)
+- [x] Add empty-document default for new rows: when `insertRow` creates a data table row, set `content` to a minimal ProseMirror doc JSON (`{"type":"doc","content":[{"type":"paragraph"}]}`)
   - This avoids null-handling in the editor and gives each new row an immediately editable empty paragraph
-- [ ] Tests: insert row with default content, update content, verify JSON round-trip
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: insert row with default content, update content, verify JSON round-trip
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. ProseMirror setup
 
