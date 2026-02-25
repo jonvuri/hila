@@ -1,0 +1,154 @@
+import { createRenderEffect, onCleanup } from 'solid-js'
+import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
+import { EditorView } from 'prosemirror-view'
+import { Selection, TextSelection } from 'prosemirror-state'
+import 'prosemirror-view/style/prosemirror.css'
+
+import { updateRow } from '../core/client/matrix-client'
+
+import { createEditorState } from './createEditorState'
+import type { OutlineCallbacks } from './keymap'
+import { ParagraphView } from './nodeviews/ParagraphView'
+import { HeadingView } from './nodeviews/HeadingView'
+
+const INDENT_PX = 24
+const SAVE_DEBOUNCE_MS = 300
+
+export type OutlineRowHandle = {
+  focus: (pos?: number | 'start' | 'end') => void
+  getView: () => EditorView | undefined
+}
+
+export type OutlineRowProps = {
+  rowId: number
+  rankKey: Uint8Array
+  content: string
+  depth: number
+  matrixId: number
+  callbacks: OutlineCallbacks
+  onHandle?: (handle: OutlineRowHandle) => void
+}
+
+const OutlineRowEditor = (props: OutlineRowProps) => {
+  const nodeViewFactory = useNodeViewFactory()
+  let editorView: EditorView | undefined
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let pendingDoc: unknown | undefined
+
+  const debouncedSave = (docJson: unknown) => {
+    pendingDoc = docJson
+    clearTimeout(saveTimer)
+    saveTimer = setTimeout(() => {
+      if (pendingDoc !== undefined) {
+        void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(pendingDoc) })
+        pendingDoc = undefined
+      }
+    }, SAVE_DEBOUNCE_MS)
+  }
+
+  const flushSave = () => {
+    clearTimeout(saveTimer)
+    if (pendingDoc !== undefined) {
+      void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(pendingDoc) })
+      pendingDoc = undefined
+    }
+  }
+
+  const handle: OutlineRowHandle = {
+    focus: (pos) => {
+      if (!editorView) return
+      editorView.focus()
+      let selection: Selection
+      if (pos === 'end') {
+        selection = Selection.atEnd(editorView.state.doc)
+      } else if (pos === undefined || pos === 'start') {
+        selection = Selection.atStart(editorView.state.doc)
+      } else {
+        selection = TextSelection.create(editorView.state.doc, pos)
+      }
+      editorView.dispatch(editorView.state.tr.setSelection(selection))
+    },
+    getView: () => editorView,
+  }
+
+  createRenderEffect(() => {
+    props.onHandle?.(handle)
+  })
+
+  const mountEditor = (el: HTMLDivElement) => {
+    const docJson = props.content ? (JSON.parse(props.content) as unknown) : undefined
+    const state = createEditorState(docJson, props.callbacks)
+
+    const view = new EditorView(el, {
+      state,
+      nodeViews: {
+        paragraph: nodeViewFactory({
+          component: ParagraphView,
+          as: 'div',
+          contentAs: 'p',
+        }),
+        heading: nodeViewFactory({
+          component: HeadingView,
+        }),
+      },
+      dispatchTransaction(tr) {
+        const newState = view.state.apply(tr)
+        view.updateState(newState)
+        if (tr.docChanged) {
+          debouncedSave(newState.doc.toJSON())
+        }
+      },
+    })
+
+    editorView = view
+  }
+
+  onCleanup(() => {
+    flushSave()
+    editorView?.destroy()
+  })
+
+  return (
+    <div class="outline-row" style={{ display: 'flex', 'align-items': 'flex-start' }}>
+      <div
+        class="outline-row-indent"
+        style={{ width: `${props.depth * INDENT_PX}px`, 'flex-shrink': 0 }}
+      />
+      <div
+        class="outline-row-handle"
+        style={{
+          width: '20px',
+          'flex-shrink': 0,
+          cursor: 'grab',
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'user-select': 'none',
+          opacity: 0.4,
+          'padding-top': '2px',
+        }}
+      >
+        ⠿
+      </div>
+      <div
+        class="outline-row-editor"
+        ref={(el) => mountEditor(el)}
+        style={{ flex: 1, 'min-width': 0 }}
+      />
+    </div>
+  )
+}
+
+export const OutlineRow = (props: OutlineRowProps) => (
+  <ProsemirrorAdapterProvider>
+    <OutlineRowEditor
+      rowId={props.rowId}
+      rankKey={props.rankKey}
+      content={props.content}
+      depth={props.depth}
+      matrixId={props.matrixId}
+      callbacks={props.callbacks}
+      onHandle={props.onHandle}
+    />
+  </ProsemirrorAdapterProvider>
+)

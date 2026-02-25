@@ -103,7 +103,7 @@ Install ProseMirror and port the core editor infrastructure from the coastline r
 
 The atomic unit of the outline: a single row with a ProseMirror editor, depth-based indentation, and a drag handle.
 
-- [ ] Create `OutlineRow` component (`src/outline/OutlineRow.tsx`):
+- [x] Create `OutlineRow` component (`src/outline/OutlineRow.tsx`):
   - Receives: row data (rowid, rank key, content JSON, depth)
   - Renders: indentation spacer (depth × indent unit), drag handle, PM editor
   - Creates an `EditorView` from the row's content JSON on mount
