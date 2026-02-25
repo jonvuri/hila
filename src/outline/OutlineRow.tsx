@@ -24,9 +24,12 @@ export type OutlineRowProps = {
   rankKey: Uint8Array
   content: string
   depth: number
+  hasChildren: boolean
+  collapsed?: boolean
   matrixId: number
   callbacks: OutlineCallbacks
   onHandle?: (handle: OutlineRowHandle) => void
+  onToggleCollapse?: () => void
 }
 
 const OutlineRowEditor = (props: OutlineRowProps) => {
@@ -131,6 +134,35 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
         ⠿
       </div>
       <div
+        class="outline-row-bullet"
+        role={props.hasChildren ? 'button' : undefined}
+        aria-label={
+          props.hasChildren
+            ? props.collapsed
+              ? 'Expand'
+              : 'Collapse'
+            : 'Bullet'
+        }
+        style={{
+          width: '20px',
+          'flex-shrink': 0,
+          display: 'flex',
+          'align-items': 'center',
+          'justify-content': 'center',
+          'user-select': 'none',
+          'padding-top': '2px',
+          cursor: props.hasChildren ? 'pointer' : 'default',
+          'font-size': props.hasChildren ? '10px' : '16px',
+          opacity: props.hasChildren ? 0.7 : 0.35,
+        }}
+        onClick={() => {
+          if (props.hasChildren) props.onToggleCollapse?.()
+        }}
+        data-testid="outline-bullet"
+      >
+        {props.hasChildren ? (props.collapsed ? '▶' : '▼') : '•'}
+      </div>
+      <div
         class="outline-row-editor"
         ref={(el) => mountEditor(el)}
         style={{ flex: 1, 'min-width': 0 }}
@@ -146,9 +178,12 @@ export const OutlineRow = (props: OutlineRowProps) => (
       rankKey={props.rankKey}
       content={props.content}
       depth={props.depth}
+      hasChildren={props.hasChildren}
+      collapsed={props.collapsed}
       matrixId={props.matrixId}
       callbacks={props.callbacks}
       onHandle={props.onHandle}
+      onToggleCollapse={props.onToggleCollapse}
     />
   </ProsemirrorAdapterProvider>
 )

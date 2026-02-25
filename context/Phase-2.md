@@ -113,19 +113,19 @@ The atomic unit of the outline: a single row with a ProseMirror editor, depth-ba
   - On ProseMirror `dispatchTransaction`: update local editor state immediately, then debounce a save to the worker (e.g. 300ms idle)
   - On unmount (virtualization scroll-out): flush any pending save immediately
   - On mount (virtualization scroll-in): recreate `EditorView` from the latest content JSON (fetched via the reactive query)
-- [ ] Indentation rendering:
+- [x] Indentation rendering:
   - Use the row's depth (from closure table) to compute left margin/padding
   - Indent unit: ~24px per level (configurable)
   - Depth is part of the outline's reactive query results, not computed per-row
-- [ ] Drag handle:
+- [x] Drag handle:
   - A small grip icon to the left of the content
   - Wired to the drag-and-drop system (task 9) -- for now, render it but leave DnD unwired
-- [ ] Bullet / collapse toggle:
+- [x] Bullet / collapse toggle:
   - A disclosure triangle or bullet between the drag handle and content
   - If the row has children: renders as a toggle (▶ collapsed, ▼ expanded). Clicking toggles collapse.
   - If the row has no children: renders as a simple bullet (•)
   - Whether a row has children can be derived from the query (or a reactive signal)
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Outline face: virtualized outline view
 
