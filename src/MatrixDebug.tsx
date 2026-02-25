@@ -3,29 +3,29 @@ import { createSignal, For, Show, type Component } from 'solid-js'
 import { createMatrix, addSampleRows, resetDatabase } from './core/client/matrix-client'
 import { useQuery } from './sql/useQuery'
 
-interface Matrix {
+type Matrix = {
   id: number
   title: string
 }
 
-interface MatrixData {
+type MatrixData = {
   id: number
   title: string | null
 }
 
-interface RankData {
+type RankData = {
   key: Uint8Array
   row_kind: number
   row_id: number
 }
 
-interface ClosureData {
+type ClosureData = {
   ancestor_key: Uint8Array
   descendant_key: Uint8Array
   depth: number
 }
 
-interface OutlineItem {
+type OutlineItem = {
   key: Uint8Array
   row_kind: number
   row_id: number

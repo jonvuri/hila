@@ -2,11 +2,11 @@ import { For } from 'solid-js'
 
 import type { WindowRendererFunction } from './ScrollVirtualizer'
 
-export interface ItemData {
+export type ItemData = {
   id: number
 }
 
-function ItemComponent(props: ItemData) {
+const ItemComponent = (props: ItemData) => {
   return (
     <div
       style={{

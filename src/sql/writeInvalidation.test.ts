@@ -12,7 +12,7 @@ import type { SqlResult } from './types'
  * Creates a subscription that collects results into an async queue.
  * Each call to nextResult() returns a promise resolving with the next emission.
  */
-function observeResults(sql: string) {
+const observeResults = (sql: string) => {
   const pending: ((result: SqlResult) => void)[] = []
   const buffered: SqlResult[] = []
 

@@ -18,6 +18,11 @@ See the `context/` directory for documentation on architecture and planning. In 
 - [Plan](context/Plan.md) -- the current implementation plan in depth
 - [Plugins](context/Plugins.md) -- plugin model and concrete examples (outline, tags)
 
+## Code style
+
+- Prefer `type` over `interface` for type definitions.
+- Prefer arrow function expressions (`const foo = () => ...`) over function declarations (`function foo() ...`).
+
 ## Development principles
 
 - **Incremental and intentional evolution.** Only tackle necessary complexity. Stay aware of high-level goals to inform decisions, but don't build ahead of proven need. Any aspect of the design may change as concrete outcomes reveal better approaches.

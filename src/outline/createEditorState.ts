@@ -15,7 +15,7 @@ const headingRule = textblockTypeInputRule(/^(#{1,6})\s$/, schema.nodes.heading!
   level: match[1]!.length,
 }))
 
-function markInputRule(pattern: RegExp, markType: typeof schema.marks.bold) {
+const markInputRule = (pattern: RegExp, markType: typeof schema.marks.bold) => {
   return new InputRule(pattern, (state, match, start, end) => {
     const captured = match[1]!
     return state.tr
@@ -41,10 +41,10 @@ const markdownInputRules = inputRules({
   rules: [headingRule, boldRule, italicRule, codeRule],
 })
 
-export function createEditorState(
+export const createEditorState = (
   docJson?: unknown,
   callbacks?: OutlineCallbacks,
-): EditorState {
+): EditorState => {
   let doc: Node | undefined
   if (docJson) {
     doc = Node.fromJSON(schema, docJson)

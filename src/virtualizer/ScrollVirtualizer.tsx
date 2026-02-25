@@ -27,7 +27,7 @@ type WindowComponentProps = {
 }
 
 // Window component that manages its own observers
-function WindowComponent(props: WindowComponentProps) {
+const WindowComponent = (props: WindowComponentProps) => {
   let elementRef: HTMLDivElement | undefined
 
   onMount(() => {
@@ -86,7 +86,7 @@ type ScrollVirtualizerProps = {
   minWindowHeight: number
 } & JSX.HTMLAttributes<HTMLDivElement>
 
-export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
+const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   // Track window states: 'VISIBLE' or 'GHOST' (previously visible but unrendered now)
   const [windowStates, setWindowStates] = createSignal<WindowState[]>([])
 
@@ -414,3 +414,5 @@ export default function ScrollVirtualizer(props: ScrollVirtualizerProps) {
     </div>
   )
 }
+
+export default ScrollVirtualizer

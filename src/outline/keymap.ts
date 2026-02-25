@@ -16,7 +16,7 @@ export type OutlineCallbacks = {
   onInsertLink: () => void
 }
 
-function hardBreak(): Command {
+const hardBreak = (): Command => {
   const br = schema.nodes.hard_break!
   return (state, dispatch) => {
     dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView())
@@ -24,14 +24,14 @@ function hardBreak(): Command {
   }
 }
 
-function enterToOutline(callback: () => void): Command {
+const enterToOutline = (callback: () => void): Command => {
   return (_state, _dispatch) => {
     callback()
     return true
   }
 }
 
-function backspaceAtStart(callback: () => void): Command {
+const backspaceAtStart = (callback: () => void): Command => {
   return (state, _dispatch) => {
     const { $cursor } = state.selection as { $cursor?: { pos: number; parentOffset: number } }
     if (!$cursor || $cursor.parentOffset > 0) return false
@@ -43,21 +43,21 @@ function backspaceAtStart(callback: () => void): Command {
   }
 }
 
-function tabToOutline(callback: () => void): Command {
+const tabToOutline = (callback: () => void): Command => {
   return (_state, _dispatch) => {
     callback()
     return true
   }
 }
 
-function modKToOutline(callback: () => void): Command {
+const modKToOutline = (callback: () => void): Command => {
   return (_state, _dispatch) => {
     callback()
     return true
   }
 }
 
-export function createOutlineKeymap(callbacks: OutlineCallbacks): Record<string, Command> {
+export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string, Command> => {
   return {
     'Shift-Enter': chainCommands(newlineInCode, createParagraphNear, hardBreak()),
     Enter: enterToOutline(callbacks.onEnter),

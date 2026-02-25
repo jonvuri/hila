@@ -2,7 +2,7 @@ import { useNodeViewContext } from '@prosemirror-adapter/solid'
 import { createMemo } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 
-export function HeadingView() {
+export const HeadingView = () => {
   const context = useNodeViewContext()
   const tag = createMemo(
     () => `h${context().node.attrs.level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6',

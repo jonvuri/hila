@@ -21,7 +21,7 @@ import { awaitWorkerReady } from '../client/worker-client'
 import type { SqlObserver } from '../sql-types'
 import type { SqlResult } from '../../sql/types'
 
-function observeResults(sql: string) {
+const observeResults = (sql: string) => {
   const pending: ((result: SqlResult) => void)[] = []
   const buffered: SqlResult[] = []
 

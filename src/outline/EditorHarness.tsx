@@ -8,13 +8,13 @@ import type { OutlineCallbacks } from './keymap'
 import { ParagraphView } from './nodeviews/ParagraphView'
 import { HeadingView } from './nodeviews/HeadingView'
 
-function EditorInner() {
+const EditorInner = () => {
   const nodeViewFactory = useNodeViewFactory()
   const [log, setLog] = createSignal<string[]>([])
   const [docJson, setDocJson] = createSignal('')
   let viewRef: EditorView | undefined
 
-  function appendLog(msg: string) {
+  const appendLog = (msg: string) => {
     setLog((prev) => [...prev.slice(-19), msg])
   }
 
@@ -30,7 +30,7 @@ function EditorInner() {
     viewRef?.destroy()
   })
 
-  function mountEditor(element: HTMLDivElement) {
+  const mountEditor = (element: HTMLDivElement) => {
     if (element.firstChild) return
 
     const state = createEditorState(undefined, callbacks)
@@ -106,10 +106,12 @@ function EditorInner() {
   )
 }
 
-export default function EditorHarness() {
+const EditorHarness = () => {
   return (
     <ProsemirrorAdapterProvider>
       <EditorInner />
     </ProsemirrorAdapterProvider>
   )
 }
+
+export default EditorHarness

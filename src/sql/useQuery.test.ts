@@ -17,7 +17,7 @@ const { addObserver, removeObserver } = await import('../core/client/sql-client'
 const mockAddObserver = addObserver as Mock
 const mockRemoveObserver = removeObserver as Mock
 
-function getLastObserver(): SqlObserver {
+const getLastObserver = (): SqlObserver => {
   const calls = mockAddObserver.mock.calls
   const lastCall = calls[calls.length - 1]
   if (!lastCall) throw new Error('addObserver should have been called')

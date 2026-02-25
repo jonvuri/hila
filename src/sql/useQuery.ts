@@ -5,10 +5,12 @@ import type { SqlObserver } from '../core/sql-types'
 
 import type { SqlResult } from './types'
 
-export function useQuery(sql: Accessor<string>): {
+export const useQuery = (
+  sql: Accessor<string>,
+): {
   result: Accessor<SqlResult | null>
   error: Accessor<Error | null>
-} {
+} => {
   const [result, setResult] = createSignal<SqlResult | null>(null)
   const [error, setError] = createSignal<Error | null>(null)
 
