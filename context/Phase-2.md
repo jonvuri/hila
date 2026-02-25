@@ -109,7 +109,7 @@ The atomic unit of the outline: a single row with a ProseMirror editor, depth-ba
   - Creates an `EditorView` from the row's content JSON on mount
   - Saves content back to the database on doc changes (debounced, via `updateRow`)
   - Exposes an imperative handle for focus management (the outline needs to programmatically focus a row's editor and place the cursor)
-- [ ] Content persistence strategy:
+- [x] Content persistence strategy:
   - On ProseMirror `dispatchTransaction`: update local editor state immediately, then debounce a save to the worker (e.g. 300ms idle)
   - On unmount (virtualization scroll-out): flush any pending save immediately
   - On mount (virtualization scroll-in): recreate `EditorView` from the latest content JSON (fetched via the reactive query)
