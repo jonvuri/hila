@@ -72,19 +72,19 @@ The outline stores ProseMirror document state as JSON in each row. This needs a 
 
 Install ProseMirror and port the core editor infrastructure from the coastline reference.
 
-- [ ] Install ProseMirror dependencies:
+- [x] Install ProseMirror dependencies:
   - `prosemirror-model`, `prosemirror-state`, `prosemirror-view`, `prosemirror-transform`
   - `prosemirror-keymap`, `prosemirror-inputrules`, `prosemirror-commands`, `prosemirror-history`
   - `@prosemirror-adapter/solid` (bridge between ProseMirror and Solid.js)
-- [ ] Define the ProseMirror schema (`src/outline/schema.ts`):
+- [x] Define the ProseMirror schema (`src/outline/schema.ts`):
   - Nodes: `doc`, `paragraph`, `heading` (with `level` attribute, 1-6)
   - Marks: `bold`, `italic`, `code`, `link` (with `href` attribute)
   - The schema should be minimal and focused -- this is the MVP rich text set
-- [ ] Create editor state factory (`src/outline/createEditorState.ts`):
+- [x] Create editor state factory (`src/outline/createEditorState.ts`):
   - Takes a JSON document (or null for empty) and returns a ProseMirror `EditorState`
   - Configures plugins: history, keymap (base + custom), input rules
   - Input rules: `#` at start of line → heading (1-6 levels with repeated `#`), markdown-style bold (`**`), italic (`*`), code (`` ` ``)
-- [ ] Create custom keymap (`src/outline/keymap.ts`):
+- [x] Create custom keymap (`src/outline/keymap.ts`):
   - **Shift-Enter**: insert a hard break / newline within the current row (soft break within PM)
   - **Enter**: dispatched to the outline (creates a new sibling row -- handled by the outline component, not PM)
   - **Backspace at start**: dispatched to the outline (merge with previous row or outdent)
@@ -92,12 +92,12 @@ Install ProseMirror and port the core editor infrastructure from the coastline r
   - **Mod-b / Mod-i / Mod-e**: bold / italic / code toggle (standard)
   - **Mod-k**: link insertion
   - The "dispatched to the outline" commands should call a callback provided to the keymap factory, keeping PM decoupled from outline logic
-- [ ] Port Solid node views from coastline (`src/outline/nodeviews/`):
+- [x] Port Solid node views from coastline (`src/outline/nodeviews/`):
   - `ParagraphView.tsx`: Solid component for paragraph nodes
   - `HeadingView.tsx`: Solid component for heading nodes (renders h1-h6 based on level attribute)
   - Use `@prosemirror-adapter/solid`'s `useNodeViewFactory` for registration
-- [ ] Verify ProseMirror editor creates, renders, and accepts input in a simple test harness (temporary, can be done in the existing dev UI)
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Verify ProseMirror editor creates, renders, and accepts input in a simple test harness (temporary, can be done in the existing dev UI)
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 5. Outline row component
 

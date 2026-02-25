@@ -1,10 +1,12 @@
-import { createSignal, type Component } from 'solid-js'
+import { createSignal, lazy, type Component } from 'solid-js'
 
 import SqlRunner from './SqlRunner'
 import MatrixDebug from './MatrixDebug'
 
+const EditorHarness = lazy(() => import('./outline/EditorHarness'))
+
 const App: Component = () => {
-  const [activeTab, setActiveTab] = createSignal<'sql' | 'matrix'>('matrix')
+  const [activeTab, setActiveTab] = createSignal<'sql' | 'matrix' | 'editor'>('editor')
 
   return (
     <div style={{ padding: '20px' }}>
@@ -33,6 +35,21 @@ const App: Component = () => {
           Matrix Debug
         </button>
         <button
+          onClick={() => setActiveTab('editor')}
+          style={{
+            padding: '10px 20px',
+            margin: '0 5px',
+            border: 'none',
+            'border-bottom':
+              activeTab() === 'editor' ? '3px solid #007acc' : '3px solid transparent',
+            'background-color': activeTab() === 'editor' ? '#f0f8ff' : 'transparent',
+            cursor: 'pointer',
+            'font-weight': activeTab() === 'editor' ? 'bold' : 'normal',
+          }}
+        >
+          Editor Harness
+        </button>
+        <button
           onClick={() => setActiveTab('sql')}
           style={{
             padding: '10px 20px',
@@ -50,6 +67,7 @@ const App: Component = () => {
       </div>
 
       {/* Tab Content */}
+      {activeTab() === 'editor' && <EditorHarness />}
       {activeTab() === 'matrix' && <MatrixDebug />}
       {activeTab() === 'sql' && <SqlRunner />}
     </div>
