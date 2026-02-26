@@ -84,6 +84,7 @@ const WindowComponent = (props: WindowComponentProps) => {
 type ScrollVirtualizerProps = {
   renderWindow: WindowRendererFunction
   minWindowHeight: number
+  totalWindows?: number
 } & JSX.HTMLAttributes<HTMLDivElement>
 
 const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
@@ -140,9 +141,12 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   const computeVisibleRange = (pair: [number, number]): Set<number> => {
     const [min, max] = pair
 
-    // Extend threshold distance around the latch pair
     const rangeStart = Math.max(0, min - THRESHOLD_DISTANCE)
-    const rangeEnd = max + THRESHOLD_DISTANCE
+    let rangeEnd = max + THRESHOLD_DISTANCE
+
+    if (props.totalWindows !== undefined) {
+      rangeEnd = Math.min(rangeEnd, props.totalWindows - 1)
+    }
 
     const visibleRange = new Set<number>()
     for (let i = rangeStart; i <= rangeEnd; i++) {
@@ -387,9 +391,20 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   })
 
   onMount(() => {
-    // Initialize with initial latch pair [0, 1]
     const initialRange = computeVisibleRange([0, 1])
     updateWindowStates(initialRange)
+  })
+
+  // When totalWindows decreases, trim windows beyond the new boundary
+  createEffect(() => {
+    const total = props.totalWindows
+    if (total === undefined) return
+
+    setWindowStates((prev) => (prev.length > total ? prev.slice(0, total) : prev))
+    setWindowHeights((prev) => (prev.length > total ? prev.slice(0, total) : prev))
+
+    const visibleRange = computeVisibleRange(latchPair())
+    updateWindowStates(visibleRange)
   })
 
   return (

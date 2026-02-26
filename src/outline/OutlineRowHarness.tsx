@@ -19,14 +19,70 @@ type MockRow = {
 }
 
 const INITIAL_ROWS: MockRow[] = [
-  { rowId: 1, rankKey: new Uint8Array([0x10]), content: makeDoc('Root item (has children, expanded)'), depth: 0, hasChildren: true, label: 'root-parent' },
-  { rowId: 2, rankKey: new Uint8Array([0x10, 0x10]), content: makeDoc('Child at depth 1'), depth: 1, hasChildren: false, label: 'child-1' },
-  { rowId: 3, rankKey: new Uint8Array([0x10, 0x20]), content: makeDoc('Another child at depth 1 (has children)'), depth: 1, hasChildren: true, label: 'child-parent' },
-  { rowId: 4, rankKey: new Uint8Array([0x10, 0x20, 0x10]), content: makeDoc('Grandchild at depth 2'), depth: 2, hasChildren: false, label: 'grandchild' },
-  { rowId: 5, rankKey: new Uint8Array([0x10, 0x20, 0x20]), content: makeDoc('Another grandchild at depth 2'), depth: 2, hasChildren: false, label: 'grandchild-2' },
-  { rowId: 6, rankKey: new Uint8Array([0x20]), content: makeDoc('Second root item (no children)'), depth: 0, hasChildren: false, label: 'root-leaf' },
-  { rowId: 7, rankKey: new Uint8Array([0x30]), content: makeDoc('Third root (has children, will collapse)'), depth: 0, hasChildren: true, label: 'root-collapsible' },
-  { rowId: 8, rankKey: new Uint8Array([0x30, 0x10]), content: makeDoc('Hidden when parent collapsed'), depth: 1, hasChildren: false, label: 'collapsible-child' },
+  {
+    rowId: 1,
+    rankKey: new Uint8Array([0x10]),
+    content: makeDoc('Root item (has children, expanded)'),
+    depth: 0,
+    hasChildren: true,
+    label: 'root-parent',
+  },
+  {
+    rowId: 2,
+    rankKey: new Uint8Array([0x10, 0x10]),
+    content: makeDoc('Child at depth 1'),
+    depth: 1,
+    hasChildren: false,
+    label: 'child-1',
+  },
+  {
+    rowId: 3,
+    rankKey: new Uint8Array([0x10, 0x20]),
+    content: makeDoc('Another child at depth 1 (has children)'),
+    depth: 1,
+    hasChildren: true,
+    label: 'child-parent',
+  },
+  {
+    rowId: 4,
+    rankKey: new Uint8Array([0x10, 0x20, 0x10]),
+    content: makeDoc('Grandchild at depth 2'),
+    depth: 2,
+    hasChildren: false,
+    label: 'grandchild',
+  },
+  {
+    rowId: 5,
+    rankKey: new Uint8Array([0x10, 0x20, 0x20]),
+    content: makeDoc('Another grandchild at depth 2'),
+    depth: 2,
+    hasChildren: false,
+    label: 'grandchild-2',
+  },
+  {
+    rowId: 6,
+    rankKey: new Uint8Array([0x20]),
+    content: makeDoc('Second root item (no children)'),
+    depth: 0,
+    hasChildren: false,
+    label: 'root-leaf',
+  },
+  {
+    rowId: 7,
+    rankKey: new Uint8Array([0x30]),
+    content: makeDoc('Third root (has children, will collapse)'),
+    depth: 0,
+    hasChildren: true,
+    label: 'root-collapsible',
+  },
+  {
+    rowId: 8,
+    rankKey: new Uint8Array([0x30, 0x10]),
+    content: makeDoc('Hidden when parent collapsed'),
+    depth: 1,
+    hasChildren: false,
+    label: 'collapsible-child',
+  },
 ]
 
 const OutlineRowHarness = () => {
@@ -45,7 +101,10 @@ const OutlineRowHarness = () => {
     onInsertLink: () => appendLog('[callback] Mod-k (link)'),
   }
 
-  const keyStr = (key: Uint8Array) => Array.from(key).map(b => b.toString(16).padStart(2, '0')).join('')
+  const keyStr = (key: Uint8Array) =>
+    Array.from(key)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
 
   const toggleCollapse = (key: Uint8Array) => {
     const k = keyStr(key)
@@ -82,8 +141,8 @@ const OutlineRowHarness = () => {
     <div data-testid="outline-row-harness">
       <h3>OutlineRow Harness</h3>
       <p style={{ color: '#666', 'font-size': '13px', margin: '0 0 12px' }}>
-        Renders OutlineRow components with mock data. Editors are functional but saves are no-ops (no backing matrix).
-        Click disclosure triangles to toggle collapse.
+        Renders OutlineRow components with mock data. Editors are functional but saves are
+        no-ops (no backing matrix). Click disclosure triangles to toggle collapse.
       </p>
 
       <div
@@ -96,7 +155,11 @@ const OutlineRowHarness = () => {
       >
         <For each={visibleRows()}>
           {(row) => (
-            <div data-testid={`row-${row.label}`} data-depth={row.depth} data-has-children={row.hasChildren}>
+            <div
+              data-testid={`row-${row.label}`}
+              data-depth={row.depth}
+              data-has-children={row.hasChildren}
+            >
               <OutlineRow
                 rowId={row.rowId}
                 rankKey={row.rankKey}

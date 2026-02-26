@@ -137,11 +137,11 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
         class="outline-row-bullet"
         role={props.hasChildren ? 'button' : undefined}
         aria-label={
-          props.hasChildren
-            ? props.collapsed
-              ? 'Expand'
-              : 'Collapse'
-            : 'Bullet'
+          props.hasChildren ?
+            props.collapsed ?
+              'Expand'
+            : 'Collapse'
+          : 'Bullet'
         }
         style={{
           width: '20px',
@@ -160,7 +160,11 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
         }}
         data-testid="outline-bullet"
       >
-        {props.hasChildren ? (props.collapsed ? '▶' : '▼') : '•'}
+        {props.hasChildren ?
+          props.collapsed ?
+            '▶'
+          : '▼'
+        : '•'}
       </div>
       <div
         class="outline-row-editor"

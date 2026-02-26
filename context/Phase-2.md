@@ -131,12 +131,12 @@ The atomic unit of the outline: a single row with a ProseMirror editor, depth-ba
 
 The main outline surface that composes `OutlineRow` components in a virtualized scroll container.
 
-- [ ] Create `OutlineFace` component (`src/outline/OutlineFace.tsx`):
+- [x] Create `OutlineFace` component (`src/outline/OutlineFace.tsx`):
 
   - The primary outline surface, combining paginated data fetching and rendering through the `ScrollVirtualizer`.
   - Filters out collapsed subtrees (task 8) and scopes to the focus root (task 9).
 
-- [ ] **Single-level page virtualization using `ScrollVirtualizer`.**
+- [x] **Single-level page virtualization using `ScrollVirtualizer`.**
 
   Data residency and DOM rendering operate at the same granularity: the **page**. Each `ScrollVirtualizer` window is a page of ~100 rows. Every row in a live page has its data in memory and its ProseMirror editor mounted. GHOST pages release both.
 
@@ -171,7 +171,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
 
   **Phase 2 start:** begin with a single page (one window, one query, no LIMIT). The `ScrollVirtualizer` wraps it with `totalWindows = 1`. The keyset pagination structure is in place from the start; switching to multi-page is just a matter of setting `pageSize` and letting the virtualizer create additional windows as the row count grows. The component structure doesn't change.
 
-- [ ] **Outline page query design.**
+- [x] **Outline page query design.**
 
   Per-page query:
 
@@ -192,7 +192,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   LIMIT :page_size                  -- omitted for single-page start
   ```
 
-- [ ] **Row identity and PM editor reuse.**
+- [x] **Row identity and PM editor reuse.**
 
   The page renderer must use `<For each={rows()}>` keyed by `row_id`, not by array index. This is critical: when a page's query result changes (row inserted/deleted, boundary shift), Solid's `<For>` diffs the old and new row ID lists and reuses existing `OutlineRow` component instances for rows that remain. Only rows that enter or leave the page's result set trigger editor mount/unmount. If keyed by index instead, every row in the page after the mutation point gets a fresh `OutlineRow` -- destroying and recreating PM editors unnecessarily.
 

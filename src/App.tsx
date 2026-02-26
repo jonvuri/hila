@@ -5,9 +5,12 @@ import MatrixDebug from './MatrixDebug'
 
 const EditorHarness = lazy(() => import('./outline/EditorHarness'))
 const OutlineRowHarness = lazy(() => import('./outline/OutlineRowHarness'))
+const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 
 const App: Component = () => {
-  const [activeTab, setActiveTab] = createSignal<'sql' | 'matrix' | 'editor' | 'outlineRow'>('outlineRow')
+  const [activeTab, setActiveTab] = createSignal<
+    'sql' | 'matrix' | 'editor' | 'outlineRow' | 'outlineFace'
+  >('outlineFace')
 
   return (
     <div style={{ padding: '20px' }}>
@@ -51,6 +54,21 @@ const App: Component = () => {
           Editor Harness
         </button>
         <button
+          onClick={() => setActiveTab('outlineFace')}
+          style={{
+            padding: '10px 20px',
+            margin: '0 5px',
+            border: 'none',
+            'border-bottom':
+              activeTab() === 'outlineFace' ? '3px solid #007acc' : '3px solid transparent',
+            'background-color': activeTab() === 'outlineFace' ? '#f0f8ff' : 'transparent',
+            cursor: 'pointer',
+            'font-weight': activeTab() === 'outlineFace' ? 'bold' : 'normal',
+          }}
+        >
+          Outline Face
+        </button>
+        <button
           onClick={() => setActiveTab('outlineRow')}
           style={{
             padding: '10px 20px',
@@ -83,6 +101,7 @@ const App: Component = () => {
       </div>
 
       {/* Tab Content */}
+      {activeTab() === 'outlineFace' && <OutlineFace />}
       {activeTab() === 'outlineRow' && <OutlineRowHarness />}
       {activeTab() === 'editor' && <EditorHarness />}
       {activeTab() === 'matrix' && <MatrixDebug />}

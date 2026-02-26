@@ -1074,19 +1074,44 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
     const existingCount = (existingRowsStmt.get({}) as unknown as { count: number }).count
     existingRowsStmt.finalize()
 
+    // Look up matrix columns to generate appropriate sample data
+    const colStmt = db.prepare(
+      'SELECT name, type FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    )
+    colStmt.bind([matrixId])
+    const columns: { name: string; type: string }[] = []
+    while (colStmt.step()) {
+      columns.push(colStmt.get({}) as unknown as { name: string; type: string })
+    }
+    colStmt.finalize()
+
+    if (columns.length === 0) {
+      throw new Error(`Matrix ${matrixId} has no columns`)
+    }
+
     const rowsToAdd = Math.floor(Math.random() * 2) + 2 // 2-3 rows
 
     for (let i = 0; i < rowsToAdd; i++) {
-      // Generate random data for the matrix data table
       const randomSuffix = Math.floor(Math.random() * 1000)
-      const title = `Sample row ${randomSuffix}`
 
-      // Insert into matrix data table
+      const colNames = columns.map((c) => quoteIdent(c.name)).join(', ')
+      const placeholders = columns.map(() => '?').join(', ')
+      const values = columns.map((c) => {
+        if (c.name === 'content') {
+          const text = `Sample row ${randomSuffix}`
+          return JSON.stringify({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+          })
+        }
+        return `Sample row ${randomSuffix}`
+      })
+
       const dataInsertStmt = db.prepare(`
-        INSERT INTO "mx_${matrixId}_data" (title) 
-        VALUES (?) RETURNING id
+        INSERT INTO "mx_${matrixId}_data" (${colNames})
+        VALUES (${placeholders}) RETURNING id
       `)
-      dataInsertStmt.bind([title])
+      dataInsertStmt.bind(values)
       if (!dataInsertStmt.step()) {
         dataInsertStmt.finalize()
         throw new Error('Failed to insert data row')

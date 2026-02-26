@@ -17,6 +17,8 @@ export default defineConfig({
   test: {
     setupFiles: ['@vitest/web-worker'],
     environment: 'jsdom',
+    // Exclude Playwright E2E tests -- they use a different runner
+    exclude: ['e2e/**', 'node_modules/**'],
   },
   server: {
     port: 3000,
