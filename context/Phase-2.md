@@ -196,7 +196,7 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
 
   The page renderer must use `<For each={rows()}>` keyed by `row_id`, not by array index. This is critical: when a page's query result changes (row inserted/deleted, boundary shift), Solid's `<For>` diffs the old and new row ID lists and reuses existing `OutlineRow` component instances for rows that remain. Only rows that enter or leave the page's result set trigger editor mount/unmount. If keyed by index instead, every row in the page after the mutation point gets a fresh `OutlineRow` -- destroying and recreating PM editors unnecessarily.
 
-- [ ] **Virtualization debug instrumentation.**
+- [x] **Virtualization debug instrumentation.**
 
   The interaction between page pagination, reactive query updates, and PM editor lifecycle is a high-risk area for subtle bugs. Add debug logging and visual overlays, each controlled by a flag (e.g., a debug signals object or `localStorage` flags) so they can be toggled at runtime without code changes.
 

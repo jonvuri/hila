@@ -1,6 +1,9 @@
 import { createEffect, For, Show } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 
+import { debugFlags } from '../debug/debugState'
+import MutationLogOverlay from '../debug/MutationLogOverlay'
+import PageBoundaryOverlay from '../debug/PageBoundaryOverlay'
 import { useQuery } from '../sql/useQuery'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
@@ -61,20 +64,26 @@ const OutlineFace = () => {
     onInsertLink: () => {},
   }
 
-  const renderWindow = () => (
-    <For each={rows}>
-      {(row) => (
-        <OutlineRow
-          rowId={row.row_id}
-          rankKey={row.key}
-          content={row.content ?? ''}
-          depth={row.depth}
-          hasChildren={row.has_children === 1}
-          matrixId={MATRIX_ID}
-          callbacks={callbacks}
-        />
-      )}
-    </For>
+  const renderWindow = (props: { windowIndex: number }) => (
+    <>
+      <Show when={debugFlags.pageBoundary()}>
+        <PageBoundaryOverlay pageIndex={props.windowIndex} rows={rows} />
+      </Show>
+      <For each={rows}>
+        {(row) => (
+          <OutlineRow
+            rowId={row.row_id}
+            rankKey={row.key}
+            content={row.content ?? ''}
+            depth={row.depth}
+            hasChildren={row.has_children === 1}
+            matrixId={MATRIX_ID}
+            pageIndex={props.windowIndex}
+            callbacks={callbacks}
+          />
+        )}
+      </For>
+    </>
   )
 
   return (
@@ -85,6 +94,7 @@ const OutlineFace = () => {
         </div>
       </Show>
       <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
+      <MutationLogOverlay />
     </div>
   )
 }

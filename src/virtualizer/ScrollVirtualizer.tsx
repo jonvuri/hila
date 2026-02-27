@@ -88,6 +88,14 @@ type ScrollVirtualizerProps = {
 } & JSX.HTMLAttributes<HTMLDivElement>
 
 const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
+  // Clamp a latch pair so neither index exceeds the known window count.
+  // No-op when totalWindows is unset (open-ended growth mode).
+  const clampPair = (pair: [number, number]): [number, number] => {
+    if (props.totalWindows === undefined) return pair
+    const maxIdx = Math.max(0, props.totalWindows - 1)
+    return [Math.min(pair[0], maxIdx), Math.min(pair[1], maxIdx)]
+  }
+
   // Track window states: 'VISIBLE' or 'GHOST' (previously visible but unrendered now)
   const [windowStates, setWindowStates] = createSignal<WindowState[]>([])
 
@@ -98,7 +106,8 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())
 
   // Track stable pair of windows that defines the visible range.
-  const [latchPair, setLatchPair] = createSignal<[number, number]>([0, 1])
+  // When totalWindows=1 the pair degenerates to [0, 0].
+  const [latchPair, setLatchPair] = createSignal<[number, number]>(clampPair([0, 1]))
 
   // Virtual positioning: offset from virtual origin (0) to physical container origin
   const [containerVirtualOffset, setContainerVirtualOffset] = createSignal(0)
@@ -284,17 +293,15 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
         // Otherwise, fill in the missing window based on position of the visible window
 
         if (visibleWindow <= 1) {
-          newPair = [0, 1]
+          newPair = clampPair([0, 1])
         } else if (visibleWindow <= currentPair[0]) {
-          newPair = [visibleWindow, visibleWindow + 1]
+          newPair = clampPair([visibleWindow, visibleWindow + 1])
         } else if (visibleWindow >= currentPair[1]) {
           newPair = [visibleWindow - 1, visibleWindow]
         }
       }
-    } else if (currentActuallyVisible.size === 0) {
-      // If 0 windows visible, keep existing latch pair
-      console.error('LATCH_PAIR: 0 windows visible, min 1 expected')
     }
+    // size === 0: transient during mount or fast scroll. Keep existing pair.
 
     if (newPair[0] === currentPair[0] && newPair[1] === currentPair[1]) {
       // Pair didn't change, return early
@@ -391,17 +398,21 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   })
 
   onMount(() => {
-    const initialRange = computeVisibleRange([0, 1])
+    const initialRange = computeVisibleRange(latchPair())
     updateWindowStates(initialRange)
   })
 
-  // When totalWindows decreases, trim windows beyond the new boundary
+  // When totalWindows decreases, trim windows and latch pair beyond the new boundary
   createEffect(() => {
     const total = props.totalWindows
     if (total === undefined) return
 
     setWindowStates((prev) => (prev.length > total ? prev.slice(0, total) : prev))
     setWindowHeights((prev) => (prev.length > total ? prev.slice(0, total) : prev))
+    setLatchPair((prev) => {
+      const clamped = clampPair(prev)
+      return clamped[0] !== prev[0] || clamped[1] !== prev[1] ? clamped : prev
+    })
 
     const visibleRange = computeVisibleRange(latchPair())
     updateWindowStates(visibleRange)

@@ -1,10 +1,11 @@
-import { createRenderEffect, onCleanup } from 'solid-js'
+import { createEffect, createRenderEffect, on, onCleanup } from 'solid-js'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
 import { EditorView } from 'prosemirror-view'
 import { Selection, TextSelection } from 'prosemirror-state'
 import 'prosemirror-view/style/prosemirror.css'
 
 import { updateRow } from '../core/client/matrix-client'
+import { logPmMount, logPmUnmount, logPmContentSync } from '../debug/debugState'
 
 import { createEditorState } from './createEditorState'
 import type { OutlineCallbacks } from './keymap'
@@ -27,6 +28,7 @@ export type OutlineRowProps = {
   hasChildren: boolean
   collapsed?: boolean
   matrixId: number
+  pageIndex: number
   callbacks: OutlineCallbacks
   onHandle?: (handle: OutlineRowHandle) => void
   onToggleCollapse?: () => void
@@ -104,12 +106,26 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
     })
 
     editorView = view
+    logPmMount(props.rowId, props.pageIndex)
   }
 
   onCleanup(() => {
     flushSave()
+    logPmUnmount(props.rowId, props.pageIndex)
     editorView?.destroy()
   })
+
+  createEffect(
+    on(
+      () => props.content,
+      (newContent) => {
+        if (!editorView) return
+        const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
+        logPmContentSync(props.rowId, currentDoc !== newContent)
+      },
+      { defer: true },
+    ),
+  )
 
   return (
     <div class="outline-row" style={{ display: 'flex', 'align-items': 'flex-start' }}>
@@ -185,6 +201,7 @@ export const OutlineRow = (props: OutlineRowProps) => (
       hasChildren={props.hasChildren}
       collapsed={props.collapsed}
       matrixId={props.matrixId}
+      pageIndex={props.pageIndex}
       callbacks={props.callbacks}
       onHandle={props.onHandle}
       onToggleCollapse={props.onToggleCollapse}

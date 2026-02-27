@@ -168,6 +168,7 @@ const OutlineRowHarness = () => {
                 hasChildren={row.hasChildren}
                 collapsed={isCollapsed(row.rankKey)}
                 matrixId={0}
+                pageIndex={0}
                 callbacks={callbacks}
                 onToggleCollapse={() => toggleCollapse(row.rankKey)}
               />
