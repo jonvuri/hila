@@ -135,15 +135,36 @@ const runSubscribedSql = async (sql: Sql) => {
   }
 }
 
-// Public interface for triggering subscribed queries when tables change
-export const triggerSubscribedQueries = (tableName: string) => {
-  const normalizedTable = tableName.toLowerCase()
-  const sqls = subscribersByTable.get(normalizedTable)
-  if (sqls) {
-    for (const sql of sqls) {
-      // Fire and forget; errors are reported via subscribeError channel
-      runSubscribedSql(sql)
+// Deferred subscription trigger: collects table names during a synchronous
+// batch (e.g. a SQLite transaction with multiple writes) and runs the
+// subscription queries in the next microtask — after all transactions have
+// committed and the database is in a consistent state.
+let pendingTables = new Set<string>()
+let triggerScheduled = false
+
+const flushPendingTriggers = () => {
+  triggerScheduled = false
+  const tables = pendingTables
+  pendingTables = new Set()
+  const firedSqls = new Set<Sql>()
+  for (const table of tables) {
+    const sqls = subscribersByTable.get(table)
+    if (sqls) {
+      for (const sql of sqls) {
+        if (!firedSqls.has(sql)) {
+          firedSqls.add(sql)
+          runSubscribedSql(sql)
+        }
+      }
     }
+  }
+}
+
+export const triggerSubscribedQueries = (tableName: string) => {
+  pendingTables.add(tableName.toLowerCase())
+  if (!triggerScheduled) {
+    triggerScheduled = true
+    queueMicrotask(flushPendingTriggers)
   }
 }
 

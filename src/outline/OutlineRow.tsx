@@ -18,6 +18,7 @@ const SAVE_DEBOUNCE_MS = 300
 export type OutlineRowHandle = {
   focus: (pos?: number | 'start' | 'end') => void
   getView: () => EditorView | undefined
+  flushSave: () => void
 }
 
 export type OutlineRowProps = {
@@ -75,6 +76,7 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
       editorView.dispatch(editorView.state.tr.setSelection(selection))
     },
     getView: () => editorView,
+    flushSave,
   }
 
   const mountEditor = (el: HTMLDivElement) => {

@@ -23,6 +23,8 @@ const EditorInner = () => {
     onBackspaceAtStart: () => appendLog('[callback] Backspace@start'),
     onIndent: () => appendLog('[callback] Tab (indent)'),
     onOutdent: () => appendLog('[callback] Shift-Tab (outdent)'),
+    onArrowUp: () => appendLog('[callback] ArrowUp'),
+    onArrowDown: () => appendLog('[callback] ArrowDown'),
     onInsertLink: () => appendLog('[callback] Mod-k (link)'),
   }
 
