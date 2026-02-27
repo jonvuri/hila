@@ -222,11 +222,11 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
   - The mutation log listens to the worker response messages (insertRow, deleteRow, etc.) and snapshots the PM counters before/after each reactive update settles.
   - This gives an at-a-glance summary of whether a mutation was "clean" (1-2 PM instances touched per boundary) or pathological (entire pages rebuilt).
 
-- [ ] Row focus management:
+- [x] Row focus management:
   - Track the currently focused row (rank key or rowid)
   - After structural operations (insert, delete, indent), move focus to the appropriate row
   - The `OutlineFace` manages focus state; individual `OutlineRow` components expose focus methods
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 7. Outline keyboard interactions
 

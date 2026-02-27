@@ -1,4 +1,4 @@
-import { createEffect, createRenderEffect, on, onCleanup } from 'solid-js'
+import { createEffect, on, onCleanup } from 'solid-js'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
 import { EditorView } from 'prosemirror-view'
 import { Selection, TextSelection } from 'prosemirror-state'
@@ -31,6 +31,7 @@ export type OutlineRowProps = {
   pageIndex: number
   callbacks: OutlineCallbacks
   onHandle?: (handle: OutlineRowHandle) => void
+  onEditorFocus?: () => void
   onToggleCollapse?: () => void
 }
 
@@ -76,16 +77,18 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
     getView: () => editorView,
   }
 
-  createRenderEffect(() => {
-    props.onHandle?.(handle)
-  })
-
   const mountEditor = (el: HTMLDivElement) => {
     const docJson = props.content ? (JSON.parse(props.content) as unknown) : undefined
     const state = createEditorState(docJson, props.callbacks)
 
     const view = new EditorView(el, {
       state,
+      handleDOMEvents: {
+        focus: () => {
+          props.onEditorFocus?.()
+          return false
+        },
+      },
       nodeViews: {
         paragraph: nodeViewFactory({
           component: ParagraphView,
@@ -107,6 +110,7 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
 
     editorView = view
     logPmMount(props.rowId, props.pageIndex)
+    props.onHandle?.(handle)
   }
 
   onCleanup(() => {
@@ -204,6 +208,7 @@ export const OutlineRow = (props: OutlineRowProps) => (
       pageIndex={props.pageIndex}
       callbacks={props.callbacks}
       onHandle={props.onHandle}
+      onEditorFocus={props.onEditorFocus}
       onToggleCollapse={props.onToggleCollapse}
     />
   </ProsemirrorAdapterProvider>

@@ -1,4 +1,4 @@
-import { createEffect, For, Show } from 'solid-js'
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 
 import { debugFlags } from '../debug/debugState'
@@ -8,7 +8,7 @@ import { useQuery } from '../sql/useQuery'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
 import type { OutlineCallbacks } from './keymap'
-import { OutlineRow } from './OutlineRow'
+import { OutlineRow, type OutlineRowHandle } from './OutlineRow'
 
 const MATRIX_ID = 1
 
@@ -56,6 +56,47 @@ const OutlineFace = () => {
     setRows(reconcile(data as unknown as OutlineRowData[], { key: 'row_id' }))
   })
 
+  // Focus management: tracks which row is focused and allows programmatic focus
+  // after structural operations (insert, delete, indent/outdent).
+  const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
+  const [pendingFocus, setPendingFocus] = createSignal<{
+    rowId: number
+    pos?: number | 'start' | 'end'
+  } | null>(null)
+  const handleMap = new Map<number, OutlineRowHandle>()
+
+  const registerHandle = (rowId: number, handle: OutlineRowHandle) => {
+    handleMap.set(rowId, handle)
+    const pending = pendingFocus()
+    if (pending && pending.rowId === rowId) {
+      setPendingFocus(null)
+      queueMicrotask(() => {
+        handle.focus(pending.pos)
+        setFocusedRowId(rowId)
+      })
+    }
+  }
+
+  const unregisterHandle = (rowId: number) => {
+    handleMap.delete(rowId)
+  }
+
+  const requestFocus = (rowId: number, pos?: number | 'start' | 'end') => {
+    const handle = handleMap.get(rowId)
+    if (handle) {
+      handle.focus(pos)
+      setFocusedRowId(rowId)
+    } else {
+      setPendingFocus({ rowId, pos })
+    }
+  }
+
+  createEffect(() => {
+    if (rows.length > 0 && focusedRowId() === null) {
+      requestFocus(rows[0]!.row_id, 'start')
+    }
+  })
+
   const callbacks: OutlineCallbacks = {
     onEnter: () => {},
     onBackspaceAtStart: () => {},
@@ -70,18 +111,24 @@ const OutlineFace = () => {
         <PageBoundaryOverlay pageIndex={props.windowIndex} rows={rows} />
       </Show>
       <For each={rows}>
-        {(row) => (
-          <OutlineRow
-            rowId={row.row_id}
-            rankKey={row.key}
-            content={row.content ?? ''}
-            depth={row.depth}
-            hasChildren={row.has_children === 1}
-            matrixId={MATRIX_ID}
-            pageIndex={props.windowIndex}
-            callbacks={callbacks}
-          />
-        )}
+        {(row) => {
+          const rowId = row.row_id
+          onCleanup(() => unregisterHandle(rowId))
+          return (
+            <OutlineRow
+              rowId={row.row_id}
+              rankKey={row.key}
+              content={row.content ?? ''}
+              depth={row.depth}
+              hasChildren={row.has_children === 1}
+              matrixId={MATRIX_ID}
+              pageIndex={props.windowIndex}
+              callbacks={callbacks}
+              onHandle={(handle) => registerHandle(rowId, handle)}
+              onEditorFocus={() => setFocusedRowId(rowId)}
+            />
+          )
+        }}
       </For>
     </>
   )
