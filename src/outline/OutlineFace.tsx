@@ -1,4 +1,4 @@
-import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { Slice } from 'prosemirror-model'
 import type { EditorView } from 'prosemirror-view'
@@ -42,6 +42,11 @@ type OutlineRowData = {
   depth: number
   has_children: number
 }
+
+const keyToHex = (key: Uint8Array): string =>
+  Array.from(key)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 
 // ---------------------------------------------------------------------------
 // Flat-list helpers: derive parent/sibling info from the ordered row array
@@ -115,6 +120,41 @@ const OutlineFace = () => {
     setRows(reconcile(data as unknown as OutlineRowData[], { key: 'row_id' }))
   })
 
+  // Collapse state (in-memory; resets on reload)
+  const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
+
+  const toggleCollapse = (key: Uint8Array) => {
+    const k = keyToHex(key)
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
+
+  const isCollapsed = (key: Uint8Array): boolean => collapsedKeys().has(keyToHex(key))
+
+  const visibleRows = createMemo((): OutlineRowData[] => {
+    const collapsed = collapsedKeys()
+    if (collapsed.size === 0) return rows.slice()
+
+    const filtered: OutlineRowData[] = []
+    let skipBelowDepth: number | null = null
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!
+      if (skipBelowDepth !== null && row.depth > skipBelowDepth) continue
+      skipBelowDepth = null
+      filtered.push(row)
+      if (row.has_children === 1 && collapsed.has(keyToHex(row.key))) {
+        skipBelowDepth = row.depth
+      }
+    }
+
+    return filtered
+  })
+
   // Focus management
   const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
   const [pendingFocus, setPendingFocus] = createSignal<{
@@ -161,10 +201,11 @@ const OutlineFace = () => {
 
   const makeCallbacks = (rowId: number): OutlineCallbacks => ({
     onEnter: (view: EditorView) => {
-      const index = findRowIndex(rows, rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
       if (index === -1) return
-      const row = rows[index]!
-      const parentRow = findParentRow(rows, index)
+      const row = vRows[index]!
+      const parentRow = findParentRow(vRows, index)
 
       const { from, to } = view.state.selection
       const doc = view.state.doc
@@ -199,13 +240,14 @@ const OutlineFace = () => {
     },
 
     onBackspaceAtStart: (view: EditorView) => {
-      const index = findRowIndex(rows, rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
       if (index === -1) return
-      const row = rows[index]!
+      const row = vRows[index]!
 
       if (index === 0) return
 
-      const prevRow = findPrevVisibleRow(rows, index)
+      const prevRow = findPrevVisibleRow(vRows, index)
       if (!prevRow) return
 
       const doc = view.state.doc
@@ -218,7 +260,7 @@ const OutlineFace = () => {
           requestFocus(targetRowId, 'end')
         })
       } else if (isEmpty && hasChildren) {
-        const firstChild = findFirstChild(rows, index)
+        const firstChild = findFirstChild(vRows, index)
         const targetRowId = firstChild?.row_id ?? prevRow.row_id
         void deleteRow(MATRIX_ID, copyKey(row.key)!).then(() => {
           requestFocus(targetRowId, 'start')
@@ -246,15 +288,16 @@ const OutlineFace = () => {
     },
 
     onIndent: () => {
-      const index = findRowIndex(rows, rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
       if (index === -1) return
-      const row = rows[index]!
+      const row = vRows[index]!
 
-      const prevSibling = findPrevSibling(rows, index)
-      if (!prevSibling) return // no previous sibling → no-op
+      const prevSibling = findPrevSibling(vRows, index)
+      if (!prevSibling) return
 
-      const prevSiblingIndex = findRowIndex(rows, prevSibling.row_id)
-      const lastChild = findLastDirectChild(rows, prevSiblingIndex)
+      const prevSiblingIndex = findRowIndex(vRows, prevSibling.row_id)
+      const lastChild = findLastDirectChild(vRows, prevSiblingIndex)
 
       void reparentRow(MATRIX_ID, copyKey(row.key)!, {
         newParentKey: copyKey(prevSibling.key),
@@ -265,15 +308,16 @@ const OutlineFace = () => {
     },
 
     onOutdent: () => {
-      const index = findRowIndex(rows, rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
       if (index === -1) return
-      const row = rows[index]!
+      const row = vRows[index]!
 
-      const parentRow = findParentRow(rows, index)
-      if (!parentRow) return // already at root → no-op
+      const parentRow = findParentRow(vRows, index)
+      if (!parentRow) return
 
-      const grandparentIndex = findRowIndex(rows, parentRow.row_id)
-      const grandparent = findParentRow(rows, grandparentIndex)
+      const grandparentIndex = findRowIndex(vRows, parentRow.row_id)
+      const grandparent = findParentRow(vRows, grandparentIndex)
 
       void reparentRow(MATRIX_ID, copyKey(row.key)!, {
         newParentKey: copyKey(grandparent?.key),
@@ -284,20 +328,30 @@ const OutlineFace = () => {
     },
 
     onArrowUp: () => {
-      const index = findRowIndex(rows, rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
       if (index <= 0) return
-      const prevRow = rows[index - 1]!
+      const prevRow = vRows[index - 1]!
       requestFocus(prevRow.row_id, 'end')
     },
 
     onArrowDown: () => {
-      const index = findRowIndex(rows, rowId)
-      if (index === -1 || index >= rows.length - 1) return
-      const nextRow = rows[index + 1]!
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
+      if (index === -1 || index >= vRows.length - 1) return
+      const nextRow = vRows[index + 1]!
       requestFocus(nextRow.row_id, 'start')
     },
 
     onInsertLink: () => {},
+
+    onToggleCollapse: () => {
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
+      if (index === -1) return
+      const row = vRows[index]!
+      if (row.has_children === 1) toggleCollapse(row.key)
+    },
   })
 
   const renderWindow = (props: { windowIndex: number }) => (
@@ -305,7 +359,7 @@ const OutlineFace = () => {
       <Show when={debugFlags.pageBoundary()}>
         <PageBoundaryOverlay pageIndex={props.windowIndex} rows={rows} />
       </Show>
-      <For each={rows}>
+      <For each={visibleRows()}>
         {(row) => {
           const rowId = row.row_id
           const callbacks = makeCallbacks(rowId)
@@ -317,11 +371,13 @@ const OutlineFace = () => {
               content={row.content ?? ''}
               depth={row.depth}
               hasChildren={row.has_children === 1}
+              collapsed={isCollapsed(row.key)}
               matrixId={MATRIX_ID}
               pageIndex={props.windowIndex}
               callbacks={callbacks}
               onHandle={(handle) => registerHandle(rowId, handle)}
               onEditorFocus={() => setFocusedRowId(rowId)}
+              onToggleCollapse={() => toggleCollapse(row.key)}
             />
           )
         }}

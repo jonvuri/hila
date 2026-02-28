@@ -26,6 +26,7 @@ const EditorInner = () => {
     onArrowUp: () => appendLog('[callback] ArrowUp'),
     onArrowDown: () => appendLog('[callback] ArrowDown'),
     onInsertLink: () => appendLog('[callback] Mod-k (link)'),
+    onToggleCollapse: () => appendLog('[callback] Mod-Enter (toggle collapse)'),
   }
 
   onCleanup(() => {

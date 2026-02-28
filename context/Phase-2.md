@@ -264,20 +264,20 @@ Layer the core outlining keybindings on top of the outline face. Each interactio
 
 Allow subtrees to be collapsed, hiding their children from the visible outline.
 
-- [ ] Collapsed state storage:
+- [x] Collapsed state storage:
   - Track collapsed keys in a Solid signal (a `Set<string>` of rank key hex strings or a similar serializable representation).
   - Persist collapsed state to a dedicated table or a matrix metadata field. For the MVP, an in-memory signal is sufficient -- collapsed state resets on page reload. Persistence can be added later.
-- [ ] Collapsed subtree filtering in the outline query:
+- [x] Collapsed subtree filtering in the outline query:
   - Add a `NOT IN` or `NOT EXISTS` clause that excludes rows whose ancestors include any collapsed key (at depth > 0).
   - This means clicking a collapse toggle re-runs the query (reactively) and the virtualizer renders the updated row list.
   - The collapsed row itself remains visible (it's the parent); only its descendants are hidden.
-- [ ] Toggle interaction:
+- [x] Toggle interaction:
   - Clicking the disclosure triangle on a row toggles its key in/out of the collapsed set.
   - Keyboard shortcut: when a row is focused, a keybinding (e.g. `Mod-Enter` or left arrow on a collapsed row) toggles collapse.
-- [ ] Visual feedback:
+- [x] Visual feedback:
   - Collapsed rows show a `▶` indicator; expanded rows with children show `▼`.
   - Optional: show a subtle child count badge on collapsed rows.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 9. Focus view (zoom into subtree)
 
