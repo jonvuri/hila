@@ -10,10 +10,12 @@ import { insertRow, deleteRow, reparentRow } from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
+import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import type { OutlineCallbacks } from './keymap'
 import { OutlineRow, type OutlineRowHandle } from './OutlineRow'
 
 const MATRIX_ID = 1
+const DRAG_THRESHOLD_PX = 5
 
 const buildOutlineQuery = (focusRootHex: string | null): string => {
   const rangeFilter =
@@ -56,6 +58,17 @@ type BreadcrumbData = {
   row_id: number
   content: string
   depth: number
+}
+
+type DragState = {
+  rowId: number
+  subtreeRowIds: Set<number>
+  startX: number
+  startY: number
+  activated: boolean
+  originDepth: number
+  originParentKey: Uint8Array | undefined
+  originPrevSiblingKey: Uint8Array | undefined
 }
 
 const keyToHex = (key: Uint8Array): string =>
@@ -281,6 +294,118 @@ ORDER BY c.depth DESC
   })
 
   // -----------------------------------------------------------------------
+  // Drag-and-drop reordering
+  // -----------------------------------------------------------------------
+
+  const [dragState, setDragState] = createSignal<DragState | null>(null)
+  const [dropTarget, setDropTarget] = createSignal<DropTargetVisual | null>(null)
+
+  const getRowElements = (): Map<number, HTMLElement> => {
+    const map = new Map<number, HTMLElement>()
+    document.querySelectorAll<HTMLElement>('[data-row-id]').forEach((el) => {
+      map.set(Number(el.dataset.rowId), el)
+    })
+    return map
+  }
+
+  const handleDragMove = (e: PointerEvent) => {
+    const drag = dragState()
+    if (!drag) return
+
+    if (!drag.activated) {
+      const dx = e.clientX - drag.startX
+      const dy = e.clientY - drag.startY
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD_PX) return
+      setDragState({ ...drag, activated: true })
+      document.body.style.cursor = 'grabbing'
+      document.body.style.userSelect = 'none'
+    }
+
+    const vRows = visibleRows()
+    const nonDragged = vRows.filter((r) => !drag.subtreeRowIds.has(r.row_id))
+    const rowEls = getRowElements()
+
+    const target = computeDropTarget(
+      e.clientX,
+      e.clientY,
+      nonDragged,
+      rowEls,
+      focusDepthOffset(),
+      focusRoot(),
+    )
+    if (
+      target &&
+      isNoOpDrop(target, drag.originDepth, drag.originParentKey, drag.originPrevSiblingKey)
+    ) {
+      setDropTarget(null)
+    } else {
+      setDropTarget(target)
+    }
+  }
+
+  const handleDragEnd = () => {
+    const drag = dragState()
+    const target = dropTarget()
+
+    if (drag?.activated && target) {
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, drag.rowId)
+      if (index !== -1) {
+        const row = vRows[index]!
+        void reparentRow(MATRIX_ID, copyKey(row.key)!, {
+          newParentKey: copyKey(target.parentKey),
+          prevSiblingKey: copyKey(target.prevSiblingKey),
+          nextSiblingKey: copyKey(target.nextSiblingKey),
+        })
+      }
+    }
+
+    setDragState(null)
+    setDropTarget(null)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    document.removeEventListener('pointermove', handleDragMove)
+    document.removeEventListener('pointerup', handleDragEnd)
+  }
+
+  const startDrag = (rowId: number, e: PointerEvent) => {
+    const vRows = visibleRows()
+    const index = findRowIndex(vRows, rowId)
+    if (index === -1) return
+
+    const row = vRows[index]!
+    const subtreeRowIds = new Set<number>([rowId])
+    for (let i = index + 1; i < vRows.length; i++) {
+      if (vRows[i]!.depth <= row.depth) break
+      subtreeRowIds.add(vRows[i]!.row_id)
+    }
+
+    const originParentRow = findParentRow(vRows, index)
+    const originPrevSib = findPrevSibling(vRows, index)
+
+    setDragState({
+      rowId,
+      subtreeRowIds,
+      startX: e.clientX,
+      startY: e.clientY,
+      activated: false,
+      originDepth: row.depth,
+      originParentKey: copyKey(originParentRow?.key) ?? (focusRoot() ? new Uint8Array(focusRoot()!) : undefined),
+      originPrevSiblingKey: copyKey(originPrevSib?.key),
+    })
+
+    document.addEventListener('pointermove', handleDragMove)
+    document.addEventListener('pointerup', handleDragEnd)
+  }
+
+  onCleanup(() => {
+    document.removeEventListener('pointermove', handleDragMove)
+    document.removeEventListener('pointerup', handleDragEnd)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  })
+
+  // -----------------------------------------------------------------------
   // Keyboard interaction callbacks (per-row, via captured rowId)
   // -----------------------------------------------------------------------
 
@@ -471,10 +596,10 @@ ORDER BY c.depth DESC
 
   const depthOffset = focusDepthOffset
 
-  const renderWindow = (props: { windowIndex: number }) => (
+  const renderWindow = (windowProps: { windowIndex: number }) => (
     <>
       <Show when={debugFlags.pageBoundary()}>
-        <PageBoundaryOverlay pageIndex={props.windowIndex} rows={rows} />
+        <PageBoundaryOverlay pageIndex={windowProps.windowIndex} rows={rows} />
       </Show>
       <For each={visibleRows()}>
         {(row) => {
@@ -490,12 +615,14 @@ ORDER BY c.depth DESC
               hasChildren={row.has_children === 1}
               collapsed={isCollapsed(row.key)}
               matrixId={MATRIX_ID}
-              pageIndex={props.windowIndex}
+              pageIndex={windowProps.windowIndex}
               callbacks={callbacks}
               onHandle={(handle) => registerHandle(rowId, handle)}
               onEditorFocus={() => setFocusedRowId(rowId)}
               onToggleCollapse={() => toggleCollapse(row.key)}
               onZoomIn={() => setFocusRoot(new Uint8Array(row.key))}
+              onDragHandlePointerDown={(e) => startDrag(rowId, e)}
+              isDragging={dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated}
             />
           )
         }}
@@ -573,6 +700,36 @@ ORDER BY c.depth DESC
         </div>
       </Show>
       <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
+      <Show when={dropTarget()}>
+        {(target) => (
+          <div
+            class="outline-drop-indicator"
+            style={{
+              position: 'fixed',
+              top: `${target().indicatorY - 1}px`,
+              left: `${target().indicatorLeft}px`,
+              width: `${target().indicatorRight - target().indicatorLeft}px`,
+              height: '2px',
+              background: '#2563eb',
+              'border-radius': '1px',
+              'pointer-events': 'none',
+              'z-index': 1000,
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: '-3px',
+                top: '-3px',
+                width: '8px',
+                height: '8px',
+                'border-radius': '50%',
+                background: '#2563eb',
+              }}
+            />
+          </div>
+        )}
+      </Show>
       <MutationLogOverlay />
     </div>
   )

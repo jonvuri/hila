@@ -35,6 +35,8 @@ export type OutlineRowProps = {
   onEditorFocus?: () => void
   onToggleCollapse?: () => void
   onZoomIn?: () => void
+  onDragHandlePointerDown?: (e: PointerEvent) => void
+  isDragging?: boolean
 }
 
 const OutlineRowEditor = (props: OutlineRowProps) => {
@@ -135,7 +137,16 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
   )
 
   return (
-    <div class="outline-row" style={{ display: 'flex', 'align-items': 'flex-start' }}>
+    <div
+      class="outline-row"
+      data-row-id={props.rowId}
+      style={{
+        display: 'flex',
+        'align-items': 'flex-start',
+        opacity: props.isDragging ? 0.25 : 1,
+        transition: 'opacity 0.15s',
+      }}
+    >
       <div
         class="outline-row-indent"
         style={{ width: `${props.depth * INDENT_PX}px`, 'flex-shrink': 0 }}
@@ -152,6 +163,12 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
           'user-select': 'none',
           opacity: 0.4,
           'padding-top': '2px',
+        }}
+        onPointerDown={(e: PointerEvent) => {
+          if (props.onDragHandlePointerDown) {
+            e.preventDefault()
+            props.onDragHandlePointerDown(e)
+          }
         }}
       >
         ⠿
@@ -217,6 +234,8 @@ export const OutlineRow = (props: OutlineRowProps) => (
       onEditorFocus={props.onEditorFocus}
       onToggleCollapse={props.onToggleCollapse}
       onZoomIn={props.onZoomIn}
+      onDragHandlePointerDown={props.onDragHandlePointerDown}
+      isDragging={props.isDragging}
     />
   </ProsemirrorAdapterProvider>
 )

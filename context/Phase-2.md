@@ -304,27 +304,27 @@ Navigate into a subtree, showing only that subtree's rows. Breadcrumb navigation
 
 Visual drag-and-drop to reorder rows and reparent subtrees.
 
-- [ ] Drag initiation:
+- [x] Drag initiation:
   - Drag starts from the drag handle (grip icon) on each row.
   - While dragging, the dragged row (and its visible children if expanded) are visually lifted/ghosted.
-- [ ] Drop target indicators:
+- [x] Drop target indicators:
   - As the user drags, show a drop indicator line between rows (for sibling reorder) or indented under a row (for reparent as child).
   - Indentation of the drop indicator determines the drop depth:
     - Same depth as surrounding rows → sibling reorder.
     - One level deeper than the row above → reparent as last child of that row.
   - The drop indicator snaps to valid positions based on cursor x-position (left/right determines depth).
-- [ ] Within-parent reorder (rank-only operation):
+- [x] Within-parent reorder (rank-only operation):
   - The row stays under the same parent, just moves to a new position.
   - Data: compute new rank key via `between(prevSibling.key, nextSibling.key)`. Single rank table update; no closure changes.
   - This is simpler than reparent and should be the common case.
-- [ ] Cross-parent reparent (rank + closure operation):
+- [x] Cross-parent reparent (rank + closure operation):
   - The row moves to a different parent.
   - Data: `reparentRow` -- rewrites rank key prefixes for the subtree and updates the closure table.
-- [ ] Implementation approach:
-  - Use native HTML drag events or a lightweight library. Evaluate whether native drag events provide enough control for the drop-indicator UX, or whether pointer events with manual state management are needed.
-  - The key challenge is computing the target position (parent + sibling) from the cursor position and the visible row layout. This requires mapping cursor Y to a row index and cursor X to an indentation level.
-- [ ] Tests (Vitest): reorder within parent (verify rank keys), reparent via drag (verify rank keys and closure)
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Implementation approach:
+  - Pointer events with manual state management for precise control over drop indicators and depth computation.
+  - `computeDropTarget` maps cursor Y to a row gap index and cursor X to an indentation level (clamped to valid depth range), then derives parent/sibling keys from the visible row array.
+- [x] Tests (Vitest): reorder within parent (verify rank keys), reparent via drag (verify rank keys and closure)
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 11. App shell restructuring
 
