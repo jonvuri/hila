@@ -34,6 +34,7 @@ export type OutlineRowProps = {
   onHandle?: (handle: OutlineRowHandle) => void
   onEditorFocus?: () => void
   onToggleCollapse?: () => void
+  onZoomIn?: () => void
 }
 
 const OutlineRowEditor = (props: OutlineRowProps) => {
@@ -180,6 +181,9 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
         onClick={() => {
           if (props.hasChildren) props.onToggleCollapse?.()
         }}
+        onDblClick={() => {
+          props.onZoomIn?.()
+        }}
         data-testid="outline-bullet"
       >
         {props.hasChildren ?
@@ -212,6 +216,7 @@ export const OutlineRow = (props: OutlineRowProps) => (
       onHandle={props.onHandle}
       onEditorFocus={props.onEditorFocus}
       onToggleCollapse={props.onToggleCollapse}
+      onZoomIn={props.onZoomIn}
     />
   </ProsemirrorAdapterProvider>
 )

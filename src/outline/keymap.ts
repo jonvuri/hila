@@ -18,6 +18,8 @@ export type OutlineCallbacks = {
   onArrowDown: () => void
   onInsertLink: () => void
   onToggleCollapse: () => void
+  onZoomIn: () => void
+  onZoomOut: () => void
 }
 
 const hardBreak = (): Command => {
@@ -103,5 +105,7 @@ export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string,
     'Mod-e': toggleMark(schema.marks.code!),
     'Mod-k': modKToOutline(callbacks.onInsertLink),
     'Mod-Enter': tabToOutline(callbacks.onToggleCollapse),
+    'Mod-ArrowDown': tabToOutline(callbacks.onZoomIn),
+    'Mod-ArrowUp': tabToOutline(callbacks.onZoomOut),
   }
 }

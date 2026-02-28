@@ -102,6 +102,8 @@ const OutlineRowHarness = () => {
     onArrowDown: () => appendLog('[callback] ArrowDown'),
     onInsertLink: () => appendLog('[callback] Mod-k (link)'),
     onToggleCollapse: () => appendLog('[callback] Mod-Enter (toggle collapse)'),
+    onZoomIn: () => appendLog('[callback] Mod-Down (zoom in)'),
+    onZoomOut: () => appendLog('[callback] Mod-Up (zoom out)'),
   }
 
   const keyStr = (key: Uint8Array) =>

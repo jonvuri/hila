@@ -15,7 +15,13 @@ import { OutlineRow, type OutlineRowHandle } from './OutlineRow'
 
 const MATRIX_ID = 1
 
-const OUTLINE_QUERY = `
+const buildOutlineQuery = (focusRootHex: string | null): string => {
+  const rangeFilter =
+    focusRootHex !== null ?
+      `AND r.key >= X'${focusRootHex}' AND r.key < X'${focusRootHex.slice(0, -2)}01'`
+    : ''
+
+  return `
 SELECT r.key, r.row_id, d.content,
        COALESCE(c.depth, 0) as depth,
        CASE WHEN ch.ancestor_key IS NOT NULL THEN 1 ELSE 0 END as has_children
@@ -32,8 +38,10 @@ LEFT JOIN (
   WHERE depth = 1
 ) ch ON r.key = ch.ancestor_key
 WHERE r.matrix_id = ${MATRIX_ID}
+${rangeFilter}
 ORDER BY r.key
 `
+}
 
 type OutlineRowData = {
   row_id: number
@@ -43,10 +51,34 @@ type OutlineRowData = {
   has_children: number
 }
 
+type BreadcrumbData = {
+  key: Uint8Array
+  row_id: number
+  content: string
+  depth: number
+}
+
 const keyToHex = (key: Uint8Array): string =>
   Array.from(key)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+
+const extractText = (contentJson: string): string => {
+  try {
+    const doc = JSON.parse(contentJson) as {
+      content?: { content?: { text?: string }[] }[]
+    }
+    if (!doc.content) return 'Untitled'
+    return (
+      doc.content
+        .flatMap((block) => block.content ?? [])
+        .map((node) => node.text ?? '')
+        .join('') || 'Untitled'
+    )
+  } catch {
+    return 'Untitled'
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Flat-list helpers: derive parent/sibling info from the ordered row array
@@ -110,7 +142,17 @@ const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
 // ---------------------------------------------------------------------------
 
 const OutlineFace = () => {
-  const { result, error } = useQuery(() => OUTLINE_QUERY)
+  // Focus view state: rank key of the subtree root, or null for full outline
+  const [focusRoot, setFocusRoot] = createSignal<Uint8Array | null>(null)
+
+  const focusRootHex = createMemo(() => {
+    const root = focusRoot()
+    return root ? keyToHex(root) : null
+  })
+
+  const outlineQuery = createMemo(() => buildOutlineQuery(focusRootHex()))
+
+  const { result, error } = useQuery(() => outlineQuery())
 
   const [rows, setRows] = createStore<OutlineRowData[]>([])
 
@@ -118,6 +160,45 @@ const OutlineFace = () => {
     const data = result()
     if (!data) return
     setRows(reconcile(data as unknown as OutlineRowData[], { key: 'row_id' }))
+  })
+
+  // Breadcrumb query: ancestors of focus root, ordered root-to-parent
+  const breadcrumbQuery = createMemo(() => {
+    const hex = focusRootHex()
+    if (!hex) return ''
+    return `
+SELECT c.ancestor_key as key, c.depth, d.content, r.row_id
+FROM "mx_${MATRIX_ID}_closure" c
+JOIN rank r ON r.key = c.ancestor_key AND r.matrix_id = ${MATRIX_ID}
+JOIN "mx_${MATRIX_ID}_data" d ON r.row_id = d.id
+WHERE c.descendant_key = X'${hex}' AND c.depth > 0
+ORDER BY c.depth DESC
+`
+  })
+
+  const { result: breadcrumbResult } = useQuery(() => breadcrumbQuery())
+
+  const breadcrumbs = createMemo((): BreadcrumbData[] => {
+    const data = breadcrumbResult()
+    if (!data) return []
+    return data as unknown as BreadcrumbData[]
+  })
+
+  // The focus root row itself (first row in query results when focused)
+  const focusRootRow = createMemo((): OutlineRowData | null => {
+    const hex = focusRootHex()
+    if (!hex) return null
+    for (let i = 0; i < rows.length; i++) {
+      if (keyToHex(rows[i]!.key) === hex) return rows[i]!
+    }
+    return null
+  })
+
+  // Depth offset: children of focus root display at depth 0
+  const focusDepthOffset = createMemo(() => {
+    const rootRow = focusRootRow()
+    if (!rootRow) return 0
+    return rootRow.depth + 1
   })
 
   // Collapse state (in-memory; resets on reload)
@@ -137,7 +218,7 @@ const OutlineFace = () => {
 
   const visibleRows = createMemo((): OutlineRowData[] => {
     const collapsed = collapsedKeys()
-    if (collapsed.size === 0) return rows.slice()
+    const rootHex = focusRootHex()
 
     const filtered: OutlineRowData[] = []
     let skipBelowDepth: number | null = null
@@ -146,6 +227,10 @@ const OutlineFace = () => {
       const row = rows[i]!
       if (skipBelowDepth !== null && row.depth > skipBelowDepth) continue
       skipBelowDepth = null
+
+      // Skip the focus root row (rendered as a title, not an outline row)
+      if (rootHex && keyToHex(row.key) === rootHex) continue
+
       filtered.push(row)
       if (row.has_children === 1 && collapsed.has(keyToHex(row.key))) {
         skipBelowDepth = row.depth
@@ -199,13 +284,21 @@ const OutlineFace = () => {
   // Keyboard interaction callbacks (per-row, via captured rowId)
   // -----------------------------------------------------------------------
 
+  // Resolve parent key with fallback to focus root for top-level rows in focused view
+  const resolveParentKey = (vRows: OutlineRowData[], index: number): Uint8Array | undefined => {
+    const parentRow = findParentRow(vRows, index)
+    if (parentRow) return copyKey(parentRow.key)
+    const root = focusRoot()
+    return root ? new Uint8Array(root) : undefined
+  }
+
   const makeCallbacks = (rowId: number): OutlineCallbacks => ({
     onEnter: (view: EditorView) => {
       const vRows = visibleRows()
       const index = findRowIndex(vRows, rowId)
       if (index === -1) return
       const row = vRows[index]!
-      const parentRow = findParentRow(vRows, index)
+      const parentKey = resolveParentKey(vRows, index)
 
       const { from, to } = view.state.selection
       const doc = view.state.doc
@@ -213,7 +306,7 @@ const OutlineFace = () => {
 
       if (atEnd) {
         void insertRow(MATRIX_ID, {
-          parentKey: copyKey(parentRow?.key),
+          parentKey,
           prevKey: copyKey(row.key),
         }).then(({ rowId: newRowId }) => {
           requestFocus(newRowId, 'start')
@@ -230,7 +323,7 @@ const OutlineFace = () => {
         handle?.flushSave()
 
         void insertRow(MATRIX_ID, {
-          parentKey: copyKey(parentRow?.key),
+          parentKey,
           prevKey: copyKey(row.key),
           values: { content: afterJson },
         }).then(({ rowId: newRowId }) => {
@@ -318,9 +411,11 @@ const OutlineFace = () => {
 
       const grandparentIndex = findRowIndex(vRows, parentRow.row_id)
       const grandparent = findParentRow(vRows, grandparentIndex)
+      const newParentKey =
+        grandparent ? copyKey(grandparent.key) : resolveParentKey(vRows, grandparentIndex)
 
       void reparentRow(MATRIX_ID, copyKey(row.key)!, {
-        newParentKey: copyKey(grandparent?.key),
+        newParentKey,
         prevSiblingKey: copyKey(parentRow.key),
       }).then(() => {
         requestFocus(rowId, 'start')
@@ -352,7 +447,29 @@ const OutlineFace = () => {
       const row = vRows[index]!
       if (row.has_children === 1) toggleCollapse(row.key)
     },
+
+    onZoomIn: () => {
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, rowId)
+      if (index === -1) return
+      const row = vRows[index]!
+      setFocusRoot(new Uint8Array(row.key))
+    },
+
+    onZoomOut: () => {
+      const root = focusRoot()
+      if (!root) return
+      const crumbs = breadcrumbs()
+      if (crumbs.length === 0) {
+        setFocusRoot(null)
+        return
+      }
+      const parent = crumbs[crumbs.length - 1]!
+      setFocusRoot(new Uint8Array(parent.key))
+    },
   })
+
+  const depthOffset = focusDepthOffset
 
   const renderWindow = (props: { windowIndex: number }) => (
     <>
@@ -369,7 +486,7 @@ const OutlineFace = () => {
               rowId={row.row_id}
               rankKey={row.key}
               content={row.content ?? ''}
-              depth={row.depth}
+              depth={row.depth - depthOffset()}
               hasChildren={row.has_children === 1}
               collapsed={isCollapsed(row.key)}
               matrixId={MATRIX_ID}
@@ -378,6 +495,7 @@ const OutlineFace = () => {
               onHandle={(handle) => registerHandle(rowId, handle)}
               onEditorFocus={() => setFocusedRowId(rowId)}
               onToggleCollapse={() => toggleCollapse(row.key)}
+              onZoomIn={() => setFocusRoot(new Uint8Array(row.key))}
             />
           )
         }}
@@ -390,6 +508,68 @@ const OutlineFace = () => {
       <Show when={error()}>
         <div style={{ color: 'red', padding: '8px', 'margin-bottom': '8px' }}>
           Query error: {error()?.message}
+        </div>
+      </Show>
+      <Show when={focusRoot()}>
+        <div
+          class="outline-breadcrumb-bar"
+          style={{
+            display: 'flex',
+            'align-items': 'center',
+            gap: '4px',
+            padding: '6px 12px',
+            'font-size': '13px',
+            color: '#888',
+            'border-bottom': '1px solid #eee',
+            'flex-wrap': 'wrap',
+          }}
+        >
+          <span
+            style={{ cursor: 'pointer', color: '#666' }}
+            onClick={() => setFocusRoot(null)}
+            data-testid="breadcrumb-home"
+          >
+            Home
+          </span>
+          <For each={breadcrumbs()}>
+            {(crumb) => (
+              <>
+                <span style={{ color: '#ccc' }}>/</span>
+                <span
+                  style={{ cursor: 'pointer', color: '#666' }}
+                  onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
+                  data-testid="breadcrumb-ancestor"
+                >
+                  {extractText(crumb.content)}
+                </span>
+              </>
+            )}
+          </For>
+          <Show when={focusRootRow()}>
+            {(rootRow) => (
+              <>
+                <span style={{ color: '#ccc' }}>/</span>
+                <span
+                  style={{ color: '#333', 'font-weight': 500 }}
+                  data-testid="breadcrumb-current"
+                >
+                  {extractText(rootRow().content)}
+                </span>
+              </>
+            )}
+          </Show>
+        </div>
+        <div
+          class="outline-focus-title"
+          style={{
+            padding: '8px 12px 4px',
+            'font-size': '18px',
+            'font-weight': 600,
+            color: '#222',
+          }}
+          data-testid="focus-title"
+        >
+          {focusRootRow() ? extractText(focusRootRow()!.content) : ''}
         </div>
       </Show>
       <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />

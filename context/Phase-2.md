@@ -283,22 +283,22 @@ Allow subtrees to be collapsed, hiding their children from the visible outline.
 
 Navigate into a subtree, showing only that subtree's rows. Breadcrumb navigation to zoom back out.
 
-- [ ] Focus state:
+- [x] Focus state:
   - A signal holding the current "focus root" rank key (or null for the full outline).
   - When focused, the outline query adds a range filter: `key >= :focus_key AND key < nextPrefix(:focus_key)`.
   - The focus root row itself is shown as a "title" at the top of the view.
-- [ ] Zoom in:
+- [x] Zoom in:
   - Double-click a row's bullet/handle, or a keybinding (e.g. `Mod-Down`), or an explicit "zoom in" button.
   - Sets the focus root to that row's key.
-- [ ] Breadcrumb bar:
+- [x] Breadcrumb bar:
   - Shows the ancestor chain from root to the current focus root.
   - Each breadcrumb is clickable, zooming to that ancestor.
   - Derived from the closure table (`getAncestors` query: `SELECT ancestor_key, depth FROM closure WHERE descendant_key = :focus_key AND depth > 0 ORDER BY depth DESC`).
-- [ ] Zoom out:
+- [x] Zoom out:
   - Click a breadcrumb to zoom to that level.
   - Keybinding (e.g. `Mod-Up` or `Escape`) to zoom out one level (focus on current root's parent).
   - When focus root is null (already at top level), zoom-out is a no-op.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 10. Drag-and-drop reordering
 
