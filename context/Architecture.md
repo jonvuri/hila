@@ -35,12 +35,20 @@ This applies to documentation as much as code: when one part of the architecture
 
 ### Local-first app
 
-- The app is a Javascript app meant to run in a browser environment, but local-first and with no external dependencies - it runs as a local app once loaded and stores all of its data locally.
-- In the future, asynchronous remote syncing of the database will be added, but syncing should occur in the background after optimistic local edits are made.
+- The app is a Javascript app meant to run in a browser environment, but local-first and with no external dependencies -- it runs as a local app once loaded and stores all of its data locally.
+- Continuous background syncing of the database and files to a remote provider (Dropbox initially) keeps data backed up and synchronized across devices. Syncing occurs in the background after optimistic local edits are made -- all reads and writes are local-first. See [Sync](./Sync.md) for the full specification.
 
 ### Database (Local SQLite)
 
-- All data is stored locally in SQLite, in the same browser environment (using the WASM SQLite build and web workers).
+- All structured data is stored locally in SQLite, in the same browser environment (using the WASM SQLite build and web workers).
+
+### File storage (Local OPFS)
+
+- Binary files (images, PDFs, etc.) are stored as content-addressed blobs in the Origin Private File System alongside the SQLite database. File metadata lives in SQLite; file content lives in OPFS. See [Sync - File management](./Sync.md#file-management).
+
+### Sync engine
+
+- A changeset-based sync engine exchanges changes with a remote storage provider. Change tracking uses SQLite triggers that log mutations to a changelog table. Conflict resolution is last-write-wins per row, with losing versions preserved for user review. The changeset mechanism is abstracted behind a pluggable interface. See [Sync](./Sync.md).
 
 ### Solid.js UI
 
@@ -48,7 +56,7 @@ This applies to documentation as much as code: when one part of the architecture
 
 ## Layered architecture
 
-The system is organized in four layers, from bottom to top:
+The system is organized in five layers, from bottom to top:
 
 ```
 ┌───────────────────────────────────────────────────┐
@@ -68,9 +76,17 @@ The system is organized in four layers, from bottom to top:
 │  │ + data tables  │ │ + face reg.  │ │  engine  │ │
 │  └────────────────┘ └──────────────┘ └──────────┘ │
 ├───────────────────────────────────────────────────┤
-│  SQLite (storage + computation)                   │
+│  Storage and sync                                 │
+│  ┌──────────┐ ┌───────────┐ ┌──────────────────┐  │
+│  │  SQLite  │ │ File store│ │  Sync engine +   │  │
+│  │  (OPFS)  │ │  (OPFS)   │ │  provider iface  │  │
+│  └──────────┘ └───────────┘ └──────────────────┘  │
 └───────────────────────────────────────────────────┘
 ```
+
+### Storage and sync
+
+The bottom layer manages local persistence and remote synchronization. SQLite (in OPFS) stores all structured data. A content-addressed file store (also in OPFS) stores binary files. The sync engine exchanges changesets with a remote provider (Dropbox initially) for backup and cross-device sync. See [Sync](./Sync.md) for the full specification.
 
 ### Core
 
@@ -105,7 +121,7 @@ Faces can represent:
 
 ## Execution model
 
-SQLite is not just the storage layer -- it is the primary computation and data manipulation substrate. All relational logic (reads, writes, structural operations) is expressed in SQL and executes inside the SQLite engine. TypeScript serves as a thin orchestration layer that routes user actions to the appropriate SQL operations and wires results to the UI.
+SQLite is not just a storage engine -- it is the primary computation and data manipulation substrate. All relational logic (reads, writes, structural operations) is expressed in SQL and executes inside the SQLite engine. TypeScript serves as a thin orchestration layer that routes user actions to the appropriate SQL operations and wires results to the UI.
 
 ### Three tiers
 
@@ -149,7 +165,7 @@ The guiding principle: **prefer SQL** whenever it is nearly as simple as the Typ
 ### Row
 
 - **Rows** are the addressable units within a matrix -- they correspond directly to rows in the matrix's SQLite data table.
-- Each row has a locally unique `rowid` within its matrix. A row is globally identified by its `(matrix_id, rowid)` pair.
+- Each row has a globally unique integer ID (random large integer, not sequential auto-increment) to support sync across devices without collisions. A row is globally identified by its `(matrix_id, row_id)` pair.
 - Rows carry typed column values as defined by the matrix's schema, including both literal columns (user-editable data) and formula columns (SQL expressions evaluated per-row).
 
 ### Query expression

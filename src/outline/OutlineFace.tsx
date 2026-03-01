@@ -390,7 +390,9 @@ ORDER BY c.depth DESC
       startY: e.clientY,
       activated: false,
       originDepth: row.depth,
-      originParentKey: copyKey(originParentRow?.key) ?? (focusRoot() ? new Uint8Array(focusRoot()!) : undefined),
+      originParentKey:
+        copyKey(originParentRow?.key) ??
+        (focusRoot() ? new Uint8Array(focusRoot()!) : undefined),
       originPrevSiblingKey: copyKey(originPrevSib?.key),
     })
 

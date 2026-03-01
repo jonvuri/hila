@@ -90,7 +90,37 @@ The first real user-facing feature. This is where the system becomes an app some
 
 ---
 
-### Phase 3 -- Plugin system and faces
+### Phase 3 -- Storage, files, and sync
+
+> Detailed specification: [Sync.md](Sync.md)
+
+Local file storage, change tracking, and continuous background sync with a remote provider (Dropbox). This phase makes the app's data durable beyond OPFS and enables cross-device use.
+
+**Work:**
+
+- **Globally unique IDs.** Replace auto-increment integer PKs with random large integers for data tables and matrix registry. Add device-specific entropy to rank key generation (`between()`). Update all row creation code paths. This is a prerequisite for all sync work.
+
+- **File storage layer.** `files` and `file_attachments` tables, OPFS file read/write, content-addressed naming (SHA-256), worker protocol for file operations.
+
+- **Attachment UI.** File drop/paste/select on outline rows, attachment display (thumbnails, file list), click-to-preview/download.
+
+- **Changeset abstraction + change tracking.** `ChangeTracker` interface, `_sync_changelog` table with retention policy (doubles as per-row version history), dynamic triggers on matrix tables and core tables, device identity, closure rebuild after remote rank changes.
+
+- **Conflict detection + retention.** `_sync_conflicts` table, conflict detection during `applyRemoteChanges`, LWW resolution with losing version preservation.
+
+- **Sync engine.** Main-thread coordinator, changeset upload/download, debouncing, periodic snapshot export.
+
+- **Provider interface + Dropbox.** Abstract `SyncProvider` type, Dropbox implementation (OAuth 2.0 PKCE, file ops, long-poll for continuous change detection).
+
+- **Sync UI.** Settings panel (connect/disconnect Dropbox), sync status indicator, "download all files" option, conflict indicators on rows (Tier 2, if time permits).
+
+**Testing:** Vitest for: unique ID generation (no collisions in bulk creation), change tracking (triggers fire correctly, changelog entries are accurate), changeset export/import (round-trip), conflict detection and LWW resolution (correct winner, loser preserved in `_sync_conflicts`), closure rebuild correctness after remote rank changes, file hashing and OPFS operations. Playwright for: OAuth flow (if testable), attachment UI (drop file, see attachment, click to preview), sync status indicator.
+
+**Proves:** The sync layer works end-to-end. Local changes propagate to Dropbox within seconds. A second device receives changes via long-poll. Conflicts are detected and the losing version is preserved. Files survive OPFS eviction via remote re-download. The provider interface is clean enough that adding S3 later is straightforward.
+
+---
+
+### Phase 4 -- Plugin system and faces
 
 Formalize the plugin model from the outline's patterns. Define what faces are and how they separate data from presentation. Build the first non-outline face types.
 
@@ -102,7 +132,7 @@ Formalize the plugin model from the outline's patterns. Define what faces are an
   - Declarative plugin definition: matrixes it creates, primitives it requests, named queries, named mutations, face bindings.
   - Lifecycle hooks: `init` (called on app start or plugin enable), `destroy` (cleanup).
   - Refactor the outline into the first formal plugin using this system.
-  - Keep the API well-defined but fluid -- it will evolve as Phase 4 (tags) reveals cross-plugin interaction needs.
+  - Keep the API well-defined but fluid -- it will evolve as the tags plugin (Phase 5) reveals cross-plugin interaction needs.
 
 - **Face system.**
 
@@ -139,7 +169,7 @@ Formalize the plugin model from the outline's patterns. Define what faces are an
 
 ---
 
-### Phase 4 -- Tags plugin (supertags)
+### Phase 5 -- Tags plugin (supertags)
 
 The second plugin, proving cross-plugin composition through SQL and the join table.
 
@@ -182,7 +212,7 @@ The second plugin, proving cross-plugin composition through SQL and the join tab
 
 ---
 
-### Phase 5 -- Tasks and movie reviews (supertags in practice)
+### Phase 6 -- Tasks and movie reviews (supertags in practice)
 
 Concrete use of the tag system for two different real-world patterns.
 
@@ -216,7 +246,7 @@ Concrete use of the tag system for two different real-world patterns.
 
 ---
 
-### Phase 6 -- Scheduling infrastructure and notifications
+### Phase 7 -- Scheduling infrastructure and notifications
 
 Core capability layer for all time-based features.
 
@@ -253,7 +283,7 @@ Core capability layer for all time-based features.
 
 ---
 
-### Phase 7 -- Spaced-repetition system
+### Phase 8 -- Spaced-repetition system
 
 A custom face type with a unique interaction model, proving that faces can be far more than tables and outlines.
 
@@ -289,7 +319,7 @@ A custom face type with a unique interaction model, proving that faces can be fa
 
 ---
 
-### Phase 8 -- Micro-journaling
+### Phase 9 -- Micro-journaling
 
 Form-based faces and timed prompts, completing the use case set.
 
@@ -302,7 +332,7 @@ Form-based faces and timed prompts, completing the use case set.
 
 - **Timed prompt system.**
 
-  - Uses the scheduler from Phase 6 to fire prompts at configured intervals.
+  - Uses the scheduler from Phase 7 to fire prompts at configured intervals.
   - Configurable schedule: every N hours, specific times of day, or N times per day evenly spaced.
   - On prompt fire: notification with "Journal now" action that opens the quick-entry face.
 
@@ -356,9 +386,9 @@ Basic responsiveness from the start. At a mobile-sized breakpoint (~600px), layo
 Every operation should be keyboard-accessible. Build a shortcut system early (Phase 2) and extend it per phase:
 
 - Phase 2: Outline navigation, editing, reorder, indent/outdent.
-- Phase 3: Table navigation (arrow keys between cells), column operations.
-- Phase 4: Tag insertion (`#` trigger), tag property navigation.
-- Phase 5+: Context-specific shortcuts for each face type.
+- Phase 4: Table navigation (arrow keys between cells), column operations.
+- Phase 5: Tag insertion (`#` trigger), tag property navigation.
+- Phase 6+: Context-specific shortcuts for each face type.
 
 ### Undo / redo
 
@@ -370,7 +400,7 @@ Options:
 - **SQLite savepoints.** Use `SAVEPOINT` / `ROLLBACK TO` for within-session undo.
 - **Per-face undo.** Each face maintains its own undo stack. Simpler but doesn't compose across faces.
 
-Recommendation: Defer a general solution. Start with ProseMirror's built-in undo for text edits (Phase 2). Address structural undo when the need is acute (likely Phase 3-4).
+Recommendation: Defer a general solution. Start with ProseMirror's built-in undo for text edits (Phase 2). Address structural undo when the need is acute (likely Phase 4-5). Note that the sync changelog (Phase 3) provides per-row version history that could inform an undo mechanism.
 
 ### Search
 
@@ -380,38 +410,41 @@ Full-text search across all matrix content. SQLite FTS5 is the natural choice:
 - Update the index on writes (trigger-based or explicit).
 - Search face: a global search bar that queries FTS5 and presents results with context.
 
-Introduce when there's enough content to make search useful (Phase 3 or 4).
+Introduce when there's enough content to make search useful (Phase 4 or 5).
 
 ---
 
 ## Dependency map
 
 ```
-Phase 1 (Foundation)
+Phase 1 (Foundation) ✓
   │
   ▼
 Phase 2 (Outline + Rich Text)
   │
+  ▼
+Phase 3 (Storage, Files, Sync)
+  │
   ├───────────────────────┐
   ▼                       ▼
-Phase 3 (Plugins          Phase 6 (Scheduling
- + Faces)                   + Notifications)
+Phase 4 (Plugins        Phase 7 (Scheduling
+  + Faces)                + Notifications)
   │                       │
   ▼                       │
-Phase 4 (Tags)            │
+Phase 5 (Tags)            │
   │                       │
   ▼                       │
-Phase 5 (Tasks +          │
+Phase 6 (Tasks +          │
   Movie Reviews)          │
   │                       │
   ├── Task reminders ◄────┘
   │
   ├──────────────────┐
   ▼                  ▼
-Phase 7 (SRS)     Phase 8 (Journaling)
+Phase 8 (SRS)     Phase 9 (Journaling)
 ```
 
-Phases 3 and 6 can proceed in parallel after Phase 2. Phase 5 (tasks and movie reviews as supertag types) requires Phase 4 (tags). Tasks ship initially without reminders; task reminders are added once Phase 6 lands. Phases 7 and 8 both require the scheduling infrastructure from Phase 6 and can proceed in parallel after it.
+Phase 3 (storage, files, sync) is a prerequisite for everything that follows -- plugins and faces may need to store files (e.g. image attachments on tagged items) and all data changes should be sync-tracked from the start. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5 (tags). Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
 
 ---
 
@@ -427,7 +460,7 @@ What we have and its status relative to this plan:
 | Client layer (`worker-client.ts`, `*-client.ts`) | Working                    | **Evolve.** Extend with new message types per phase.                                                                                                                                                                  |
 | SQL query system (`sql/`)                        | Working, no params         | **Evolve.** Add parameterized queries (Phase 1).                                                                                                                                                                      |
 | `ScrollVirtualizer`                              | Working                    | **Evolve.** Integrate with ProseMirror editors (Phase 2).                                                                                                                                                             |
-| `App.tsx`, `MatrixDebug.tsx`, `SqlRunner.tsx`    | Debug UI                   | **Evolve.** `MatrixDebug` evolves into the admin matrix browser (Phase 3). `SqlRunner` stays as a dev tool. `App.tsx` will be restructured as the real UI takes shape (Phase 2).                                      |
+| `App.tsx`, `MatrixDebug.tsx`, `SqlRunner.tsx`    | Debug UI                   | **Evolve.** `MatrixDebug` evolves into the admin matrix browser (Phase 4). `SqlRunner` stays as a dev tool. `App.tsx` will be restructured as the real UI takes shape (Phase 2).                                      |
 | `node-sql-parser` dependency                     | Used for table extraction  | **Evaluate.** May keep for query analysis or replace with SQLite-native approach.                                                                                                                                     |
 | `rxjs` dependency                                | Used for query observables | **Remove in Phase 1.** Replace with Solid reactive primitives (`createSignal`, `createEffect`, `onCleanup`). The underlying worker subscribe/unsubscribe protocol stays; only the client-side reactive layer changes. |
 
@@ -449,4 +482,4 @@ These don't need answers now but should be resolved as their phases approach.
 
 1. **Undo scope.** ProseMirror handles text undo. Structural and data undo is harder. Per-face undo stacks? Global transaction log? Defer until the pain is real?
 
-2. **Full-text search timing.** FTS5 index over all matrix content. Deferred for now -- the ProseMirror JSON supports simple text extraction, so the index can be added later without schema changes. Revisit when there's enough content to warrant it (likely Phase 4+).
+2. **Full-text search timing.** FTS5 index over all matrix content. Deferred for now -- the ProseMirror JSON supports simple text extraction, so the index can be added later without schema changes. Revisit when there's enough content to warrant it (likely Phase 5+).
