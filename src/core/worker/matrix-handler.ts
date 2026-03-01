@@ -21,15 +21,32 @@ import { sqliteWasm } from './worker-db'
 
 const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
 
+const WELCOME_DOC_JSON = JSON.stringify({
+  type: 'doc',
+  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Welcome to Hila' }] }],
+})
+
 const postMessage = (message: MatrixWorkerMessage) => {
   self.postMessage(message)
 }
 
 const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)))
 
+const seedWelcomeRow = (db: Database, matrixId: number) => {
+  const checkStmt = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" LIMIT 1`)
+  const hasRows = checkStmt.step()
+  checkStmt.finalize()
+
+  if (hasRows) return
+
+  const rowId = insertDataRow(db, matrixId, { content: WELCOME_DOC_JSON })
+  insertRowImpl(db, { matrixId, rowKind: 0, rowId })
+}
+
 export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
   ensureRootMatrix(db)
+  seedWelcomeRow(db, 1)
 }
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
@@ -78,6 +95,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
 
         initMatrixSchema(db)
         ensureRootMatrix(db)
+        seedWelcomeRow(db, 1)
 
         postMessage({ type: 'resetDatabaseSuccess', id, result: undefined })
       } catch (err: unknown) {

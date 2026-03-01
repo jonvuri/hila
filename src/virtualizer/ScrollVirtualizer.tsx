@@ -419,7 +419,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   })
 
   return (
-    <div class={styles.container} style={{ position: 'relative', display: 'flex' }}>
+    <div class={styles.container}>
       <div ref={containerRef} class={styles.scrollContainer}>
         <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
           <For each={visibleWindows()}>

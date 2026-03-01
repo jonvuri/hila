@@ -1,6 +1,6 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { between, makeKey, nextPrefix, parseKey } from './lexorank'
+import { between, compareKeys, makeKey, nextPrefix, parseKey } from './lexorank'
 
 // Initialize database with the core tables required for matrixes
 export const initMatrixSchema = (db: Database) => {
@@ -375,9 +375,9 @@ export const insertRow = (
       }
     } else {
       // Insert at root level with no siblings specified.
-      // First check this matrix's last key; if the matrix is empty, fall back
-      // to the global last single-segment key to avoid rank key collisions
-      // when multiple matrices are inserted into with no positioning.
+      // Check both the matrix-local last key and the global last
+      // single-segment key, using whichever is greater. The rank table
+      // is global so keys must be unique across all matrices.
       const lastRootStmt = db.prepare(`
         SELECT key FROM rank
         WHERE matrix_id = ?
@@ -393,22 +393,20 @@ export const insertRow = (
       }
       lastRootStmt.finalize()
 
-      if (lastKey.length === 0) {
-        // No rows in this matrix yet. Find the global last single-segment key
-        // (single-segment = no 0x00 byte except the final terminator) so the
-        // new key stays in root-level key space and is globally unique.
-        const globalLastStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE instr(substr(key, 1, length(key) - 1), X'00') = 0
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        if (globalLastStmt.step()) {
-          const result = globalLastStmt.get({}) as { key: Uint8Array }
-          lastKey = new Uint8Array(result.key)
+      const globalLastStmt = db.prepare(`
+        SELECT key FROM rank
+        WHERE instr(substr(key, 1, length(key) - 1), X'00') = 0
+        ORDER BY key DESC
+        LIMIT 1
+      `)
+      if (globalLastStmt.step()) {
+        const result = globalLastStmt.get({}) as { key: Uint8Array }
+        const globalLast = new Uint8Array(result.key)
+        if (compareKeys(globalLast, lastKey) > 0) {
+          lastKey = globalLast
         }
-        globalLastStmt.finalize()
       }
+      globalLastStmt.finalize()
 
       rankKey = between(lastKey, new Uint8Array(0))
     }

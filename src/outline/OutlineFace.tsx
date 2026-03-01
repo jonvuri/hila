@@ -633,7 +633,7 @@ ORDER BY c.depth DESC
   )
 
   return (
-    <div>
+    <div class="outline-face">
       <Show when={error()}>
         <div style={{ color: 'red', padding: '8px', 'margin-bottom': '8px' }}>
           Query error: {error()?.message}

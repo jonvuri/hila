@@ -330,18 +330,18 @@ Visual drag-and-drop to reorder rows and reparent subtrees.
 
 Replace the debug-only `App.tsx` with a real app shell that hosts the outline as the primary view, while keeping dev tools accessible.
 
-- [ ] Create a new `App.tsx` layout:
+- [x] Create a new `App.tsx` layout:
   - Main content area: the outline face (full width/height, the primary surface)
   - A sidebar or panel system for secondary views (matrix debug, SQL runner) -- keep them accessible but not front-and-center
   - Basic responsive layout: at narrow widths (~600px), panels collapse or stack
-- [ ] Create the initial outline matrix on first load:
+- [x] Create the initial outline matrix on first load:
   - If no outline exists (first run), create a root matrix with the `content` column and insert a welcome row
   - Subsequent loads open the existing outline
-- [ ] Keyboard shortcut system:
+- [x] Keyboard shortcut system:
   - A global shortcut handler that routes keybindings to the focused context (outline, panel, etc.)
   - Phase 2 shortcuts: outline navigation and editing (already defined in task 7), collapse/expand (task 8), focus view (task 9)
   - The system should be extensible for future phases (table navigation, tag insertion, etc.)
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 12. Playwright E2E test setup and tests
 
