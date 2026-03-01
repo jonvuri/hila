@@ -14,9 +14,9 @@ Check these tasks after every major change:
 See the `context/` directory for documentation on architecture and planning. In particular:
 
 - [Architecture](context/Architecture.md) -- layered architecture, core concepts, objectives
-- [Primitives](context/Primitives.md) -- rank, closure, and join table specs
+- [Traits](context/Traits.md) -- rank and closure trait specs, join table, provisioning model
 - [Plan](context/Plan.md) -- the current implementation plan in depth
-- [Plugins](context/Plugins.md) -- plugin model and concrete examples (outline, tags)
+- [Plugins](context/Plugins.md) -- plugin model, face slot system, concrete examples (outline, notes, tags)
 
 ## Code style
 
@@ -30,9 +30,9 @@ See the `context/` directory for documentation on architecture and planning. In 
 
 ## Architecture summary
 
-The system has four layers: SQLite storage, core (matrix registry + plugin system), structural primitives (rank, closure, joins), and plugins (all user-facing features).
+The system has three layers: SQLite storage and sync, core (matrix registry + plugin system + trait system + join table + query engine), and plugins (all user-facing features).
 
-- **Matrixes** are independent data containers (typed SQLite tables). Their addressable units are called **entries**. Existence does not require placement in any outline.
-- **Structural primitives** (rank, closure, joins) are core-provided building blocks that plugins request for their matrixes.
-- **Plugins** compose matrixes and primitives to provide user-facing features. The outline view, tag system, etc. are all plugins.
-- **Faces** are the views and interaction surfaces that plugins register and provide.
+- **Matrixes** are independent data containers (typed SQLite tables). Their addressable units are called **rows**. Existence does not require placement in any outline.
+- **Traits** (rank, closure) are per-matrix metadata tables auto-provisioned on demand and shared by all consumers. The **join table** is global infrastructure for cross-matrix references.
+- **Plugins** compose matrixes, traits, and the join table to provide user-facing features. The outline view, note editor, tag system, etc. are all plugins.
+- **Faces** are the views and interaction surfaces that plugins register. Face types declare **slots** (named positions with preferred column types) that matrix columns bind to, allowing any face to render any compatible matrix.

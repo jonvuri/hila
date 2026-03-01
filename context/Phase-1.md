@@ -22,7 +22,7 @@ Align code vocabulary with architecture docs before other changes land.
 
 ## 2. Implement the join table
 
-Global `joins` table per the [Primitives spec](Primitives.md#join).
+Global `joins` table per the [Traits spec](Traits.md#join).
 
 - [x] Create `joins` table in `initMatrixSchema()`:
   ```sql
@@ -114,4 +114,4 @@ The `columns` JSON field on the `matrix` table works but stores relational data 
 
 ## Done criteria
 
-All five work items complete. `npm run typecheck && npm run lint && npm run test:run` all pass with no regressions. The codebase uses consistent vocabulary (row/rank), all three structural primitives are working and tested, the reactive query system uses Solid signals, and column schemas are tracked and mutable.
+All five work items complete. `npm run typecheck && npm run lint && npm run test:run` all pass with no regressions. The codebase uses consistent vocabulary (row/rank), rank and closure traits plus the global join table are working and tested, the reactive query system uses Solid signals, and column schemas are tracked and mutable.

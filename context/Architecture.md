@@ -2,7 +2,7 @@
 
 ## Objectives
 
-- Create an app that combines the experiences of personal note taking / outlining and maintaining a personal database of spreadsheets into one unified experience.
+- Create an app that combines the experiences of personal note taking, outlining, document authoring, and maintaining a personal database of spreadsheets into one unified experience. The same data can be viewed and edited through different faces -- an outline, a document editor, a spreadsheet -- all backed by the same SQLite tables.
 - Focus on performance - the results of all interactions should take place in under 50ms, for a snappy and fluid feel.
 - Focus on simplicity and composability - functionality that works completely and harmoniously together as a gestalt experience, rather than a disconnected suite of features.
 
@@ -56,25 +56,24 @@ This applies to documentation as much as code: when one part of the architecture
 
 ## Layered architecture
 
-The system is organized in five layers, from bottom to top:
+The system is organized in three layers, from bottom to top:
 
 ```
 ┌───────────────────────────────────────────────────┐
 │  Plugins (user-facing)                            │
-│  ┌──────────┐ ┌──────┐ ┌────────┐ ┌─────┐         │
-│  │ Outline  │ │ Tags │ │ Kanban │ │ ... │         │
-│  └──────────┘ └──────┘ └────────┘ └─────┘         │
-├───────────────────────────────────────────────────┤
-│  Structural primitives (core building blocks)     │
-│  ┌──────────┐ ┌─────────┐ ┌──────┐                │
-│  │  Rank    │ │ Closure │ │ Join │                │
-│  └──────────┘ └─────────┘ └──────┘                │
+│  ┌──────────┐ ┌───────┐ ┌──────┐ ┌─────┐         │
+│  │ Outline  │ │ Notes │ │ Tags │ │ ... │         │
+│  └──────────┘ └───────┘ └──────┘ └─────┘         │
 ├───────────────────────────────────────────────────┤
 │  Core                                             │
 │  ┌────────────────┐ ┌──────────────┐ ┌──────────┐ │
 │  │ Matrix registry│ │ Plugin system│ │  Query   │ │
 │  │ + data tables  │ │ + face reg.  │ │  engine  │ │
-│  └────────────────┘ └──────────────┘ └──────────┘ │
+│  ├────────────────┤ ├──────────────┘ └──────────┘ │
+│  │ Trait system   │                               │
+│  │ rank, closure  │  ┌──────────────────────────┐ │
+│  │ (per-matrix)   │  │ Join table (global)      │ │
+│  └────────────────┘  └──────────────────────────┘ │
 ├───────────────────────────────────────────────────┤
 │  Storage and sync                                 │
 │  ┌──────────┐ ┌───────────┐ ┌──────────────────┐  │
@@ -90,27 +89,40 @@ The bottom layer manages local persistence and remote synchronization. SQLite (i
 
 ### Core
 
-The core provides the foundation: creating and managing **matrixes** (typed data tables), a **plugin system** for registering plugins and faces, a **query engine** for sandboxed evaluation of SQL expressions over matrixes, and raw SQLite access.
+The core provides the foundation: creating and managing **matrixes** (typed data tables), a **plugin system** for registering plugins and faces, a **query engine** for sandboxed evaluation of SQL expressions over matrixes, the **trait system** for per-matrix structural metadata, the global **join table** for cross-matrix references, and raw SQLite access.
 
-### Structural primitives
+### Traits
 
-The core provides a small set of well-optimized, well-tested structural building blocks that plugins can request for their matrixes. These are not plugins themselves -- they are capabilities that the core provisions and manages on behalf of plugins. See [Primitives](./Primitives.md) for detailed specs.
+Traits are per-matrix metadata tables that provide structural capabilities. A matrix "has the rank trait" or "has the closure trait." Traits are auto-provisioned on first request and shared by all consumers (plugins, faces, the system itself). See [Traits](./Traits.md) for detailed specs.
 
 - **Rank** -- Lexorank-based row ordering within a scope.
 - **Closure** -- ancestor/descendant hierarchy tracking.
-- **Join** -- cross-matrix row references.
+
+Traits are not plugins and have no independent agency. They are purpose-specific data structures that the core knows how to create, maintain, and optimize.
+
+**Provisioning model.** Any consumer can request `ensureTrait(type, matrixId, scopeName)`. If the backing table exists, the existing handle is returned. If not, the core creates it. Traits are idempotent to request, shared across consumers, provisioned lazily on demand, and persistent (they survive plugin removal). A single matrix can have multiple trait instances (e.g. two independent rank scopes for different orderings).
+
+**The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits.md#join).
 
 ### Plugins
 
-Plugins compose core matrixes and structural primitives to provide user-facing functionality. Each plugin can create matrixes, request primitives for them, and register faces. See [Plugins](./Plugins.md) for the plugin model and concrete examples.
+Plugins compose core matrixes, traits, and the join table to provide user-facing functionality. Each plugin can create matrixes, request traits for them, and register faces. See [Plugins](./Plugins.md) for the plugin model and concrete examples.
 
 ### Faces
 
-Faces are the views and interaction surfaces that plugins provide. Every face renders the result of a **query expression** -- a sandboxed SQL query evaluated against the matrix namespace. The query determines what data the face shows; the face type determines how it's rendered and what interactions are available.
+Faces are the views and interaction surfaces that plugins provide. Every face renders the result of a **query expression** -- a sandboxed SQL query evaluated against the matrix namespace.
 
-Faces update optimistically with user input and propagate updates to underlying data asynchronously. If updates fail, faces retry and get user input if intervention is needed.
+#### Face types and slots
 
-Faces can represent:
+A **face type** (outline, note, table, flashcard, etc.) defines how query results are rendered and what interactions are available. Each face type declares **slots** -- named positions with preferred column types that define the face's ideal data shape. When a face is applied to a matrix, the matrix's columns are **bound** to the face's slots.
+
+Slot binding follows a resolution chain: explicit manual binding (stored in face configuration) > column name matching slot name > column type + position matching slot preference > fallback to first available column. A face always renders something -- it never refuses a matrix. Rendering quality degrades gracefully when the data shape doesn't match the slots.
+
+Columns that don't bind to any slot are **overflow columns**, rendered in a face-type-specific secondary area (e.g. side-columns in an outline, a property panel in a note view). Overflow columns follow the same hydration rules as slot-bound columns.
+
+A **face configuration** is a serializable data object combining a query, a face type, slot bindings (optional manual overrides), and face-type-specific settings. This allows the same matrix to be viewed through different face types with different column-to-slot mappings.
+
+#### What faces can represent
 
 - A matrix's full contents (the **identity face** -- see below).
 - A filtered, sorted, or grouped subset of a matrix.
@@ -118,6 +130,26 @@ Faces can represent:
 - Aggregations, computed results, or dashboards.
 - Forms to insert new rows.
 - Lightweight always-on surfaces (e.g. a notification tray that reactively shows fired reminders or status updates). Not every face is a full panel -- a face can be as small as a badge or toast.
+
+#### Cross-face data sharing
+
+The same matrix can be viewed through multiple face types simultaneously. Edits in any face write to the same underlying matrix rows and propagate via reactive query invalidation. Applying a face to a matrix may trigger auto-provisioning of traits the matrix didn't originally have (e.g. closure for hierarchy when applying the outline face).
+
+This is not an abstract capability -- it enables concrete workflows:
+
+**Switching faces for different tasks.** A user switches between face types on the same data to match their current activity. View flashcards as a compact outline for quick bulk editing, then switch to the flashcard face for review. Write outline bullets, then switch to the note face to focus on longer prose for a particular item. The data stays the same; the interaction surface adapts.
+
+**Nesting faces within each other.** A face can embed another face as part of its content. An outline row can expand into an inline note face for writing longer content without leaving the outline. A note can embed a live outline of a subtree, or a live table showing filtered rows from another matrix. This enables compositions like a project note that contains an editable task table, or a study guide outline with embedded flashcard lists.
+
+**Live embedded queries.** A note includes a live, editable table of "all tasks tagged #project-X" or "all flashcards from this chapter." The embedded face is a table (or outline, or any face type) bound to a filtered query over another matrix. Edits propagate to the source matrix. This is like Notion's linked database views but editable in-place and composable with any face type.
+
+**Side-by-side synchronized editing.** Two faces of the same matrix open in a split view. Edit a task's status in the table face; see the inline tag update in the outline in real time. Useful for bulk data management (table) alongside contextual editing (outline or notes).
+
+**Progressive depth.** An outline row expands into a full note face when focused, for writing longer prose. Collapse back to a one-line bullet. The data (the row's columns) doesn't change -- just the rendering granularity. A bullet IS a note if you zoom in far enough. This is the outline-to-note continuum enabled by shared slot bindings over the same matrix.
+
+**Alternative visualization face types.** The same task matrix viewed as a kanban board (status column mapped to lanes), a calendar (due date column mapped to timeline positions), or a table (all columns as spreadsheet cells). No data duplication -- just different face types with different slot bindings over the same query. New face types can be added without changing the data model.
+
+Faces update optimistically with user input and propagate updates to underlying data asynchronously. If updates fail, faces retry and get user input if intervention is needed.
 
 ## Execution model
 
@@ -128,7 +160,7 @@ SQLite is not just a storage engine -- it is the primary computation and data ma
 | Tier                          | What lives here                                                                                                                                                                            | Examples                                                                                                                                    |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Custom SQLite functions**   | Byte-level algorithms that are procedural by nature, registered as deterministic SQLite functions at init. They execute inside the SQLite engine and can be called from any SQL statement. | `lexo_between(prev, next)` for Lexorank key computation, `lexo_next_prefix(key)` for subtree bounds                                         |
-| **Prepared SQL transactions** | All relational operations: queries, data mutations, structural primitive operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use.        | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
+| **Prepared SQL transactions** | All relational operations: queries, data mutations, trait operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use.        | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
 | **TypeScript orchestration**  | Routing: which prepared statement to execute for a given user action. Binding parameters. Error handling. UI event dispatch. No data manipulation logic.                                   | Determining which insert case applies (after sibling? first child? at end?), binding the parameters, executing the prepared transaction     |
 
 ### Why SQL-first
@@ -139,7 +171,7 @@ SQLite is not just a storage engine -- it is the primary computation and data ma
 
 **Minimal round trips.** Set-based SQL operations replace fetch-loop-insert patterns. For example, creating closure relationships for a new child row is a single `INSERT ... SELECT` that generates all ancestor rows inside the engine, rather than querying ancestors to JavaScript, looping, and inserting one at a time.
 
-**One computational substrate.** The same SQL that powers user-facing query expressions (formula columns, live searches, face data sources) also powers core operations (rank, closure, joins). Plugins compose SQL for both reads and writes. There is one language for data, not two.
+**One computational substrate.** The same SQL that powers user-facing query expressions (formula columns, live searches, face data sources) also powers core operations (rank traits, closure traits, join table). Plugins compose SQL for both reads and writes. There is one language for data, not two.
 
 ### Boundary: what stays in TypeScript
 
@@ -183,7 +215,7 @@ Query expressions appear at three granularities:
 Query expressions run in a read-only sandbox using SQLite's authorizer callback:
 
 - **Read-only.** Only `SELECT` operations are authorized. `INSERT`, `UPDATE`, `DELETE`, and DDL are rejected at parse time.
-- **Table scoping.** Only matrix data tables are accessible, not internal system tables (matrix registry, rank tables, closure tables, plugin config).
+- **Table scoping.** Only matrix data tables are accessible, not internal system tables (matrix registry, trait tables, plugin config).
 - **Resource limits.** Step limits via `sqlite3_progress_handler` prevent runaway queries. Result sets are capped.
 - **No side effects.** Dangerous functions (e.g. `load_extension()`) are blocked. Only pure, deterministic functions are available.
 
@@ -197,7 +229,7 @@ All data mutations flow through prepared SQL transactions in the worker. When a 
 
 ### Identity face
 
-The **identity face** is the canonical face for a matrix, bound to it 1-to-1. It is the matrix's representation in the outline and the full-context, full-authority surface for its data.
+The **identity face** is the canonical face for a matrix, bound to it 1-to-1. It is always a **table face** (no slots, every column rendered as a spreadsheet column) and serves as the full-context, full-authority surface for the matrix's data.
 
 **What the identity face shows:**
 
@@ -214,13 +246,15 @@ The **identity face** is the canonical face for a matrix, bound to it 1-to-1. It
 
 The identity face is also the **source** in the hydration model -- the pool from which data flows downstream to other faces.
 
+A matrix can also be viewed through **specialized face types** with slot bindings (outline, note, flashcard, etc.). These are additional views, not replacements for the identity face. The identity face remains the authoritative surface for schema and destructive operations. A note matrix's primary user-facing view might be the note face, but its identity face (the table view) is always accessible for full-authority management.
+
 ### Hydration
 
 The hydration model governs what is editable and what is read-only across all faces. Data originates at its **source** (the identity face for a matrix) and **flows** downstream through query expressions to other faces.
 
 #### Hydrated columns
 
-A column in a face's query result is **hydrated** if it has flowed from its source matrix without modification -- the face has the matrix ID, the rowid, and the column value corresponds directly to a literal column in the source table. Hydrated columns are live and editable from any face, because editing them writes back to a specific, identifiable cell in a specific source row.
+A column in a face's query result is **hydrated** if it has flowed from its source matrix without modification -- the face has the matrix ID, the rowid, and the column value corresponds directly to a literal column in the source table. Hydrated columns are live and editable from any face, because editing them writes back to a specific, identifiable cell in a specific source row. Hydration applies equally to slot-bound columns and overflow columns -- editability depends on whether the column traces back to a source cell, not on which slot (if any) it occupies.
 
 Join reference columns are hydrated like any other column. A visible join reference can be edited (relinked to a different target row), cleared (unlinked), or filled (creating a new link). These operations translate to changes on the join table, but from the user's perspective it is simply editing a visible cell value. If the join reference column is not selected in the query, the join relationship is invisible and untouchable.
 

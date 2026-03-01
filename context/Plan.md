@@ -2,26 +2,43 @@
 
 ## Target use cases
 
-Five use cases serve as a north star. Each one proves out different slices of the architecture; together they validate the full system.
+Six use cases serve as a north star. Each one proves out different slices of the architecture; together they validate the full system.
 
 | Use case                                           | What it proves                                                                                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Outline with rich text**                         | Core data loop (SQLite → reactive query → UI → edit → SQLite), ProseMirror integration, rank + closure, virtualization, keyboard-driven UX |
+| **Outline with rich text**                         | Core data loop (SQLite → reactive query → UI → edit → SQLite), ProseMirror integration, rank + closure traits, virtualization, keyboard-driven UX |
+| **Notes with wiki-links**                          | Face slot model, cross-face data sharing, wiki-link joins, trait auto-provisioning, Obsidian-like document editing                          |
 | **Tasks** (due dates, priority, reminders)         | Supertag pattern, scheduling infrastructure, notification system, structured data in spreadsheet view                                      |
 | **Movie reviews** (name, rating, auto-filled date) | Supertag pattern, auto-fill/default values, custom cell renderers, lightweight structured data                                             |
 | **Spaced-repetition flashcards**                   | Custom face types with unique interaction models, time-based scheduling, join-based card sources                                           |
 | **Micro-journaling** (timed prompts)               | Form-based faces, timed notification triggers, configurable schedules, aggregate/timeline views                                            |
 
+### Cross-face workflows
+
+The face slot model exists to serve concrete workflows, not as an abstraction exercise. These scenarios describe how face flexibility translates to real user value:
+
+- **Switching faces for different tasks.** View flashcards as a compact outline for quick bulk editing of front/back text, then switch to the flashcard face for review sessions. Write outline bullets for structure, then switch to the note face to focus on longer prose for a particular item. The data stays the same; the interaction surface adapts to the task at hand.
+- **Nesting faces within each other.** An outline row expands into an inline note face for writing longer content without leaving the outline context. A note embeds a live outline subtree or a live table showing filtered rows from another matrix. A project note contains an editable task table; a study guide outline contains embedded flashcard lists. Faces compose inside each other.
+- **Live embedded queries.** A note includes a live, editable table of "all tasks tagged #project-X" or "all flashcards from this chapter." The embedded face is bound to a filtered query over another matrix. Edits propagate to the source. This bridges the gap between documents and databases -- structured data lives inside prose, not beside it.
+- **Progressive depth.** An outline bullet expands into a full note face when focused, for writing longer prose. Collapse back to a one-line bullet. The data doesn't change -- just the rendering granularity. A bullet IS a note if you zoom in far enough. This eliminates the artificial boundary between outliners and document editors.
+- **Side-by-side synchronized editing.** Two faces of the same matrix open in a split view. Edit a task's status in the table face; see the inline tag update in the outline in real time. Useful for bulk data management (table) alongside contextual editing (outline or notes).
+- **Alternative visualizations.** The same task matrix viewed as a kanban board (status column mapped to lanes), a calendar (due date mapped to positions), or a table. No data duplication -- just different face types with different slot bindings. New visualization types can be added without touching the data model.
+
+These workflows should guide the face system's design: if a design decision makes any of these harder, it's a signal to reconsider.
+
 ### Common capability threads
 
 These threads run across multiple use cases and should be built as shared infrastructure, not per-use-case:
 
-1. **Rich text outline** -- the foundational UI surface (outline, tasks, journaling all embed rich text).
-2. **Matrix schemas + table faces** -- structured data management as spreadsheet-like tables (tasks, reviews, SRS cards, journal entries all have typed columns).
-3. **Tags / joins (supertags)** -- inline structured data attached to notes (tasks and reviews are supertags; SRS cards reference source material via joins).
-4. **Scheduling & time** -- time-based triggers and state machines (task reminders, SRS intervals, journal prompts).
-5. **Custom faces** -- non-outline views with unique interaction (flashcard review, journal quick-entry, notification tray).
-6. **Notifications** -- proactive alerts that surface across the app (task due dates, journal prompts, SRS review reminders).
+1. **Rich text editing** -- the foundational content surface (outline, notes, tasks, journaling all embed rich text via ProseMirror).
+2. **Face slot system** -- faces declare slots, columns bind to them, overflow renders in secondary areas. Every face type uses this (outline, notes, table, flashcards).
+3. **Face composition** -- nesting faces within each other, embedding live query faces in notes, progressive depth (outline bullet ↔ note). See cross-face workflows above.
+4. **Trait provisioning** -- auto-provisioned, shared per-matrix metadata tables (rank, closure) requested by plugins or triggered by face application.
+5. **Matrix schemas + table faces** -- structured data management as spreadsheet-like tables (tasks, reviews, SRS cards, journal entries all have typed columns).
+6. **Tags / joins (supertags)** -- inline structured data attached to notes (tasks and reviews are supertags; SRS cards reference source material via joins).
+7. **Scheduling & time** -- time-based triggers and state machines (task reminders, SRS intervals, journal prompts).
+8. **Custom faces** -- non-outline views with unique interaction (note editor, flashcard review, journal quick-entry, notification tray).
+9. **Notifications** -- proactive alerts that surface across the app (task due dates, journal prompts, SRS review reminders).
 
 ---
 
@@ -33,17 +50,17 @@ Each phase delivers something usable, proves specific architectural concepts, an
 
 > Detailed task list: [Phase-1.md](Phase-1.md)
 
-Clean up the existing codebase and fill the gaps needed before real features. End state: a solid, tested core with all three structural primitives working.
+Clean up the existing codebase and fill the gaps needed before real features. End state: a solid, tested core with rank and closure traits working, plus the global join table.
 
 **Work:**
 
 - **Rename `element` → `row`, `ordering` → `rank`** throughout schema, types, queries, and tests. Align code vocabulary with architecture docs.
-- **Implement the join table.** Global `joins` table per the Primitives spec, with indexes for both forward and reverse lookup. Basic insert/delete/query operations.
+- **Implement the join table.** Global `joins` table per the Traits spec, with indexes for both forward and reverse lookup. Basic insert/delete/query operations.
 - **Worker resilience.** Queue messages during worker init; replay once ready. Prevents race conditions on cold start.
 - **Replace RxJS with Solid reactive primitives.** The current `querySubject.ts` uses `BehaviorSubject` + `shareReplay` for replay and ref-counted lifecycle, but Solid signals and `createEffect` + `onCleanup` handle both natively. Replace with a `useQuery(sql)` hook that creates a signal-based subscription tied to component lifecycle. This also gives parameterized queries for free -- when the SQL signal changes, the effect re-runs, cleaning up the old subscription and starting a new one. Extend the worker-side `execQuery` to return results directly as a promise (currently returns `Promise<void>`).
 - **Column schema management.** Matrix registry tracks column definitions (name, type, order). Support add/remove/rename column operations as SQL migrations on the data table.
 
-**Testing:** Vitest unit and integration tests. All structural primitive operations (rank, closure, join) should have thorough tests against the SQLite database directly. The `useQuery` hook can be tested with Solid's test utilities. Worker message queuing should be tested for race condition scenarios.
+**Testing:** Vitest unit and integration tests. All trait operations (rank, closure) and join table operations should have thorough tests against the SQLite database directly. The `useQuery` hook can be tested with Solid's test utilities. Worker message queuing should be tested for race condition scenarios.
 
 ---
 
@@ -79,7 +96,7 @@ The first real user-facing feature. This is where the system becomes an app some
   - Within-parent reorder (rank key rewrite, no closure changes).
   - Cross-parent reparent (rank key prefix rewrite + closure table update, atomic transaction).
 
-- **Implement reparent operations.** Complete the rank + closure combined transactions from the Primitives spec that are currently stubbed.
+- **Implement reparent operations.** Complete the rank + closure combined transactions from the Traits spec that are currently stubbed.
 
 **Testing:** This phase introduces Playwright E2E tests alongside Vitest. The outlining interactions (Enter to create row, Tab/Shift-Tab to indent/outdent, Backspace to merge/delete, arrow key navigation, collapse/expand, drag-and-drop) are nontrivial UI behaviors that need E2E coverage. Vitest continues to cover the data layer (reparent transactions, rank key correctness, closure table integrity). ProseMirror document serialization round-trips (JSON ↔ editor state) can also be tested at the unit level.
 
@@ -120,58 +137,84 @@ Local file storage, change tracking, and continuous background sync with a remot
 
 ---
 
-### Phase 4 -- Plugin system and faces
+### Phase 4 -- Plugin system, faces, and notes
 
-Formalize the plugin model from the outline's patterns. Define what faces are and how they separate data from presentation. Build the first non-outline face types.
+Formalize the plugin model from the outline's patterns. Build the face slot system. Introduce the notes plugin as the second consumer. Define how faces separate data from presentation and how the same matrix can be viewed through different face types.
 
 **Work:**
 
 - **Plugin system.**
 
   - Formalize registration: plugin ID, name, metadata, stored in a `plugins` table.
-  - Declarative plugin definition: matrixes it creates, primitives it requests, named queries, named mutations, face bindings.
+  - Declarative plugin definition: matrixes it creates, traits it requests, named queries, named mutations, face bindings.
   - Lifecycle hooks: `init` (called on app start or plugin enable), `destroy` (cleanup).
   - Refactor the outline into the first formal plugin using this system.
-  - Keep the API well-defined but fluid -- it will evolve as the tags plugin (Phase 5) reveals cross-plugin interaction needs.
 
-- **Face system.**
+- **Trait provisioning system.**
 
-  - Define the face interface: the contract between a query (data source) and a renderer (presentation). A face binds a named query to a face type with configuration. The face type determines how query results are rendered and what interactions are available.
-  - Face configuration as serializable data: named query, face type, settings (visible columns, sort, grouping, etc.).
-  - Face rendering dispatch: given a face config, render the appropriate component with the query results.
-  - The key principle is separation of data and presentation. Plugins own how they surface their data to users -- the face system provides the mechanism, not the policy.
+  - Implement `ensureTrait(type, matrixId, scopeName)` as the core provisioning API.
+  - Idempotent: returns existing handle if the trait is already provisioned.
+  - Shared: multiple consumers access the same trait tables.
+  - Persistent: traits survive plugin removal.
+  - Face-triggered provisioning: when a face type with trait requirements is applied to a matrix, the system auto-provisions the needed traits.
+
+- **Face system with slots.**
+
+  - Define the face interface: the contract between a query (data source), a face type (renderer), and slot bindings (column-to-slot mapping).
+  - Face types declare named **slots** with preferred column types. Columns bind to slots via the resolution chain: explicit manual binding > name match > type+position > fallback. See [Plugins - Face slot model](./Plugins.md#face-slot-model).
+  - **Overflow columns** (not bound to any slot) render in a face-type-specific secondary area.
+  - Face configuration as serializable data: named query, face type, slot bindings, settings.
+  - Face rendering dispatch: given a face config, resolve slot bindings and render the appropriate component.
+  - **Face configuration UI**: when applying a face to a matrix, show the face's slots alongside the matrix's columns with auto-mapped bindings and override dropdowns.
 
 - **Table face type.**
 
   - A general-purpose spreadsheet-like face for viewing and editing matrix data.
+  - No slots (every column is a table column). The universal face and the default identity face for all matrixes.
   - Column headers with name and type. Click to rename, drag to reorder.
   - Inline cell editing: click a cell to edit, type to confirm.
   - Column type system: text, number, date, boolean, select (enum with options). Each type has an appropriate editor and display renderer.
   - Add column (with type picker), delete column, add row, delete row.
   - Basic sort and filter controls.
-  - The outline plugin uses this as the identity face for matrixes it manages (showing all rows and columns with full-authority editing). Other plugins may use it differently or not at all -- it is a face type, not a universal requirement.
+
+- **Notes plugin.**
+
+  - Note matrix with `title` (text) and `body` (rich text, ProseMirror JSON) columns.
+  - Rank trait for user-defined ordering in the note list. No closure (notes are flat).
+  - **Note face** with slots: `title` (prefers text), `body` (prefers rich text). Overflow columns render in a Notion-style property panel.
+  - Note list face (sidebar): scrollable list of notes with title and body preview.
+  - Single-note face (main pane): title as editable heading, body as ProseMirror editor, backlinks panel below.
+  - **Wiki-link ProseMirror inline node**: `{ type: 'wikilink', attrs: { matrixId, rowId } }`. Displayed as the target note's current title. `[[` triggers autocomplete.
+  - **Wiki-link → join table sync**: on doc save, sync inline wikilink nodes to join table rows. The join table is a materialized index; the PM doc is the source of truth.
+  - **Backlinks**: reverse join lookup showing all notes that link to the current note.
+
+- **Cross-face data sharing demo.**
+
+  - Apply the outline face to the note matrix. The system auto-provisions rank and closure traits.
+  - `title` binds to the outline's `primary_content` slot. `body` becomes an overflow side-column.
+  - Edits in either face write to the same matrix rows. This proves the face slot model and trait auto-provisioning end-to-end.
 
 - **Admin / debug matrix browser.**
 
   - A built-in view (not a plugin face -- an admin surface) that lists all matrixes in the registry as simple tables.
   - Filter by plugin (which plugin created the matrix), by matrix name, or other metadata.
-  - Shows raw data, rank, closure, and join state for each matrix.
-  - Evolves from the existing `MatrixDebug.tsx` into a proper system-level tool. Always accessible but not the normal user path -- plugins manage how they surface and present their own data to users.
+  - Shows raw data, trait state (rank, closure), and join state for each matrix.
+  - Evolves from the existing `MatrixDebug.tsx` into a proper system-level tool.
 
 - **Formula columns** (read-only computed columns).
   - A column whose value is a SQL expression evaluated per-row.
   - Rendered with a visual distinction (e.g. gray background) to indicate non-editability.
   - Provides the foundation for auto-fill and computed fields.
 
-**Testing:** Vitest for plugin registration, face config serialization, formula column evaluation. Playwright for table face interactions (cell editing, column add/rename/delete, sort/filter controls).
+**Testing:** Vitest for plugin registration, trait provisioning (idempotent, shared, face-triggered), face config serialization, slot binding resolution, wiki-link → join table sync, formula column evaluation. Playwright for table face interactions, note face (create note, edit title/body, insert wiki-link via `[[` autocomplete, backlinks panel), face configuration UI (slot binding), cross-face data sharing (edit in note face, verify in outline face).
 
-**Proves:** The plugin model works for at least one real consumer (outline). The face system cleanly separates data from presentation. The table face type provides spreadsheet-like editing. Formula columns enable computed data.
+**Proves:** The plugin model works for two real consumers (outline + notes). The face slot system cleanly separates data from presentation. The same matrix can be viewed through different face types with different slot bindings. Trait auto-provisioning works when a face is applied. Wiki-links use the join table. The table face provides spreadsheet-like editing. Formula columns enable computed data.
 
 ---
 
 ### Phase 5 -- Tags plugin (supertags)
 
-The second plugin, proving cross-plugin composition through SQL and the join table.
+The third plugin, proving cross-plugin composition through SQL and the join table.
 
 **Work:**
 
@@ -186,6 +229,7 @@ The second plugin, proving cross-plugin composition through SQL and the join tab
   - Custom ProseMirror inline node for tags: `{ type: 'tag', attrs: { matrixId, rowId } }`.
   - Rendered inline with the tag name and optionally key properties (e.g. "Buy groceries `#task` ⏰ Friday").
   - Tag autocomplete: typing `#` opens a search/create dropdown. Selecting a tag type either creates a new row in that tag's matrix and inserts the marker, or links to an existing row.
+  - Tags can appear in both outline text and note body text -- the inline node pattern is shared with wiki-links.
 
 - **Join table wiring.**
 
@@ -204,11 +248,11 @@ The second plugin, proving cross-plugin composition through SQL and the join tab
   - Each tag type can open a table face showing all its rows (the tag matrix as a spreadsheet).
   - Reverse lookup: select a tag row to see all notes that reference it.
 
-- **Solidify plugin API.** With two real consumers (outline + tags), extract and formalize the plugin registration, lifecycle, and cross-plugin patterns.
+- **Solidify plugin API.** With three real consumers (outline + notes + tags), extract and formalize the plugin registration, lifecycle, and cross-plugin patterns.
 
 **Testing:** Vitest for join table sync logic (PM doc → join rows), tag type creation, forward/reverse lookup queries. Playwright for inline tag insertion (typing `#`, autocomplete interaction), tag property panel editing, tag browser navigation.
 
-**Proves:** Cross-plugin interaction through SQL and the join table. Inline structured data in rich text (ProseMirror custom nodes). The supertag pattern works. Plugin-to-plugin rendering delegation (outline delegates tag rendering to tags plugin).
+**Proves:** Cross-plugin interaction through SQL and the join table. Inline structured data in rich text (ProseMirror custom nodes). The supertag pattern works. Plugin-to-plugin rendering delegation (outline/notes delegate tag rendering to tags plugin).
 
 ---
 
@@ -362,7 +406,7 @@ These are not phase-gated -- they should be addressed incrementally as they beco
 
 Two testing layers, chosen by what they're best at:
 
-- **Vitest** for everything that can be tested against module interfaces or database state directly: structural primitive operations (rank, closure, join), SQL query correctness, plugin registration logic, scheduling algorithms, formula evaluation, data transformations. These tests are fast, deterministic, and cover the data layer thoroughly.
+- **Vitest** for everything that can be tested against module interfaces or database state directly: trait operations (rank, closure), join table operations, SQL query correctness, plugin registration logic, slot binding resolution, scheduling algorithms, formula evaluation, data transformations. These tests are fast, deterministic, and cover the data layer thoroughly.
 - **Playwright E2E** for nontrivial UI interactions that exercise the full stack: outline keyboard navigation (Enter/Tab/Backspace/arrow keys), drag-and-drop reordering, ProseMirror editing, inline tag insertion and autocomplete, cell editing in table faces, flashcard review flow, form submission. Introduced in **Phase 2** when the first real UI interactions land.
 
 General guidelines:
@@ -386,7 +430,7 @@ Basic responsiveness from the start. At a mobile-sized breakpoint (~600px), layo
 Every operation should be keyboard-accessible. Build a shortcut system early (Phase 2) and extend it per phase:
 
 - Phase 2: Outline navigation, editing, reorder, indent/outdent.
-- Phase 4: Table navigation (arrow keys between cells), column operations.
+- Phase 4: Table navigation (arrow keys between cells), column operations, note face navigation, wiki-link insertion (`[[` trigger).
 - Phase 5: Tag insertion (`#` trigger), tag property navigation.
 - Phase 6+: Context-specific shortcuts for each face type.
 
@@ -425,26 +469,26 @@ Phase 2 (Outline + Rich Text)
   ▼
 Phase 3 (Storage, Files, Sync)
   │
-  ├───────────────────────┐
-  ▼                       ▼
-Phase 4 (Plugins        Phase 7 (Scheduling
-  + Faces)                + Notifications)
-  │                       │
-  ▼                       │
-Phase 5 (Tags)            │
-  │                       │
-  ▼                       │
-Phase 6 (Tasks +          │
-  Movie Reviews)          │
-  │                       │
-  ├── Task reminders ◄────┘
+  ├───────────────────────────┐
+  ▼                           ▼
+Phase 4 (Plugins, Faces,    Phase 7 (Scheduling
+  Notes, Traits, Slots)       + Notifications)
+  │                           │
+  ▼                           │
+Phase 5 (Tags)                │
+  │                           │
+  ▼                           │
+Phase 6 (Tasks +              │
+  Movie Reviews)              │
+  │                           │
+  ├── Task reminders ◄────────┘
   │
   ├──────────────────┐
   ▼                  ▼
 Phase 8 (SRS)     Phase 9 (Journaling)
 ```
 
-Phase 3 (storage, files, sync) is a prerequisite for everything that follows -- plugins and faces may need to store files (e.g. image attachments on tagged items) and all data changes should be sync-tracked from the start. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5 (tags). Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
+Phase 3 (storage, files, sync) is a prerequisite for everything that follows -- plugins and faces may need to store files (e.g. image attachments on tagged items) and all data changes should be sync-tracked from the start. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 is the heaviest phase: it formalizes the plugin system, builds the face slot model, introduces trait auto-provisioning, and delivers the notes plugin as the second consumer alongside the refactored outline. Phase 5 (tags) is the third plugin, proving cross-plugin composition. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
 
 ---
 
@@ -471,7 +515,7 @@ What we have and its status relative to this plan:
 | ProseMirror setup (`createEditorView.ts`)          | **Port and adapt.** Core editor creation, keymap, node view factories.                |
 | Custom node views (`Paragraph.tsx`, `Heading.tsx`) | **Port and adapt.** Solid component-based node views.                                 |
 | `@prosemirror-adapter/solid` integration           | **Adopt.** The bridge between ProseMirror and Solid.js.                               |
-| Widget views (`Hashes.tsx`)                        | **Reference.** Pattern for ProseMirror decorations; adapt for tag markers.            |
+| Widget views (`Hashes.tsx`)                        | **Reference.** Pattern for ProseMirror decorations; adapt for wiki-links and tag markers. |
 | Custom commands (`commands.ts`)                    | **Port selectively.** Enter handling, heading cycling. Extend for outline operations. |
 
 ---

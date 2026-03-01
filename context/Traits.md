@@ -1,16 +1,30 @@
-# Structural primitives
+# Traits
 
-Structural primitives are core-provided building blocks that plugins can request for their matrixes. The core provisions the underlying tables and provides operations on them. Plugins choose which primitives they need and compose them to build their functionality.
+Traits are per-matrix metadata tables that provide structural capabilities. A matrix "has the rank trait" or "has the closure trait." The core provisions the underlying tables and provides operations on them. Any consumer -- plugins, faces, or the system itself -- can request traits for any matrix.
 
-A primitive is **not** a plugin. It has no lifecycle, no faces, no independent agency. It is a data structure that the core knows how to create, maintain, and optimize on behalf of plugins.
+A trait is **not** a plugin. It has no lifecycle, no faces, no independent agency. It is a purpose-specific data structure that the core knows how to create, maintain, and optimize.
 
-All primitive operations are expressed as SQL and execute inside the SQLite engine. See [Architecture - Execution model](./Architecture.md#execution-model) for the overall approach.
+All trait operations are expressed as SQL and execute inside the SQLite engine. See [Architecture - Execution model](./Architecture.md#execution-model) for the overall approach.
+
+## Provisioning model
+
+Traits are auto-provisioned on first request and shared by all consumers.
+
+**`ensureTrait(type, matrixId, scopeName)`** is the provisioning interface. If the backing table for the requested trait already exists, the existing handle is returned. If not, the core creates it.
+
+- **Idempotent.** Requesting an already-provisioned trait is a no-op that returns the existing handle.
+- **Shared.** Multiple plugins and faces read/write the same trait tables. If the outline plugin and a kanban plugin both need rank for the same matrix with the same scope, they share one table. If they need different orderings, they request different scopes.
+- **Lazy.** Traits are provisioned when first requested, not eagerly. A matrix starts with no traits.
+- **Persistent.** Once provisioned, a trait persists even if the requesting consumer is disabled or removed. Trait tables are matrix infrastructure, not plugin state.
+- **Scoped.** Traits are identified by `(type, matrix_id, scope_name)`. A single matrix can have multiple rank traits (e.g. outline ordering vs. kanban priority) with different scope names. Closure traits typically have one scope per matrix but follow the same pattern.
+
+**Face-triggered provisioning.** When a face type with trait requirements is applied to a matrix, the system auto-provisions the needed traits. For example, applying the outline face to a note matrix provisions rank and closure traits for that matrix, even though the note plugin never requested them.
 
 ## Rank
 
-Provides ordered positioning of rows within a scope, using Lexorank sort keys. A plugin requests a rank scope, and the core provisions a rank table for it.
+Provides ordered positioning of rows within a scope, using Lexorank sort keys. Any consumer can request a rank trait for a matrix, and the core provisions a rank table for it.
 
-Different plugins can maintain independent rank scopes over the same or different matrixes. For example, the outline plugin ranks rows by user-chosen position, while a kanban plugin might rank the same rows by priority.
+Different consumers can maintain independent rank scopes over the same or different matrixes. For example, the outline plugin ranks rows by user-chosen position, while a kanban plugin might rank the same rows by priority -- each with its own scope name.
 
 ### Lexorank encoding
 
@@ -74,13 +88,13 @@ WHERE key >= :old_prefix
 
 ## Closure
 
-Provides ancestor/descendant hierarchy tracking within a matrix. A plugin requests a closure scope for a matrix, and the core provisions a closure table for it.
+Provides ancestor/descendant hierarchy tracking within a matrix. Any consumer can request a closure trait for a matrix, and the core provisions a closure table for it.
 
 A closure table has one row for every ancestor-descendant relationship, including the identity relationship between a row and itself (depth 0).
 
 ### Invariant with rank
 
-When a plugin uses both rank and closure on the same matrix, the closure table is the source of truth for the matrix's outline structure and the depth of each row. However, it must match up with the Lexorank structure in the rank table when it comes to ancestor/descendant/sibling relationships. All operations that modify either table should use transactions and be carefully tested to ensure this invariant.
+When a matrix has both rank and closure traits, the closure table is the source of truth for the matrix's tree structure and the depth of each row. However, it must match up with the Lexorank structure in the rank table when it comes to ancestor/descendant/sibling relationships. All operations that modify either table should use transactions and be carefully tested to ensure this invariant.
 
 ### SQL operations
 
@@ -178,7 +192,7 @@ This replaces hundreds of lines of interleaved TypeScript and SQL with a handful
 
 ## Join
 
-Provides cross-matrix row references. The join table is a single global table (analogous to how the matrix registry is global) that links rows across matrixes.
+The join table is **global infrastructure**, not a per-matrix trait. It is always present and provides cross-matrix row references. Every matrix can participate in joins without requesting anything.
 
 ### Schema
 
@@ -192,14 +206,14 @@ CREATE TABLE IF NOT EXISTS joins (
 ) STRICT;
 ```
 
-Indexes should support efficient queries in both directions (source → targets, target → sources).
+Indexes should support efficient queries in both directions (source -> targets, target -> sources).
 
 ### Semantics
 
 - A join row says "this row in this matrix references that row in that matrix."
 - Joins are many-to-many: a single row can reference multiple rows across multiple matrixes, and a single row can be referenced by many others.
-- Joins are orthogonal to the outline hierarchy. A note in the user's outline can join to a tag row in a plugin-managed matrix that has never appeared in any outline.
-- Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline tag markers in note text), or as the **primary source of truth** for a relationship, depending on the plugin's design.
+- Joins are orthogonal to traits. A note can join to a tag row in a matrix that has no rank or closure traits.
+- Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline tag markers or wiki-links in note text), or as the **primary source of truth** for a relationship, depending on the plugin's design.
 
 ### Hydration
 
