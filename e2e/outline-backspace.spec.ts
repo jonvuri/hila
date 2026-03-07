@@ -4,21 +4,20 @@ import { test, expect, type Page } from '@playwright/test'
 // Helpers
 // ---------------------------------------------------------------------------
 
+const openSidebar = async (page: Page) => {
+  const sidebar = page.locator('.app-sidebar')
+  if (!(await sidebar.isVisible())) {
+    await page.getByRole('button', { name: 'Toggle dev tools' }).click()
+    await expect(sidebar).toBeVisible({ timeout: 3000 })
+  }
+}
+
 const resetDB = async (page: Page) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Matrix Debug' }).click()
+  await openSidebar(page)
+  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
   await page.getByRole('button', { name: 'Reset Database' }).click()
   await expect(page.getByRole('button', { name: 'Reset Database' })).toBeEnabled()
-}
-
-const addSampleRows = async (page: Page) => {
-  const btn = page.getByRole('button', { name: 'Add Sample Rows' }).first()
-  await btn.click()
-  await expect(btn).toBeEnabled({ timeout: 5000 })
-}
-
-const goToOutlineFace = async (page: Page) => {
-  await page.getByRole('button', { name: 'Outline Face' }).click()
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {
@@ -60,18 +59,15 @@ const moveCursorToStart = async (page: Page, editorLocator: ReturnType<Page['loc
 // Set up a controlled outline: two root-level rows with known text.
 const setupTwoRows = async (page: Page): Promise<number> => {
   await resetDB(page)
-  await addSampleRows(page)
-  await goToOutlineFace(page)
-  await waitForRows(page, 2)
+  await waitForRows(page, 1)
 
-  // Overwrite first editor content with "Alpha"
+  // Overwrite the welcome row with "Alpha"
   const firstEditor = page.locator('.ProseMirror').first()
   await firstEditor.click()
   await page.keyboard.press('Meta+a')
   await page.keyboard.type('Alpha')
 
   // Create a new row after the first by pressing Enter at end
-  await page.keyboard.press('End')
   await page.keyboard.press('Meta+ArrowRight')
   await page.keyboard.press('Enter')
 
@@ -94,8 +90,6 @@ const setupTwoRows = async (page: Page): Promise<number> => {
 test.describe('Backspace at start of row', () => {
   test('backspace on first row at doc start is a no-op', async ({ page }) => {
     await resetDB(page)
-    await addSampleRows(page)
-    await goToOutlineFace(page)
     const initialCount = await waitForRows(page, 1)
     const initialTexts = await getEditorTexts(page)
 
@@ -116,8 +110,6 @@ test.describe('Backspace at start of row', () => {
 
   test('backspace deletes an empty row and focuses previous row', async ({ page }) => {
     await resetDB(page)
-    await addSampleRows(page)
-    await goToOutlineFace(page)
     const initialCount = await waitForRows(page, 1)
 
     // Focus first editor, go to end, press Enter to create empty row
@@ -194,9 +186,7 @@ test.describe('Backspace at start of row', () => {
 
   test('backspace on empty row created by Enter round-trips correctly', async ({ page }) => {
     await resetDB(page)
-    await addSampleRows(page)
-    await goToOutlineFace(page)
-    await waitForRows(page, 2)
+    await waitForRows(page, 1)
 
     // Overwrite first editor
     const firstEditor = page.locator('.ProseMirror').first()

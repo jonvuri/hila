@@ -4,41 +4,39 @@ import { test, expect, type Page } from '@playwright/test'
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Open the dev tools sidebar if not already open. */
+const openSidebar = async (page: Page) => {
+  const sidebar = page.locator('.app-sidebar')
+  if (!(await sidebar.isVisible())) {
+    await page.getByRole('button', { name: 'Toggle dev tools' }).click()
+    await expect(sidebar).toBeVisible({ timeout: 3000 })
+  }
+}
+
 /** Navigate to the app and reset the database to a clean state. */
 const resetDB = async (page: Page) => {
   await page.goto('/')
 
-  // Go to Matrix Debug tab and reset
-  await page.getByRole('button', { name: 'Matrix Debug' }).click()
+  await openSidebar(page)
+  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
   await page.getByRole('button', { name: 'Reset Database' }).click()
-
-  // Wait for the reset to complete -- the button goes back to its normal state
   await expect(page.getByRole('button', { name: 'Reset Database' })).toBeEnabled()
 }
 
-/** Add sample rows to the root matrix (ID 1) via the Matrix Debug tab.
- *  Assumes the Matrix Debug tab is already active.  */
+/** Add sample rows to the root matrix (ID 1) via the Matrix Debug panel.
+ *  Opens the sidebar and switches to Matrix Debug if needed. */
 const addSampleRows = async (page: Page) => {
-  // The first "Add Sample Rows" button belongs to the root matrix (ID 1)
+  await openSidebar(page)
+  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
   const btn = page.getByRole('button', { name: 'Add Sample Rows' }).first()
   await btn.click()
-  // Wait for the button to re-enable (indicates the async operation completed)
   await expect(btn).toBeEnabled({ timeout: 5000 })
 }
 
-/** Switch to the Outline Face tab. */
-const goToOutlineFace = async (page: Page) => {
-  await page.getByRole('button', { name: 'Outline Face' }).click()
-}
-
-/** Switch to the Matrix Debug tab. */
-const goToMatrixDebug = async (page: Page) => {
-  await page.getByRole('button', { name: 'Matrix Debug' }).click()
-}
-
-/** Switch to the SQL Runner tab. */
+/** Switch to the SQL Runner panel in the sidebar. */
 const goToSqlRunner = async (page: Page) => {
-  await page.getByRole('button', { name: 'SQL Runner' }).click()
+  await openSidebar(page)
+  await page.locator('.sidebar-tab', { hasText: 'SQL Runner' }).click()
 }
 
 /** Wait until at least `minCount` outline rows are visible in the face. */
@@ -58,36 +56,32 @@ const waitForRows = async (page: Page, minCount = 1) => {
 // ---------------------------------------------------------------------------
 
 test.describe('Virtualizer totalWindows capping', () => {
-  test('empty state: exactly one window exists with no outline rows', async ({ page }) => {
+  test('after reset: exactly one window exists with the welcome row', async ({ page }) => {
     await resetDB(page)
-    await goToOutlineFace(page)
 
-    // Wait for the virtualizer to mount
+    // Wait for the virtualizer to mount (outline is always visible)
     await expect(page.locator('[data-window-index]')).toBeVisible({ timeout: 5000 })
 
     // With totalWindows=1, exactly one window should exist
     await expect(page.locator('[data-window-index]')).toHaveCount(1)
 
-    // No rows: the root matrix is empty after reset
-    await expect(page.locator('.outline-row')).toHaveCount(0)
+    // After reset, seedWelcomeRow creates a single "Welcome to Hila" row
+    await expect(page.locator('.outline-row')).toHaveCount(1)
   })
 
   test('populated state: still exactly one window regardless of row count', async ({ page }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
 
-    // Wait for rows to appear
+    // Wait for rows to appear (outline is always visible)
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 
     // totalWindows=1 means the virtualizer must never create more than one window
-    // even though there is content to display
     await expect(page.locator('[data-window-index]')).toHaveCount(1)
   })
 
   test('window index is exactly 0', async ({ page }) => {
     await resetDB(page)
-    await goToOutlineFace(page)
 
     await expect(page.locator('[data-window-index]')).toBeVisible({ timeout: 5000 })
 
@@ -104,19 +98,14 @@ test.describe('Outline query: depth and hasChildren', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
   })
 
   test('at least one row has non-zero indentation depth', async ({ page }) => {
     // addSampleRowsToMatrix creates at least one child row (last row is a child
     // of an existing row when existingCount > 0). After two calls to addSampleRows
-    // we're guaranteed a child. But even one call creates a child on the second
-    // batch. We call addSampleRows once more to be certain.
-    // Re-seed: go back to debug, add more rows, return
-    await goToMatrixDebug(page)
+    // we're guaranteed a child.
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 2)
 
     // Find all indent spacers -- at least one should have non-zero computed width
@@ -197,7 +186,6 @@ test.describe('Row identity: PM editor survives reactive query updates', () => {
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
 
     // Click the first PM editor
@@ -234,7 +222,6 @@ test.describe('Row identity: PM editor survives reactive query updates', () => {
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
 
     const countBefore = await page.locator('.ProseMirror').count()
@@ -262,7 +249,6 @@ test.describe('Reactive data flow', () => {
   test('content persists through the debounced save cycle to the database', async ({ page }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
 
     // Type into the first editor
@@ -284,33 +270,29 @@ test.describe('Reactive data flow', () => {
     await expect(page.locator('body')).toContainText(savedText, { timeout: 3000 })
   })
 
-  test('new rows appear in the outline without page reload after being added via Matrix Debug', async ({
+  test('new rows appear in the outline reactively after being added via Matrix Debug', async ({
     page,
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
 
     const countBefore = await waitForRows(page, 1)
 
-    // Go to Matrix Debug and add more rows while OutlineFace is unmounted
-    await goToMatrixDebug(page)
+    // Add more rows via Matrix Debug sidebar (outline stays mounted)
     await addSampleRows(page)
 
-    // Return to Outline Face
-    await goToOutlineFace(page)
-    await waitForRows(page, 1)
+    // Wait for reactive update
+    await page.waitForTimeout(1000)
 
     const countAfter = await page.locator('.outline-row').count()
     expect(countAfter).toBeGreaterThan(countBefore)
   })
 
-  test('content survives unmount and remount (flush-on-cleanup + load from DB)', async ({
+  test('content survives page reload (flush + load from DB)', async ({
     page,
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
 
     // Type into the first editor
@@ -322,11 +304,8 @@ test.describe('Reactive data flow', () => {
     // Wait for the debounce to flush
     await page.waitForTimeout(1000)
 
-    // Unmount OutlineFace by switching tabs
-    await goToMatrixDebug(page)
-
-    // Remount by switching back
-    await goToOutlineFace(page)
+    // Reload the page to force full remount
+    await page.reload()
     await waitForRows(page, 1)
 
     // The saved text must be present in the reloaded editor
@@ -344,7 +323,6 @@ test.describe('ProseMirror editor basics', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await goToOutlineFace(page)
     await waitForRows(page, 1)
   })
 

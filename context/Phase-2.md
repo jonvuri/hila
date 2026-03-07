@@ -232,33 +232,33 @@ The main outline surface that composes `OutlineRow` components in a virtualized 
 
 Layer the core outlining keybindings on top of the outline face. Each interaction is described in terms of what it does at the data layer and what happens in the UI.
 
-- [ ] **Enter** (create sibling row):
+- [x] **Enter** (create sibling row):
   - If cursor is at the end of a row's content: create a new empty row after the current one (same parent, prev = current row). Focus the new row.
   - If cursor is in the middle of content: split the content at the cursor. Current row keeps content before the cursor; new row gets content after the cursor. Focus the new row at position 0.
   - Data: `insertRow` with `parentKey` = current row's parent, `prevKey` = current row's key. Then update both rows' content if splitting.
-- [ ] **Tab** (indent / make child of previous sibling):
+- [x] **Tab** (indent / make child of previous sibling):
   - The current row becomes the last child of the previous sibling.
   - Data: `reparentRow` with `newParentKey` = previous sibling's key, placed after the previous sibling's last child.
   - Guard: no previous sibling → no-op. Already at max depth → no-op (if we want a depth limit).
   - The row's subtree moves with it.
-- [ ] **Shift-Tab** (outdent / move to parent's level):
+- [x] **Shift-Tab** (outdent / move to parent's level):
   - The current row becomes the next sibling of its parent.
   - Data: `reparentRow` with `newParentKey` = grandparent's key, `prevSiblingKey` = current parent's key.
   - Guard: already at root level → no-op.
   - The row's subtree moves with it. Siblings that were after this row under the old parent stay under the old parent.
-- [ ] **Backspace at start of row**:
+- [x] **Backspace at start of row**:
   - If the row is empty and has no children: delete the row, focus the previous row at its end.
   - If the row is empty and has children: delete the row, re-parent children to the deleted row's parent. Focus the first child (now promoted).
   - If the row has content: merge content into the previous row (append current row's content to previous row's content). Delete the current row. Focus the previous row at the merge point (original end of previous row's content).
   - Guard: first row in the outline → no-op.
-- [ ] **Arrow Up / Arrow Down** (inter-row navigation):
+- [x] **Arrow Up / Arrow Down** (inter-row navigation):
   - When the cursor is at the top of a row's editor, Up arrow moves focus to the previous visible row (cursor at end).
   - When the cursor is at the bottom of a row's editor, Down arrow moves focus to the next visible row (cursor at start).
   - For single-line rows (most common), up/down always cross rows.
   - For multi-line rows (multiple paragraphs or headings), up/down navigate within the PM editor until hitting the top/bottom edge, then cross to the adjacent row.
   - Implementation: use ProseMirror's `endOfTextblock('up')` / `endOfTextblock('down')` to detect edge positions, then dispatch to the outline for cross-row navigation.
-- [ ] Tests (Vitest): each keyboard interaction at the data layer level -- insert-after, split content, reparent as child, reparent to parent level, delete with merge, delete empty row
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Vitest): each keyboard interaction at the data layer level -- insert-after, split content, reparent as child, reparent to parent level, delete with merge, delete empty row
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 8. Collapse / expand
 
@@ -347,11 +347,11 @@ Replace the debug-only `App.tsx` with a real app shell that hosts the outline as
 
 Phase 2 introduces Playwright alongside Vitest. The outlining interactions are the first nontrivial UI behaviors that need E2E coverage.
 
-- [ ] Install and configure Playwright:
+- [x] Install and configure Playwright:
   - `@playwright/test` as a dev dependency
   - `playwright.config.ts` configured to start the Vite dev server and run tests against it
   - A base test fixture that navigates to the app and waits for the outline to load
-- [ ] E2E test suite for outline interactions:
+- [x] E2E test suite for outline interactions:
   - **Row creation**: click into a row, press Enter, verify a new row appears below. Type text, verify it persists after blur.
   - **Content splitting**: type text, move cursor to the middle, press Enter, verify content is split across two rows.
   - **Indent / outdent**: create rows, press Tab to indent, verify visual indentation changes. Press Shift-Tab to outdent.
@@ -364,7 +364,7 @@ Phase 2 introduces Playwright alongside Vitest. The outlining interactions are t
   - **Rich text**: select text, apply bold (Mod-B), verify styling. Same for italic, code.
 - [ ] E2E tests for page boundary health (multi-page mode):
 
-  These tests verify that structural operations cause minimal PM editor churn across page boundaries. They require enough rows to span multiple pages (~200+ rows to get at least 2 pages). The tests read from the PM lifecycle counters (`pmMountCount`, `pmUnmountCount`) exposed as globals or data attributes in debug mode.
+  Deferred: these tests require multi-page mode (totalWindows > 1), which is not yet activated. Phase 2 starts single-page; multi-page activates by setting a page size and letting the virtualizer create windows. These tests will be added when multi-page mode is enabled.
 
   - **Insert at page boundary**: populate enough rows to fill 2+ pages. Insert a new row at the last position of page 0. Verify: PM mount count increases by 1 (the new row), PM unmount count increases by at most 1 (the boundary-migrating row), all other editors in both pages are untouched (no unnecessary destroy/recreate cycle).
   - **Delete at page boundary**: delete the last row of page 0. Verify: PM unmount count increases by 1 (the deleted row), PM mount count increases by at most 1 (row migrating from page 1 into page 0), all other editors untouched.
@@ -372,8 +372,8 @@ Phase 2 introduces Playwright alongside Vitest. The outlining interactions are t
   - **Expand subtree**: reverse of collapse. Expand and verify mount count matches the revealed children, with no churn on unrelated rows.
   - **Insert in the middle of a page (control test)**: insert a row in the middle of page 0 (far from any boundary). Verify: exactly 1 PM mount (the new row), 0 PM unmounts. This confirms that within-page inserts cause no boundary effects at all.
 
-- [ ] Run `npx playwright test` -- all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
+- [x] Run `npx playwright test` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
 
 ---
 
