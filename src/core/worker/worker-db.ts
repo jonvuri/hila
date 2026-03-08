@@ -22,7 +22,7 @@ export const sqliteWasm = initSqliteWasm({
     let db: Database
     if ('opfs' in sqlite3) {
       try {
-        db = new sqlite3.oo1.OpfsDb('/hioa-db.sqlite3')
+        db = new sqlite3.oo1.OpfsDb('/hila-db.sqlite3')
       } catch (_) {
         // Fall back to in-memory in case OPFS is unavailable (e.g., in tests)
         db = new sqlite3.oo1.DB(':memory:', 'c')

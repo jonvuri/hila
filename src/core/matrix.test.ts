@@ -163,7 +163,6 @@ describe('Matrix Operations', () => {
     const matrix2Id = createMatrix(db, 'Second Matrix')
 
     expect(matrix1Id).not.toBe(matrix2Id)
-    expect(matrix2Id).toBeGreaterThan(matrix1Id)
 
     // Verify both matrices exist
     const countStmt = db.prepare('SELECT COUNT(*) as count FROM matrix')
@@ -2399,14 +2398,14 @@ describe('insertDataRow', () => {
     expect(rowId).toBeTypeOf('number')
   })
 
-  test('inserts multiple rows with incrementing IDs', () => {
+  test('inserts multiple rows with unique IDs', () => {
     const matrixId = createMatrix(db, 'M')
     const id1 = insertDataRow(db, matrixId, { title: 'First' })
     const id2 = insertDataRow(db, matrixId, { title: 'Second' })
     const id3 = insertDataRow(db, matrixId, { title: 'Third' })
 
-    expect(id2).toBeGreaterThan(id1)
-    expect(id3).toBeGreaterThan(id2)
+    const ids = new Set([id1, id2, id3])
+    expect(ids.size).toBe(3)
   })
 })
 
@@ -2878,5 +2877,167 @@ describe('Row operations round-trip', () => {
     makeRow('Sibling', { prevKey: parent.key })
 
     expect(queryTitles()).toEqual(['P', 'C1', 'C2', 'Sibling'])
+  })
+})
+
+describe('Globally unique random IDs', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('matrix IDs are non-sequential positive integers', () => {
+    const ids: number[] = []
+    for (let i = 0; i < 10; i++) {
+      ids.push(createMatrix(db, `Matrix ${i}`))
+    }
+
+    for (const id of ids) {
+      expect(id).toBeGreaterThan(0)
+    }
+
+    // Verify non-sequential: not all consecutive differences are 1
+    const diffs = ids.slice(1).map((id, i) => Math.abs(id - ids[i]!))
+    const allSequential = diffs.every((d) => d === 1)
+    expect(allSequential).toBe(false)
+  })
+
+  test('matrix IDs are unique across many creations', () => {
+    const ids = new Set<number>()
+    for (let i = 0; i < 100; i++) {
+      ids.add(createMatrix(db, `Matrix ${i}`))
+    }
+    expect(ids.size).toBe(100)
+  })
+
+  test('data row IDs are non-sequential positive integers', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const ids: number[] = []
+    for (let i = 0; i < 10; i++) {
+      ids.push(insertDataRow(db, matrixId, { title: `Row ${i}` }))
+    }
+
+    for (const id of ids) {
+      expect(id).toBeGreaterThan(0)
+    }
+
+    const diffs = ids.slice(1).map((id, i) => Math.abs(id - ids[i]!))
+    const allSequential = diffs.every((d) => d === 1)
+    expect(allSequential).toBe(false)
+  })
+
+  test('bulk-create 1000 data rows with no collisions', () => {
+    const matrixId = createMatrix(db, 'Bulk')
+    const ids = new Set<number>()
+    for (let i = 0; i < 1000; i++) {
+      ids.add(insertDataRow(db, matrixId, { title: `Row ${i}` }))
+    }
+    expect(ids.size).toBe(1000)
+  })
+
+  test('insertDataRow with DEFAULT VALUES returns random positive ID', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const id = insertDataRow(db, matrixId)
+    expect(id).toBeGreaterThan(0)
+    expect(id).toBeTypeOf('number')
+  })
+
+  test('insertDataRow with values returns random positive ID', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const id = insertDataRow(db, matrixId, { title: 'Hello' })
+    expect(id).toBeGreaterThan(0)
+    expect(id).toBeTypeOf('number')
+  })
+
+  test('createMatrix returns random positive ID', () => {
+    const id = createMatrix(db, 'Test')
+    expect(id).toBeGreaterThan(0)
+    expect(id).toBeTypeOf('number')
+  })
+
+  test('existing operations work correctly with random IDs', () => {
+    const matrixId = createMatrix(db, 'Test')
+
+    // insertDataRow + insertRow
+    const rowId1 = insertDataRow(db, matrixId, { title: 'Row 1' })
+    const key1 = insertRow(db, { matrixId, rowKind: 0, rowId: rowId1 })
+
+    const rowId2 = insertDataRow(db, matrixId, { title: 'Row 2' })
+    const key2 = insertRow(db, { matrixId, prevKey: key1, rowKind: 0, rowId: rowId2 })
+
+    // Verify children and parents work
+    const rowId3 = insertDataRow(db, matrixId, { title: 'Child' })
+    const key3 = insertRow(db, { matrixId, parentKey: key1, rowKind: 0, rowId: rowId3 })
+
+    expect(getChildren(db, matrixId, key1)).toHaveLength(1)
+    expect(getParent(db, matrixId, key3)).not.toBeNull()
+
+    // Reparent
+    const newKey3 = reparentRow(db, {
+      matrixId,
+      nodeKey: key3,
+      newParentKey: key2,
+    })
+    expect(getChildren(db, matrixId, key1)).toHaveLength(0)
+    expect(getChildren(db, matrixId, key2)).toHaveLength(1)
+
+    // Delete
+    deleteRow(db, { matrixId, key: newKey3 })
+    expect(getChildren(db, matrixId, key2)).toHaveLength(0)
+  })
+
+  test('outline query works with random IDs', () => {
+    const matrixId = createMatrix(db, 'Test')
+
+    const rowId1 = insertDataRow(db, matrixId, { title: 'Parent' })
+    const key1 = insertRow(db, { matrixId, rowKind: 0, rowId: rowId1 })
+
+    const rowId2 = insertDataRow(db, matrixId, { title: 'Child' })
+    insertRow(db, { matrixId, parentKey: key1, rowKind: 0, rowId: rowId2 })
+
+    const rowId3 = insertDataRow(db, matrixId, { title: 'Sibling' })
+    insertRow(db, { matrixId, prevKey: key1, rowKind: 0, rowId: rowId3 })
+
+    // Outline-style query: join rank + data, order by key
+    const stmt = db.prepare(`
+      SELECT d.title
+      FROM rank r
+      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
+      WHERE r.matrix_id = ?
+      ORDER BY r.key
+    `)
+    stmt.bind([matrixId])
+    const titles: string[] = []
+    while (stmt.step()) {
+      titles.push((stmt.get({}) as { title: string }).title)
+    }
+    stmt.finalize()
+
+    expect(titles).toEqual(['Parent', 'Child', 'Sibling'])
+  })
+
+  test('addSampleRowsToMatrix works with random IDs', () => {
+    const matrixId = createMatrix(db, 'Test')
+    addSampleRowsToMatrix(db, matrixId)
+
+    const dataStmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)
+    dataStmt.step()
+    const count = (dataStmt.get({}) as { count: number }).count
+    expect(count).toBeGreaterThanOrEqual(2)
+    dataStmt.finalize()
+  })
+
+  test('ensureRootMatrix still works with explicit ID 1', () => {
+    const rootId = ensureRootMatrix(db)
+    expect(rootId).toBe(1)
+
+    const rowId = insertDataRow(db, 1, { content: 'test' })
+    expect(rowId).toBeGreaterThan(0)
   })
 })

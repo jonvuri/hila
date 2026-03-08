@@ -14,20 +14,14 @@ All entity IDs must be globally unique across devices before any sync work can b
 
 Replace auto-increment with random 63-bit positive integers via `abs(random())`. Birthday paradox: ~3 billion rows before a 50% collision chance -- negligible for a personal app.
 
-- [ ] Update `initMatrixSchema` in `matrix.ts`: change the `matrix` table definition so that `id` defaults to `abs(random())` instead of relying on auto-increment:
-  ```sql
-  CREATE TABLE IF NOT EXISTS matrix (
-    id INTEGER PRIMARY KEY DEFAULT (abs(random())),
-    title TEXT NOT NULL DEFAULT ''
-  ) STRICT;
-  ```
-- [ ] Update `createMatrix` in `matrix.ts`: the `INSERT INTO matrix (title) VALUES (?) RETURNING id` pattern still works -- SQLite applies the DEFAULT expression when id is omitted. Verify the returned id is the random value.
-- [ ] Update per-matrix data table creation (`createMatrix`, `ensureRootMatrix`): change `id INTEGER PRIMARY KEY` to `id INTEGER PRIMARY KEY DEFAULT (abs(random()))` in `mx_{id}_data` table DDL.
-- [ ] Update `insertDataRow` in `matrix.ts`: the `INSERT ... DEFAULT VALUES RETURNING id` and `INSERT ... (columns) VALUES (...) RETURNING id` patterns still work since we are not providing `id`. Verify random IDs are returned.
-- [ ] Update `addSampleRowsToMatrix`: verify it still works with random IDs (it doesn't hardcode row IDs).
-- [ ] Fix the OPFS database filename: the current `worker-db.ts` uses `/hioa-db.sqlite3` but [Sync.md](Sync.md) specifies `/hila-db.sqlite3`. Rename for consistency.
-- [ ] Tests: create multiple matrixes, verify IDs are non-sequential and positive. Bulk-create 1000 rows, verify no collisions. Verify existing operations (insertRow, reparentRow, deleteRow, getChildren, getParent) work correctly with random IDs. Verify the outline query still works (it keys on rank keys, not row IDs, but row IDs appear in JOINs).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Update `initMatrixSchema` in `matrix.ts`: change the `matrix` table definition so that `id` defaults to `(abs(random()) >> 10) + 1` instead of relying on auto-increment. The `>> 10` constrains values to 53 bits (fits in JS Number without BigInt serialization issues in the worker). The DEFAULT clause alone is not sufficient for `INTEGER PRIMARY KEY` (SQLite uses its ROWID algorithm when the column is omitted), so INSERT statements also explicitly generate the random ID.
+- [x] Update `createMatrix` in `matrix.ts`: changed to `INSERT INTO matrix (id, title) VALUES ((abs(random()) >> 10) + 1, ?) RETURNING id` to explicitly generate the random ID.
+- [x] Update per-matrix data table creation (`createMatrix`, `ensureRootMatrix`): changed `id INTEGER PRIMARY KEY` to `id INTEGER PRIMARY KEY DEFAULT ((abs(random()) >> 10) + 1)` in `mx_{id}_data` table DDL.
+- [x] Update `insertDataRow` in `matrix.ts`: both code paths (with values and DEFAULT VALUES) now explicitly include `id` with `(abs(random()) >> 10) + 1` in the INSERT.
+- [x] Update `addSampleRowsToMatrix`: updated to explicitly include `id` with the random expression in the INSERT.
+- [x] Fix the OPFS database filename: renamed from `/hioa-db.sqlite3` to `/hila-db.sqlite3` in `worker-db.ts`.
+- [x] Tests: added "Globally unique random IDs" test suite verifying non-sequential positive IDs, uniqueness across 100 matrixes and 1000 data rows, existing operations (insertRow, reparentRow, deleteRow, getChildren, getParent) work correctly, outline query works, addSampleRowsToMatrix works, and ensureRootMatrix still works with explicit ID 1. Fixed two existing tests that assumed sequential IDs.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Device-specific entropy in rank keys
 

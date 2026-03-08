@@ -2,6 +2,19 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { between, compareKeys, makeKey, nextPrefix, parseKey } from './lexorank'
 
+/**
+ * SQL expression that generates a random positive integer fitting in
+ * JavaScript's Number.MAX_SAFE_INTEGER (2^53 − 1).
+ *
+ * SQLite's random() returns a 64-bit signed integer. abs() makes it positive
+ * (63 bits). The >> 10 right-shift drops the low 10 bits, leaving 53 bits —
+ * the maximum integer precision of a JS double. The + 1 guarantees the result
+ * is always ≥ 1 (never zero).
+ *
+ * Use as a SQL value expression (e.g. in INSERT) or as a column DEFAULT.
+ */
+export const SQL_RANDOM_ID = '(abs(random()) >> 10) + 1'
+
 // Initialize database with the core tables required for matrixes
 export const initMatrixSchema = (db: Database) => {
   // Set pragmas for better behavior and performance
@@ -17,7 +30,7 @@ export const initMatrixSchema = (db: Database) => {
     -- Matrix registry
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix (
-      id         INTEGER PRIMARY KEY,
+      id         INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
       title      TEXT NOT NULL DEFAULT ''
     ) STRICT;
 
@@ -81,7 +94,9 @@ export const createMatrix = (
   db.exec('BEGIN TRANSACTION')
 
   try {
-    const insertStmt = db.prepare('INSERT INTO matrix (title) VALUES (?) RETURNING id')
+    const insertStmt = db.prepare(
+      `INSERT INTO matrix (id, title) VALUES (${SQL_RANDOM_ID}, ?) RETURNING id`,
+    )
     insertStmt.bind([title])
     if (!insertStmt.step()) {
       insertStmt.finalize()
@@ -108,7 +123,7 @@ export const createMatrix = (
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
         ${columnDefs}
       ) STRICT;
     `)
@@ -164,7 +179,7 @@ export const ensureRootMatrix = (db: Database): number => {
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
         content TEXT
       ) STRICT;
     `)
@@ -484,8 +499,8 @@ export const insertDataRow = (
   const entries = Object.entries(values || {})
 
   if (entries.length > 0) {
-    const columns = entries.map(([name]) => quoteIdent(name)).join(', ')
-    const placeholders = entries.map(() => '?').join(', ')
+    const columns = ['id', ...entries.map(([name]) => quoteIdent(name))].join(', ')
+    const placeholders = [SQL_RANDOM_ID, ...entries.map(() => '?')].join(', ')
     const stmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (${columns}) VALUES (${placeholders}) RETURNING id`,
     )
@@ -498,7 +513,9 @@ export const insertDataRow = (
     stmt.finalize()
     return rowId
   } else {
-    const stmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" DEFAULT VALUES RETURNING id`)
+    const stmt = db.prepare(
+      `INSERT INTO "mx_${matrixId}_data" (id) VALUES (${SQL_RANDOM_ID}) RETURNING id`,
+    )
     if (!stmt.step()) {
       stmt.finalize()
       throw new Error('Failed to insert data row')
@@ -1092,8 +1109,8 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
     for (let i = 0; i < rowsToAdd; i++) {
       const randomSuffix = Math.floor(Math.random() * 1000)
 
-      const colNames = columns.map((c) => quoteIdent(c.name)).join(', ')
-      const placeholders = columns.map(() => '?').join(', ')
+      const colNames = ['id', ...columns.map((c) => quoteIdent(c.name))].join(', ')
+      const placeholders = [SQL_RANDOM_ID, ...columns.map(() => '?')].join(', ')
       const values = columns.map((c) => {
         if (c.name === 'content') {
           const text = `Sample row ${randomSuffix}`
