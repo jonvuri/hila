@@ -27,16 +27,16 @@ Replace auto-increment with random 63-bit positive integers via `abs(random())`.
 
 Establish a persistent device ID for change attribution. This is the foundation for change tracking (task 3) and conflict resolution (task 5).
 
-- [ ] Create `_sync_state` table in `initMatrixSchema`:
+- [x] Create `_sync_state` table in `initMatrixSchema`:
   ```sql
   CREATE TABLE IF NOT EXISTS _sync_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
   ) STRICT;
   ```
-- [ ] Generate a device UUID on first run: after schema init, check if `_sync_state` has a `device_id` key. If not, insert one using `crypto.randomUUID()` (available in workers). Store it for the lifetime of the session.
-- [ ] Tests: verify device ID is generated on first init, persists across re-init calls, and is a valid UUID.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Generate a device UUID on first run: after schema init, check if `_sync_state` has a `device_id` key. If not, insert one using `crypto.randomUUID()` (available in workers). Store it for the lifetime of the session.
+- [x] Tests: verify device ID is generated on first init, persists across re-init calls, and is a valid UUID.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Change tracking infrastructure
 

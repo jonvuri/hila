@@ -24,6 +24,8 @@ import {
   addColumn,
   removeColumn,
   renameColumn,
+  getOrCreateDeviceId,
+  resetDeviceIdCache,
 } from './matrix'
 import { compareKeys, parseKey } from './lexorank'
 
@@ -3039,5 +3041,65 @@ describe('Globally unique random IDs', () => {
 
     const rowId = insertDataRow(db, 1, { content: 'test' })
     expect(rowId).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Device identity
+// ---------------------------------------------------------------------------
+describe('Device identity', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    resetDeviceIdCache()
+
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('generates a device ID on first init', () => {
+    const id = getOrCreateDeviceId(db)
+    expect(typeof id).toBe('string')
+    expect(id.length).toBeGreaterThan(0)
+  })
+
+  test('device ID is a valid UUID', () => {
+    const id = getOrCreateDeviceId(db)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    expect(id).toMatch(uuidRegex)
+  })
+
+  test('device ID persists across re-init calls', () => {
+    const first = getOrCreateDeviceId(db)
+
+    // Clear the in-process cache so the next call must read from DB
+    resetDeviceIdCache()
+
+    // Re-run schema init (idempotent CREATE IF NOT EXISTS)
+    initMatrixSchema(db)
+
+    const second = getOrCreateDeviceId(db)
+    expect(second).toBe(first)
+  })
+
+  test('device ID is stored in _sync_state table', () => {
+    const id = getOrCreateDeviceId(db)
+
+    const stmt = db.prepare("SELECT value FROM _sync_state WHERE key = 'device_id'")
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { value: string }
+    stmt.finalize()
+
+    expect(row.value).toBe(id)
+  })
+
+  test('in-process cache returns same value without DB round-trip', () => {
+    const first = getOrCreateDeviceId(db)
+    const second = getOrCreateDeviceId(db)
+    expect(second).toBe(first)
   })
 })

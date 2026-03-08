@@ -71,7 +71,49 @@ export const initMatrixSchema = (db: Database) => {
 
     CREATE INDEX IF NOT EXISTS joins_by_target
       ON joins(target_matrix_id, target_row_id);
+
+    -- ------------------------------------------------------------
+    -- Sync state (device identity, high-water marks, etc.)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS _sync_state (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    ) STRICT;
   `)
+}
+
+/**
+ * Retrieve the persistent device ID from `_sync_state`, creating one on first
+ * run via `crypto.randomUUID()`. The result is cached in-process so subsequent
+ * calls skip the database round-trip.
+ */
+let cachedDeviceId: string | null = null
+export const getOrCreateDeviceId = (db: Database): string => {
+  if (cachedDeviceId) return cachedDeviceId
+
+  const stmt = db.prepare("SELECT value FROM _sync_state WHERE key = 'device_id'")
+  if (stmt.step()) {
+    const row = stmt.get({}) as { value: string }
+    cachedDeviceId = row.value
+    stmt.finalize()
+    return cachedDeviceId
+  }
+  stmt.finalize()
+
+  const id = crypto.randomUUID()
+  db.exec("INSERT INTO _sync_state (key, value) VALUES ('device_id', ?)", {
+    bind: [id],
+  })
+  cachedDeviceId = id
+  return id
+}
+
+/**
+ * Reset the cached device ID. Intended for tests only — lets a fresh
+ * `getOrCreateDeviceId` call read from the database again.
+ */
+export const resetDeviceIdCache = (): void => {
+  cachedDeviceId = null
 }
 
 // Stored column definition (includes display order)

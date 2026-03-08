@@ -3,6 +3,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
 import {
   initMatrixSchema,
+  getOrCreateDeviceId,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
   ensureRootMatrix,
@@ -45,6 +46,7 @@ const seedWelcomeRow = (db: Database, matrixId: number) => {
 
 export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
+  getOrCreateDeviceId(db)
   ensureRootMatrix(db)
   seedWelcomeRow(db, 1)
 }
@@ -94,6 +96,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 0, 0)
 
         initMatrixSchema(db)
+        getOrCreateDeviceId(db)
         ensureRootMatrix(db)
         seedWelcomeRow(db, 1)
 
