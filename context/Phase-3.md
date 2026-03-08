@@ -23,9 +23,9 @@ Replace auto-increment with random 63-bit positive integers via `abs(random())`.
 - [x] Tests: added "Globally unique random IDs" test suite verifying non-sequential positive IDs, uniqueness across 100 matrixes and 1000 data rows, existing operations (insertRow, reparentRow, deleteRow, getChildren, getParent) work correctly, outline query works, addSampleRowsToMatrix works, and ensureRootMatrix still works with explicit ID 1. Fixed two existing tests that assumed sequential IDs.
 - [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
-## 2. Device-specific entropy in rank keys
+## 2. Device identity
 
-When two devices insert between the same siblings, the deterministic `between()` function produces identical rank keys. Add device-specific entropy to new key segments to prevent this.
+Establish a persistent device ID for change attribution. This is the foundation for change tracking (task 3) and conflict resolution (task 5).
 
 - [ ] Create `_sync_state` table in `initMatrixSchema`:
   ```sql
@@ -35,10 +35,7 @@ When two devices insert between the same siblings, the deterministic `between()`
   ) STRICT;
   ```
 - [ ] Generate a device UUID on first run: after schema init, check if `_sync_state` has a `device_id` key. If not, insert one using `crypto.randomUUID()` (available in workers). Store it for the lifetime of the session.
-- [ ] Expose device ID to the rank key system: the worker handler should read the device ID at init and pass it (or a short derivative) to the lexorank functions.
-- [ ] Modify `between()` in `lexorank.ts` to accept an optional entropy parameter (a few bytes derived from the device ID). When generating a new key segment and there is room between the two boundaries, incorporate the entropy bytes into the midpoint computation so that two devices choosing the same midpoint diverge. When no entropy is provided (tests, backward compat), behavior is unchanged.
-- [ ] Update `lexo_between` custom SQLite function registration to pass the device entropy.
-- [ ] Tests: call `between()` with two different entropy values for the same (prev, next) pair, verify distinct results. Call without entropy, verify deterministic behavior is preserved. Run the full lexorank test suite to verify no regressions.
+- [ ] Tests: verify device ID is generated on first init, persists across re-init calls, and is a valid UUID.
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Change tracking infrastructure
@@ -133,6 +130,7 @@ When applying remote changes, detect conflicts (same row modified locally since 
   - **UPDATE handling:** deserialize `data` JSON and execute `UPDATE` with the full row data.
   - **DELETE handling:** execute `DELETE` on the target table.
   - Disable change-tracking triggers during remote apply (to avoid re-logging remote changes as local). Use a session-scoped flag or temporarily drop/recreate triggers. Alternatively, use a `_sync_applying` flag in `_sync_state` that the triggers check.
+  - **Duplicate rank key resolution:** when applying a remote rank INSERT or UPDATE, check whether the incoming rank key already exists locally for a different row ID. If a collision is found (two devices inserted between the same siblings independently), re-rank one of the rows by calling `between()` against its neighbors. Deterministic tie-break: the row from the lower device ID keeps its key; the other is re-ranked. This ensures both devices converge to the same state regardless of apply order.
   - After all entries are applied: if any entries touched the `rank` table, trigger a closure rebuild for the affected matrixes (task 6).
   - Update per-device high-water mark in `_sync_state`.
   - Return `ApplyResult` with count of applied changes and any conflict records.
@@ -148,6 +146,7 @@ When applying remote changes, detect conflicts (same row modified locally since 
   - Apply a remote DELETE for a row edited locally -- verify conflict detection.
   - Verify remote changes do NOT appear in `_sync_changelog` (trigger suppression works).
   - Verify per-device high-water marks are updated.
+  - Simulate two devices inserting between the same siblings (producing identical rank keys). Apply one as a remote change. Verify the collision is detected, one row is re-ranked, both rows are present, and their ordering is correct. Verify no collision path is triggered when rank keys differ (the common case).
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Closure rebuild after remote rank changes
@@ -183,20 +182,20 @@ The changelog doubles as per-row version history and should not grow unbounded.
 ```
 1. Globally unique IDs
    │
-   └─► 2. Device entropy in rank keys
+   └─► 2. Device identity
           │
           └─► 3. Change tracking infrastructure
                  │
                  ├─► 4. Changeset abstraction
                  │      │
-                 │      └─► 5. Conflict detection + resolution
+                 │      └─► 5. Conflict detection + resolution (incl. duplicate rank keys)
                  │             │
                  │             └─► 6. Closure rebuild after remote changes
                  │
                  └─► 7. Changelog retention
 ```
 
-Tasks are strictly sequential: each builds on the previous. Task 7 (changelog retention) branches off task 3 and can proceed in parallel with 4-6.
+Tasks are strictly sequential: each builds on the previous. Task 7 (changelog retention) branches off task 3 and can proceed in parallel with 4–6.
 
 ---
 
@@ -213,4 +212,4 @@ Tasks are strictly sequential: each builds on the previous. Task 7 (changelog re
 
 ## Done criteria
 
-All seven task groups complete. Entity IDs are globally unique random integers. Device identity is established and incorporated into rank key generation. Change tracking triggers log all mutations to the changelog. The changeset abstraction supports exporting local changes and importing remote changes with LWW conflict resolution. Closure tables can be rebuilt from rank after remote changes. Changelog retention keeps the changelog bounded. All data mutations from this point forward are tracked. `npm run typecheck && npm run lint && npm run test:run` all pass.
+All seven task groups complete. Entity IDs are globally unique random integers. Device identity is established. Change tracking triggers log all mutations to the changelog. The changeset abstraction supports exporting local changes and importing remote changes with LWW conflict resolution. Duplicate rank keys from concurrent inserts are detected and resolved as part of remote change application. Closure tables can be rebuilt from rank after remote changes. Changelog retention keeps the changelog bounded. All data mutations from this point forward are tracked. `npm run typecheck && npm run lint && npm run test:run` all pass.
