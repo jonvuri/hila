@@ -107,33 +107,32 @@ The first real user-facing feature. This is where the system becomes an app some
 
 ---
 
-### Phase 3 -- Storage, files, and sync
+### Phase 3 -- Sync-readiness
 
+> Detailed task list: [Phase-3.md](Phase-3.md)
 > Detailed specification: [Sync.md](Sync.md)
 
-Local file storage, change tracking, and continuous background sync with a remote provider (Dropbox). This phase makes the app's data durable beyond OPFS and enables cross-device use.
+Core infrastructure changes to make the schema sync-safe and all data mutations trackable. No live sync, no file storage, no Dropbox -- those come in [Phase 10](#phase-10----live-sync-files-and-dropbox). The goal is to ensure that from this point forward, every data mutation is tracked and the system is ready for remote sync when the time comes.
 
 **Work:**
 
 - **Globally unique IDs.** Replace auto-increment integer PKs with random large integers for data tables and matrix registry. Add device-specific entropy to rank key generation (`between()`). Update all row creation code paths. This is a prerequisite for all sync work.
 
-- **File storage layer.** `files` and `file_attachments` tables, OPFS file read/write, content-addressed naming (SHA-256), worker protocol for file operations.
+- **Device identity.** `_sync_state` table, device UUID generation on first run, entropy passed to rank key system.
 
-- **Attachment UI.** File drop/paste/select on outline rows, attachment display (thumbnails, file list), click-to-preview/download.
+- **Change tracking.** `_sync_changelog` table, dynamic triggers on matrix data tables and core tables (rank, joins, matrix, matrix_columns), trigger reinstallation on schema changes (add/remove/rename column). Closure tables are not tracked (derived from rank, rebuilt after remote changes).
 
-- **Changeset abstraction + change tracking.** `ChangeTracker` interface, `_sync_changelog` table with retention policy (doubles as per-row version history), dynamic triggers on matrix tables and core tables, device identity, closure rebuild after remote rank changes.
+- **Changeset abstraction.** `ChangeEntry`/`Changeset`/`ApplyResult` types, `getLocalChanges(sinceSeq)`, `getLastSeq()`, sequence tracking in `_sync_state`.
 
-- **Conflict detection + retention.** `_sync_conflicts` table, conflict detection during `applyRemoteChanges`, LWW resolution with losing version preservation.
+- **Conflict detection + resolution.** `_sync_conflicts` table, `applyRemoteChanges` with LWW resolution, trigger suppression during remote apply, per-device high-water marks.
 
-- **Sync engine.** Main-thread coordinator, changeset upload/download, debouncing, periodic snapshot export.
+- **Closure rebuild.** `rebuildClosure(matrixId)` reconstructs closure from rank key hierarchy after remote rank changes.
 
-- **Provider interface + Dropbox.** Abstract `SyncProvider` type, Dropbox implementation (OAuth 2.0 PKCE, file ops, long-poll for continuous change detection).
+- **Changelog retention.** Compaction policy: time window + per-row cap + device acknowledgment.
 
-- **Sync UI.** Settings panel (connect/disconnect Dropbox), sync status indicator, "download all files" option, conflict indicators on rows (Tier 2, if time permits).
+**Testing:** Vitest for: unique ID generation (no collisions in bulk creation), change tracking (triggers fire correctly, changelog entries are accurate), changeset export/import (round-trip), conflict detection and LWW resolution (correct winner, loser preserved in `_sync_conflicts`), closure rebuild correctness after simulated remote rank changes, changelog compaction under various retention scenarios.
 
-**Testing:** Vitest for: unique ID generation (no collisions in bulk creation), change tracking (triggers fire correctly, changelog entries are accurate), changeset export/import (round-trip), conflict detection and LWW resolution (correct winner, loser preserved in `_sync_conflicts`), closure rebuild correctness after remote rank changes, file hashing and OPFS operations. Playwright for: OAuth flow (if testable), attachment UI (drop file, see attachment, click to preview), sync status indicator.
-
-**Proves:** The sync layer works end-to-end. Local changes propagate to Dropbox within seconds. A second device receives changes via long-poll. Conflicts are detected and the losing version is preserved. Files survive OPFS eviction via remote re-download. The provider interface is clean enough that adding S3 later is straightforward.
+**Proves:** The schema is sync-safe. All data mutations are tracked with full row snapshots. Changesets can be exported and imported. Conflicts are detected and resolved with the losing version preserved. Closure tables can be reconstructed from rank. The infrastructure is ready for a live sync engine to plug into.
 
 ---
 
@@ -398,6 +397,31 @@ Form-based faces and timed prompts, completing the use case set.
 
 ---
 
+### Phase 10 -- Live sync, files, and Dropbox
+
+> Detailed task list: [Phase-10.md](Phase-10.md)
+> Detailed specification: [Sync.md](Sync.md)
+
+Builds on Phase 3's sync-readiness infrastructure to add live sync. Content-addressed file storage, file attachments on outline rows, the sync engine coordinator, the Dropbox provider, and sync UI. By the end, data flows continuously between devices.
+
+**Work:**
+
+- **File storage layer.** `files` and `file_attachments` tables, OPFS file read/write, content-addressed naming (SHA-256), worker protocol for file operations.
+
+- **Attachment UI.** File drop/paste/select on outline rows, attachment display (thumbnails, file list), click-to-preview/download.
+
+- **Provider interface + Dropbox.** Abstract `SyncProvider` type, Dropbox implementation (OAuth 2.0 PKCE, file ops, long-poll for continuous change detection).
+
+- **Sync engine.** Main-thread coordinator, changeset upload/download via provider, debouncing, periodic snapshot export, lazy file sync, changelog compaction.
+
+- **Sync UI.** Settings panel (connect/disconnect Dropbox), sync status indicator, "download all files" option, conflict indicators on rows (Tier 2, if time permits).
+
+**Testing:** Vitest for: file hashing and OPFS operations, sync engine with mock provider (upload/download round-trip, debounce, snapshot, error handling), Dropbox API calls with mocked fetch. Playwright for: attachment UI (drop file, see attachment, click to preview), sync status indicator, OAuth flow (if testable).
+
+**Proves:** The sync layer works end-to-end. Local changes propagate to Dropbox within seconds. A second device receives changes via long-poll. Conflicts are detected and the losing version is preserved. Files survive OPFS eviction via remote re-download. The provider interface is clean enough that adding S3 later is straightforward.
+
+---
+
 ## Cross-cutting concerns
 
 These are not phase-gated -- they should be addressed incrementally as they become relevant.
@@ -467,7 +491,7 @@ Phase 1 (Foundation) ✓
 Phase 2 (Outline + Rich Text)
   │
   ▼
-Phase 3 (Storage, Files, Sync)
+Phase 3 (Sync-readiness)
   │
   ├───────────────────────────┐
   ▼                           ▼
@@ -486,9 +510,13 @@ Phase 6 (Tasks +              │
   ├──────────────────┐
   ▼                  ▼
 Phase 8 (SRS)     Phase 9 (Journaling)
+
+Phase 10 (Live sync, files, Dropbox) ◄── Phase 3
+  (can proceed any time after Phase 3;
+   independent of Phases 4-9)
 ```
 
-Phase 3 (storage, files, sync) is a prerequisite for everything that follows -- plugins and faces may need to store files (e.g. image attachments on tagged items) and all data changes should be sync-tracked from the start. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 is the heaviest phase: it formalizes the plugin system, builds the face slot model, introduces trait auto-provisioning, and delivers the notes plugin as the second consumer alongside the refactored outline. Phase 5 (tags) is the third plugin, proving cross-plugin composition. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
+Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 is the heaviest phase: it formalizes the plugin system, builds the face slot model, introduces trait auto-provisioning, and delivers the notes plugin as the second consumer alongside the refactored outline. Phase 5 (tags) is the third plugin, proving cross-plugin composition. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
 
 ---
 
