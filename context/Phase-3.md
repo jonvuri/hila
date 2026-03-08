@@ -42,7 +42,7 @@ Establish a persistent device ID for change attribution. This is the foundation 
 
 Trigger-based changelog on all tracked tables. Every INSERT/UPDATE/DELETE fires a trigger that logs to `_sync_changelog`. This is the foundation for the sync engine and doubles as per-row version history.
 
-- [ ] Create `_sync_changelog` table in `initMatrixSchema`:
+- [x] Create `_sync_changelog` table in `initMatrixSchema`:
   ```sql
   CREATE TABLE IF NOT EXISTS _sync_changelog (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,19 +55,19 @@ Trigger-based changelog on all tracked tables. Every INSERT/UPDATE/DELETE fires 
   ) STRICT;
   ```
   Note: `seq` uses AUTOINCREMENT here intentionally -- it is a monotonic sequence number for ordering changes, not an entity ID.
-- [ ] Implement `installChangeTrackingTriggers(db, tableName, deviceId)` in a new `src/core/sync.ts` module:
+- [x] Implement `installChangeTrackingTriggers(db, tableName, deviceId)` in a new `src/core/sync.ts` module:
   - Creates three triggers (INSERT, UPDATE, DELETE) on the given table.
   - INSERT trigger: logs the full row as JSON via `json_object(...)` over known columns.
   - UPDATE trigger: logs the full NEW row as JSON.
   - DELETE trigger: logs with `data = NULL`.
   - Trigger names follow a convention: `_sync_track_{tableName}_{operation}`.
   - Idempotent: uses `CREATE TRIGGER IF NOT EXISTS`.
-- [ ] Install triggers on core tables at schema init time: `rank`, `joins`, `matrix`, `matrix_columns`. The device_id for triggers is read from `_sync_state`.
-- [ ] Install triggers dynamically on `mx_{id}_data` tables when a matrix is created (`createMatrix`, `ensureRootMatrix`). The trigger column list is derived from `matrix_columns` for that matrix.
-- [ ] Handle `addColumn` / `removeColumn` / `renameColumn`: when a matrix's schema changes, drop and recreate the data table's changelog triggers so the JSON serialization reflects the current columns.
-- [ ] Closure tables are **not** change-tracked -- they are derived from rank and rebuilt after remote changes. Confirm no triggers are installed on `mx_{id}_closure`.
-- [ ] Tests: insert a row, verify a changelog entry appears with correct table_name, row_id, operation='INSERT', and data containing the full row JSON. Update a row, verify 'UPDATE' entry. Delete a row, verify 'DELETE' entry with data=NULL. Verify device_id is populated correctly. Add a column to a matrix, insert a row, verify the new column appears in the changelog JSON.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Install triggers on core tables at schema init time: `rank`, `joins`, `matrix`, `matrix_columns`. The device_id for triggers is read from `_sync_state`.
+- [x] Install triggers dynamically on `mx_{id}_data` tables when a matrix is created (`createMatrix`, `ensureRootMatrix`). The trigger column list is derived from `matrix_columns` for that matrix.
+- [x] Handle `addColumn` / `removeColumn` / `renameColumn`: when a matrix's schema changes, drop and recreate the data table's changelog triggers so the JSON serialization reflects the current columns.
+- [x] Closure tables are **not** change-tracked -- they are derived from rank and rebuilt after remote changes. Confirm no triggers are installed on `mx_{id}_closure`.
+- [x] Tests: insert a row, verify a changelog entry appears with correct table_name, row_id, operation='INSERT', and data containing the full row JSON. Update a row, verify 'UPDATE' entry. Delete a row, verify 'DELETE' entry with data=NULL. Verify device_id is populated correctly. Add a column to a matrix, insert a row, verify the new column appears in the changelog JSON.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Changeset abstraction
 

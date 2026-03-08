@@ -4,6 +4,7 @@ import type { MatrixClientMessage, MatrixWorkerMessage } from '../matrix-types'
 import {
   initMatrixSchema,
   getOrCreateDeviceId,
+  resetDeviceIdCache,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
   ensureRootMatrix,
@@ -17,6 +18,7 @@ import {
   getChildren,
   getColumns,
 } from '../matrix'
+import { installCoreTableTriggers } from '../sync'
 
 import { sqliteWasm } from './worker-db'
 
@@ -46,7 +48,8 @@ const seedWelcomeRow = (db: Database, matrixId: number) => {
 
 export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
-  getOrCreateDeviceId(db)
+  const deviceId = getOrCreateDeviceId(db)
+  installCoreTableTriggers(db, deviceId)
   ensureRootMatrix(db)
   seedWelcomeRow(db, 1)
 }
@@ -95,8 +98,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         sqlite3.capi.sqlite3_exec(db, 'VACUUM', 0, 0, 0)
         sqlite3.capi.sqlite3_db_config(db, sqlite3.capi.SQLITE_DBCONFIG_RESET_DATABASE, 0, 0)
 
+        resetDeviceIdCache()
         initMatrixSchema(db)
-        getOrCreateDeviceId(db)
+        const newDeviceId = getOrCreateDeviceId(db)
+        installCoreTableTriggers(db, newDeviceId)
         ensureRootMatrix(db)
         seedWelcomeRow(db, 1)
 

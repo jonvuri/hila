@@ -1,6 +1,11 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { between, compareKeys, makeKey, nextPrefix, parseKey } from './lexorank'
+import {
+  dropChangeTrackingTriggers,
+  installDataTableTriggers,
+  reinstallDataTableTriggers,
+} from './sync'
 
 /**
  * SQL expression that generates a random positive integer fitting in
@@ -78,6 +83,21 @@ export const initMatrixSchema = (db: Database) => {
     CREATE TABLE IF NOT EXISTS _sync_state (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
+    ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Sync changelog (trigger-based mutation log)
+    -- seq uses AUTOINCREMENT intentionally: monotonic sequence
+    -- number for ordering changes, never reused after deletion.
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS _sync_changelog (
+      seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id  TEXT NOT NULL,
+      timestamp  TEXT NOT NULL DEFAULT (datetime('now')),
+      table_name TEXT NOT NULL,
+      row_id     INTEGER NOT NULL,
+      operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
+      data       TEXT
     ) STRICT;
   `)
 }
@@ -182,6 +202,9 @@ export const createMatrix = (
         ON "mx_${matrixId}_closure"(descendant_key);
     `)
 
+    const deviceId = getOrCreateDeviceId(db)
+    installDataTableTriggers(db, matrixId, deviceId, columns)
+
     db.exec('COMMIT')
     return matrixId
   } catch (error) {
@@ -198,7 +221,9 @@ export const ensureRootMatrix = (db: Database): number => {
   checkStmt.finalize()
 
   if (exists) {
-    // Root matrix already exists
+    const deviceId = getOrCreateDeviceId(db)
+    const columns = getColumns(db, 1)
+    installDataTableTriggers(db, 1, deviceId, columns)
     return 1
   }
 
@@ -237,6 +262,9 @@ export const ensureRootMatrix = (db: Database): number => {
       CREATE INDEX IF NOT EXISTS "mx_${matrixId}_closure_by_descendant"
         ON "mx_${matrixId}_closure"(descendant_key);
     `)
+
+    const deviceId = getOrCreateDeviceId(db)
+    installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
 
     db.exec('COMMIT')
     return matrixId
@@ -1369,6 +1397,9 @@ export const addColumn = (
       bind: [matrixId, column.name, column.type, nextOrder],
     })
 
+    const deviceId = getOrCreateDeviceId(db)
+    reinstallDataTableTriggers(db, matrixId, deviceId, [...current, column])
+
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
@@ -1387,11 +1418,19 @@ export const removeColumn = (db: Database, matrixId: number, columnName: string)
       throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
     }
 
+    // Drop triggers before ALTER TABLE — existing triggers reference the
+    // column being dropped and SQLite validates them after DROP COLUMN.
+    dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+
     db.exec(`ALTER TABLE "mx_${matrixId}_data" DROP COLUMN ${quoteIdent(columnName)}`)
 
     db.exec('DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?', {
       bind: [matrixId, columnName],
     })
+
+    const deviceId = getOrCreateDeviceId(db)
+    const remaining = current.filter((c) => c.name !== columnName)
+    installDataTableTriggers(db, matrixId, deviceId, remaining)
 
     db.exec('COMMIT')
   } catch (error) {
@@ -1419,6 +1458,10 @@ export const renameColumn = (
       throw new Error(`Column "${newName}" already exists in matrix ${matrixId}`)
     }
 
+    // Drop triggers before RENAME — existing triggers reference the old
+    // column name which becomes invalid after ALTER TABLE RENAME COLUMN.
+    dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+
     db.exec(
       `ALTER TABLE "mx_${matrixId}_data" RENAME COLUMN ${quoteIdent(oldName)} TO ${quoteIdent(newName)}`,
     )
@@ -1426,6 +1469,10 @@ export const renameColumn = (
     db.exec('UPDATE matrix_columns SET name = ? WHERE matrix_id = ? AND name = ?', {
       bind: [newName, matrixId, oldName],
     })
+
+    const deviceId = getOrCreateDeviceId(db)
+    const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
+    installDataTableTriggers(db, matrixId, deviceId, updated)
 
     db.exec('COMMIT')
   } catch (error) {
