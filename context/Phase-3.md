@@ -166,14 +166,14 @@ When remote changes modify the `rank` table (reordering, reparenting on another 
 
 The changelog doubles as per-row version history and should not grow unbounded.
 
-- [ ] Implement `compactChangelog(db)` in `sync.ts`:
+- [x] Implement `compactChangelog(db)` in `sync.ts`:
   - Retention policy: keep all entries from the last N days (configurable, default 30).
   - Per-row cap: always keep the last M versions per `(table_name, row_id)` pair (configurable, default 10).
   - Only compact entries that all known devices have acknowledged (check per-device high-water marks in `_sync_state`).
   - Delete entries that are older than the retention window, exceed the per-row cap, and are below all devices' acknowledged seq.
-- [ ] Wire into a periodic maintenance path: for now, expose `compactChangelog` as a worker message so it can be called on demand or on a timer. The sync engine (Phase 10) will call it automatically.
-- [ ] Tests: create a matrix, insert and update a row many times (exceeding the per-row cap), run compaction, verify only the last M entries per row remain. Verify entries within the retention window are preserved regardless of count. Verify entries above a device's high-water mark are preserved (not compacted away before the device has seen them).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Wire into a periodic maintenance path: for now, expose `compactChangelog` as a worker message so it can be called on demand or on a timer. The sync engine (Phase 10) will call it automatically.
+- [x] Tests: create a matrix, insert and update a row many times (exceeding the per-row cap), run compaction, verify only the last M entries per row remain. Verify entries within the retention window are preserved regardless of count. Verify entries above a device's high-water mark are preserved (not compacted away before the device has seen them).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ---
 

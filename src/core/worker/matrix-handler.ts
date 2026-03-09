@@ -18,7 +18,7 @@ import {
   getChildren,
   getColumns,
 } from '../matrix'
-import { installCoreTableTriggers } from '../sync'
+import { installCoreTableTriggers, compactChangelog } from '../sync'
 
 import { sqliteWasm } from './worker-db'
 
@@ -207,6 +207,18 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'deleteSubtreeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteSubtreeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'compactChangelog': {
+      const { id, retentionDays, perRowCap } = message
+      try {
+        const { db } = await sqliteWasm
+        const deleted = compactChangelog(db, { retentionDays, perRowCap })
+        postMessage({ type: 'compactChangelogSuccess', id, result: deleted })
+      } catch (err: unknown) {
+        postMessage({ type: 'compactChangelogError', id, error: toError(err) })
       }
       break
     }

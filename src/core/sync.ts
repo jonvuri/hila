@@ -619,6 +619,75 @@ export const applyRemoteChanges = (
   return { applied, conflicts, affectedRankMatrixIds }
 }
 
+export type CompactChangelogOptions = {
+  /** Keep all entries from the last N days (default 30). */
+  retentionDays?: number
+  /** Always keep the last M versions per (table_name, row_id) pair (default 10). */
+  perRowCap?: number
+}
+
+/**
+ * Compact the changelog by removing old entries that exceed the retention
+ * window and per-row cap, provided all known devices have acknowledged them.
+ *
+ * An entry is deleted only if ALL of these conditions are met:
+ * 1. Its seq is below all devices' acknowledged high-water marks.
+ * 2. It is older than the retention window (retentionDays).
+ * 3. It exceeds the per-row cap (more than perRowCap newer entries exist for the same table_name + row_id).
+ */
+export const compactChangelog = (
+  db: Database,
+  options: CompactChangelogOptions = {},
+): number => {
+  const retentionDays = options.retentionDays ?? 30
+  const perRowCap = options.perRowCap ?? 10
+
+  // Find the minimum high-water mark across all known devices.
+  // Only compact entries that ALL devices have acknowledged.
+  const hwmStmt = db.prepare(
+    "SELECT MIN(CAST(value AS INTEGER)) AS min_hwm FROM _sync_state WHERE key LIKE 'last_acked_seq_%'",
+  )
+  let minHwm: number | null = null
+  if (hwmStmt.step()) {
+    const row = hwmStmt.get({}) as { min_hwm: number | null }
+    minHwm = row.min_hwm
+  }
+  hwmStmt.finalize()
+
+  // If no devices have high-water marks, nothing to compact
+  // (no remote devices known, so no entries are safe to remove)
+  if (minHwm === null) {
+    return 0
+  }
+
+  // Delete entries that are:
+  // 1. Below the minimum device high-water mark (all devices have seen them)
+  // 2. Older than the retention window
+  // 3. Exceeding the per-row cap (not among the last M entries for their row)
+  //
+  // We use a CTE to identify which entries to keep per (table_name, row_id)
+  // and delete the rest that also satisfy conditions 1 and 2.
+  const deleteSql = `
+    DELETE FROM _sync_changelog
+    WHERE seq IN (
+      SELECT seq FROM _sync_changelog AS c
+      WHERE c.seq <= ?
+        AND c.timestamp < datetime('now', ?)
+        AND (
+          SELECT COUNT(*) FROM _sync_changelog AS c2
+          WHERE c2.table_name = c.table_name
+            AND c2.row_id = c.row_id
+            AND c2.seq > c.seq
+        ) >= ?
+    )
+  `
+
+  const retentionModifier = `-${retentionDays} days`
+  db.exec(deleteSql, { bind: [minHwm, retentionModifier, perRowCap] })
+
+  return db.changes()
+}
+
 /**
  * Read the local device ID from `_sync_state`.
  */

@@ -28,6 +28,7 @@ import {
   setLastUploadedSeq,
   applyRemoteChanges,
   rebuildClosure,
+  compactChangelog,
 } from './sync'
 import type { Changeset } from './sync-types'
 
@@ -1251,5 +1252,270 @@ describe('Change tracking infrastructure', () => {
       const log = getChangelog()
       expect(log.length).toBeGreaterThan(0)
     })
+  })
+})
+
+describe('Changelog retention (compactChangelog)', () => {
+  let db: Database
+  let deviceId: string
+
+  beforeEach(async () => {
+    resetDeviceIdCache()
+
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    deviceId = getOrCreateDeviceId(db)
+    installCoreTableTriggers(db, deviceId)
+  })
+
+  const getChangelog = (): ChangelogEntry[] => {
+    const stmt = db.prepare(
+      'SELECT seq, device_id, timestamp, table_name, row_id, operation, data FROM _sync_changelog ORDER BY seq',
+    )
+    const entries: ChangelogEntry[] = []
+    while (stmt.step()) {
+      entries.push(stmt.get({}) as unknown as ChangelogEntry)
+    }
+    stmt.finalize()
+    return entries
+  }
+
+  const setDeviceHwm = (remoteDeviceId: string, seq: number) => {
+    const key = `last_acked_seq_${remoteDeviceId}`
+    db.exec(
+      'INSERT INTO _sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      { bind: [key, String(seq)] },
+    )
+  }
+
+  test('no compaction when no devices have high-water marks', () => {
+    const matrixId = createMatrix(db, 'Test')
+    for (let i = 0; i < 15; i++) {
+      insertDataRow(db, matrixId, { title: `Row ${i}` })
+    }
+
+    const beforeCount = getChangelog().length
+    expect(beforeCount).toBeGreaterThan(0)
+
+    const deleted = compactChangelog(db)
+    expect(deleted).toBe(0)
+    expect(getChangelog().length).toBe(beforeCount)
+  })
+
+  test('compacts entries exceeding per-row cap when all conditions met', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
+
+    // Update the same row many times to exceed the per-row cap
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId, values: { title: `Update ${i}` } })
+    }
+
+    // Total data table entries for this row: 1 INSERT + 15 UPDATEs = 16
+    const dataEntries = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+    expect(dataEntries.length).toBe(16)
+
+    const maxSeq = Math.max(...getChangelog().map((e) => e.seq))
+
+    // Set a device high-water mark above all entries
+    setDeviceHwm('remote-device-1', maxSeq + 100)
+
+    // Backdate all entries to be outside the retention window
+    db.exec(
+      "UPDATE _sync_changelog SET timestamp = datetime('now', '-60 days') WHERE table_name = ?",
+      { bind: [`mx_${matrixId}_data`] },
+    )
+
+    const deleted = compactChangelog(db, { perRowCap: 10 })
+    expect(deleted).toBeGreaterThan(0)
+
+    // Should keep exactly 10 entries for this row (the newest 10)
+    const remaining = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+    expect(remaining.length).toBe(10)
+
+    // Verify the kept entries are the newest ones (highest seq values)
+    const keptSeqs = remaining.map((e) => e.seq)
+    const originalSeqs = dataEntries.map((e) => e.seq)
+    const expectedKept = originalSeqs.slice(-10)
+    expect(keptSeqs).toEqual(expectedKept)
+  })
+
+  test('preserves entries within the retention window regardless of count', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
+
+    // Update the same row many times to exceed the per-row cap
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId, values: { title: `Update ${i}` } })
+    }
+
+    const dataEntries = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+    expect(dataEntries.length).toBe(16)
+
+    const maxSeq = Math.max(...getChangelog().map((e) => e.seq))
+    setDeviceHwm('remote-device-1', maxSeq + 100)
+
+    // Don't backdate — entries are within the default 30-day retention window
+    const deleted = compactChangelog(db, { perRowCap: 10 })
+    expect(deleted).toBe(0)
+
+    // All entries preserved because they're within the retention window
+    const remaining = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+    expect(remaining.length).toBe(16)
+  })
+
+  test('preserves entries above a device high-water mark', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
+
+    // Update the same row many times
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId, values: { title: `Update ${i}` } })
+    }
+
+    const dataEntries = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+    expect(dataEntries.length).toBe(16)
+
+    // Set device high-water mark in the middle of our entries
+    // Only entries at or below this mark are eligible for compaction
+    const midSeq = dataEntries[7]!.seq
+    setDeviceHwm('remote-device-1', midSeq)
+
+    // Backdate all entries
+    db.exec("UPDATE _sync_changelog SET timestamp = datetime('now', '-60 days')")
+
+    compactChangelog(db, { perRowCap: 10 })
+
+    // Entries above midSeq are preserved (device hasn't seen them yet)
+    const remaining = getChangelog().filter(
+      (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === rowId,
+    )
+
+    // All entries with seq > midSeq are preserved (8 entries: indices 8-15)
+    const aboveHwm = remaining.filter((e) => e.seq > midSeq)
+    expect(aboveHwm.length).toBe(8)
+
+    // For entries at or below midSeq, we can only delete those exceeding the per-row cap
+    // considering ALL entries for that row (not just the ones below hwm).
+    // We had 16 total, 8 are above hwm. The 8 below hwm: only those that
+    // have >= 10 newer entries get deleted. Entry at index 0-5 have 10-15 newer entries (deletable).
+    // Entries at index 6-7 have 9 and 8 newer entries (kept, below cap threshold).
+    // So we expect 6 deleted: remaining = 16 - 6 = 10? Let me verify...
+    // Actually entries below hwm: indices 0-7 (8 entries), seq values dataEntries[0..7].seq
+    // For each: count of entries with same (table,row) and higher seq
+    //   index 0: 15 newer -> >= 10, eligible
+    //   index 1: 14 newer -> eligible
+    //   index 2: 13 newer -> eligible
+    //   index 3: 12 newer -> eligible
+    //   index 4: 11 newer -> eligible
+    //   index 5: 10 newer -> eligible
+    //   index 6: 9 newer -> not eligible (< 10)
+    //   index 7: 8 newer -> not eligible
+    // So 6 deleted, 10 remain
+    expect(remaining.length).toBe(10)
+  })
+
+  test('respects minimum high-water mark across multiple devices', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
+
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId, values: { title: `Update ${i}` } })
+    }
+
+    const allEntries = getChangelog()
+    const maxSeq = Math.max(...allEntries.map((e) => e.seq))
+    const midSeq = allEntries[5]!.seq
+
+    // Device A has seen everything, device B has only seen up to midSeq
+    setDeviceHwm('device-a', maxSeq + 100)
+    setDeviceHwm('device-b', midSeq)
+
+    // Backdate all entries
+    db.exec("UPDATE _sync_changelog SET timestamp = datetime('now', '-60 days')")
+
+    compactChangelog(db, { perRowCap: 10 })
+
+    // No entry above midSeq should be deleted (device-b hasn't seen them)
+    const remaining = getChangelog()
+    const aboveMid = remaining.filter((e) => e.seq > midSeq)
+    const originalAboveMid = allEntries.filter((e) => e.seq > midSeq)
+    expect(aboveMid.length).toBe(originalAboveMid.length)
+  })
+
+  test('configurable retention days', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
+
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId, values: { title: `Update ${i}` } })
+    }
+
+    const maxSeq = Math.max(...getChangelog().map((e) => e.seq))
+    setDeviceHwm('remote-device-1', maxSeq + 100)
+
+    // Backdate entries to 10 days ago (within default 30-day window but outside 5-day window)
+    db.exec("UPDATE _sync_changelog SET timestamp = datetime('now', '-10 days')")
+
+    // With default 30 days, nothing should be deleted
+    const deleted30 = compactChangelog(db, { retentionDays: 30, perRowCap: 10 })
+    expect(deleted30).toBe(0)
+
+    // With 5-day retention, entries exceeding cap should be deleted
+    const deleted5 = compactChangelog(db, { retentionDays: 5, perRowCap: 10 })
+    expect(deleted5).toBeGreaterThan(0)
+  })
+
+  test('handles multiple rows independently', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const rowId1 = insertDataRow(db, matrixId, { title: 'Row 1' })
+    const rowId2 = insertDataRow(db, matrixId, { title: 'Row 2' })
+
+    // Update row1 many times, row2 only a few
+    for (let i = 0; i < 15; i++) {
+      updateRow(db, { matrixId, rowId: rowId1, values: { title: `Row1 Update ${i}` } })
+    }
+    for (let i = 0; i < 3; i++) {
+      updateRow(db, { matrixId, rowId: rowId2, values: { title: `Row2 Update ${i}` } })
+    }
+
+    const maxSeq = Math.max(...getChangelog().map((e) => e.seq))
+    setDeviceHwm('remote-device-1', maxSeq + 100)
+
+    // Backdate all entries
+    db.exec(
+      "UPDATE _sync_changelog SET timestamp = datetime('now', '-60 days') WHERE table_name = ?",
+      { bind: [`mx_${matrixId}_data`] },
+    )
+
+    compactChangelog(db, { perRowCap: 10 })
+
+    const tableName = `mx_${matrixId}_data`
+    const row1Entries = getChangelog().filter(
+      (e) => e.table_name === tableName && e.row_id === rowId1,
+    )
+    const row2Entries = getChangelog().filter(
+      (e) => e.table_name === tableName && e.row_id === rowId2,
+    )
+
+    // Row1 had 16 entries, should be capped at 10
+    expect(row1Entries.length).toBe(10)
+    // Row2 had 4 entries (1 INSERT + 3 UPDATEs), all below cap, all preserved
+    expect(row2Entries.length).toBe(4)
   })
 })

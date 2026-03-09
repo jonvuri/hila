@@ -46,6 +46,10 @@ export type MatrixOperationMap = {
     params: { matrixId: number; key: Uint8Array }
     result: void
   }
+  compactChangelog: {
+    params: { retentionDays?: number; perRowCap?: number }
+    result: number
+  }
 }
 
 export type MatrixOperationType = keyof MatrixOperationMap
