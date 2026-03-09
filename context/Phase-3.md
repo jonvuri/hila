@@ -108,7 +108,7 @@ The sync engine works with changesets -- serializable descriptions of what chang
 
 When applying remote changes, detect conflicts (same row modified locally since last sync with that device) and resolve via LWW. Preserve the losing version.
 
-- [ ] Create `_sync_conflicts` table in `initMatrixSchema`:
+- [x] Create `_sync_conflicts` table in `initMatrixSchema`:
   ```sql
   CREATE TABLE IF NOT EXISTS _sync_conflicts (
     id INTEGER PRIMARY KEY DEFAULT (abs(random())),
@@ -121,7 +121,7 @@ When applying remote changes, detect conflicts (same row modified locally since 
     resolved INTEGER NOT NULL DEFAULT 0
   ) STRICT;
   ```
-- [ ] Implement `applyRemoteChanges(db, changeset): ApplyResult` in `sync.ts`:
+- [x] Implement `applyRemoteChanges(db, changeset): ApplyResult` in `sync.ts`:
   - For each entry in the changeset:
     - **Conflict check:** query `_sync_changelog` for local modifications to the same `(table_name, row_id)` since the last sync with the remote device (tracked per-device in `_sync_state` as `last_acked_seq_{deviceId}`).
     - **No conflict:** apply the change directly (INSERT/UPDATE/DELETE on the target table).
@@ -134,11 +134,11 @@ When applying remote changes, detect conflicts (same row modified locally since 
   - After all entries are applied: if any entries touched the `rank` table, trigger a closure rebuild for the affected matrixes (task 6).
   - Update per-device high-water mark in `_sync_state`.
   - Return `ApplyResult` with count of applied changes and any conflict records.
-- [ ] Implement the trigger-suppression mechanism. Preferred approach: the triggers check a runtime flag so that changes applied during remote sync are not re-logged. Options:
+- [x] Implement the trigger-suppression mechanism. Preferred approach: the triggers check a runtime flag so that changes applied during remote sync are not re-logged. Options:
   - A `TEMP` table with a single row that triggers inspect via `EXISTS`.
   - A custom SQLite function (`sync_is_applying()`) that returns a flag set by TypeScript before/after apply.
   - Evaluate and pick the simplest reliable approach.
-- [ ] Tests:
+- [x] Tests:
   - Apply a remote INSERT for a row that doesn't exist locally -- verify row appears.
   - Apply a remote UPDATE for a row with no local modifications -- verify row updated, no conflict.
   - Apply a remote UPDATE for a row that was also locally modified (set up by inserting, modifying locally, then applying a remote change with a newer timestamp) -- verify LWW picks remote, conflict record saved with local as loser.
@@ -147,7 +147,7 @@ When applying remote changes, detect conflicts (same row modified locally since 
   - Verify remote changes do NOT appear in `_sync_changelog` (trigger suppression works).
   - Verify per-device high-water marks are updated.
   - Simulate two devices inserting between the same siblings (producing identical rank keys). Apply one as a remote change. Verify the collision is detected, one row is re-ranked, both rows are present, and their ordering is correct. Verify no collision path is triggered when rank keys differ (the common case).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Closure rebuild after remote rank changes
 

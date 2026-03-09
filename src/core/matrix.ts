@@ -99,6 +99,27 @@ export const initMatrixSchema = (db: Database) => {
       operation  TEXT NOT NULL CHECK (operation IN ('INSERT', 'UPDATE', 'DELETE')),
       data       TEXT
     ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Sync conflicts (LWW conflict records with losing version)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS _sync_conflicts (
+      id           INTEGER PRIMARY KEY DEFAULT (abs(random())),
+      table_name   TEXT NOT NULL,
+      row_id       INTEGER NOT NULL,
+      winner       TEXT NOT NULL CHECK (winner IN ('local', 'remote')),
+      losing_data  TEXT NOT NULL,
+      winning_data TEXT NOT NULL,
+      detected_at  TEXT NOT NULL DEFAULT (datetime('now')),
+      resolved     INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Sync applying flag (presence of a row suppresses triggers)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS _sync_applying (
+      flag INTEGER PRIMARY KEY DEFAULT 1
+    ) STRICT;
   `)
 }
 

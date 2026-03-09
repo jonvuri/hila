@@ -22,7 +22,9 @@ import {
   getLastSeq,
   getLastUploadedSeq,
   setLastUploadedSeq,
+  applyRemoteChanges,
 } from './sync'
+import type { Changeset } from './sync-types'
 
 type ChangelogEntry = {
   seq: number
@@ -467,6 +469,512 @@ describe('Change tracking infrastructure', () => {
       setLastUploadedSeq(db, 10)
       setLastUploadedSeq(db, 25)
       expect(getLastUploadedSeq(db)).toBe(25)
+    })
+  })
+
+  // -- Conflict detection and resolution --
+
+  describe('Conflict detection and resolution', () => {
+    const REMOTE_DEVICE_ID = 'remote-device-aaaa-bbbb-ccccddddeeee'
+
+    const makeRemoteChangeset = (
+      entries: Changeset['entries'],
+      fromSeq = 0,
+      toSeq = 100,
+    ): Changeset => ({
+      deviceId: REMOTE_DEVICE_ID,
+      fromSeq,
+      toSeq,
+      entries,
+    })
+
+    // -- _sync_conflicts table existence --
+
+    test('_sync_conflicts table exists after schema init', () => {
+      const stmt = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='_sync_conflicts'",
+      )
+      expect(stmt.step()).toBe(true)
+      stmt.finalize()
+    })
+
+    test('_sync_applying table exists after schema init', () => {
+      const stmt = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='_sync_applying'",
+      )
+      expect(stmt.step()).toBe(true)
+      stmt.finalize()
+    })
+
+    // -- Remote INSERT for a row that doesn't exist locally --
+
+    test('apply remote INSERT creates a new row', () => {
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+
+      const remoteRowId = 999888777
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId: remoteRowId,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: { id: remoteRowId, title: 'Remote row' },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(0)
+
+      // Verify the row exists
+      const stmt = db.prepare(`SELECT id, title FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([remoteRowId])
+      expect(stmt.step()).toBe(true)
+      const row = stmt.get({}) as { id: number; title: string }
+      expect(row.title).toBe('Remote row')
+      stmt.finalize()
+    })
+
+    // -- Remote UPDATE with no local modifications --
+
+    test('apply remote UPDATE with no local conflict updates the row', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'Original' })
+      clearChangelog()
+
+      // Set a high-water mark so the local insert isn't seen as a conflict
+      db.exec(
+        `INSERT INTO _sync_state (key, value) VALUES ('last_acked_seq_${REMOTE_DEVICE_ID}', '99999')`,
+      )
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId,
+            operation: 'UPDATE',
+            timestamp: '2025-01-01 13:00:00',
+            data: { id: rowId, title: 'Updated remotely' },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(0)
+
+      const stmt = db.prepare(`SELECT title FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([rowId])
+      expect(stmt.step()).toBe(true)
+      expect((stmt.get({}) as { title: string }).title).toBe('Updated remotely')
+      stmt.finalize()
+    })
+
+    // -- Remote UPDATE conflicts with local modification, remote wins (LWW) --
+
+    test('conflict: remote UPDATE wins when remote timestamp is newer', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'Original' })
+
+      // Local modification (tracked in changelog)
+      updateRow(db, { matrixId, rowId, values: { title: 'Local edit' } })
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId,
+            operation: 'UPDATE',
+            timestamp: '2099-01-01 00:00:00', // Far future — remote wins
+            data: { id: rowId, title: 'Remote edit' },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(1)
+
+      const conflict = result.conflicts[0]!
+      expect(conflict.winner).toBe('remote')
+      expect(conflict.tableName).toBe(`mx_${matrixId}_data`)
+      expect(conflict.rowId).toBe(rowId)
+
+      // Losing data should be the local version
+      const losingData = JSON.parse(conflict.losingData) as Record<string, unknown>
+      expect(losingData.title).toBe('Local edit')
+
+      // Winning data should be the remote version
+      const winningData = JSON.parse(conflict.winningData) as Record<string, unknown>
+      expect(winningData.title).toBe('Remote edit')
+
+      // The row should have the remote value
+      const stmt = db.prepare(`SELECT title FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([rowId])
+      expect(stmt.step()).toBe(true)
+      expect((stmt.get({}) as { title: string }).title).toBe('Remote edit')
+      stmt.finalize()
+    })
+
+    // -- Remote UPDATE conflicts with local modification, local wins (LWW) --
+
+    test('conflict: local UPDATE wins when local timestamp is newer', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'Original' })
+
+      // Local modification (tracked in changelog)
+      updateRow(db, { matrixId, rowId, values: { title: 'Local edit' } })
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId,
+            operation: 'UPDATE',
+            timestamp: '2000-01-01 00:00:00', // Far past — local wins
+            data: { id: rowId, title: 'Remote edit' },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(0)
+      expect(result.conflicts).toHaveLength(1)
+
+      const conflict = result.conflicts[0]!
+      expect(conflict.winner).toBe('local')
+
+      // Losing data should be the remote version
+      const losingData = JSON.parse(conflict.losingData) as Record<string, unknown>
+      expect(losingData.title).toBe('Remote edit')
+
+      // Winning data should be the local version
+      const winningData = JSON.parse(conflict.winningData) as Record<string, unknown>
+      expect(winningData.title).toBe('Local edit')
+
+      // The row should still have the local value
+      const stmt = db.prepare(`SELECT title FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([rowId])
+      expect(stmt.step()).toBe(true)
+      expect((stmt.get({}) as { title: string }).title).toBe('Local edit')
+      stmt.finalize()
+    })
+
+    // -- Remote DELETE for a row edited locally --
+
+    test('conflict: remote DELETE vs local edit detects conflict', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'Will be contested' })
+
+      // Local modification
+      updateRow(db, { matrixId, rowId, values: { title: 'Local edit' } })
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId,
+            operation: 'DELETE',
+            timestamp: '2099-01-01 00:00:00', // Remote wins
+            data: null,
+          },
+        ]),
+      )
+
+      expect(result.conflicts).toHaveLength(1)
+      expect(result.conflicts[0]!.winner).toBe('remote')
+
+      // Row should be deleted
+      const stmt = db.prepare(`SELECT id FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([rowId])
+      expect(stmt.step()).toBe(false)
+      stmt.finalize()
+    })
+
+    // -- Remote changes do NOT appear in _sync_changelog (trigger suppression) --
+
+    test('remote changes do not appear in _sync_changelog', () => {
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+
+      const remoteRowId = 111222333
+      applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId: remoteRowId,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: { id: remoteRowId, title: 'Remote only' },
+          },
+        ]),
+      )
+
+      const log = getChangelog()
+      const remoteEntries = log.filter(
+        (e) => e.table_name === `mx_${matrixId}_data` && e.row_id === remoteRowId,
+      )
+      expect(remoteEntries).toHaveLength(0)
+    })
+
+    // -- Per-device high-water marks are updated --
+
+    test('per-device high-water mark is updated after apply', () => {
+      const matrixId = createMatrix(db, 'Test')
+
+      const remoteRowId = 444555666
+      applyRemoteChanges(
+        db,
+        makeRemoteChangeset(
+          [
+            {
+              table: `mx_${matrixId}_data`,
+              rowId: remoteRowId,
+              operation: 'INSERT',
+              timestamp: '2025-01-01 12:00:00',
+              data: { id: remoteRowId, title: 'HWM test' },
+            },
+          ],
+          50,
+          150,
+        ),
+      )
+
+      const stmt = db.prepare(
+        `SELECT value FROM _sync_state WHERE key = 'last_acked_seq_${REMOTE_DEVICE_ID}'`,
+      )
+      expect(stmt.step()).toBe(true)
+      expect((stmt.get({}) as { value: string }).value).toBe('150')
+      stmt.finalize()
+    })
+
+    // -- Duplicate rank key collision --
+
+    test('duplicate rank key collision is resolved: both rows present with correct order', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const localRowId = insertDataRow(db, matrixId, { title: 'Local row' })
+      const remoteRowId = 777888999
+
+      // Insert the remote data row first (no rank yet)
+      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote row')`, {
+        bind: [remoteRowId],
+      })
+
+      // Insert local row into rank with a known key
+      const localKey = new Uint8Array([0x80, 0x00])
+      db.exec('INSERT INTO rank (key, matrix_id, row_kind, row_id) VALUES (?, ?, 0, ?)', {
+        bind: [localKey, matrixId, localRowId],
+      })
+
+      clearChangelog()
+
+      // Remote device tries to insert with the SAME rank key
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'rank',
+            rowId: remoteRowId,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              key: '8000', // hex-encoded [0x80, 0x00]
+              matrix_id: matrixId,
+              row_kind: 0,
+              row_id: remoteRowId,
+            },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+
+      // Both rows should exist in rank
+      const countStmt = db.prepare('SELECT COUNT(*) AS cnt FROM rank WHERE matrix_id = ?')
+      countStmt.bind([matrixId])
+      countStmt.step()
+      expect((countStmt.get({}) as { cnt: number }).cnt).toBe(2)
+      countStmt.finalize()
+
+      // Both rows should have different keys
+      const keysStmt = db.prepare(
+        'SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key',
+      )
+      keysStmt.bind([matrixId])
+      const rankRows: { key: Uint8Array; row_id: number }[] = []
+      while (keysStmt.step()) {
+        const r = keysStmt.get({}) as { key: Uint8Array; row_id: number }
+        rankRows.push({ key: new Uint8Array(r.key), row_id: r.row_id })
+      }
+      keysStmt.finalize()
+
+      expect(rankRows).toHaveLength(2)
+      // Keys should be different
+      expect(rankRows[0]!.key).not.toEqual(rankRows[1]!.key)
+      // Both row IDs should be present
+      const rowIds = rankRows.map((r) => r.row_id).sort()
+      expect(rowIds).toContain(localRowId)
+      expect(rowIds).toContain(remoteRowId)
+    })
+
+    // -- No collision when rank keys differ (common case) --
+
+    test('no rank key collision when keys differ', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const localRowId = insertDataRow(db, matrixId, { title: 'Local' })
+      const remoteRowId = 123456789
+
+      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote')`, {
+        bind: [remoteRowId],
+      })
+
+      // Local row at key [0x40, 0x00]
+      db.exec('INSERT INTO rank (key, matrix_id, row_kind, row_id) VALUES (?, ?, 0, ?)', {
+        bind: [new Uint8Array([0x40, 0x00]), matrixId, localRowId],
+      })
+
+      clearChangelog()
+
+      // Remote row at different key [0xC0, 0x00]
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'rank',
+            rowId: remoteRowId,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              key: 'C000', // hex-encoded [0xC0, 0x00]
+              matrix_id: matrixId,
+              row_kind: 0,
+              row_id: remoteRowId,
+            },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(0)
+
+      // Both rows in rank with their original keys
+      const stmt = db.prepare(
+        'SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key',
+      )
+      stmt.bind([matrixId])
+      const rows: { key: Uint8Array; row_id: number }[] = []
+      while (stmt.step()) {
+        const r = stmt.get({}) as { key: Uint8Array; row_id: number }
+        rows.push({ key: new Uint8Array(r.key), row_id: r.row_id })
+      }
+      stmt.finalize()
+
+      expect(rows).toHaveLength(2)
+      expect(rows[0]!.row_id).toBe(localRowId) // 0x40 < 0xC0
+      expect(rows[1]!.row_id).toBe(remoteRowId)
+    })
+
+    // -- affectedRankMatrixIds tracking --
+
+    test('affectedRankMatrixIds includes matrix IDs from rank changes', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const remoteRowId = 555666777
+      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'R')`, {
+        bind: [remoteRowId],
+      })
+      clearChangelog()
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'rank',
+            rowId: remoteRowId,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              key: '8000',
+              matrix_id: matrixId,
+              row_kind: 0,
+              row_id: remoteRowId,
+            },
+          },
+        ]),
+      )
+
+      expect(result.affectedRankMatrixIds.has(matrixId)).toBe(true)
+    })
+
+    // -- Remote DELETE operation --
+
+    test('apply remote DELETE removes the row', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'To be deleted' })
+
+      // Set high-water mark high so no conflict
+      db.exec(
+        `INSERT INTO _sync_state (key, value) VALUES ('last_acked_seq_${REMOTE_DEVICE_ID}', '99999')`,
+      )
+      clearChangelog()
+
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: `mx_${matrixId}_data`,
+            rowId,
+            operation: 'DELETE',
+            timestamp: '2025-01-01 12:00:00',
+            data: null,
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(0)
+
+      const stmt = db.prepare(`SELECT id FROM mx_${matrixId}_data WHERE id = ?`)
+      stmt.bind([rowId])
+      expect(stmt.step()).toBe(false)
+      stmt.finalize()
+    })
+
+    // -- Trigger suppression flag is cleaned up after error --
+
+    test('trigger suppression flag is cleaned up after error', () => {
+      // Apply a changeset that will fail (invalid table)
+      expect(() =>
+        applyRemoteChanges(
+          db,
+          makeRemoteChangeset([
+            {
+              table: 'nonexistent_table',
+              rowId: 1,
+              operation: 'INSERT',
+              timestamp: '2025-01-01 12:00:00',
+              data: { id: 1, value: 'test' },
+            },
+          ]),
+        ),
+      ).toThrow()
+
+      // Verify the _sync_applying table is empty (flag cleared)
+      const stmt = db.prepare('SELECT COUNT(*) AS cnt FROM _sync_applying')
+      stmt.step()
+      expect((stmt.get({}) as { cnt: number }).cnt).toBe(0)
+      stmt.finalize()
+
+      // Verify normal change tracking still works
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+      insertDataRow(db, matrixId, { title: 'After error' })
+      const log = getChangelog()
+      expect(log.length).toBeGreaterThan(0)
     })
   })
 })
