@@ -138,6 +138,8 @@ Core infrastructure changes to make the schema sync-safe and all data mutations 
 
 ### Phase 4 -- Plugin system, faces, and notes
 
+> Detailed task list: [Phase-4.md](Phase-4.md)
+
 Formalize the plugin model from the outline's patterns. Build the face slot system. Introduce the notes plugin as the second consumer. Define how faces separate data from presentation and how the same matrix can be viewed through different face types.
 
 **Work:**
