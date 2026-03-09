@@ -3,11 +3,12 @@ import type {
   MatrixOperationMap,
   MatrixClientMessage,
 } from '../matrix-types'
+import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
 
 import { postMessage } from './worker-client'
 import { pendingRequests } from './matrix-client-promises'
 
-const workerCall = <K extends MatrixOperationType>(
+export const workerCall = <K extends MatrixOperationType>(
   type: K,
   params: MatrixOperationMap[K]['params'],
 ): Promise<MatrixOperationMap[K]['result']> =>
@@ -51,3 +52,14 @@ export const reparentRow = (
 
 export const deleteSubtree = (matrixId: number, key: Uint8Array) =>
   workerCall('deleteSubtree', { matrixId, key })
+
+export const registerPlugin = async (definition: PluginDefinition): Promise<PluginContext> => {
+  const { init, destroy: _destroy, ...registration } = definition
+  const ctx = await workerCall('registerPlugin', { definition: registration })
+  if (init) {
+    await init(ctx)
+  }
+  return ctx
+}
+
+export const getPlugins = (): Promise<PluginRow[]> => workerCall('getPlugins', {})

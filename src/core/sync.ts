@@ -2,6 +2,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { between, makeKey, parseKey } from './lexorank'
 import type { ApplyResult, ChangeEntry, Changeset, ConflictRecord } from './sync-types'
+import { withTransaction } from './transaction'
 
 type TrackedColumn = {
   name: string
@@ -76,9 +77,17 @@ export const dropChangeTrackingTriggers = (db: Database, tableName: string): voi
 }
 
 const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
+  plugins: [
+    { name: 'id', type: 'TEXT' },
+    { name: 'name', type: 'TEXT' },
+    { name: 'version', type: 'TEXT' },
+    { name: 'enabled', type: 'INTEGER' },
+    { name: 'metadata', type: 'TEXT' },
+  ],
   matrix: [
     { name: 'id', type: 'INTEGER' },
     { name: 'title', type: 'TEXT' },
+    { name: 'source_plugin_id', type: 'TEXT' },
   ],
   matrix_columns: [
     { name: 'matrix_id', type: 'INTEGER' },
@@ -395,16 +404,8 @@ const handleRankKeyCollision = (
  * Runs as a single transaction (or participates in an existing one if
  * `insideTransaction` is true).
  */
-export const rebuildClosure = (
-  db: Database,
-  matrixId: number,
-  insideTransaction = false,
-): void => {
-  if (!insideTransaction) {
-    db.exec('BEGIN TRANSACTION')
-  }
-
-  try {
+export const rebuildClosure = (db: Database, matrixId: number): void => {
+  withTransaction(db, () => {
     // 1. Clear the closure table
     db.exec(`DELETE FROM "mx_${matrixId}_closure"`)
 
@@ -454,16 +455,7 @@ export const rebuildClosure = (
         }
       }
     }
-
-    if (!insideTransaction) {
-      db.exec('COMMIT')
-    }
-  } catch (error) {
-    if (!insideTransaction) {
-      db.exec('ROLLBACK')
-    }
-    throw error
-  }
+  })
 }
 
 /**
@@ -488,9 +480,7 @@ export const applyRemoteChanges = (
   let applied = 0
   const affectedRankMatrixIds = new Set<number>()
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     // Suppress change-tracking triggers
     db.exec('INSERT INTO _sync_applying (flag) VALUES (1)')
 
@@ -603,18 +593,12 @@ export const applyRemoteChanges = (
 
     // Rebuild closure tables for matrixes whose rank entries were modified
     for (const matrixId of affectedRankMatrixIds) {
-      rebuildClosure(db, matrixId, true)
+      rebuildClosure(db, matrixId)
     }
 
     // Update per-device high-water mark
     setDeviceHighWaterMark(db, changeset.deviceId, changeset.toSeq)
-
-    db.exec('COMMIT')
-  } catch (e) {
-    db.exec('DELETE FROM _sync_applying')
-    db.exec('ROLLBACK')
-    throw e
-  }
+  })
 
   return { applied, conflicts, affectedRankMatrixIds }
 }

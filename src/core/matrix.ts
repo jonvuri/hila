@@ -6,6 +6,7 @@ import {
   installDataTableTriggers,
   reinstallDataTableTriggers,
 } from './sync'
+import { withTransaction } from './transaction'
 
 /**
  * SQL expression that generates a random positive integer fitting in
@@ -32,11 +33,23 @@ export const initMatrixSchema = (db: Database) => {
   // Create core matrix tables
   db.exec(`
     -- ------------------------------------------------------------
+    -- Plugin registry
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS plugins (
+      id       TEXT PRIMARY KEY,
+      name     TEXT NOT NULL,
+      version  TEXT NOT NULL,
+      enabled  INTEGER NOT NULL DEFAULT 1,
+      metadata TEXT
+    ) STRICT;
+
+    -- ------------------------------------------------------------
     -- Matrix registry
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix (
-      id         INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
-      title      TEXT NOT NULL DEFAULT ''
+      id               INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
+      title            TEXT NOT NULL DEFAULT '',
+      source_plugin_id TEXT REFERENCES plugins(id) ON DELETE SET NULL
     ) STRICT;
 
     -- ------------------------------------------------------------
@@ -121,6 +134,15 @@ export const initMatrixSchema = (db: Database) => {
       flag INTEGER PRIMARY KEY DEFAULT 1
     ) STRICT;
   `)
+
+  // Migration: add source_plugin_id to existing matrix tables that lack it
+  try {
+    db.exec(
+      'ALTER TABLE matrix ADD COLUMN source_plugin_id TEXT REFERENCES plugins(id) ON DELETE SET NULL',
+    )
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
 }
 
 /**
@@ -174,9 +196,7 @@ export const createMatrix = (
   title: string,
   columns: { name: string; type: string }[] = [{ name: 'title', type: 'TEXT' }],
 ): number => {
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  return withTransaction(db, () => {
     const insertStmt = db.prepare(
       `INSERT INTO matrix (id, title) VALUES (${SQL_RANDOM_ID}, ?) RETURNING id`,
     )
@@ -226,12 +246,8 @@ export const createMatrix = (
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, columns)
 
-    db.exec('COMMIT')
     return matrixId
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 // Ensure the root matrix exists (creates it if it doesn't)
@@ -248,9 +264,7 @@ export const ensureRootMatrix = (db: Database): number => {
     return 1
   }
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  return withTransaction(db, () => {
     const insertStmt = db.prepare('INSERT INTO matrix (id, title) VALUES (1, ?) RETURNING id')
     insertStmt.bind(['Root'])
     if (!insertStmt.step()) {
@@ -287,12 +301,8 @@ export const ensureRootMatrix = (db: Database): number => {
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
 
-    db.exec('COMMIT')
     return matrixId
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /**
@@ -321,9 +331,7 @@ export const insertRow = (
 ): Uint8Array => {
   const { matrixId, parentKey, prevKey, nextKey, rowKind, rowId } = params
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  return withTransaction(db, () => {
     // Compute the rank key
     let rankKey: Uint8Array
 
@@ -569,12 +577,8 @@ export const insertRow = (
       }
     }
 
-    db.exec('COMMIT')
     return rankKey
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /**
@@ -676,9 +680,7 @@ export const reparentRow = (
 ): Uint8Array => {
   const { matrixId, nodeKey, newParentKey, prevSiblingKey, nextSiblingKey } = params
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  return withTransaction(db, () => {
     const oldKey = nodeKey
     const oldUpperBound = nextPrefix(oldKey)
 
@@ -919,12 +921,8 @@ export const reparentRow = (
       },
     )
 
-    db.exec('COMMIT')
     return newKey
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /**
@@ -944,9 +942,7 @@ export const deleteRow = (
 ): void => {
   const { matrixId, key } = params
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     // Look up row_id so we can delete from the data table
     const rowStmt = db.prepare(
       'SELECT row_id, row_kind FROM rank WHERE matrix_id = ? AND key = ?',
@@ -980,12 +976,7 @@ export const deleteRow = (
         bind: [rowId],
       })
     }
-
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /**
@@ -1004,9 +995,7 @@ export const deleteSubtree = (
   const { matrixId, key } = params
   const upperBound = nextPrefix(key)
 
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     // 1. Collect row_ids for data rows in the subtree (need these before deleting rank)
     const subtreeStmt = db.prepare(`
       SELECT row_id, row_kind FROM rank
@@ -1057,12 +1046,7 @@ export const deleteSubtree = (
         bind: [rowId],
       })
     }
-
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /**
@@ -1164,9 +1148,7 @@ const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array =
 
 // Add sample rows to a matrix
 export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     // Get existing rows count to determine if we should create children
     const existingRowsStmt = db.prepare(`
       SELECT COUNT(*) as count FROM rank 
@@ -1310,14 +1292,7 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
         }
       }
     }
-
-    // Commit transaction
-    db.exec('COMMIT')
-  } catch (error) {
-    // Rollback on error
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 // Get all matrices for the debug UI
@@ -1400,9 +1375,7 @@ export const addColumn = (
   matrixId: number,
   column: { name: string; type: string },
 ): void => {
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
     if (current.some((c) => c.name === column.name)) {
@@ -1420,19 +1393,12 @@ export const addColumn = (
 
     const deviceId = getOrCreateDeviceId(db)
     reinstallDataTableTriggers(db, matrixId, deviceId, [...current, column])
-
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /** Remove a column from a matrix's data table and registry. */
 export const removeColumn = (db: Database, matrixId: number, columnName: string): void => {
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
     if (!current.some((c) => c.name === columnName)) {
@@ -1452,12 +1418,7 @@ export const removeColumn = (db: Database, matrixId: number, columnName: string)
     const deviceId = getOrCreateDeviceId(db)
     const remaining = current.filter((c) => c.name !== columnName)
     installDataTableTriggers(db, matrixId, deviceId, remaining)
-
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 /** Rename a column in a matrix's data table and registry. */
@@ -1467,9 +1428,7 @@ export const renameColumn = (
   oldName: string,
   newName: string,
 ): void => {
-  db.exec('BEGIN TRANSACTION')
-
-  try {
+  withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
     if (!current.some((c) => c.name === oldName)) {
@@ -1494,12 +1453,7 @@ export const renameColumn = (
     const deviceId = getOrCreateDeviceId(db)
     const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
     installDataTableTriggers(db, matrixId, deviceId, updated)
-
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  })
 }
 
 // -- Join operations ----------------------------------------------------------

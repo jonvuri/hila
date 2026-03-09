@@ -1,3 +1,5 @@
+import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
+
 // Matrix operation registry: maps operation names to request params and response results.
 // All message types and the protocol shape are derived from this single declaration.
 
@@ -49,6 +51,14 @@ export type MatrixOperationMap = {
   compactChangelog: {
     params: { retentionDays?: number; perRowCap?: number }
     result: number
+  }
+  registerPlugin: {
+    params: { definition: PluginRegistration }
+    result: PluginContext
+  }
+  getPlugins: {
+    params: Record<string, never>
+    result: PluginRow[]
   }
 }
 

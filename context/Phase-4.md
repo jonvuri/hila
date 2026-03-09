@@ -12,7 +12,7 @@ Ordered to build incrementally: core plugin infrastructure first, then the outli
 
 The minimum viable plugin system: a registration table, a plugin definition type, lifecycle hooks, and a registration API. Following the [Plugins - Pragmatic development path](./Plugins.md#pragmatic-development-path), this is intentionally minimal -- the formal API will be extracted after multiple real consumers have been built.
 
-- [ ] Create `plugins` table in `initMatrixSchema`:
+- [x] Create `plugins` table in `initMatrixSchema`:
   ```sql
   CREATE TABLE IF NOT EXISTS plugins (
     id TEXT PRIMARY KEY,
@@ -24,7 +24,7 @@ The minimum viable plugin system: a registration table, a plugin definition type
   ```
   Install change-tracking triggers on this table (using Phase 3 infrastructure).
 
-- [ ] Define the `PluginDefinition` type in a new `src/core/plugin-types.ts`:
+- [x] Define the `PluginDefinition` type in a new `src/core/plugin-types.ts`:
   ```typescript
   type PluginDefinition = {
     id: string
@@ -64,7 +64,7 @@ The minimum viable plugin system: a registration table, a plugin definition type
   }
   ```
 
-- [ ] Implement `registerPlugin(db, definition: PluginDefinition)` in a new `src/core/plugin.ts`:
+- [x] Implement `registerPlugin(db, definition: PluginDefinition)` in a new `src/core/plugin.ts`:
   - Inserts or updates the `plugins` table row.
   - Creates matrixes declared in `definition.matrixes` (via `createMatrix`). Stores the mapping from `matrixKey` to actual `matrixId`.
   - Requests traits declared in `definition.traits` (via `ensureTrait`, task 2).
@@ -73,30 +73,30 @@ The minimum viable plugin system: a registration table, a plugin definition type
   - Calls `init` lifecycle hook with the resolved `PluginContext`.
   - Idempotent: re-registering the same plugin ID updates metadata but does not recreate existing matrixes (checks matrix registry first).
 
-- [ ] Implement `unregisterPlugin(db, pluginId)`:
+- [x] Implement `unregisterPlugin(db, pluginId)`:
   - Calls `destroy` lifecycle hook.
   - Removes the `plugins` table row.
   - Does NOT delete matrixes or traits (per [Traits - Provisioning model](./Traits.md#provisioning-model): "traits survive plugin removal"; matrixes are core entities).
 
-- [ ] Implement `getPlugin(db, pluginId)` and `getAllPlugins(db)` for querying plugin state.
+- [x] Implement `getPlugin(db, pluginId)` and `getAllPlugins(db)` for querying plugin state.
 
-- [ ] Add a `source_plugin_id` column to the `matrix` table:
+- [x] Add a `source_plugin_id` column to the `matrix` table:
   ```sql
   ALTER TABLE matrix ADD COLUMN source_plugin_id TEXT REFERENCES plugins(id);
   ```
   Populated when a plugin creates a matrix. Allows the admin browser (task 12) to filter by plugin. Nullable -- user-created matrixes have no plugin source.
 
-- [ ] Add worker message types for plugin operations:
+- [x] Add worker message types for plugin operations:
   - `registerPlugin` -- accepts a serializable subset of `PluginDefinition` (no function hooks; those live on the main thread).
   - `getPlugins` -- returns all registered plugins.
   The worker handler calls `registerPlugin` and returns the resolved `PluginContext` (matrix ID mapping).
 
-- [ ] Add client-side functions in `matrix-client.ts` (or a new `plugin-client.ts`):
+- [x] Add client-side functions in `matrix-client.ts` (or a new `plugin-client.ts`):
   - `registerPlugin(definition)` → sends to worker, returns `PluginContext`.
   - `getPlugins()` → returns plugin list.
 
-- [ ] Tests: register a plugin, verify `plugins` table row exists. Register the same plugin twice, verify idempotent (no duplicate matrixes). Unregister a plugin, verify `plugins` row removed but matrixes persist. Verify `source_plugin_id` is set on plugin-created matrixes.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: register a plugin, verify `plugins` table row exists. Register the same plugin twice, verify idempotent (no duplicate matrixes). Unregister a plugin, verify `plugins` row removed but matrixes persist. Verify `source_plugin_id` is set on plugin-created matrixes.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Trait provisioning API
 

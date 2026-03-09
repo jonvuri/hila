@@ -18,6 +18,10 @@ import {
   getChildren,
   getColumns,
 } from '../matrix'
+import {
+  registerPlugin as registerPluginImpl,
+  getAllPlugins as getAllPluginsImpl,
+} from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
 
 import { sqliteWasm } from './worker-db'
@@ -219,6 +223,30 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'compactChangelogSuccess', id, result: deleted })
       } catch (err: unknown) {
         postMessage({ type: 'compactChangelogError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'registerPlugin': {
+      const { definition, id } = message
+      try {
+        const { db } = await sqliteWasm
+        const ctx = await registerPluginImpl(db, definition)
+        postMessage({ type: 'registerPluginSuccess', id, result: ctx })
+      } catch (err: unknown) {
+        postMessage({ type: 'registerPluginError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getPlugins': {
+      const { id } = message
+      try {
+        const { db } = await sqliteWasm
+        const plugins = getAllPluginsImpl(db)
+        postMessage({ type: 'getPluginsSuccess', id, result: plugins })
+      } catch (err: unknown) {
+        postMessage({ type: 'getPluginsError', id, error: toError(err) })
       }
       break
     }
