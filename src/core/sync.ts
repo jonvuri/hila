@@ -1,6 +1,6 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { between } from './lexorank'
+import { between, makeKey, parseKey } from './lexorank'
 import type { ApplyResult, ChangeEntry, Changeset, ConflictRecord } from './sync-types'
 
 type TrackedColumn = {
@@ -291,10 +291,7 @@ const buildUpdateSql = (
 ): { sql: string; values: (string | number | Uint8Array | null)[] } => {
   const columns = Object.keys(data).filter((c) => c !== 'id' && c !== 'rowid')
   const setClauses = columns.map((c) => `${quoteIdent(c)} = ?`).join(', ')
-  const values = [
-    ...columns.map((c) => data[c] as string | number | Uint8Array | null),
-    rowId,
-  ]
+  const values = [...columns.map((c) => data[c] as string | number | Uint8Array | null), rowId]
   return {
     sql: `UPDATE ${quoteIdent(tableName)} SET ${setClauses} WHERE rowid = ?`,
     values,
@@ -386,6 +383,90 @@ const handleRankKeyCollision = (
 }
 
 /**
+ * Rebuild the closure table for a matrix from rank keys.
+ *
+ * Drops all rows in the closure table and reconstructs it by walking the rank
+ * key hierarchy. Since rank keys encode parent-child relationships via prefix
+ * structure, the parent of any key with N segments is the key with N-1 segments.
+ *
+ * Rows are processed in key order (parents always sort before children),
+ * so ancestor lookups against already-inserted closure rows are safe.
+ *
+ * Runs as a single transaction (or participates in an existing one if
+ * `insideTransaction` is true).
+ */
+export const rebuildClosure = (
+  db: Database,
+  matrixId: number,
+  insideTransaction = false,
+): void => {
+  if (!insideTransaction) {
+    db.exec('BEGIN TRANSACTION')
+  }
+
+  try {
+    // 1. Clear the closure table
+    db.exec(`DELETE FROM "mx_${matrixId}_closure"`)
+
+    // 2. Get all rank entries for this matrix, ordered by key
+    const rankStmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? ORDER BY key')
+    rankStmt.bind([matrixId])
+
+    const keys: Uint8Array[] = []
+    while (rankStmt.step()) {
+      keys.push(new Uint8Array((rankStmt.get({}) as { key: Uint8Array }).key))
+    }
+    rankStmt.finalize()
+
+    // 3. For each key, insert self-reference and ancestor relationships
+    for (const key of keys) {
+      // Self-reference
+      db.exec(
+        `INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+         VALUES (?, ?, 0)`,
+        { bind: [key, key] },
+      )
+
+      // Derive parent from key prefix structure
+      const segments = parseKey(key)
+      if (segments.length > 1) {
+        const parentKey = makeKey(segments.slice(0, -1))
+
+        // Get all ancestors of the parent (already inserted since parents sort first)
+        const ancestorsStmt = db.prepare(
+          `SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+           WHERE descendant_key = ?`,
+        )
+        ancestorsStmt.bind([parentKey])
+
+        const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
+        while (ancestorsStmt.step()) {
+          ancestors.push(ancestorsStmt.get({}) as { ancestor_key: Uint8Array; depth: number })
+        }
+        ancestorsStmt.finalize()
+
+        for (const ancestor of ancestors) {
+          db.exec(
+            `INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+             VALUES (?, ?, ?)`,
+            { bind: [ancestor.ancestor_key, key, ancestor.depth + 1] },
+          )
+        }
+      }
+    }
+
+    if (!insideTransaction) {
+      db.exec('COMMIT')
+    }
+  } catch (error) {
+    if (!insideTransaction) {
+      db.exec('ROLLBACK')
+    }
+    throw error
+  }
+}
+
+/**
  * Apply a remote changeset to the local database.
  *
  * For each entry:
@@ -434,11 +515,13 @@ export const applyRemoteChanges = (
           tableName: entry.table,
           rowId: entry.rowId,
           winner: remoteWins ? 'remote' : 'local',
-          losingData: remoteWins
-            ? (localConflict.data ?? JSON.stringify(null))
+          losingData:
+            remoteWins ?
+              (localConflict.data ?? JSON.stringify(null))
             : JSON.stringify(entry.data),
-          winningData: remoteWins
-            ? JSON.stringify(entry.data)
+          winningData:
+            remoteWins ?
+              JSON.stringify(entry.data)
             : (localConflict.data ?? JSON.stringify(null)),
           detectedAt: '', // will be assigned by DB
           resolved: 0,
@@ -517,6 +600,11 @@ export const applyRemoteChanges = (
 
     // Re-enable change-tracking triggers
     db.exec('DELETE FROM _sync_applying')
+
+    // Rebuild closure tables for matrixes whose rank entries were modified
+    for (const matrixId of affectedRankMatrixIds) {
+      rebuildClosure(db, matrixId, true)
+    }
 
     // Update per-device high-water mark
     setDeviceHighWaterMark(db, changeset.deviceId, changeset.toSeq)

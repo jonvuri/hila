@@ -153,14 +153,14 @@ When applying remote changes, detect conflicts (same row modified locally since 
 
 When remote changes modify the `rank` table (reordering, reparenting on another device), the local closure tables may be stale. Rather than change-tracking the closure table (high-volume derived data), rebuild it from rank after applying remote changes.
 
-- [ ] Implement `rebuildClosure(db, matrixId)` in `matrix.ts`:
+- [x] Implement `rebuildClosure(db, matrixId)` in `sync.ts` (placed here instead of `matrix.ts` to avoid circular dependency):
   - Drops all rows in `mx_{matrixId}_closure`.
   - Scans `rank` for all rows belonging to the matrix, ordered by key.
   - Reconstructs the full closure table by walking the rank key hierarchy: for each row, derive its parent from the rank key prefix structure, then insert the self-reference and all ancestor relationships.
-  - Runs as a single transaction.
-- [ ] Wire into `applyRemoteChanges`: after applying a batch, collect the set of matrix IDs whose rank entries were modified, and call `rebuildClosure` for each.
-- [ ] Tests: create a matrix with a hierarchy (parent + children + grandchildren). Manually modify rank entries to simulate a remote reparent (move a child to a different parent by rewriting its rank key prefix). Call `rebuildClosure`. Verify the closure table reflects the new hierarchy (correct ancestors, correct depths). Verify the outline query returns correct results after rebuild.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+  - Runs as a single transaction (or participates in an existing one via `insideTransaction` flag).
+- [x] Wire into `applyRemoteChanges`: after applying a batch, collect the set of matrix IDs whose rank entries were modified, and call `rebuildClosure` for each (within the same transaction).
+- [x] Tests: create a matrix with a hierarchy (parent + children + grandchildren). Manually modify rank entries to simulate a remote reparent (move a child to a different parent by rewriting its rank key prefix). Call `rebuildClosure`. Verify the closure table reflects the new hierarchy (correct ancestors, correct depths). Verify the outline query returns correct results after rebuild.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 7. Changelog retention
 

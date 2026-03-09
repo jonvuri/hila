@@ -11,11 +11,15 @@ import {
   updateRow,
   deleteRow,
   insertRow,
+  getChildren,
+  getParent,
+  getDepth,
   addColumn,
   removeColumn,
   renameColumn,
   getColumns,
 } from './matrix'
+import { makeKey, parseKey } from './lexorank'
 import {
   installCoreTableTriggers,
   getLocalChanges,
@@ -23,6 +27,7 @@ import {
   getLastUploadedSeq,
   setLastUploadedSeq,
   applyRemoteChanges,
+  rebuildClosure,
 } from './sync'
 import type { Changeset } from './sync-types'
 
@@ -863,9 +868,7 @@ describe('Change tracking infrastructure', () => {
       expect(result.conflicts).toHaveLength(0)
 
       // Both rows in rank with their original keys
-      const stmt = db.prepare(
-        'SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key',
-      )
+      const stmt = db.prepare('SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key')
       stmt.bind([matrixId])
       const rows: { key: Uint8Array; row_id: number }[] = []
       while (stmt.step()) {
@@ -942,6 +945,278 @@ describe('Change tracking infrastructure', () => {
       stmt.bind([rowId])
       expect(stmt.step()).toBe(false)
       stmt.finalize()
+    })
+
+    // -- Closure rebuild after remote rank changes --
+
+    describe('Closure rebuild after remote rank changes', () => {
+      test('rebuildClosure reconstructs hierarchy from rank keys', () => {
+        const matrixId = createMatrix(db, 'Test')
+
+        // Build a hierarchy: parent → child → grandchild
+        const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
+        const parentKey = insertRow(db, { matrixId, rowKind: 0, rowId: parentRowId })
+
+        const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
+        const childKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: childRowId,
+          parentKey,
+        })
+
+        const grandchildRowId = insertDataRow(db, matrixId, { title: 'Grandchild' })
+        const grandchildKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: grandchildRowId,
+          parentKey: childKey,
+        })
+
+        // Verify initial hierarchy is correct
+        expect(getParent(db, matrixId, childKey)).toEqual(parentKey)
+        expect(getParent(db, matrixId, grandchildKey)).toEqual(childKey)
+        expect(getChildren(db, matrixId, parentKey)).toEqual([childKey])
+        expect(getDepth(db, matrixId, grandchildKey)).toBe(2)
+
+        // Corrupt the closure table by clearing it
+        db.exec(`DELETE FROM "mx_${matrixId}_closure"`)
+
+        // Verify it's broken
+        expect(getParent(db, matrixId, childKey)).toBeNull()
+
+        // Rebuild
+        rebuildClosure(db, matrixId)
+
+        // Verify hierarchy is restored
+        expect(getParent(db, matrixId, parentKey)).toBeNull() // root
+        expect(getParent(db, matrixId, childKey)).toEqual(parentKey)
+        expect(getParent(db, matrixId, grandchildKey)).toEqual(childKey)
+        expect(getChildren(db, matrixId, parentKey)).toEqual([childKey])
+        expect(getChildren(db, matrixId, childKey)).toEqual([grandchildKey])
+        expect(getDepth(db, matrixId, parentKey)).toBe(0)
+        expect(getDepth(db, matrixId, childKey)).toBe(1)
+        expect(getDepth(db, matrixId, grandchildKey)).toBe(2)
+      })
+
+      test('rebuildClosure after simulated remote reparent', () => {
+        const matrixId = createMatrix(db, 'Test')
+
+        // Build: P1 → C1, P2 → C2 → GC
+        // Insert both root nodes first to avoid key ordering issues
+        const p1RowId = insertDataRow(db, matrixId, { title: 'P1' })
+        const p1Key = insertRow(db, { matrixId, rowKind: 0, rowId: p1RowId })
+
+        const p2RowId = insertDataRow(db, matrixId, { title: 'P2' })
+        const p2Key = insertRow(db, { matrixId, rowKind: 0, rowId: p2RowId })
+
+        const c1RowId = insertDataRow(db, matrixId, { title: 'C1' })
+        const c1Key = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: c1RowId,
+          parentKey: p1Key,
+        })
+
+        const c2RowId = insertDataRow(db, matrixId, { title: 'C2' })
+        const c2Key = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: c2RowId,
+          parentKey: p2Key,
+        })
+
+        const gcRowId = insertDataRow(db, matrixId, { title: 'GC' })
+        const gcKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: gcRowId,
+          parentKey: c2Key,
+        })
+
+        // Verify initial: GC is under P2 → C2
+        expect(getParent(db, matrixId, gcKey)).toEqual(c2Key)
+        expect(getParent(db, matrixId, c2Key)).toEqual(p2Key)
+
+        // Simulate remote reparent: move C2 (with GC) to be a child of P1
+        // Rewrite C2's rank key to have P1's prefix
+        const p1Segments = parseKey(p1Key)
+        const gcSegments = parseKey(gcKey)
+
+        // New C2 key: P1 prefix + a unique segment (0xD0 to avoid colliding with C1's segment)
+        const newC2Segment = new Uint8Array([0xd0])
+        const newC2Key = makeKey([...p1Segments, newC2Segment])
+        // New GC key: new C2 prefix + GC's last segment
+        const newGcKey = makeKey([
+          ...p1Segments,
+          newC2Segment,
+          gcSegments[gcSegments.length - 1]!,
+        ])
+
+        // Directly modify rank keys (simulating remote change applied)
+        db.exec('UPDATE rank SET key = ? WHERE matrix_id = ? AND key = ?', {
+          bind: [newC2Key, matrixId, c2Key],
+        })
+        db.exec('UPDATE rank SET key = ? WHERE matrix_id = ? AND key = ?', {
+          bind: [newGcKey, matrixId, gcKey],
+        })
+
+        // Rebuild closure
+        rebuildClosure(db, matrixId)
+
+        // Verify new hierarchy: P1 → C1, P1 → C2 → GC
+        expect(getParent(db, matrixId, p1Key)).toBeNull()
+        expect(getParent(db, matrixId, p2Key)).toBeNull()
+        expect(getParent(db, matrixId, c1Key)).toEqual(p1Key)
+        expect(getParent(db, matrixId, newC2Key)).toEqual(p1Key)
+        expect(getParent(db, matrixId, newGcKey)).toEqual(newC2Key)
+        expect(getDepth(db, matrixId, newGcKey)).toBe(2)
+
+        // P1 now has two children: C1 and C2
+        const p1Children = getChildren(db, matrixId, p1Key)
+        expect(p1Children).toHaveLength(2)
+
+        // P2 has no children
+        expect(getChildren(db, matrixId, p2Key)).toHaveLength(0)
+      })
+
+      test('applyRemoteChanges triggers closure rebuild for affected matrixes', () => {
+        const matrixId = createMatrix(db, 'Test')
+
+        // Create a parent and child
+        const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
+        const parentKey = insertRow(db, { matrixId, rowKind: 0, rowId: parentRowId })
+
+        const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
+        insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: childRowId,
+          parentKey,
+        })
+
+        clearChangelog()
+
+        // Apply a remote rank INSERT (new row as child of parent)
+        const remoteRowId = 888999111
+        db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote child')`, {
+          bind: [remoteRowId],
+        })
+
+        // Build a rank key that's a child of parentKey
+        const parentSegments = parseKey(parentKey)
+        const remoteChildKey = makeKey([...parentSegments, new Uint8Array([0xc0])])
+
+        const hexKey = Array.from(remoteChildKey)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+          .toUpperCase()
+
+        const result = applyRemoteChanges(
+          db,
+          makeRemoteChangeset([
+            {
+              table: 'rank',
+              rowId: remoteRowId,
+              operation: 'INSERT',
+              timestamp: '2025-01-01 12:00:00',
+              data: {
+                key: hexKey,
+                matrix_id: matrixId,
+                row_kind: 0,
+                row_id: remoteRowId,
+              },
+            },
+          ]),
+        )
+
+        expect(result.applied).toBe(1)
+        expect(result.affectedRankMatrixIds.has(matrixId)).toBe(true)
+
+        // Closure should have been rebuilt — the remote child should be under parent
+        const parent = getParent(db, matrixId, remoteChildKey)
+        expect(parent).toEqual(parentKey)
+
+        // Parent should have both children
+        const children = getChildren(db, matrixId, parentKey)
+        expect(children.length).toBe(2)
+      })
+
+      test('outline query returns correct results after closure rebuild', () => {
+        const matrixId = createMatrix(db, 'Test')
+
+        // Build a tree: root → A, root → B → C
+        const rootRowId = insertDataRow(db, matrixId, { title: 'Root' })
+        const rootKey = insertRow(db, { matrixId, rowKind: 0, rowId: rootRowId })
+
+        const aRowId = insertDataRow(db, matrixId, { title: 'A' })
+        const aKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: aRowId,
+          parentKey: rootKey,
+        })
+
+        const bRowId = insertDataRow(db, matrixId, { title: 'B' })
+        const bKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: bRowId,
+          parentKey: rootKey,
+        })
+
+        const cRowId = insertDataRow(db, matrixId, { title: 'C' })
+        const cKey = insertRow(db, {
+          matrixId,
+          rowKind: 0,
+          rowId: cRowId,
+          parentKey: bKey,
+        })
+
+        // Rebuild closure from scratch
+        rebuildClosure(db, matrixId)
+
+        // Verify the full hierarchy via queries
+        expect(getParent(db, matrixId, rootKey)).toBeNull()
+        const rootChildren = getChildren(db, matrixId, rootKey)
+        expect(rootChildren).toHaveLength(2)
+        expect(rootChildren).toContainEqual(aKey)
+        expect(rootChildren).toContainEqual(bKey)
+        expect(getChildren(db, matrixId, bKey)).toEqual([cKey])
+        expect(getChildren(db, matrixId, aKey)).toHaveLength(0)
+        expect(getDepth(db, matrixId, cKey)).toBe(2)
+
+        // Verify outline-style query (rank order with depth)
+        const outlineStmt = db.prepare(`
+          SELECT r.key, r.row_id, d.title,
+                 COALESCE((SELECT MAX(depth) FROM "mx_${matrixId}_closure" WHERE descendant_key = r.key), 0) as depth
+          FROM rank r
+          JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
+          WHERE r.matrix_id = ?
+          ORDER BY r.key
+        `)
+        outlineStmt.bind([matrixId])
+
+        const outline: { title: string; depth: number }[] = []
+        while (outlineStmt.step()) {
+          const row = outlineStmt.get({}) as { title: string; depth: number }
+          outline.push({ title: row.title, depth: row.depth })
+        }
+        outlineStmt.finalize()
+
+        expect(outline).toHaveLength(4)
+        // Root is at depth 0
+        expect(outline.find((r) => r.title === 'Root')!.depth).toBe(0)
+        // A and B are at depth 1
+        expect(outline.find((r) => r.title === 'A')!.depth).toBe(1)
+        expect(outline.find((r) => r.title === 'B')!.depth).toBe(1)
+        // C is at depth 2 (child of B)
+        expect(outline.find((r) => r.title === 'C')!.depth).toBe(2)
+        // C must come right after B in rank order (B's subtree)
+        const bIndex = outline.findIndex((r) => r.title === 'B')
+        const cIndex = outline.findIndex((r) => r.title === 'C')
+        expect(cIndex).toBe(bIndex + 1)
+      })
     })
 
     // -- Trigger suppression flag is cleaned up after error --
