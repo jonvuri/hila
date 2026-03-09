@@ -73,7 +73,7 @@ Trigger-based changelog on all tracked tables. Every INSERT/UPDATE/DELETE fires 
 
 The sync engine works with changesets -- serializable descriptions of what changed -- without knowing the trigger mechanics. This is the seam between the change-tracking layer and the sync/transport layer.
 
-- [ ] Define the changeset types in `src/core/sync-types.ts`:
+- [x] Define the changeset types in `src/core/sync-types.ts`:
   ```typescript
   type ChangeEntry = {
     table: string
@@ -95,14 +95,14 @@ The sync engine works with changesets -- serializable descriptions of what chang
     conflicts: ConflictRecord[]
   }
   ```
-- [ ] Implement `getLocalChanges(db, sinceSeq): Changeset` in `sync.ts`:
+- [x] Implement `getLocalChanges(db, sinceSeq): Changeset` in `sync.ts`:
   - Queries `_sync_changelog` for entries with `seq > sinceSeq` from the local device.
   - Reads device_id from `_sync_state`.
   - Returns a `Changeset` with the range `[sinceSeq+1, maxSeq]`.
-- [ ] Implement `getLastSeq(db): number` -- reads the max `seq` from `_sync_changelog`.
-- [ ] Store `last_uploaded_seq` in `_sync_state` to track what has been uploaded.
-- [ ] Tests: insert several rows across different tables, call `getLocalChanges(0)`, verify the changeset contains all entries in order. Call `getLocalChanges(N)` where N is a mid-point seq, verify only later entries are returned. Verify `getLastSeq` returns the correct value.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Implement `getLastSeq(db): number` -- reads the max `seq` from `_sync_changelog`.
+- [x] Store `last_uploaded_seq` in `_sync_state` to track what has been uploaded.
+- [x] Tests: insert several rows across different tables, call `getLocalChanges(0)`, verify the changeset contains all entries in order. Call `getLocalChanges(N)` where N is a mid-point seq, verify only later entries are returned. Verify `getLastSeq` returns the correct value.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 5. Conflict detection and resolution
 

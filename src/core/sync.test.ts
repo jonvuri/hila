@@ -16,7 +16,13 @@ import {
   renameColumn,
   getColumns,
 } from './matrix'
-import { installCoreTableTriggers } from './sync'
+import {
+  installCoreTableTriggers,
+  getLocalChanges,
+  getLastSeq,
+  getLastUploadedSeq,
+  setLastUploadedSeq,
+} from './sync'
 
 type ChangelogEntry = {
   seq: number
@@ -334,5 +340,133 @@ describe('Change tracking infrastructure', () => {
 
     expect(dataOps[0]!.seq).toBeLessThan(dataOps[1]!.seq)
     expect(dataOps[1]!.seq).toBeLessThan(dataOps[2]!.seq)
+  })
+
+  // -- Changeset abstraction --
+
+  describe('Changeset abstraction', () => {
+    test('getLocalChanges(0) returns all entries in order', () => {
+      const m1 = createMatrix(db, 'Alpha')
+      const m2 = createMatrix(db, 'Beta')
+      clearChangelog()
+
+      insertDataRow(db, m1, { title: 'A1' })
+      insertDataRow(db, m2, { title: 'B1' })
+      insertDataRow(db, m1, { title: 'A2' })
+
+      const cs = getLocalChanges(db, 0)
+
+      expect(cs.deviceId).toBe(deviceId)
+      expect(cs.fromSeq).toBe(0)
+      expect(cs.toSeq).toBeGreaterThan(0)
+      expect(cs.entries).toHaveLength(3)
+
+      expect(cs.entries[0]!.table).toBe(`mx_${m1}_data`)
+      expect(cs.entries[0]!.operation).toBe('INSERT')
+      expect(cs.entries[0]!.data!.title).toBe('A1')
+
+      expect(cs.entries[1]!.table).toBe(`mx_${m2}_data`)
+      expect(cs.entries[1]!.data!.title).toBe('B1')
+
+      expect(cs.entries[2]!.table).toBe(`mx_${m1}_data`)
+      expect(cs.entries[2]!.data!.title).toBe('A2')
+    })
+
+    test('getLocalChanges(N) returns only entries after N', () => {
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+
+      insertDataRow(db, matrixId, { title: 'First' })
+      insertDataRow(db, matrixId, { title: 'Second' })
+
+      const midSeq = getLastSeq(db)
+
+      insertDataRow(db, matrixId, { title: 'Third' })
+      insertDataRow(db, matrixId, { title: 'Fourth' })
+
+      const firstSeq = getLocalChanges(db, 0).entries[0]!
+      expect(firstSeq.data!.title).toBe('First')
+
+      const cs = getLocalChanges(db, midSeq)
+      expect(cs.fromSeq).toBe(midSeq)
+      expect(cs.toSeq).toBeGreaterThan(midSeq)
+      expect(cs.entries).toHaveLength(2)
+      expect(cs.entries[0]!.data!.title).toBe('Third')
+      expect(cs.entries[1]!.data!.title).toBe('Fourth')
+    })
+
+    test('getLastSeq returns correct max seq value', () => {
+      clearChangelog()
+      expect(getLastSeq(db)).toBe(0)
+
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+
+      insertDataRow(db, matrixId, { title: 'One' })
+      const seq1 = getLastSeq(db)
+      expect(seq1).toBeGreaterThan(0)
+
+      insertDataRow(db, matrixId, { title: 'Two' })
+      const seq2 = getLastSeq(db)
+      expect(seq2).toBeGreaterThan(seq1)
+    })
+
+    test('getLocalChanges with no entries returns empty changeset', () => {
+      clearChangelog()
+
+      const cs = getLocalChanges(db, 0)
+      expect(cs.deviceId).toBe(deviceId)
+      expect(cs.fromSeq).toBe(0)
+      expect(cs.toSeq).toBe(0)
+      expect(cs.entries).toHaveLength(0)
+    })
+
+    test('getLocalChanges includes DELETE entries with null data', () => {
+      const matrixId = createMatrix(db, 'Test')
+      const rowId = insertDataRow(db, matrixId, { title: 'Gone' })
+      const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+      clearChangelog()
+
+      deleteRow(db, { matrixId, key })
+
+      const cs = getLocalChanges(db, 0)
+      const dataDelete = cs.entries.find(
+        (e) => e.table === `mx_${matrixId}_data` && e.operation === 'DELETE',
+      )
+
+      expect(dataDelete).toBeDefined()
+      expect(dataDelete!.data).toBeNull()
+    })
+
+    test('changeset entries have parsed data objects, not JSON strings', () => {
+      const matrixId = createMatrix(db, 'Test')
+      clearChangelog()
+
+      insertDataRow(db, matrixId, { title: 'Parsed' })
+
+      const cs = getLocalChanges(db, 0)
+      const entry = cs.entries.find((e) => e.table === `mx_${matrixId}_data`)!
+      expect(typeof entry.data).toBe('object')
+      expect(entry.data!.title).toBe('Parsed')
+    })
+  })
+
+  // -- last_uploaded_seq tracking --
+
+  describe('last_uploaded_seq tracking', () => {
+    test('getLastUploadedSeq defaults to 0', () => {
+      expect(getLastUploadedSeq(db)).toBe(0)
+    })
+
+    test('setLastUploadedSeq persists and is retrievable', () => {
+      setLastUploadedSeq(db, 42)
+      expect(getLastUploadedSeq(db)).toBe(42)
+    })
+
+    test('setLastUploadedSeq overwrites previous value', () => {
+      setLastUploadedSeq(db, 10)
+      setLastUploadedSeq(db, 25)
+      expect(getLastUploadedSeq(db)).toBe(25)
+    })
   })
 })

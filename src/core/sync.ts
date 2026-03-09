@@ -1,5 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import type { ChangeEntry, Changeset } from './sync-types'
+
 type TrackedColumn = {
   name: string
   type: string
@@ -122,4 +124,88 @@ export const reinstallDataTableTriggers = (
 ): void => {
   dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
   installDataTableTriggers(db, matrixId, deviceId, columns)
+}
+
+/**
+ * Return the maximum seq value from `_sync_changelog`, or 0 if the table is empty.
+ */
+export const getLastSeq = (db: Database): number => {
+  const stmt = db.prepare('SELECT MAX(seq) AS max_seq FROM _sync_changelog')
+  let result = 0
+  if (stmt.step()) {
+    const row = stmt.get({}) as { max_seq: number | null }
+    result = row.max_seq ?? 0
+  }
+  stmt.finalize()
+  return result
+}
+
+/**
+ * Build a `Changeset` from local changelog entries with `seq > sinceSeq`.
+ * Reads the device_id from `_sync_state`.
+ */
+export const getLocalChanges = (db: Database, sinceSeq: number): Changeset => {
+  const deviceStmt = db.prepare("SELECT value FROM _sync_state WHERE key = 'device_id'")
+  let localDeviceId = ''
+  if (deviceStmt.step()) {
+    localDeviceId = (deviceStmt.get({}) as { value: string }).value
+  }
+  deviceStmt.finalize()
+
+  const stmt = db.prepare(
+    'SELECT seq, table_name, row_id, operation, timestamp, data FROM _sync_changelog WHERE seq > ? AND device_id = ? ORDER BY seq',
+  )
+  stmt.bind([sinceSeq, localDeviceId])
+
+  const entries: ChangeEntry[] = []
+  let maxSeq = sinceSeq
+  while (stmt.step()) {
+    const row = stmt.get({}) as {
+      seq: number
+      table_name: string
+      row_id: number
+      operation: 'INSERT' | 'UPDATE' | 'DELETE'
+      timestamp: string
+      data: string | null
+    }
+    entries.push({
+      table: row.table_name,
+      rowId: row.row_id,
+      operation: row.operation,
+      timestamp: row.timestamp,
+      data: row.data ? (JSON.parse(row.data) as Record<string, unknown>) : null,
+    })
+    maxSeq = row.seq
+  }
+  stmt.finalize()
+
+  return {
+    deviceId: localDeviceId,
+    fromSeq: sinceSeq,
+    toSeq: entries.length > 0 ? maxSeq : sinceSeq,
+    entries,
+  }
+}
+
+/**
+ * Read the `last_uploaded_seq` value from `_sync_state`, defaulting to 0.
+ */
+export const getLastUploadedSeq = (db: Database): number => {
+  const stmt = db.prepare("SELECT value FROM _sync_state WHERE key = 'last_uploaded_seq'")
+  let result = 0
+  if (stmt.step()) {
+    result = Number((stmt.get({}) as { value: string }).value)
+  }
+  stmt.finalize()
+  return result
+}
+
+/**
+ * Persist the `last_uploaded_seq` value in `_sync_state`.
+ */
+export const setLastUploadedSeq = (db: Database, seq: number): void => {
+  db.exec(
+    "INSERT INTO _sync_state (key, value) VALUES ('last_uploaded_seq', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    { bind: [String(seq)] },
+  )
 }
