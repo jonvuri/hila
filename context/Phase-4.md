@@ -221,7 +221,7 @@ Build the core face abstraction: face types with slot declarations, slot binding
 
 Transform the existing outline module into the first formal plugin. This validates the plugin system, trait provisioning, and face type registry with a real consumer. The outline's behavior does not change -- only its registration and wiring.
 
-- [ ] Define the outline plugin definition in `src/outline/outline-plugin.ts`:
+- [x] Define the outline plugin definition in `src/outline/outline-plugin.ts`:
   ```typescript
   const outlinePlugin: PluginDefinition = {
     id: 'hila.outline',
@@ -251,7 +251,7 @@ Transform the existing outline module into the first formal plugin. This validat
   }
   ```
 
-- [ ] Register the outline face type with the face registry:
+- [x] Register the outline face type with the face registry:
   ```typescript
   registerFaceType({
     id: 'hila.outline',
@@ -267,21 +267,21 @@ Transform the existing outline module into the first formal plugin. This validat
   })
   ```
 
-- [ ] Remove the hardcoded `MATRIX_ID = 1` from `OutlineFace.tsx`. Instead, the outline receives its matrix ID from the plugin context (resolved by `registerPlugin`). Pass it as a prop or via a context provider.
+- [x] Remove the hardcoded `MATRIX_ID = 1` from `OutlineFace.tsx`. Instead, the outline receives its matrix ID from the plugin context (resolved by `registerPlugin`). Pass it as a prop or via a context provider.
 
-- [ ] Refactor `ensureRootMatrix` usage: the outline plugin's `init` hook handles matrix creation and welcome-row seeding, replacing the current `seedWelcomeRow` call in `matrix-handler.ts`. The root matrix is now created through the plugin system like any other plugin matrix.
+- [x] Refactor `ensureRootMatrix` usage: the outline plugin's `init` hook handles matrix creation and welcome-row seeding, replacing the current `seedWelcomeRow` call in `matrix-handler.ts`. The root matrix is now created through the plugin system like any other plugin matrix.
 
-- [ ] Update `App.tsx` to initialize the plugin system on startup:
+- [x] Update `App.tsx` to initialize the plugin system on startup:
   - Register the outline plugin.
   - Get the resolved matrix ID from the plugin context.
   - Pass it to `OutlineFace`.
   - The existing outline behavior is preserved -- the refactoring is structural, not behavioral.
 
-- [ ] Verify the outline's named queries match the existing SQL in `OutlineFace.tsx`. Formalize them as plugin-level declarations. The actual query execution continues to use `useQuery` and the reactive subscription system.
+- [x] Verify the outline's named queries match the existing SQL in `OutlineFace.tsx`. Formalize them as plugin-level declarations. The actual query execution continues to use `useQuery` and the reactive subscription system.
 
-- [ ] Tests: register the outline plugin, verify matrixes and traits are created. Verify the outline renders and functions identically to the pre-refactor version (all existing outline Vitest + Playwright tests should pass without modification).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
-- [ ] Run `npx playwright test` -- all existing E2E tests pass
+- [x] Tests: register the outline plugin, verify matrixes and traits are created. Verify the outline renders and functions identically to the pre-refactor version (all existing outline Vitest + Playwright tests should pass without modification).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npx playwright test` -- all existing E2E tests pass
 
 ## 5. Worker protocol: column management operations
 

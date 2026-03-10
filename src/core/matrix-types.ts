@@ -1,4 +1,4 @@
-import type { FaceConfig } from './face-types'
+import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from './traits'
 
@@ -81,6 +81,14 @@ export type MatrixOperationMap = {
   getFaceConfigs: {
     params: { matrixId: number }
     result: FaceConfig[]
+  }
+  seedWelcomeRow: {
+    params: { matrixId: number; content: string }
+    result: void
+  }
+  registerFaceType: {
+    params: { definition: FaceTypeDefinition }
+    result: void
   }
 }
 

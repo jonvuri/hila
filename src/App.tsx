@@ -8,7 +8,10 @@ import {
   type Component,
 } from 'solid-js'
 
+import { registerPlugin } from './core/client/matrix-client'
+import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
+import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixDebug = lazy(() => import('./MatrixDebug'))
@@ -17,8 +20,15 @@ const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
+  const [outlineMatrixId, setOutlineMatrixId] = createSignal<number | null>(null)
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
+
+  const initPlugins = async () => {
+    await registerOutlineFaceType()
+    const ctx = await registerPlugin(outlinePlugin)
+    setOutlineMatrixId(ctx.matrixIds['root']!)
+  }
 
   onMount(() => {
     shortcuts.install()
@@ -30,6 +40,8 @@ const App: Component = () => {
       },
     })
 
+    void awaitWorkerReady().then(initPlugins)
+
     onCleanup(() => {
       unregisterToggle()
       shortcuts.uninstall()
@@ -40,7 +52,9 @@ const App: Component = () => {
     <div class="app-shell">
       <div class="app-main">
         <Suspense fallback={<div class="app-loading">Loading…</div>}>
-          <OutlineFace />
+          <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
+            {(matrixId) => <OutlineFace matrixId={matrixId()} />}
+          </Show>
         </Suspense>
       </div>
 
@@ -85,7 +99,7 @@ const App: Component = () => {
           </div>
           <Suspense fallback={<div class="app-loading">Loading…</div>}>
             <div class="sidebar-content">
-              {activePanel() === 'matrix' && <MatrixDebug />}
+              {activePanel() === 'matrix' && <MatrixDebug onReset={initPlugins} />}
               {activePanel() === 'sql' && <SqlRunner />}
             </div>
           </Suspense>

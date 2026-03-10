@@ -1,4 +1,4 @@
-import type { FaceConfig } from '../face-types'
+import type { FaceConfig, FaceTypeDefinition } from '../face-types'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -83,3 +83,9 @@ export const saveFaceConfig = (config: FaceConfig): Promise<void> =>
 
 export const getFaceConfigs = (matrixId: number): Promise<FaceConfig[]> =>
   workerCall('getFaceConfigs', { matrixId })
+
+export const seedWelcomeRow = (matrixId: number, content: string): Promise<void> =>
+  workerCall('seedWelcomeRow', { matrixId, content })
+
+export const registerFaceType = (definition: FaceTypeDefinition): Promise<void> =>
+  workerCall('registerFaceType', { definition })

@@ -7,7 +7,6 @@ import {
   resetDeviceIdCache,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
-  ensureRootMatrix,
   insertDataRow,
   insertRow as insertRowImpl,
   updateRow as updateRowImpl,
@@ -23,6 +22,7 @@ import {
   saveFaceConfig as saveFaceConfigImpl,
   getFaceConfigsForMatrix as getFaceConfigsForMatrixImpl,
 } from '../face-config'
+import { registerFaceType as registerFaceTypeImpl } from '../face-registry'
 import {
   registerPlugin as registerPluginImpl,
   getAllPlugins as getAllPluginsImpl,
@@ -34,25 +34,20 @@ import { sqliteWasm } from './worker-db'
 
 const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
 
-const WELCOME_DOC_JSON = JSON.stringify({
-  type: 'doc',
-  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Welcome to Hila' }] }],
-})
-
 const postMessage = (message: MatrixWorkerMessage) => {
   self.postMessage(message)
 }
 
 const toError = (err: unknown): Error => (err instanceof Error ? err : new Error(String(err)))
 
-const seedWelcomeRow = (db: Database, matrixId: number) => {
+const seedWelcomeRow = (db: Database, matrixId: number, content: string) => {
   const checkStmt = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" LIMIT 1`)
   const hasRows = checkStmt.step()
   checkStmt.finalize()
 
   if (hasRows) return
 
-  const rowId = insertDataRow(db, matrixId, { content: WELCOME_DOC_JSON })
+  const rowId = insertDataRow(db, matrixId, { content })
   insertRowImpl(db, { matrixId, rowKind: 0, rowId })
 }
 
@@ -60,8 +55,6 @@ export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
   const deviceId = getOrCreateDeviceId(db)
   installCoreTableTriggers(db, deviceId)
-  ensureRootMatrix(db)
-  seedWelcomeRow(db, 1)
 }
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
@@ -112,8 +105,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         initMatrixSchema(db)
         const newDeviceId = getOrCreateDeviceId(db)
         installCoreTableTriggers(db, newDeviceId)
-        ensureRootMatrix(db)
-        seedWelcomeRow(db, 1)
 
         postMessage({ type: 'resetDatabaseSuccess', id, result: undefined })
       } catch (err: unknown) {
@@ -313,6 +304,29 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getFaceConfigsSuccess', id, result: configs })
       } catch (err: unknown) {
         postMessage({ type: 'getFaceConfigsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'seedWelcomeRow': {
+      const { id, matrixId, content } = message
+      try {
+        const { db } = await sqliteWasm
+        seedWelcomeRow(db, matrixId, content)
+        postMessage({ type: 'seedWelcomeRowSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'seedWelcomeRowError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'registerFaceType': {
+      const { id, definition } = message
+      try {
+        registerFaceTypeImpl(definition)
+        postMessage({ type: 'registerFaceTypeSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'registerFaceTypeError', id, error: toError(err) })
       }
       break
     }

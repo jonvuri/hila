@@ -404,7 +404,11 @@ const MatrixPanel: Component<{
   )
 }
 
-const MatrixDebug: Component = () => {
+type MatrixDebugProps = {
+  onReset?: () => void | Promise<void>
+}
+
+const MatrixDebug: Component<MatrixDebugProps> = (props) => {
   const [newMatrixTitle, setNewMatrixTitle] = createSignal('')
   const [loading, setLoading] = createSignal<Record<number, boolean>>({})
   const [resetLoading, setResetLoading] = createSignal(false)
@@ -439,6 +443,9 @@ const MatrixDebug: Component = () => {
     setResetLoading(true)
     try {
       await resetDatabase()
+      if (props.onReset) {
+        await props.onReset()
+      }
     } catch (error) {
       console.error('Error resetting database:', error)
     } finally {

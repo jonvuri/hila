@@ -12,38 +12,10 @@ import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import type { OutlineCallbacks } from './keymap'
+import { buildOutlineQuery, buildBreadcrumbQuery } from './outline-plugin'
 import { OutlineRow, type OutlineRowHandle } from './OutlineRow'
 
-const MATRIX_ID = 1
 const DRAG_THRESHOLD_PX = 5
-
-const buildOutlineQuery = (focusRootHex: string | null): string => {
-  const rangeFilter =
-    focusRootHex !== null ?
-      `AND r.key >= X'${focusRootHex}' AND r.key < X'${focusRootHex.slice(0, -2)}01'`
-    : ''
-
-  return `
-SELECT r.key, r.row_id, d.content,
-       COALESCE(c.depth, 0) as depth,
-       CASE WHEN ch.ancestor_key IS NOT NULL THEN 1 ELSE 0 END as has_children
-FROM rank r
-JOIN "mx_${MATRIX_ID}_data" d ON r.row_id = d.id
-LEFT JOIN (
-  SELECT descendant_key, MAX(depth) as depth
-  FROM "mx_${MATRIX_ID}_closure"
-  GROUP BY descendant_key
-) c ON r.key = c.descendant_key
-LEFT JOIN (
-  SELECT DISTINCT ancestor_key
-  FROM "mx_${MATRIX_ID}_closure"
-  WHERE depth = 1
-) ch ON r.key = ch.ancestor_key
-WHERE r.matrix_id = ${MATRIX_ID}
-${rangeFilter}
-ORDER BY r.key
-`
-}
 
 type OutlineRowData = {
   row_id: number
@@ -154,7 +126,11 @@ const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
 
 // ---------------------------------------------------------------------------
 
-const OutlineFace = () => {
+type OutlineFaceProps = {
+  matrixId: number
+}
+
+const OutlineFace = (props: OutlineFaceProps) => {
   // Focus view state: rank key of the subtree root, or null for full outline
   const [focusRoot, setFocusRoot] = createSignal<Uint8Array | null>(null)
 
@@ -163,7 +139,7 @@ const OutlineFace = () => {
     return root ? keyToHex(root) : null
   })
 
-  const outlineQuery = createMemo(() => buildOutlineQuery(focusRootHex()))
+  const outlineQuery = createMemo(() => buildOutlineQuery(props.matrixId, focusRootHex()))
 
   const { result, error } = useQuery(() => outlineQuery())
 
@@ -179,14 +155,7 @@ const OutlineFace = () => {
   const breadcrumbQuery = createMemo(() => {
     const hex = focusRootHex()
     if (!hex) return ''
-    return `
-SELECT c.ancestor_key as key, c.depth, d.content, r.row_id
-FROM "mx_${MATRIX_ID}_closure" c
-JOIN rank r ON r.key = c.ancestor_key AND r.matrix_id = ${MATRIX_ID}
-JOIN "mx_${MATRIX_ID}_data" d ON r.row_id = d.id
-WHERE c.descendant_key = X'${hex}' AND c.depth > 0
-ORDER BY c.depth DESC
-`
+    return buildBreadcrumbQuery(props.matrixId, hex)
   })
 
   const { result: breadcrumbResult } = useQuery(() => breadcrumbQuery())
@@ -352,7 +321,7 @@ ORDER BY c.depth DESC
       const index = findRowIndex(vRows, drag.rowId)
       if (index !== -1) {
         const row = vRows[index]!
-        void reparentRow(MATRIX_ID, copyKey(row.key)!, {
+        void reparentRow(props.matrixId, copyKey(row.key)!, {
           newParentKey: copyKey(target.parentKey),
           prevSiblingKey: copyKey(target.prevSiblingKey),
           nextSiblingKey: copyKey(target.nextSiblingKey),
@@ -432,7 +401,7 @@ ORDER BY c.depth DESC
       const atEnd = from === to && to >= doc.content.size - 1
 
       if (atEnd) {
-        void insertRow(MATRIX_ID, {
+        void insertRow(props.matrixId, {
           parentKey,
           prevKey: copyKey(row.key),
         }).then(({ rowId: newRowId }) => {
@@ -449,7 +418,7 @@ ORDER BY c.depth DESC
         const handle = handleMap.get(rowId)
         handle?.flushSave()
 
-        void insertRow(MATRIX_ID, {
+        void insertRow(props.matrixId, {
           parentKey,
           prevKey: copyKey(row.key),
           values: { content: afterJson },
@@ -476,13 +445,13 @@ ORDER BY c.depth DESC
 
       if (isEmpty && !hasChildren) {
         const targetRowId = prevRow.row_id
-        void deleteRow(MATRIX_ID, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
           requestFocus(targetRowId, 'end')
         })
       } else if (isEmpty && hasChildren) {
         const firstChild = findFirstChild(vRows, index)
         const targetRowId = firstChild?.row_id ?? prevRow.row_id
-        void deleteRow(MATRIX_ID, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
           requestFocus(targetRowId, 'start')
         })
       } else {
@@ -501,7 +470,7 @@ ORDER BY c.depth DESC
         prevView.dispatch(tr)
         prevHandle.flushSave()
 
-        void deleteRow(MATRIX_ID, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
           requestFocus(prevRow.row_id, mergePoint)
         })
       }
@@ -519,7 +488,7 @@ ORDER BY c.depth DESC
       const prevSiblingIndex = findRowIndex(vRows, prevSibling.row_id)
       const lastChild = findLastDirectChild(vRows, prevSiblingIndex)
 
-      void reparentRow(MATRIX_ID, copyKey(row.key)!, {
+      void reparentRow(props.matrixId, copyKey(row.key)!, {
         newParentKey: copyKey(prevSibling.key),
         prevSiblingKey: copyKey(lastChild?.key),
       }).then(() => {
@@ -541,7 +510,7 @@ ORDER BY c.depth DESC
       const newParentKey =
         grandparent ? copyKey(grandparent.key) : resolveParentKey(vRows, grandparentIndex)
 
-      void reparentRow(MATRIX_ID, copyKey(row.key)!, {
+      void reparentRow(props.matrixId, copyKey(row.key)!, {
         newParentKey,
         prevSiblingKey: copyKey(parentRow.key),
       }).then(() => {
@@ -616,7 +585,7 @@ ORDER BY c.depth DESC
               depth={row.depth - depthOffset()}
               hasChildren={row.has_children === 1}
               collapsed={isCollapsed(row.key)}
-              matrixId={MATRIX_ID}
+              matrixId={props.matrixId}
               pageIndex={windowProps.windowIndex}
               callbacks={callbacks}
               onHandle={(handle) => registerHandle(rowId, handle)}
