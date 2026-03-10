@@ -15,7 +15,10 @@ import {
   reparentRow as reparentRowImpl,
   getParent,
   getChildren,
-  getColumns,
+  getColumns as getColumnsImpl,
+  addColumn as addColumnImpl,
+  removeColumn as removeColumnImpl,
+  renameColumn as renameColumnImpl,
 } from '../matrix'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
@@ -30,6 +33,7 @@ import {
 import { installCoreTableTriggers, compactChangelog } from '../sync'
 import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl } from '../traits'
 
+import { triggerSubscribedQueries } from './sql-handler'
 import { sqliteWasm } from './worker-db'
 
 const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
@@ -121,7 +125,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         // If the matrix has a content column and no content is provided, set the empty-doc default
         let resolvedValues = values
         if (resolvedValues === undefined || !('content' in resolvedValues)) {
-          const columns = getColumns(db, matrixId)
+          const columns = getColumnsImpl(db, matrixId)
           if (columns.some((c) => c.name === 'content')) {
             resolvedValues = { ...resolvedValues, content: EMPTY_DOC_JSON }
           }
@@ -327,6 +331,57 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'registerFaceTypeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'registerFaceTypeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'addColumn': {
+      const { id, matrixId, name, columnType } = message
+      try {
+        const { db } = await sqliteWasm
+        addColumnImpl(db, matrixId, { name, type: columnType })
+        triggerSubscribedQueries(`mx_${matrixId}_data`)
+        postMessage({ type: 'addColumnSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'addColumnError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'removeColumn': {
+      const { id, matrixId, columnName } = message
+      try {
+        const { db } = await sqliteWasm
+        removeColumnImpl(db, matrixId, columnName)
+        triggerSubscribedQueries(`mx_${matrixId}_data`)
+        postMessage({ type: 'removeColumnSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'removeColumnError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'renameColumn': {
+      const { id, matrixId, oldName, newName } = message
+      try {
+        const { db } = await sqliteWasm
+        renameColumnImpl(db, matrixId, oldName, newName)
+        triggerSubscribedQueries(`mx_${matrixId}_data`)
+        postMessage({ type: 'renameColumnSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'renameColumnError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getColumns': {
+      const { id, matrixId } = message
+      try {
+        const { db } = await sqliteWasm
+        const columns = getColumnsImpl(db, matrixId)
+        postMessage({ type: 'getColumnsSuccess', id, result: columns })
+      } catch (err: unknown) {
+        postMessage({ type: 'getColumnsError', id, error: toError(err) })
       }
       break
     }

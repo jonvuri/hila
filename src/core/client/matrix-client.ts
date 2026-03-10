@@ -1,4 +1,5 @@
 import type { FaceConfig, FaceTypeDefinition } from '../face-types'
+import type { ColumnDefinition } from '../matrix'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -89,3 +90,18 @@ export const seedWelcomeRow = (matrixId: number, content: string): Promise<void>
 
 export const registerFaceType = (definition: FaceTypeDefinition): Promise<void> =>
   workerCall('registerFaceType', { definition })
+
+export const addColumn = (matrixId: number, name: string, columnType: string): Promise<void> =>
+  workerCall('addColumn', { matrixId, name, columnType })
+
+export const removeColumn = (matrixId: number, columnName: string): Promise<void> =>
+  workerCall('removeColumn', { matrixId, columnName })
+
+export const renameColumn = (
+  matrixId: number,
+  oldName: string,
+  newName: string,
+): Promise<void> => workerCall('renameColumn', { matrixId, oldName, newName })
+
+export const getColumns = (matrixId: number): Promise<ColumnDefinition[]> =>
+  workerCall('getColumns', { matrixId })

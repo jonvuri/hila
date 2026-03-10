@@ -287,24 +287,24 @@ Transform the existing outline module into the first formal plugin. This validat
 
 Expose `addColumn`, `removeColumn`, and `renameColumn` through the worker protocol. These operations are currently implemented in `matrix.ts` but not exposed to the main thread. The table face (task 6) and identity face need them for schema management.
 
-- [ ] Add worker message types for column operations in `matrix-types.ts`:
-  - `addColumn` -- params: `{ matrixId: number; name: string; type: string }`, result: `void`.
+- [x] Add worker message types for column operations in `matrix-types.ts`:
+  - `addColumn` -- params: `{ matrixId: number; name: string; columnType: string }`, result: `void`. (param named `columnType` to avoid collision with message `type` discriminator in `workerCall` spread)
   - `removeColumn` -- params: `{ matrixId: number; columnName: string }`, result: `void`.
   - `renameColumn` -- params: `{ matrixId: number; oldName: string; newName: string }`, result: `void`.
-  - `getColumns` -- params: `{ matrixId: number }`, result: `Column[]`.
+  - `getColumns` -- params: `{ matrixId: number }`, result: `ColumnDefinition[]`.
 
-- [ ] Add handlers in `matrix-handler.ts` that call the corresponding `matrix.ts` functions.
+- [x] Add handlers in `matrix-handler.ts` that call the corresponding `matrix.ts` functions.
 
-- [ ] Add client-side functions in `matrix-client.ts`:
-  - `addColumn(matrixId, name, type)` → worker call.
+- [x] Add client-side functions in `matrix-client.ts`:
+  - `addColumn(matrixId, name, columnType)` → worker call.
   - `removeColumn(matrixId, columnName)` → worker call.
   - `renameColumn(matrixId, oldName, newName)` → worker call.
   - `getColumns(matrixId)` → worker call.
 
-- [ ] Ensure column operations trigger write invalidation so reactive queries on the affected matrix update. The `matrix_columns` table and `mx_{id}_data` table both change -- subscribed queries that reference either should re-run.
+- [x] Ensure column operations trigger write invalidation so reactive queries on the affected matrix update. The `matrix_columns` table and `mx_{id}_data` table both change -- subscribed queries that reference either should re-run.
 
-- [ ] Tests: add a column via the worker protocol, verify the column exists in both `matrix_columns` and the data table. Remove a column, verify it's gone. Rename a column, verify data survives.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: add a column via the worker protocol, verify the column exists in both `matrix_columns` and the data table. Remove a column, verify it's gone. Rename a column, verify data survives.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Table face type
 

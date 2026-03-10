@@ -17,11 +17,15 @@ import { describe, it, beforeAll, expect } from 'vitest'
 
 import { addObserver, removeObserver } from '../client/sql-client'
 import {
+  addColumn,
   createMatrix,
   ensureTrait,
+  getColumns,
   insertRow,
   registerFaceType,
   registerPlugin,
+  removeColumn,
+  renameColumn,
   updateRow,
 } from '../client/matrix-client'
 import { awaitWorkerReady } from '../client/worker-client'
@@ -244,6 +248,74 @@ describe('outline matrix content column defaults', () => {
       expect(after[0]?.content).toBe(updatedDoc)
     } finally {
       cleanup()
+    }
+  }, 5000)
+})
+
+describe('column management through worker', () => {
+  let matrixId: number
+
+  beforeAll(async () => {
+    matrixId = await createMatrix('col-ops-test')
+    await ensureTrait('rank', matrixId)
+    await ensureTrait('closure', matrixId)
+  })
+
+  it('getColumns returns initial columns', async () => {
+    const cols = await getColumns(matrixId)
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+  }, 5000)
+
+  it('addColumn adds to both registry and data table', async () => {
+    await addColumn(matrixId, 'notes', 'TEXT')
+
+    const cols = await getColumns(matrixId)
+    expect(cols).toEqual([
+      { name: 'title', type: 'TEXT', order: 0 },
+      { name: 'notes', type: 'TEXT', order: 1 },
+    ])
+  }, 5000)
+
+  it('removeColumn removes from both registry and data table', async () => {
+    await removeColumn(matrixId, 'notes')
+
+    const cols = await getColumns(matrixId)
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+  }, 5000)
+
+  it('renameColumn renames and preserves data', async () => {
+    await insertRow(matrixId, { values: { title: 'keep-me' } })
+
+    await renameColumn(matrixId, 'title', 'label')
+
+    const cols = await getColumns(matrixId)
+    expect(cols).toEqual([{ name: 'label', type: 'TEXT', order: 0 }])
+
+    const sql = `SELECT label FROM "mx_${matrixId}_data" WHERE label = 'keep-me'`
+    const { nextResult, cleanup } = observeResults(sql)
+    try {
+      const result = await nextResult()
+      expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBe('keep-me')
+    } finally {
+      cleanup()
+    }
+  }, 5000)
+
+  it('addColumn triggers subscription invalidation on data table', async () => {
+    const sql = `SELECT * FROM "mx_${matrixId}_data" LIMIT 1`
+    const { nextResult, cleanup } = observeResults(sql)
+
+    try {
+      await nextResult()
+
+      await addColumn(matrixId, 'extra', 'TEXT')
+
+      const after = await nextResult()
+      expect(after[0]).toHaveProperty('extra')
+    } finally {
+      cleanup()
+      await removeColumn(matrixId, 'extra')
     }
   }, 5000)
 })

@@ -1,4 +1,5 @@
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
+import type { ColumnDefinition } from './matrix'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from './traits'
 
@@ -89,6 +90,22 @@ export type MatrixOperationMap = {
   registerFaceType: {
     params: { definition: FaceTypeDefinition }
     result: void
+  }
+  addColumn: {
+    params: { matrixId: number; name: string; columnType: string }
+    result: void
+  }
+  removeColumn: {
+    params: { matrixId: number; columnName: string }
+    result: void
+  }
+  renameColumn: {
+    params: { matrixId: number; oldName: string; newName: string }
+    result: void
+  }
+  getColumns: {
+    params: { matrixId: number }
+    result: ColumnDefinition[]
   }
 }
 
