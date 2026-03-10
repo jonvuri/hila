@@ -7,7 +7,6 @@ export type MatrixSpec = {
 export type TraitRequest = {
   type: 'rank' | 'closure'
   matrixKey: string // references MatrixSpec.key
-  scopeName: string
 }
 
 export type FaceBinding = {

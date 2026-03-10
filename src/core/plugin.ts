@@ -2,6 +2,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
 import { createMatrix } from './matrix'
+import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -70,7 +71,16 @@ export const registerPlugin = async (
       bind: [metadata, definition.id],
     })
 
-    // TODO: Request traits via ensureTrait (not yet implemented)
+    for (const trait of definition.traits) {
+      const traitMatrixId = matrixIds[trait.matrixKey]
+      if (traitMatrixId === undefined) {
+        throw new Error(
+          `Trait references unknown matrix key "${trait.matrixKey}" in plugin "${definition.id}"`,
+        )
+      }
+      ensureTrait(db, trait.type, traitMatrixId)
+    }
+
     // TODO: Store named queries/mutations (in-memory, future task)
     // TODO: Resolve face bindings (face system, future task)
   })

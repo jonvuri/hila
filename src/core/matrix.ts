@@ -6,6 +6,7 @@ import {
   installDataTableTriggers,
   reinstallDataTableTriggers,
 } from './sync'
+import { ensureTrait, requireTraits } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -74,6 +75,15 @@ export const initMatrixSchema = (db: Database) => {
 
       -- minimal key validity: must end with a single terminator
       CHECK (length(key) > 0 AND substr(key, length(key), 1) = x'00')
+    ) STRICT;
+
+    -- ------------------------------------------------------------
+    -- Trait provisioning registry
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS matrix_traits (
+      matrix_id  INTEGER NOT NULL REFERENCES matrix(id),
+      trait_type TEXT NOT NULL CHECK (trait_type IN ('rank', 'closure')),
+      PRIMARY KEY (matrix_id, trait_type)
     ) STRICT;
 
     -- ------------------------------------------------------------
@@ -231,18 +241,6 @@ export const createMatrix = (
       ) STRICT;
     `)
 
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
-        ancestor_key    BLOB NOT NULL,
-        descendant_key  BLOB NOT NULL,
-        depth           INTEGER NOT NULL CHECK (depth >= 0),
-        PRIMARY KEY (ancestor_key, descendant_key)
-      ) STRICT;
-
-      CREATE INDEX IF NOT EXISTS "mx_${matrixId}_closure_by_descendant"
-        ON "mx_${matrixId}_closure"(descendant_key);
-    `)
-
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, columns)
 
@@ -261,6 +259,8 @@ export const ensureRootMatrix = (db: Database): number => {
     const deviceId = getOrCreateDeviceId(db)
     const columns = getColumns(db, 1)
     installDataTableTriggers(db, 1, deviceId, columns)
+    ensureTrait(db, 'rank', 1)
+    ensureTrait(db, 'closure', 1)
     return 1
   }
 
@@ -286,20 +286,11 @@ export const ensureRootMatrix = (db: Database): number => {
       ) STRICT;
     `)
 
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS "mx_${matrixId}_closure" (
-        ancestor_key    BLOB NOT NULL,
-        descendant_key  BLOB NOT NULL,
-        depth           INTEGER NOT NULL CHECK (depth >= 0),
-        PRIMARY KEY (ancestor_key, descendant_key)
-      ) STRICT;
-
-      CREATE INDEX IF NOT EXISTS "mx_${matrixId}_closure_by_descendant"
-        ON "mx_${matrixId}_closure"(descendant_key);
-    `)
-
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
+
+    ensureTrait(db, 'rank', matrixId)
+    ensureTrait(db, 'closure', matrixId)
 
     return matrixId
   })
@@ -332,6 +323,7 @@ export const insertRow = (
   const { matrixId, parentKey, prevKey, nextKey, rowKind, rowId } = params
 
   return withTransaction(db, () => {
+    requireTraits(db, matrixId, ['rank', 'closure'])
     // Compute the rank key
     let rankKey: Uint8Array
 

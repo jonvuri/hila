@@ -153,7 +153,7 @@ Formalize the plugin model from the outline's patterns. Build the face slot syst
 
 - **Trait provisioning system.**
 
-  - Implement `ensureTrait(type, matrixId, scopeName)` as the core provisioning API.
+  - Implement `ensureTrait(type, matrixId)` as the core provisioning API.
   - Idempotent: returns existing handle if the trait is already provisioned.
   - Shared: multiple consumers access the same trait tables.
   - Persistent: traits survive plugin removal.

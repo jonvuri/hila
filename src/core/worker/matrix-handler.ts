@@ -23,6 +23,7 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
+import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl } from '../traits'
 
 import { sqliteWasm } from './worker-db'
 
@@ -247,6 +248,30 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getPluginsSuccess', id, result: plugins })
       } catch (err: unknown) {
         postMessage({ type: 'getPluginsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'ensureTrait': {
+      const { id, traitType, matrixId } = message
+      try {
+        const { db } = await sqliteWasm
+        const handle = ensureTraitImpl(db, traitType, matrixId)
+        postMessage({ type: 'ensureTraitSuccess', id, result: handle })
+      } catch (err: unknown) {
+        postMessage({ type: 'ensureTraitError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getTraits': {
+      const { id, matrixId } = message
+      try {
+        const { db } = await sqliteWasm
+        const traits = getTraitsImpl(db, matrixId)
+        postMessage({ type: 'getTraitsSuccess', id, result: traits })
+      } catch (err: unknown) {
+        postMessage({ type: 'getTraitsError', id, error: toError(err) })
       }
       break
     }

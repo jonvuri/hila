@@ -20,6 +20,7 @@ import {
   getColumns,
 } from './matrix'
 import { makeKey, parseKey } from './lexorank'
+import { ensureTrait } from './traits'
 import {
   installCoreTableTriggers,
   getLocalChanges,
@@ -31,6 +32,17 @@ import {
   compactChangelog,
 } from './sync'
 import type { Changeset } from './sync-types'
+
+const createMatrixWithTraits = (
+  db: Database,
+  title: string,
+  columns?: { name: string; type: string }[],
+): number => {
+  const matrixId = createMatrix(db, title, columns)
+  ensureTrait(db, 'rank', matrixId)
+  ensureTrait(db, 'closure', matrixId)
+  return matrixId
+}
 
 type ChangelogEntry = {
   seq: number
@@ -89,7 +101,7 @@ describe('Change tracking infrastructure', () => {
   // -- Data table INSERT tracking --
 
   test('INSERT into data table logs changelog entry with correct fields', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     clearChangelog()
 
     const rowId = insertDataRow(db, matrixId, { title: 'Hello' })
@@ -112,7 +124,7 @@ describe('Change tracking infrastructure', () => {
   // -- Data table UPDATE tracking --
 
   test('UPDATE on data table logs changelog entry with full NEW row', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Before' })
     clearChangelog()
 
@@ -134,7 +146,7 @@ describe('Change tracking infrastructure', () => {
   // -- Data table DELETE tracking --
 
   test('DELETE on data table logs changelog entry with data=NULL', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Doomed' })
     const key = insertRow(db, { matrixId, rowKind: 0, rowId })
     clearChangelog()
@@ -153,7 +165,7 @@ describe('Change tracking infrastructure', () => {
   // -- device_id correctness --
 
   test('device_id in changelog matches the configured device', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     clearChangelog()
 
     insertDataRow(db, matrixId, { title: 'Check device' })
@@ -166,7 +178,7 @@ describe('Change tracking infrastructure', () => {
   // -- seq monotonicity --
 
   test('changelog seq values are monotonically increasing', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     clearChangelog()
 
     insertDataRow(db, matrixId, { title: 'A' })
@@ -182,7 +194,7 @@ describe('Change tracking infrastructure', () => {
   // -- Column change: addColumn triggers reflect new schema --
 
   test('addColumn reinstalls triggers so new column appears in changelog JSON', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     addColumn(db, matrixId, { name: 'score', type: 'INTEGER' })
     clearChangelog()
 
@@ -200,7 +212,7 @@ describe('Change tracking infrastructure', () => {
   // -- removeColumn triggers reflect updated schema --
 
   test('removeColumn reinstalls triggers so removed column is absent from changelog JSON', () => {
-    const matrixId = createMatrix(db, 'Test', [
+    const matrixId = createMatrixWithTraits(db, 'Test', [
       { name: 'a', type: 'TEXT' },
       { name: 'b', type: 'TEXT' },
     ])
@@ -221,7 +233,7 @@ describe('Change tracking infrastructure', () => {
   // -- renameColumn triggers reflect updated schema --
 
   test('renameColumn reinstalls triggers so renamed column appears with new name', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     renameColumn(db, matrixId, 'title', 'label')
     clearChangelog()
 
@@ -241,7 +253,7 @@ describe('Change tracking infrastructure', () => {
   test('INSERT into matrix table is tracked', () => {
     clearChangelog()
 
-    const matrixId = createMatrix(db, 'Tracked Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Tracked Matrix')
 
     const log = getChangelog()
     const matrixInsert = log.find((e) => e.table_name === 'matrix' && e.operation === 'INSERT')
@@ -255,7 +267,7 @@ describe('Change tracking infrastructure', () => {
   test('INSERT into matrix_columns table is tracked', () => {
     clearChangelog()
 
-    const matrixId = createMatrix(db, 'M', [
+    const matrixId = createMatrixWithTraits(db, 'M', [
       { name: 'name', type: 'TEXT' },
       { name: 'age', type: 'INTEGER' },
     ])
@@ -277,7 +289,7 @@ describe('Change tracking infrastructure', () => {
   })
 
   test('INSERT into rank table is tracked with hex-encoded key', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Ranked' })
     clearChangelog()
 
@@ -298,7 +310,7 @@ describe('Change tracking infrastructure', () => {
   // -- Closure tables are NOT tracked --
 
   test('no triggers are installed on closure tables', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
 
     const stmt = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name = ?`,
@@ -317,7 +329,7 @@ describe('Change tracking infrastructure', () => {
   // -- Existing column operations still work with change tracking --
 
   test('getColumns still returns correct columns after trigger installation', () => {
-    const matrixId = createMatrix(db, 'Test', [
+    const matrixId = createMatrixWithTraits(db, 'Test', [
       { name: 'x', type: 'TEXT' },
       { name: 'y', type: 'INTEGER' },
     ])
@@ -329,7 +341,7 @@ describe('Change tracking infrastructure', () => {
   // -- Multiple operations produce ordered changelog --
 
   test('mixed insert/update/delete produces ordered changelog', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     clearChangelog()
 
     const rowId = insertDataRow(db, matrixId, { title: 'Created' })
@@ -354,8 +366,8 @@ describe('Change tracking infrastructure', () => {
 
   describe('Changeset abstraction', () => {
     test('getLocalChanges(0) returns all entries in order', () => {
-      const m1 = createMatrix(db, 'Alpha')
-      const m2 = createMatrix(db, 'Beta')
+      const m1 = createMatrixWithTraits(db, 'Alpha')
+      const m2 = createMatrixWithTraits(db, 'Beta')
       clearChangelog()
 
       insertDataRow(db, m1, { title: 'A1' })
@@ -381,7 +393,7 @@ describe('Change tracking infrastructure', () => {
     })
 
     test('getLocalChanges(N) returns only entries after N', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
 
       insertDataRow(db, matrixId, { title: 'First' })
@@ -407,7 +419,7 @@ describe('Change tracking infrastructure', () => {
       clearChangelog()
       expect(getLastSeq(db)).toBe(0)
 
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
 
       insertDataRow(db, matrixId, { title: 'One' })
@@ -430,7 +442,7 @@ describe('Change tracking infrastructure', () => {
     })
 
     test('getLocalChanges includes DELETE entries with null data', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Gone' })
       const key = insertRow(db, { matrixId, rowKind: 0, rowId })
       clearChangelog()
@@ -447,7 +459,7 @@ describe('Change tracking infrastructure', () => {
     })
 
     test('changeset entries have parsed data objects, not JSON strings', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
 
       insertDataRow(db, matrixId, { title: 'Parsed' })
@@ -515,7 +527,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote INSERT for a row that doesn't exist locally --
 
     test('apply remote INSERT creates a new row', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
 
       const remoteRowId = 999888777
@@ -547,7 +559,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote UPDATE with no local modifications --
 
     test('apply remote UPDATE with no local conflict updates the row', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Original' })
       clearChangelog()
 
@@ -582,7 +594,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote UPDATE conflicts with local modification, remote wins (LWW) --
 
     test('conflict: remote UPDATE wins when remote timestamp is newer', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Original' })
 
       // Local modification (tracked in changelog)
@@ -628,7 +640,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote UPDATE conflicts with local modification, local wins (LWW) --
 
     test('conflict: local UPDATE wins when local timestamp is newer', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Original' })
 
       // Local modification (tracked in changelog)
@@ -672,7 +684,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote DELETE for a row edited locally --
 
     test('conflict: remote DELETE vs local edit detects conflict', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Will be contested' })
 
       // Local modification
@@ -704,7 +716,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote changes do NOT appear in _sync_changelog (trigger suppression) --
 
     test('remote changes do not appear in _sync_changelog', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
 
       const remoteRowId = 111222333
@@ -731,7 +743,7 @@ describe('Change tracking infrastructure', () => {
     // -- Per-device high-water marks are updated --
 
     test('per-device high-water mark is updated after apply', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
 
       const remoteRowId = 444555666
       applyRemoteChanges(
@@ -762,7 +774,7 @@ describe('Change tracking infrastructure', () => {
     // -- Duplicate rank key collision --
 
     test('duplicate rank key collision is resolved: both rows present with correct order', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const localRowId = insertDataRow(db, matrixId, { title: 'Local row' })
       const remoteRowId = 777888999
 
@@ -831,7 +843,7 @@ describe('Change tracking infrastructure', () => {
     // -- No collision when rank keys differ (common case) --
 
     test('no rank key collision when keys differ', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const localRowId = insertDataRow(db, matrixId, { title: 'Local' })
       const remoteRowId = 123456789
 
@@ -886,7 +898,7 @@ describe('Change tracking infrastructure', () => {
     // -- affectedRankMatrixIds tracking --
 
     test('affectedRankMatrixIds includes matrix IDs from rank changes', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const remoteRowId = 555666777
       db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'R')`, {
         bind: [remoteRowId],
@@ -917,7 +929,7 @@ describe('Change tracking infrastructure', () => {
     // -- Remote DELETE operation --
 
     test('apply remote DELETE removes the row', () => {
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'To be deleted' })
 
       // Set high-water mark high so no conflict
@@ -952,7 +964,7 @@ describe('Change tracking infrastructure', () => {
 
     describe('Closure rebuild after remote rank changes', () => {
       test('rebuildClosure reconstructs hierarchy from rank keys', () => {
-        const matrixId = createMatrix(db, 'Test')
+        const matrixId = createMatrixWithTraits(db, 'Test')
 
         // Build a hierarchy: parent → child → grandchild
         const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
@@ -1001,7 +1013,7 @@ describe('Change tracking infrastructure', () => {
       })
 
       test('rebuildClosure after simulated remote reparent', () => {
-        const matrixId = createMatrix(db, 'Test')
+        const matrixId = createMatrixWithTraits(db, 'Test')
 
         // Build: P1 → C1, P2 → C2 → GC
         // Insert both root nodes first to avoid key ordering issues
@@ -1082,7 +1094,7 @@ describe('Change tracking infrastructure', () => {
       })
 
       test('applyRemoteChanges triggers closure rebuild for affected matrixes', () => {
-        const matrixId = createMatrix(db, 'Test')
+        const matrixId = createMatrixWithTraits(db, 'Test')
 
         // Create a parent and child
         const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
@@ -1144,7 +1156,7 @@ describe('Change tracking infrastructure', () => {
       })
 
       test('outline query returns correct results after closure rebuild', () => {
-        const matrixId = createMatrix(db, 'Test')
+        const matrixId = createMatrixWithTraits(db, 'Test')
 
         // Build a tree: root → A, root → B → C
         const rootRowId = insertDataRow(db, matrixId, { title: 'Root' })
@@ -1246,7 +1258,7 @@ describe('Change tracking infrastructure', () => {
       stmt.finalize()
 
       // Verify normal change tracking still works
-      const matrixId = createMatrix(db, 'Test')
+      const matrixId = createMatrixWithTraits(db, 'Test')
       clearChangelog()
       insertDataRow(db, matrixId, { title: 'After error' })
       const log = getChangelog()
@@ -1294,7 +1306,7 @@ describe('Changelog retention (compactChangelog)', () => {
   }
 
   test('no compaction when no devices have high-water marks', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     for (let i = 0; i < 15; i++) {
       insertDataRow(db, matrixId, { title: `Row ${i}` })
     }
@@ -1308,7 +1320,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('compacts entries exceeding per-row cap when all conditions met', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
 
     // Update the same row many times to exceed the per-row cap
@@ -1350,7 +1362,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('preserves entries within the retention window regardless of count', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
 
     // Update the same row many times to exceed the per-row cap
@@ -1378,7 +1390,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('preserves entries above a device high-water mark', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
 
     // Update the same row many times
@@ -1431,7 +1443,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('respects minimum high-water mark across multiple devices', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
 
     for (let i = 0; i < 15; i++) {
@@ -1459,7 +1471,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('configurable retention days', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Row 1' })
 
     for (let i = 0; i < 15; i++) {
@@ -1482,7 +1494,7 @@ describe('Changelog retention (compactChangelog)', () => {
   })
 
   test('handles multiple rows independently', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId1 = insertDataRow(db, matrixId, { title: 'Row 1' })
     const rowId2 = insertDataRow(db, matrixId, { title: 'Row 2' })
 

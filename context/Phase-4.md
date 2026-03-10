@@ -48,7 +48,6 @@ The minimum viable plugin system: a registration table, a plugin definition type
   type TraitRequest = {
     type: 'rank' | 'closure'
     matrixKey: string  // references MatrixSpec.key
-    scopeName: string
   }
 
   type FaceBinding = {
@@ -102,37 +101,36 @@ The minimum viable plugin system: a registration table, a plugin definition type
 
 Decouple trait creation from matrix creation and implement the `ensureTrait` provisioning API per [Traits - Provisioning model](./Traits.md#provisioning-model). Currently, `createMatrix` always creates a closure table, and rank entries are created implicitly by `insertRow`. The new API makes trait provisioning explicit, lazy, and shared.
 
-- [ ] Add a `matrix_traits` table in `initMatrixSchema`:
+- [x] Add a `matrix_traits` table in `initMatrixSchema`:
   ```sql
   CREATE TABLE IF NOT EXISTS matrix_traits (
     matrix_id INTEGER NOT NULL REFERENCES matrix(id),
     trait_type TEXT NOT NULL CHECK (trait_type IN ('rank', 'closure')),
-    scope_name TEXT NOT NULL,
-    PRIMARY KEY (matrix_id, trait_type, scope_name)
+    PRIMARY KEY (matrix_id, trait_type)
   ) STRICT;
   ```
   Records which traits have been provisioned for which matrixes. Install change-tracking triggers.
 
-- [ ] Implement `ensureTrait(db, type, matrixId, scopeName)` in `src/core/plugin.ts` (or a new `src/core/traits.ts`):
-  - Checks `matrix_traits` for an existing `(matrixId, type, scopeName)` entry.
+- [x] Implement `ensureTrait(db, type, matrixId)` in `src/core/traits.ts`:
+  - Checks `matrix_traits` for an existing `(matrixId, type)` entry.
   - If found: returns immediately (idempotent).
   - If not found:
     - **rank**: the `rank` table is shared globally (already exists from `initMatrixSchema`). The trait record is simply bookkeeping -- rank rows reference `matrix_id` already. Insert the `matrix_traits` row.
     - **closure**: creates `mx_{matrixId}_closure` table if it doesn't exist (`CREATE TABLE IF NOT EXISTS`). Insert the `matrix_traits` row.
-  - Returns a `TraitHandle` with the trait type, matrix ID, and scope name.
+  - Returns a `TraitHandle` with the trait type and matrix ID.
 
-- [ ] Update `createMatrix` to NOT automatically create a closure table. Currently `createMatrix` always creates `mx_{id}_closure`. After this change, the closure table is created on demand via `ensureTrait`. This is a breaking change -- update all call sites that depend on the closure table existing immediately.
+- [x] Update `createMatrix` to NOT automatically create a closure table. Currently `createMatrix` always creates `mx_{id}_closure`. After this change, the closure table is created on demand via `ensureTrait`. This is a breaking change -- update all call sites that depend on the closure table existing immediately.
 
-- [ ] Update `ensureRootMatrix` to explicitly call `ensureTrait('rank', matrixId, 'default')` and `ensureTrait('closure', matrixId, 'default')` after creating the root matrix. The outline requires both.
+- [x] Update `ensureRootMatrix` to explicitly call `ensureTrait('rank', matrixId)` and `ensureTrait('closure', matrixId)` after creating the root matrix. The outline requires both.
 
-- [ ] Update `insertRow` to check for trait existence: if called for a matrix that doesn't have the rank or closure trait, either error or auto-provision. Prefer erroring with a clear message -- the caller should ensure traits are provisioned before inserting rows that depend on them.
+- [x] Update `insertRow` to check for trait existence: if called for a matrix that doesn't have the rank or closure trait, either error or auto-provision. Prefer erroring with a clear message -- the caller should ensure traits are provisioned before inserting rows that depend on them.
 
-- [ ] Implement `getTraits(db, matrixId)` to list all provisioned traits for a matrix.
+- [x] Implement `getTraits(db, matrixId)` to list all provisioned traits for a matrix.
 
-- [ ] Add worker message types: `ensureTrait`, `getTraits`. Wire into the worker handler.
+- [x] Add worker message types: `ensureTrait`, `getTraits`. Wire into the worker handler.
 
-- [ ] Tests: call `ensureTrait('closure', matrixId, 'default')` twice, verify idempotent (one table, one `matrix_traits` row). Call for a matrix that already has rank entries, verify no data loss. Create a matrix without traits, attempt `insertRow`, verify it errors or auto-provisions. Verify `getTraits` returns correct results.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: call `ensureTrait('closure', matrixId)` twice, verify idempotent (one table, one `matrix_traits` row). Call for a matrix that already has rank entries, verify no data loss. Create a matrix without traits, attempt `insertRow`, verify it errors or auto-provisions. Verify `getTraits` returns correct results.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Face type registry and slot binding system
 
@@ -150,7 +148,7 @@ Build the core face abstraction: face types with slot declarations, slot binding
     id: string
     name: string
     slots: SlotDeclaration[]
-    traitRequirements: { type: 'rank' | 'closure'; scopeName: string }[]
+    traitRequirements: { type: 'rank' | 'closure' }[]
     overflowBehavior: 'side-columns' | 'property-panel' | 'none'
   }
 
@@ -188,7 +186,7 @@ Build the core face abstraction: face types with slot declarations, slot binding
   - A face always renders something -- never refuses a matrix.
 
 - [ ] Implement face-triggered trait provisioning:
-  - `applyFaceToMatrix(db, faceTypeId, matrixId, scopeName?)` -- the high-level operation for applying a face type to a matrix.
+  - `applyFaceToMatrix(db, faceTypeId, matrixId)` -- the high-level operation for applying a face type to a matrix.
   - Reads the face type's `traitRequirements` and calls `ensureTrait` for each (task 2).
   - Creates a default `FaceConfig` with auto-resolved slot bindings.
   - Returns the `FaceConfig`.
@@ -237,8 +235,8 @@ Transform the existing outline module into the first formal plugin. This validat
       },
     ],
     traits: [
-      { type: 'rank', matrixKey: 'root', scopeName: 'default' },
-      { type: 'closure', matrixKey: 'root', scopeName: 'default' },
+      { type: 'rank', matrixKey: 'root' },
+      { type: 'closure', matrixKey: 'root' },
     ],
     namedQueries: { /* outline page query, breadcrumbs, etc. */ },
     namedMutations: { /* insertRow, reparentRow, deleteRow wrappers */ },
@@ -262,8 +260,8 @@ Transform the existing outline module into the first formal plugin. This validat
       { name: 'primary_content', preferredType: 'richtext', required: true },
     ],
     traitRequirements: [
-      { type: 'rank', scopeName: 'default' },
-      { type: 'closure', scopeName: 'default' },
+      { type: 'rank' },
+      { type: 'closure' },
     ],
     overflowBehavior: 'side-columns',
   })
@@ -428,7 +426,7 @@ The second formal plugin, proving the plugin model with a different data shape a
       },
     ],
     traits: [
-      { type: 'rank', matrixKey: 'notes', scopeName: 'default' },
+      { type: 'rank', matrixKey: 'notes' },
     ],
     namedQueries: {
       allNotes: `SELECT r.row_id, d.title, d.body FROM rank r JOIN mx_{mid}_data d ON r.row_id = d.id WHERE r.matrix_id = :mid ORDER BY r.key`,

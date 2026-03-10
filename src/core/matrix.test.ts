@@ -28,6 +28,19 @@ import {
   resetDeviceIdCache,
 } from './matrix'
 import { compareKeys, parseKey } from './lexorank'
+import { ensureTrait } from './traits'
+
+/** Create a matrix with default rank + closure traits provisioned. */
+const createMatrixWithTraits = (
+  db: Database,
+  title: string,
+  columns?: { name: string; type: string }[],
+): number => {
+  const matrixId = createMatrix(db, title, columns)
+  ensureTrait(db, 'rank', matrixId)
+  ensureTrait(db, 'closure', matrixId)
+  return matrixId
+}
 
 describe('Root Matrix Initialization', () => {
   let db: Database
@@ -146,17 +159,18 @@ describe('Matrix Operations', () => {
     expect(result.title).toBe('Test Matrix')
     checkStmt.finalize()
 
-    // Verify per-matrix tables were created
+    // Verify data table was created
     const dataTableExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_${matrixId}_data'`,
     )
     expect(dataTableExists.step()).toBe(true)
     dataTableExists.finalize()
 
+    // Closure table is NOT created by createMatrix -- it's created on demand via ensureTrait
     const closureTableExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_${matrixId}_closure'`,
     )
-    expect(closureTableExists.step()).toBe(true)
+    expect(closureTableExists.step()).toBe(false)
     closureTableExists.finalize()
   })
 
@@ -175,7 +189,7 @@ describe('Matrix Operations', () => {
   })
 
   test('addSampleRowsToMatrix should add rows with proper relationships', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Add sample rows
     addSampleRowsToMatrix(db, matrixId)
@@ -205,7 +219,7 @@ describe('Matrix Operations', () => {
   })
 
   test('addSampleRowsToMatrix should create hierarchical relationships on subsequent calls', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Add first batch of sample rows
     addSampleRowsToMatrix(db, matrixId)
@@ -243,7 +257,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert row at root level with no existing rows', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Create a data row
     const dataStmt = db.prepare(
@@ -293,7 +307,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert multiple rows in order with only prevKey', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
@@ -360,7 +374,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert multiple rows in order with only nextKey', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
@@ -427,7 +441,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert row between two existing rows', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     let dataStmt = db.prepare(
       `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
@@ -495,7 +509,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert child rows with parentKey', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Create and insert parent row
     let dataStmt = db.prepare(
@@ -590,7 +604,7 @@ describe('insertRow API', () => {
   })
 
   test('should handle nested parent-child relationships', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Create and insert root row
     let dataStmt = db.prepare(
@@ -668,7 +682,7 @@ describe('insertRow API', () => {
   })
 
   test('should insert two children of the same parent correctly', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Create parent
     let dataStmt = db.prepare(
@@ -739,7 +753,7 @@ describe('insertRow API', () => {
   })
 
   test('should maintain correct ordering with multiple inserts at different levels', () => {
-    const matrixId = createMatrix(db, 'Test Matrix')
+    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
 
     // Create root level rows
     const dataStmt1 = db.prepare(
@@ -888,7 +902,7 @@ describe('reparentRow', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('reparent leaf node to a new parent', () => {
@@ -1271,7 +1285,7 @@ describe('deleteRow', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('delete a leaf row removes rank, closure, and data entries', () => {
@@ -1469,7 +1483,7 @@ describe('deleteSubtree', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('delete a single leaf row (no descendants)', () => {
@@ -1645,7 +1659,7 @@ describe('getChildren', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('returns empty array for a leaf node', () => {
@@ -1741,7 +1755,7 @@ describe('getParent', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('returns null for a root-level row', () => {
@@ -1843,7 +1857,7 @@ describe('getDepth', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Test')
+    matrixId = createMatrixWithTraits(db, 'Test')
   })
 
   test('returns 0 for a root-level row', () => {
@@ -2693,7 +2707,7 @@ describe('Row operations round-trip', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = createMatrix(db, 'M')
+    matrixId = createMatrixWithTraits(db, 'M')
   })
 
   test('insert data row + rank row, then query both', () => {
@@ -2964,7 +2978,7 @@ describe('Globally unique random IDs', () => {
   })
 
   test('existing operations work correctly with random IDs', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
 
     // insertDataRow + insertRow
     const rowId1 = insertDataRow(db, matrixId, { title: 'Row 1' })
@@ -2995,7 +3009,7 @@ describe('Globally unique random IDs', () => {
   })
 
   test('outline query works with random IDs', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
 
     const rowId1 = insertDataRow(db, matrixId, { title: 'Parent' })
     const key1 = insertRow(db, { matrixId, rowKind: 0, rowId: rowId1 })
@@ -3025,7 +3039,7 @@ describe('Globally unique random IDs', () => {
   })
 
   test('addSampleRowsToMatrix works with random IDs', () => {
-    const matrixId = createMatrix(db, 'Test')
+    const matrixId = createMatrixWithTraits(db, 'Test')
     addSampleRowsToMatrix(db, matrixId)
 
     const dataStmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)

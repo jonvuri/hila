@@ -1,4 +1,5 @@
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
+import type { TraitHandle, TraitRow, TraitType } from './traits'
 
 // Matrix operation registry: maps operation names to request params and response results.
 // All message types and the protocol shape are derived from this single declaration.
@@ -59,6 +60,14 @@ export type MatrixOperationMap = {
   getPlugins: {
     params: Record<string, never>
     result: PluginRow[]
+  }
+  ensureTrait: {
+    params: { traitType: TraitType; matrixId: number }
+    result: TraitHandle
+  }
+  getTraits: {
+    params: { matrixId: number }
+    result: TraitRow[]
   }
 }
 

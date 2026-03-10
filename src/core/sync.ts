@@ -95,6 +95,10 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'type', type: 'TEXT' },
     { name: 'order', type: 'INTEGER' },
   ],
+  matrix_traits: [
+    { name: 'matrix_id', type: 'INTEGER' },
+    { name: 'trait_type', type: 'TEXT' },
+  ],
   rank: [
     { name: 'key', type: 'BLOB' },
     { name: 'matrix_id', type: 'INTEGER' },

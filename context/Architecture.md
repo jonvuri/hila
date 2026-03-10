@@ -95,12 +95,12 @@ The core provides the foundation: creating and managing **matrixes** (typed data
 
 Traits are per-matrix metadata tables that provide structural capabilities. A matrix "has the rank trait" or "has the closure trait." Traits are auto-provisioned on first request and shared by all consumers (plugins, faces, the system itself). See [Traits](./Traits.md) for detailed specs.
 
-- **Rank** -- Lexorank-based row ordering within a scope.
-- **Closure** -- ancestor/descendant hierarchy tracking.
+- **Rank** -- Lexorank-based tree-position ordering. The rank table is global; provisioning records the matrix's participation. See [Traits - Current scope and future evolution](./Traits.md#current-scope-and-future-evolution) for how this may evolve for non-tree ordering consumers.
+- **Closure** -- ancestor/descendant hierarchy tracking (per-matrix table, created on demand).
 
 Traits are not plugins and have no independent agency. They are purpose-specific data structures that the core knows how to create, maintain, and optimize.
 
-**Provisioning model.** Any consumer can request `ensureTrait(type, matrixId, scopeName)`. If the backing table exists, the existing handle is returned. If not, the core creates it. Traits are idempotent to request, shared across consumers, provisioned lazily on demand, and persistent (they survive plugin removal). A single matrix can have multiple trait instances (e.g. two independent rank scopes for different orderings).
+**Provisioning model.** Any consumer can request `ensureTrait(type, matrixId)`. If the backing table exists, the existing handle is returned. If not, the core creates it. Traits are idempotent to request, shared across consumers, provisioned lazily on demand, and persistent (they survive plugin removal).
 
 **The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits.md#join).
 

@@ -10,21 +10,18 @@ All trait operations are expressed as SQL and execute inside the SQLite engine. 
 
 Traits are auto-provisioned on first request and shared by all consumers.
 
-**`ensureTrait(type, matrixId, scopeName)`** is the provisioning interface. If the backing table for the requested trait already exists, the existing handle is returned. If not, the core creates it.
+**`ensureTrait(type, matrixId)`** is the provisioning interface. If the backing table for the requested trait already exists, the existing handle is returned. If not, the core creates it.
 
 - **Idempotent.** Requesting an already-provisioned trait is a no-op that returns the existing handle.
-- **Shared.** Multiple plugins and faces read/write the same trait tables. If the outline plugin and a kanban plugin both need rank for the same matrix with the same scope, they share one table. If they need different orderings, they request different scopes.
+- **Shared.** Multiple plugins and faces read/write the same trait tables. If the outline plugin and a note plugin both need rank for the same matrix, they share one table.
 - **Lazy.** Traits are provisioned when first requested, not eagerly. A matrix starts with no traits.
 - **Persistent.** Once provisioned, a trait persists even if the requesting consumer is disabled or removed. Trait tables are matrix infrastructure, not plugin state.
-- **Scoped.** Traits are identified by `(type, matrix_id, scope_name)`. A single matrix can have multiple rank traits (e.g. outline ordering vs. kanban priority) with different scope names. Closure traits typically have one scope per matrix but follow the same pattern.
 
 **Face-triggered provisioning.** When a face type with trait requirements is applied to a matrix, the system auto-provisions the needed traits. For example, applying the outline face to a note matrix provisions rank and closure traits for that matrix, even though the note plugin never requested them.
 
 ## Rank
 
-Provides ordered positioning of rows within a scope, using Lexorank sort keys. Any consumer can request a rank trait for a matrix, and the core provisions a rank table for it.
-
-Different consumers can maintain independent rank scopes over the same or different matrixes. For example, the outline plugin ranks rows by user-chosen position, while a kanban plugin might rank the same rows by priority -- each with its own scope name.
+Provides tree-position ordering of rows using Lexorank sort keys. The rank table is global (shared across all matrixes) and uses `matrix_id` to separate entries. Provisioning rank for a matrix records the intent in `matrix_traits`; the global rank table already exists.
 
 ### Lexorank encoding
 
@@ -88,7 +85,7 @@ WHERE key >= :old_prefix
 
 ## Closure
 
-Provides ancestor/descendant hierarchy tracking within a matrix. Any consumer can request a closure trait for a matrix, and the core provisions a closure table for it.
+Provides ancestor/descendant hierarchy tracking within a matrix. Any consumer can request a closure trait for a matrix, and the core provisions a per-matrix closure table for it (`mx_{matrixId}_closure`).
 
 A closure table has one row for every ancestor-descendant relationship, including the identity relationship between a row and itself (depth 0).
 
@@ -189,6 +186,24 @@ COMMIT;
 ```
 
 This replaces hundreds of lines of interleaved TypeScript and SQL with a handful of declarative statements in one transaction.
+
+## Current scope and future evolution
+
+The trait system currently has two types: rank and closure. They have an intentional asymmetry:
+
+- **Closure** is per-matrix (each matrix gets its own `mx_{id}_closure` table) and genuinely lazy -- the table is created on demand by `ensureTrait`. This is the cleanest fit for the trait model: optional, shared, provisioned transparently.
+
+- **Rank** is a global table that uses `matrix_id` to partition entries. Provisioning rank is bookkeeping (a `matrix_traits` row) rather than table creation. The global rank table encodes both ordering and hierarchy in the Lexorank key structure -- a parent's key is a prefix of its children's keys. This makes it tree-position infrastructure, not a generic ordering primitive.
+
+**Why this matters for future consumers.** The current rank design serves tree-structured views (outline, hierarchical note lists) well. But non-tree orderings -- flat list positions, kanban column positions, spaced-repetition schedules -- have fundamentally different shapes. A kanban ordering doesn't use hierarchical Lexorank keys. A flashcard review order might be computed from interval data rather than stored as position keys.
+
+When a non-tree ordering consumer arrives, it has two clean options:
+
+1. **Plugin-specific table.** If the ordering is internal to one plugin, it can create its own position table (using the Lexorank utilities for `between()` calculations) without involving the trait system. Traits only add value for genuinely shared structural metadata.
+
+2. **New trait type.** If the ordering needs to be shared across consumers (e.g. a flat ordering used by both a list face and a calendar face), the trait system could evolve to support additional ordering types. This would mean new trait types with their own provisioning logic, not scoping the existing rank table.
+
+The Lexorank algorithm (`between`, `makeKey`, `parseKey`, `nextPrefix`) is shared utility code regardless of how ordering tables evolve.
 
 ## Join
 

@@ -16,7 +16,7 @@
 import { describe, it, beforeAll, expect } from 'vitest'
 
 import { addObserver, removeObserver } from '../client/sql-client'
-import { createMatrix, insertRow, updateRow } from '../client/matrix-client'
+import { createMatrix, ensureTrait, insertRow, updateRow } from '../client/matrix-client'
 import { awaitWorkerReady } from '../client/worker-client'
 import type { SqlObserver } from '../sql-types'
 import type { SqlResult } from '../../sql/types'
@@ -58,6 +58,8 @@ describe('row operations through worker', () => {
   beforeAll(async () => {
     await awaitWorkerReady()
     matrixId = await createMatrix('row-ops-test')
+    await ensureTrait('rank', matrixId)
+    await ensureTrait('closure', matrixId)
   })
 
   it('insertRow returns key and rowId', async () => {
