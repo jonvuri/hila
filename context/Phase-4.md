@@ -136,7 +136,7 @@ Decouple trait creation from matrix creation and implement the `ensureTrait` pro
 
 Build the core face abstraction: face types with slot declarations, slot binding resolution, and face configuration as serializable data. This is the infrastructure that all faces (outline, table, note, flashcard) will use.
 
-- [ ] Define face types in a new `src/core/face-types.ts`:
+- [x] Define face types in a new `src/core/face-types.ts`:
   ```typescript
   type SlotDeclaration = {
     name: string
@@ -169,13 +169,13 @@ Build the core face abstraction: face types with slot declarations, slot binding
   }
   ```
 
-- [ ] Implement the face type registry in `src/core/face-registry.ts`:
+- [x] Implement the face type registry in `src/core/face-registry.ts`:
   - `registerFaceType(definition: FaceTypeDefinition)` -- registers a face type by ID.
   - `getFaceType(faceTypeId: string)` -- retrieves a face type definition.
   - `getAllFaceTypes()` -- lists all registered face types.
   - The registry is in-memory (face types are registered at app startup by plugins, not persisted in the database).
 
-- [ ] Implement slot binding resolution in `src/core/slot-binding.ts`:
+- [x] Implement slot binding resolution in `src/core/slot-binding.ts`:
   - `resolveSlotBindings(faceType: FaceTypeDefinition, columns: Column[], explicitBindings?: Record<string, string>): ResolvedSlotBinding[]`
   - Resolution chain per [Plugins - Slot binding resolution](./Plugins.md#slot-binding-resolution):
     1. **Explicit binding** -- if `explicitBindings[slotName]` specifies a column, use it.
@@ -185,13 +185,13 @@ Build the core face abstraction: face types with slot declarations, slot binding
   - Returns the binding for each slot plus a list of overflow columns (columns not bound to any slot).
   - A face always renders something -- never refuses a matrix.
 
-- [ ] Implement face-triggered trait provisioning:
+- [x] Implement face-triggered trait provisioning:
   - `applyFaceToMatrix(db, faceTypeId, matrixId)` -- the high-level operation for applying a face type to a matrix.
   - Reads the face type's `traitRequirements` and calls `ensureTrait` for each (task 2).
   - Creates a default `FaceConfig` with auto-resolved slot bindings.
   - Returns the `FaceConfig`.
 
-- [ ] Create a `face_configs` table for persisting face configurations:
+- [x] Create a `face_configs` table for persisting face configurations:
   ```sql
   CREATE TABLE IF NOT EXISTS face_configs (
     id TEXT PRIMARY KEY,
@@ -205,17 +205,17 @@ Build the core face abstraction: face types with slot declarations, slot binding
   ```
   Install change-tracking triggers.
 
-- [ ] Implement face config CRUD: `saveFaceConfig(db, config)`, `getFaceConfig(db, id)`, `getFaceConfigsForMatrix(db, matrixId)`.
+- [x] Implement face config CRUD: `saveFaceConfig(db, config)`, `getFaceConfig(db, id)`, `getFaceConfigsForMatrix(db, matrixId)`.
 
-- [ ] Add worker messages: `applyFaceToMatrix`, `saveFaceConfig`, `getFaceConfigs`. Wire into the worker handler.
+- [x] Add worker messages: `applyFaceToMatrix`, `saveFaceConfig`, `getFaceConfigs`. Wire into the worker handler.
 
-- [ ] Implement the face rendering dispatch on the UI side in a new `src/core/FaceRenderer.tsx`:
+- [x] Implement the face rendering dispatch on the UI side in a new `src/core/FaceRenderer.tsx`:
   - A Solid component that takes a `FaceConfig` and renders the appropriate face type component.
   - Resolves slot bindings, passes them to the face type component as props.
   - Each face type component is registered in a component map keyed by `faceTypeId`.
 
-- [ ] Tests: resolve slot bindings with explicit bindings (verify explicit wins). Resolve with matching column names (verify name match). Resolve with type match (verify first matching type). Resolve with no match (verify fallback). Verify overflow columns are correctly identified. Verify face-triggered trait provisioning creates traits. Verify FaceConfig round-trip (save and load).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: resolve slot bindings with explicit bindings (verify explicit wins). Resolve with matching column names (verify name match). Resolve with type match (verify first matching type). Resolve with no match (verify fallback). Verify overflow columns are correctly identified. Verify face-triggered trait provisioning creates traits. Verify FaceConfig round-trip (save and load).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Refactor outline as formal plugin
 

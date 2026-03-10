@@ -138,6 +138,19 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     -- ------------------------------------------------------------
+    -- Face configurations (face type bound to matrix with slot bindings)
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS face_configs (
+      id               TEXT PRIMARY KEY,
+      face_type_id     TEXT NOT NULL,
+      matrix_id        INTEGER NOT NULL REFERENCES matrix(id),
+      query            TEXT NOT NULL,
+      slot_bindings    TEXT NOT NULL,  -- JSON
+      settings         TEXT,           -- JSON
+      created_by_plugin TEXT REFERENCES plugins(id)
+    ) STRICT;
+
+    -- ------------------------------------------------------------
     -- Sync applying flag (presence of a row suppresses triggers)
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS _sync_applying (

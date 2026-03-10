@@ -1,3 +1,4 @@
+import type { FaceConfig } from '../face-types'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -70,3 +71,15 @@ export const ensureTrait = (traitType: TraitType, matrixId: number): Promise<Tra
 
 export const getTraits = (matrixId: number): Promise<TraitRow[]> =>
   workerCall('getTraits', { matrixId })
+
+export const applyFaceToMatrix = (
+  faceTypeId: string,
+  matrixId: number,
+  pluginId?: string,
+): Promise<FaceConfig> => workerCall('applyFaceToMatrix', { faceTypeId, matrixId, pluginId })
+
+export const saveFaceConfig = (config: FaceConfig): Promise<void> =>
+  workerCall('saveFaceConfig', { config })
+
+export const getFaceConfigs = (matrixId: number): Promise<FaceConfig[]> =>
+  workerCall('getFaceConfigs', { matrixId })

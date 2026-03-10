@@ -111,6 +111,15 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'target_matrix_id', type: 'INTEGER' },
     { name: 'target_row_id', type: 'INTEGER' },
   ],
+  face_configs: [
+    { name: 'id', type: 'TEXT' },
+    { name: 'face_type_id', type: 'TEXT' },
+    { name: 'matrix_id', type: 'INTEGER' },
+    { name: 'query', type: 'TEXT' },
+    { name: 'slot_bindings', type: 'TEXT' },
+    { name: 'settings', type: 'TEXT' },
+    { name: 'created_by_plugin', type: 'TEXT' },
+  ],
 }
 
 /** Install change-tracking triggers on the four core tables. */

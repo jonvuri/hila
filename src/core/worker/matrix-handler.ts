@@ -19,6 +19,11 @@ import {
   getColumns,
 } from '../matrix'
 import {
+  applyFaceToMatrix as applyFaceToMatrixImpl,
+  saveFaceConfig as saveFaceConfigImpl,
+  getFaceConfigsForMatrix as getFaceConfigsForMatrixImpl,
+} from '../face-config'
+import {
   registerPlugin as registerPluginImpl,
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
@@ -272,6 +277,42 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getTraitsSuccess', id, result: traits })
       } catch (err: unknown) {
         postMessage({ type: 'getTraitsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'applyFaceToMatrix': {
+      const { id, faceTypeId, matrixId, pluginId } = message
+      try {
+        const { db } = await sqliteWasm
+        const config = applyFaceToMatrixImpl(db, faceTypeId, matrixId, pluginId)
+        postMessage({ type: 'applyFaceToMatrixSuccess', id, result: config })
+      } catch (err: unknown) {
+        postMessage({ type: 'applyFaceToMatrixError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'saveFaceConfig': {
+      const { id, config } = message
+      try {
+        const { db } = await sqliteWasm
+        saveFaceConfigImpl(db, config)
+        postMessage({ type: 'saveFaceConfigSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'saveFaceConfigError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getFaceConfigs': {
+      const { id, matrixId } = message
+      try {
+        const { db } = await sqliteWasm
+        const configs = getFaceConfigsForMatrixImpl(db, matrixId)
+        postMessage({ type: 'getFaceConfigsSuccess', id, result: configs })
+      } catch (err: unknown) {
+        postMessage({ type: 'getFaceConfigsError', id, error: toError(err) })
       }
       break
     }

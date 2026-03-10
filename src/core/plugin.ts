@@ -1,6 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
+import { applyFaceToMatrix } from './face-config'
 import { createMatrix } from './matrix'
 import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
@@ -82,7 +83,16 @@ export const registerPlugin = async (
     }
 
     // TODO: Store named queries/mutations (in-memory, future task)
-    // TODO: Resolve face bindings (face system, future task)
+
+    for (const fb of definition.faceBindings) {
+      const fbMatrixId = matrixIds[fb.matrixKey]
+      if (fbMatrixId === undefined) {
+        throw new Error(
+          `Face binding references unknown matrix key "${fb.matrixKey}" in plugin "${definition.id}"`,
+        )
+      }
+      applyFaceToMatrix(db, fb.faceTypeId, fbMatrixId, definition.id)
+    }
   })
 
   const ctx: PluginContext = { matrixIds }

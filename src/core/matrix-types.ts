@@ -1,3 +1,4 @@
+import type { FaceConfig } from './face-types'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from './traits'
 
@@ -68,6 +69,18 @@ export type MatrixOperationMap = {
   getTraits: {
     params: { matrixId: number }
     result: TraitRow[]
+  }
+  applyFaceToMatrix: {
+    params: { faceTypeId: string; matrixId: number; pluginId?: string }
+    result: FaceConfig
+  }
+  saveFaceConfig: {
+    params: { config: FaceConfig }
+    result: void
+  }
+  getFaceConfigs: {
+    params: { matrixId: number }
+    result: FaceConfig[]
   }
 }
 
