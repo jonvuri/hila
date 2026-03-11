@@ -1,0 +1,435 @@
+.tableFace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  font-size: 13px;
+  color: #1a1a1a;
+}
+
+/* ---- Toolbar / filter bar ---- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 36px;
+  background: #fafafa;
+}
+
+.filterTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #4338ca;
+}
+
+.filterTag button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6366f1;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.filterTag button:hover {
+  color: #4338ca;
+}
+
+.addFilterBtn {
+  background: none;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #888;
+  cursor: pointer;
+}
+
+.addFilterBtn:hover {
+  border-color: #999;
+  color: #555;
+}
+
+/* ---- Filter popover ---- */
+
+.filterPopover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 50;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 8px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.filterPopover select,
+.filterPopover input {
+  font-size: 12px;
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.filterPopover button {
+  padding: 4px 8px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* ---- Table ---- */
+
+.tableContainer {
+  flex: 1;
+  overflow: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* ---- Column headers ---- */
+
+.th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fafafa;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 0;
+  text-align: left;
+  font-weight: 500;
+  font-size: 12px;
+  color: #555;
+  min-width: 120px;
+  user-select: none;
+}
+
+.thContent {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.thContent:hover {
+  background: #f0f0f0;
+}
+
+.sortIndicator {
+  font-size: 10px;
+  color: #2563eb;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.typeLabel {
+  font-size: 10px;
+  color: #aaa;
+  font-weight: 400;
+}
+
+.thAddColumn {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fafafa;
+  border-bottom: 2px solid #e0e0e0;
+  width: 40px;
+  min-width: 40px;
+  padding: 0;
+}
+
+.addColumnBtn {
+  width: 100%;
+  height: 100%;
+  background: none;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addColumnBtn:hover {
+  background: #f0f0f0;
+  color: #555;
+}
+
+/* ---- Column header editing ---- */
+
+.thInput {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 6px 12px;
+  width: 100%;
+}
+
+/* ---- Context menu ---- */
+
+.contextMenu {
+  position: fixed;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  min-width: 160px;
+  padding: 4px 0;
+}
+
+.contextMenuItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+}
+
+.contextMenuItem:hover {
+  background: #f0f0f0;
+}
+
+.contextMenuSub {
+  padding: 4px 12px;
+}
+
+.contextMenuSub label {
+  display: block;
+  padding: 4px 0;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.contextMenuSub label:hover {
+  color: #111;
+}
+
+.contextMenuSub input[type='radio'] {
+  margin-right: 6px;
+}
+
+.contextMenuDanger {
+  color: #dc2626;
+}
+
+.contextMenuDanger:hover {
+  background: #fef2f2;
+}
+
+/* ---- Cells ---- */
+
+.td {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 0;
+  vertical-align: top;
+  overflow: hidden;
+}
+
+.cell {
+  padding: 6px 12px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: default;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell:hover {
+  background: #f8f9fa;
+}
+
+.cellSelected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  border-radius: 1px;
+}
+
+.cellEditing {
+  padding: 0;
+}
+
+.cellEditing input,
+.cellEditing select {
+  width: 100%;
+  padding: 6px 12px;
+  border: none;
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  font: inherit;
+  font-size: 13px;
+  min-height: 32px;
+  background: #fff;
+}
+
+.cellNumber {
+  justify-content: flex-end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cellBoolean {
+  justify-content: center;
+}
+
+.cellBoolean input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.cellDate {
+  color: #555;
+}
+
+.cellSelect {
+  gap: 4px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  background: #e0e7ff;
+  color: #3730a3;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.coercionError {
+  color: #dc2626;
+  font-style: italic;
+  font-size: 12px;
+}
+
+/* ---- Row ID column ---- */
+
+.thRowId {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #fafafa;
+  border-bottom: 2px solid #e0e0e0;
+  width: 40px;
+  min-width: 40px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #bbb;
+  text-align: center;
+  font-weight: 400;
+}
+
+.rowIdCell {
+  font-size: 11px;
+  color: #bbb;
+  text-align: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  user-select: none;
+}
+
+/* ---- Add row ---- */
+
+.addRowTr td {
+  border-bottom: none;
+  padding: 0;
+}
+
+.addRowBtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.addRowBtn:hover {
+  background: #f8f9fa;
+  color: #555;
+}
+
+/* ---- Type picker ---- */
+
+.typePicker {
+  position: absolute;
+  z-index: 100;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+}
+
+.typePickerItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  border-radius: 4px;
+}
+
+.typePickerItem:hover {
+  background: #f0f0f0;
+}
+
+.typePickerIcon {
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+}
+
+/* ---- Drag reorder ---- */
+
+.dragging {
+  opacity: 0.4;
+}
+
+.dropTarget {
+  border-left: 2px solid #2563eb;
+}

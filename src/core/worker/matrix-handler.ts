@@ -7,7 +7,7 @@ import {
   resetDeviceIdCache,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
-  insertDataRow,
+  insertDataRow as insertDataRowImpl,
   insertRow as insertRowImpl,
   updateRow as updateRowImpl,
   deleteRow as deleteRowImpl,
@@ -19,6 +19,9 @@ import {
   addColumn as addColumnImpl,
   removeColumn as removeColumnImpl,
   renameColumn as renameColumnImpl,
+  updateColumnDisplayType as updateColumnDisplayTypeImpl,
+  updateColumnOptions as updateColumnOptionsImpl,
+  reorderColumns as reorderColumnsImpl,
 } from '../matrix'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
@@ -51,7 +54,7 @@ const seedWelcomeRow = (db: Database, matrixId: number, content: string) => {
 
   if (hasRows) return
 
-  const rowId = insertDataRow(db, matrixId, { content })
+  const rowId = insertDataRowImpl(db, matrixId, { content })
   insertRowImpl(db, { matrixId, rowKind: 0, rowId })
 }
 
@@ -131,7 +134,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           }
         }
 
-        const rowId = insertDataRow(db, matrixId, resolvedValues)
+        const rowId = insertDataRowImpl(db, matrixId, resolvedValues)
         const key = insertRowImpl(db, {
           matrixId,
           parentKey,
@@ -335,12 +338,25 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       break
     }
 
-    case 'addColumn': {
-      const { id, matrixId, name, columnType } = message
+    case 'insertDataRow': {
+      const { id, matrixId, values } = message
       try {
         const { db } = await sqliteWasm
-        addColumnImpl(db, matrixId, { name, type: columnType })
+        const rowId = insertDataRowImpl(db, matrixId, values)
+        postMessage({ type: 'insertDataRowSuccess', id, result: rowId })
+      } catch (err: unknown) {
+        postMessage({ type: 'insertDataRowError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'addColumn': {
+      const { id, matrixId, name, columnType, displayType, options } = message
+      try {
+        const { db } = await sqliteWasm
+        addColumnImpl(db, matrixId, { name, type: columnType, displayType, options })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
+        triggerSubscribedQueries('matrix_columns')
         postMessage({ type: 'addColumnSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'addColumnError', id, error: toError(err) })
@@ -354,6 +370,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         const { db } = await sqliteWasm
         removeColumnImpl(db, matrixId, columnName)
         triggerSubscribedQueries(`mx_${matrixId}_data`)
+        triggerSubscribedQueries('matrix_columns')
         postMessage({ type: 'removeColumnSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'removeColumnError', id, error: toError(err) })
@@ -367,6 +384,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         const { db } = await sqliteWasm
         renameColumnImpl(db, matrixId, oldName, newName)
         triggerSubscribedQueries(`mx_${matrixId}_data`)
+        triggerSubscribedQueries('matrix_columns')
         postMessage({ type: 'renameColumnSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'renameColumnError', id, error: toError(err) })
@@ -382,6 +400,45 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getColumnsSuccess', id, result: columns })
       } catch (err: unknown) {
         postMessage({ type: 'getColumnsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'updateColumnDisplayType': {
+      const { id, matrixId, columnName, displayType } = message
+      try {
+        const { db } = await sqliteWasm
+        updateColumnDisplayTypeImpl(db, matrixId, columnName, displayType)
+        triggerSubscribedQueries('matrix_columns')
+        postMessage({ type: 'updateColumnDisplayTypeSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'updateColumnDisplayTypeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'updateColumnOptions': {
+      const { id, matrixId, columnName, options } = message
+      try {
+        const { db } = await sqliteWasm
+        updateColumnOptionsImpl(db, matrixId, columnName, options)
+        triggerSubscribedQueries('matrix_columns')
+        postMessage({ type: 'updateColumnOptionsSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'updateColumnOptionsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'reorderColumns': {
+      const { id, matrixId, columnNames } = message
+      try {
+        const { db } = await sqliteWasm
+        reorderColumnsImpl(db, matrixId, columnNames)
+        triggerSubscribedQueries('matrix_columns')
+        postMessage({ type: 'reorderColumnsSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'reorderColumnsError', id, error: toError(err) })
       }
       break
     }

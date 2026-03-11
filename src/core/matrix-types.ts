@@ -91,8 +91,18 @@ export type MatrixOperationMap = {
     params: { definition: FaceTypeDefinition }
     result: void
   }
+  insertDataRow: {
+    params: { matrixId: number; values?: Record<string, unknown> }
+    result: number
+  }
   addColumn: {
-    params: { matrixId: number; name: string; columnType: string }
+    params: {
+      matrixId: number
+      name: string
+      columnType: string
+      displayType?: string
+      options?: string
+    }
     result: void
   }
   removeColumn: {
@@ -106,6 +116,18 @@ export type MatrixOperationMap = {
   getColumns: {
     params: { matrixId: number }
     result: ColumnDefinition[]
+  }
+  updateColumnDisplayType: {
+    params: { matrixId: number; columnName: string; displayType: string }
+    result: void
+  }
+  updateColumnOptions: {
+    params: { matrixId: number; columnName: string; options: string | null }
+    result: void
+  }
+  reorderColumns: {
+    params: { matrixId: number; columnNames: string[] }
+    result: void
   }
 }
 

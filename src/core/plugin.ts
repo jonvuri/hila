@@ -2,9 +2,12 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
 import { applyFaceToMatrix } from './face-config'
+import { getFaceType } from './face-registry'
 import { createMatrix } from './matrix'
 import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
+
+const TABLE_FACE_TYPE_ID = 'hila.table'
 
 /**
  * Register a plugin: upsert its `plugins` row, create declared matrixes
@@ -64,6 +67,10 @@ export const registerPlugin = async (
         bind: [definition.id, matrixId],
       })
       matrixIds[spec.key] = matrixId
+
+      if (getFaceType(TABLE_FACE_TYPE_ID)) {
+        applyFaceToMatrix(db, TABLE_FACE_TYPE_ID, matrixId)
+      }
     }
 
     // Persist the key→matrixId mapping in the metadata column

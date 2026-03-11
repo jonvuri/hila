@@ -2083,7 +2083,7 @@ describe('Column schema management', () => {
     const id = createMatrix(db, 'M')
     const cols = getColumns(db, id)
 
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
   })
 
   test('createMatrix with custom columns stores them correctly', () => {
@@ -2095,9 +2095,9 @@ describe('Column schema management', () => {
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      { name: 'name', type: 'TEXT', order: 0 },
-      { name: 'score', type: 'INTEGER', order: 1 },
-      { name: 'active', type: 'INTEGER', order: 2 },
+      { name: 'name', type: 'TEXT', displayType: 'text', order: 0, options: null },
+      { name: 'score', type: 'INTEGER', displayType: 'number', order: 1, options: null },
+      { name: 'active', type: 'INTEGER', displayType: 'number', order: 2, options: null },
     ])
   })
 
@@ -2125,7 +2125,7 @@ describe('Column schema management', () => {
   test('ensureRootMatrix stores column definitions', () => {
     ensureRootMatrix(db)
     const cols = getColumns(db, 1)
-    expect(cols).toEqual([{ name: 'content', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'content', type: 'TEXT', displayType: 'text', order: 0, options: null }])
   })
 
   test('getColumns throws for non-existent matrix', () => {
@@ -2163,8 +2163,8 @@ describe('Column schema management', () => {
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      { name: 'title', type: 'TEXT', order: 0 },
-      { name: 'notes', type: 'TEXT', order: 1 },
+      { name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null },
+      { name: 'notes', type: 'TEXT', displayType: 'text', order: 1, options: null },
     ])
 
     // Verify actual table schema
@@ -2258,7 +2258,7 @@ describe('Column schema management', () => {
     renameColumn(db, id, 'title', 'name')
 
     const cols = getColumns(db, id)
-    expect(cols).toEqual([{ name: 'name', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'name', type: 'TEXT', displayType: 'text', order: 0, options: null }])
 
     // Verify actual table schema
     const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
@@ -2323,7 +2323,7 @@ describe('Column schema management', () => {
     expect(getColumns(db, id)).toHaveLength(2)
 
     removeColumn(db, id, 'temp')
-    expect(getColumns(db, id)).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+    expect(getColumns(db, id)).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
   })
 
   test('multiple addColumn calls assign incrementing order', () => {

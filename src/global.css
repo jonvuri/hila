@@ -138,6 +138,36 @@ body,
   border-color: #ccc;
 }
 
+/* ---- View switcher ---- */
+
+.view-switcher {
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+  padding: 0 8px;
+}
+
+.view-tab {
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.view-tab:hover {
+  color: #333;
+}
+
+.view-tab[data-active='true'] {
+  color: #333;
+  font-weight: 500;
+  border-bottom-color: #2563eb;
+}
+
 /* ---- Outline face ---- */
 
 .outline-face {

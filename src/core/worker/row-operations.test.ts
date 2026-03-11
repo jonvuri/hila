@@ -263,7 +263,7 @@ describe('column management through worker', () => {
 
   it('getColumns returns initial columns', async () => {
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
   }, 5000)
 
   it('addColumn adds to both registry and data table', async () => {
@@ -271,8 +271,8 @@ describe('column management through worker', () => {
 
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      { name: 'title', type: 'TEXT', order: 0 },
-      { name: 'notes', type: 'TEXT', order: 1 },
+      { name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null },
+      { name: 'notes', type: 'TEXT', displayType: 'text', order: 1, options: null },
     ])
   }, 5000)
 
@@ -280,7 +280,7 @@ describe('column management through worker', () => {
     await removeColumn(matrixId, 'notes')
 
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
   }, 5000)
 
   it('renameColumn renames and preserves data', async () => {
@@ -289,7 +289,7 @@ describe('column management through worker', () => {
     await renameColumn(matrixId, 'title', 'label')
 
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'label', type: 'TEXT', order: 0 }])
+    expect(cols).toEqual([{ name: 'label', type: 'TEXT', displayType: 'text', order: 0, options: null }])
 
     const sql = `SELECT label FROM "mx_${matrixId}_data" WHERE label = 'keep-me'`
     const { nextResult, cleanup } = observeResults(sql)

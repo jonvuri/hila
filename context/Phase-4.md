@@ -310,7 +310,7 @@ Expose `addColumn`, `removeColumn`, and `renameColumn` through the worker protoc
 
 A general-purpose spreadsheet-like face for viewing and editing matrix data. This is the universal face and the default **identity face** for all matrixes. See [Architecture - Identity face](./Architecture.md#identity-face).
 
-- [ ] Register the table face type:
+- [x] Register the table face type:
   ```typescript
   registerFaceType({
     id: 'hila.table',
@@ -321,19 +321,19 @@ A general-purpose spreadsheet-like face for viewing and editing matrix data. Thi
   })
   ```
 
-- [ ] Create `src/table/TableFace.tsx` component:
+- [x] Create `src/table/TableFace.tsx` component:
   - Receives a `FaceConfig` (with matrix ID and query).
   - Queries column metadata via `getColumns` (reactive, re-runs on schema changes).
   - Queries row data via the face config's query (defaults to `SELECT * FROM mx_{id}_data`).
   - Renders a scrollable table with column headers and data cells.
 
-- [ ] **Column headers:**
+- [x] **Column headers:**
   - Display column name and type.
   - Click a column header to rename (inline edit).
   - Drag column headers to reorder (updates `matrix_columns` order).
   - Column header context menu: rename, change type, delete column.
 
-- [ ] **Column type system:**
+- [x] **Column type system:**
   - Types: `text`, `number`, `date`, `boolean`, `select`.
   - Each type has a display renderer and an edit renderer:
     - `text`: plain text display, text input on edit.
@@ -343,37 +343,37 @@ A general-purpose spreadsheet-like face for viewing and editing matrix data. Thi
     - `select`: badge/chip display, dropdown on edit. Options stored in column metadata (extend `matrix_columns` with an `options` TEXT column for JSON-encoded enum values).
   - Type coercion: when changing a column's type, existing values that can't be coerced display an error indicator.
 
-- [ ] **Inline cell editing:**
+- [x] **Inline cell editing:**
   - Click a cell to enter edit mode (or start typing while a cell is focused).
   - The cell's editor component is determined by the column type.
   - On blur or Enter: commit the edit via `updateRow`.
   - On Escape: cancel the edit.
   - Tab / Shift-Tab: commit and move to the next/previous cell.
 
-- [ ] **Row operations:**
+- [x] **Row operations:**
   - Add row: a "+" button at the bottom or a keyboard shortcut. Creates a new row via `insertDataRow` + `insertRow` (if rank trait exists).
   - Delete row: row context menu or keyboard shortcut. Only available on the identity face (per [Architecture - Hydration](./Architecture.md#hydration)).
 
-- [ ] **Column operations:**
+- [x] **Column operations:**
   - Add column: a "+" button on the last column header. Opens a type picker. Calls `addColumn`.
   - Delete column: via column header context menu. Calls `removeColumn`. Only available on the identity face.
 
-- [ ] **Basic sort and filter:**
+- [x] **Basic sort and filter:**
   - Click a column header to sort by that column (ASC/DESC toggle). Sorting modifies the face config's query to add `ORDER BY`.
   - A filter bar that allows adding conditions (column, operator, value). Filtering modifies the query to add `WHERE` clauses.
   - Sort and filter state is stored in the face config's `settings`.
 
-- [ ] **Keyboard navigation:**
+- [x] **Keyboard navigation:**
   - Arrow keys move between cells.
   - Enter starts editing, Escape cancels.
   - Tab/Shift-Tab move between cells and commit edits.
 
-- [ ] **Identity face wiring:**
+- [x] **Identity face wiring:**
   - When a matrix is created, automatically create an identity face config with `faceTypeId: 'hila.table'` and the default `SELECT * FROM mx_{id}_data` query.
   - The identity face is accessible from the admin browser and from any surface that manages matrix metadata.
 
-- [ ] Tests (Vitest): column type rendering dispatch (given a type, returns correct renderer). Sort/filter query generation. Cell edit commit logic.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Vitest): column type rendering dispatch (given a type, returns correct renderer). Sort/filter query generation. Cell edit commit logic.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 7. Formula columns
 

@@ -57,10 +57,12 @@ export const initMatrixSchema = (db: Database) => {
     -- Column definitions (normalized, one row per column)
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix_columns (
-      matrix_id  INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
-      name       TEXT    NOT NULL,
-      type       TEXT    NOT NULL,
-      "order"    INTEGER NOT NULL,
+      matrix_id    INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
+      name         TEXT    NOT NULL,
+      type         TEXT    NOT NULL,
+      display_type TEXT    NOT NULL DEFAULT 'text',
+      "order"      INTEGER NOT NULL,
+      options      TEXT,
       PRIMARY KEY (matrix_id, name)
     ) STRICT;
 
@@ -206,7 +208,16 @@ export const resetDeviceIdCache = (): void => {
 export type ColumnDefinition = {
   name: string
   type: string
+  displayType: string
   order: number
+  options: string | null
+}
+
+const sqliteTypeToDisplayType = (sqliteType: string): string => {
+  const upper = sqliteType.toUpperCase()
+  if (upper === 'INTEGER') return 'number'
+  if (upper === 'REAL') return 'number'
+  return 'text'
 }
 
 type SqlValue = string | number | null | Uint8Array | bigint
@@ -234,10 +245,16 @@ export const createMatrix = (
 
     // Store column definitions in the normalized table
     const colStmt = db.prepare(
-      'INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, ?, ?, ?)',
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order") VALUES (?, ?, ?, ?, ?)',
     )
     for (let i = 0; i < columns.length; i++) {
-      colStmt.bind([matrixId, columns[i]!.name, columns[i]!.type, i])
+      colStmt.bind([
+        matrixId,
+        columns[i]!.name,
+        columns[i]!.type,
+        sqliteTypeToDisplayType(columns[i]!.type),
+        i,
+      ])
       colStmt.step()
       colStmt.reset()
     }
@@ -287,7 +304,7 @@ export const ensureRootMatrix = (db: Database): number => {
     insertStmt.finalize()
 
     db.exec(
-      `INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (1, 'content', 'TEXT', 0)`,
+      `INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order") VALUES (1, 'content', 'TEXT', 'text', 0)`,
     )
 
     const matrixId = 1
@@ -1362,7 +1379,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   existsStmt.finalize()
 
   const stmt = db.prepare(
-    'SELECT name, type, "order" FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    'SELECT name, type, display_type AS displayType, "order", options FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
   )
   stmt.bind([matrixId])
 
@@ -1378,7 +1395,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
 export const addColumn = (
   db: Database,
   matrixId: number,
-  column: { name: string; type: string },
+  column: { name: string; type: string; displayType?: string; options?: string },
 ): void => {
   withTransaction(db, () => {
     const current = getColumns(db, matrixId)
@@ -1391,10 +1408,21 @@ export const addColumn = (
       `ALTER TABLE "mx_${matrixId}_data" ADD COLUMN ${quoteIdent(column.name)} ${column.type}`,
     )
 
+    const displayType = column.displayType ?? sqliteTypeToDisplayType(column.type)
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
-    db.exec('INSERT INTO matrix_columns (matrix_id, name, type, "order") VALUES (?, ?, ?, ?)', {
-      bind: [matrixId, column.name, column.type, nextOrder],
-    })
+    db.exec(
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options) VALUES (?, ?, ?, ?, ?, ?)',
+      {
+        bind: [
+          matrixId,
+          column.name,
+          column.type,
+          displayType,
+          nextOrder,
+          column.options ?? null,
+        ],
+      },
+    )
 
     const deviceId = getOrCreateDeviceId(db)
     reinstallDataTableTriggers(db, matrixId, deviceId, [...current, column])
@@ -1458,6 +1486,60 @@ export const renameColumn = (
     const deviceId = getOrCreateDeviceId(db)
     const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
     installDataTableTriggers(db, matrixId, deviceId, updated)
+  })
+}
+
+/** Update the display type of a column. */
+export const updateColumnDisplayType = (
+  db: Database,
+  matrixId: number,
+  columnName: string,
+  displayType: string,
+): void => {
+  const current = getColumns(db, matrixId)
+  if (!current.some((c) => c.name === columnName)) {
+    throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
+  }
+  db.exec('UPDATE matrix_columns SET display_type = ? WHERE matrix_id = ? AND name = ?', {
+    bind: [displayType, matrixId, columnName],
+  })
+}
+
+/** Update the options (for select type) of a column. */
+export const updateColumnOptions = (
+  db: Database,
+  matrixId: number,
+  columnName: string,
+  options: string | null,
+): void => {
+  const current = getColumns(db, matrixId)
+  if (!current.some((c) => c.name === columnName)) {
+    throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
+  }
+  db.exec('UPDATE matrix_columns SET options = ? WHERE matrix_id = ? AND name = ?', {
+    bind: [options, matrixId, columnName],
+  })
+}
+
+/** Reorder columns by updating their order values. */
+export const reorderColumns = (db: Database, matrixId: number, columnNames: string[]): void => {
+  withTransaction(db, () => {
+    const current = getColumns(db, matrixId)
+    const existingNames = new Set(current.map((c) => c.name))
+    for (const name of columnNames) {
+      if (!existingNames.has(name)) {
+        throw new Error(`Column "${name}" not found in matrix ${matrixId}`)
+      }
+    }
+    const stmt = db.prepare(
+      'UPDATE matrix_columns SET "order" = ? WHERE matrix_id = ? AND name = ?',
+    )
+    for (let i = 0; i < columnNames.length; i++) {
+      stmt.bind([i, matrixId, columnNames[i]!])
+      stmt.step()
+      stmt.reset()
+    }
+    stmt.finalize()
   })
 }
 

@@ -91,8 +91,19 @@ export const seedWelcomeRow = (matrixId: number, content: string): Promise<void>
 export const registerFaceType = (definition: FaceTypeDefinition): Promise<void> =>
   workerCall('registerFaceType', { definition })
 
-export const addColumn = (matrixId: number, name: string, columnType: string): Promise<void> =>
-  workerCall('addColumn', { matrixId, name, columnType })
+export const insertDataRow = (
+  matrixId: number,
+  values?: Record<string, unknown>,
+): Promise<number> => workerCall('insertDataRow', { matrixId, values })
+
+export const addColumn = (
+  matrixId: number,
+  name: string,
+  columnType: string,
+  displayType?: string,
+  options?: string,
+): Promise<void> =>
+  workerCall('addColumn', { matrixId, name, columnType, displayType, options })
 
 export const removeColumn = (matrixId: number, columnName: string): Promise<void> =>
   workerCall('removeColumn', { matrixId, columnName })
@@ -105,3 +116,18 @@ export const renameColumn = (
 
 export const getColumns = (matrixId: number): Promise<ColumnDefinition[]> =>
   workerCall('getColumns', { matrixId })
+
+export const updateColumnDisplayType = (
+  matrixId: number,
+  columnName: string,
+  displayType: string,
+): Promise<void> => workerCall('updateColumnDisplayType', { matrixId, columnName, displayType })
+
+export const updateColumnOptions = (
+  matrixId: number,
+  columnName: string,
+  options: string | null,
+): Promise<void> => workerCall('updateColumnOptions', { matrixId, columnName, options })
+
+export const reorderColumns = (matrixId: number, columnNames: string[]): Promise<void> =>
+  workerCall('reorderColumns', { matrixId, columnNames })

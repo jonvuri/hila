@@ -8,26 +8,41 @@ import {
   type Component,
 } from 'solid-js'
 
-import { registerPlugin } from './core/client/matrix-client'
+import type { FaceConfig } from './core/face-types'
+import { registerFaceComponent } from './core/FaceRenderer'
+import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
+import { registerTableFaceType } from './table/table-plugin'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixDebug = lazy(() => import('./MatrixDebug'))
 const OutlineFace = lazy(() => import('./outline/OutlineFace'))
+const TableFace = lazy(() => import('./table/TableFace'))
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
   const [outlineMatrixId, setOutlineMatrixId] = createSignal<number | null>(null)
+  const [activeView, setActiveView] = createSignal<'outline' | 'table'>('outline')
+  const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
   const initPlugins = async () => {
+    await registerTableFaceType()
+    const TableFaceComponent = (await import('./table/TableFace')).default
+    registerFaceComponent('hila.table', TableFaceComponent)
+
     await registerOutlineFaceType()
     const ctx = await registerPlugin(outlinePlugin)
-    setOutlineMatrixId(ctx.matrixIds['root']!)
+    const matrixId = ctx.matrixIds['root']!
+    setOutlineMatrixId(matrixId)
+
+    const configs = await getFaceConfigs(matrixId)
+    const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
+    if (tableConfig) setTableFaceConfig(tableConfig)
   }
 
   onMount(() => {
@@ -51,9 +66,39 @@ const App: Component = () => {
   return (
     <div class="app-shell">
       <div class="app-main">
+        <Show when={outlineMatrixId()}>
+          <div class="view-switcher">
+            <button
+              class="view-tab"
+              data-active={activeView() === 'outline'}
+              onClick={() => setActiveView('outline')}
+            >
+              Outline
+            </button>
+            <button
+              class="view-tab"
+              data-active={activeView() === 'table'}
+              onClick={() => setActiveView('table')}
+            >
+              Table
+            </button>
+          </div>
+        </Show>
         <Suspense fallback={<div class="app-loading">Loading…</div>}>
           <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
-            {(matrixId) => <OutlineFace matrixId={matrixId()} />}
+            {(matrixId) => (
+              <Show
+                when={activeView() === 'table' && tableFaceConfig()}
+                fallback={<OutlineFace matrixId={matrixId()} />}
+              >
+                {(config) => (
+                  <TableFace
+                    config={config()}
+                    bindings={{ bindings: [], overflowColumns: [] }}
+                  />
+                )}
+              </Show>
+            )}
           </Show>
         </Suspense>
       </div>

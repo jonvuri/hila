@@ -5,10 +5,6 @@ import type { SqlWorkerMessage } from '../sql-types'
 
 import { pendingExecs, subscribedObservers } from './sql-client-promises'
 
-const trimSql = (sql: string) => {
-  return sql.trim().replace(/\s+/g, ' ')
-}
-
 export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
   const { type } = message
 
@@ -17,26 +13,18 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
     case 'subscribeResult': {
       const { sql } = message
       const observers = subscribedObservers.get(sql)
-      if (observers) {
-        for (const observer of observers) {
-          observer(message.result, null)
-        }
-      } else {
-        throw new Error(`No observers for subscribe result of SQL: ${trimSql(sql)}`)
+      if (!observers) break
+      for (const observer of observers) {
+        observer(message.result, null)
       }
       break
     }
     case 'subscribeError': {
       const { sql } = message
       const observers = subscribedObservers.get(sql)
-      if (observers) {
-        for (const observer of observers) {
-          observer(null, message.error)
-        }
-      } else {
-        throw new Error(`No observers for subscribe error of SQL: ${trimSql(sql)}`, {
-          cause: message.error,
-        })
+      if (!observers) break
+      for (const observer of observers) {
+        observer(null, message.error)
       }
       break
     }
