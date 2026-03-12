@@ -105,6 +105,14 @@ export type MatrixOperationMap = {
     }
     result: void
   }
+  addFormulaColumn: {
+    params: {
+      matrixId: number
+      name: string
+      formula: string
+    }
+    result: void
+  }
   removeColumn: {
     params: { matrixId: number; columnName: string }
     result: void

@@ -41,6 +41,9 @@ const addRowBtn: string;
 const typePicker: string;
 const typePickerItem: string;
 const typePickerIcon: string;
+const thFormula: string;
+const cellFormula: string;
+const formulaIcon: string;
 const dragging: string;
 const dropTarget: string;
 
@@ -80,6 +83,9 @@ export {
 	typePicker,
 	typePickerItem,
 	typePickerIcon,
+	thFormula,
+	cellFormula,
+	formulaIcon,
 	dragging,
 	dropTarget
 };
@@ -120,6 +126,9 @@ export default {
 	typePicker,
 	typePickerItem,
 	typePickerIcon,
+	thFormula,
+	cellFormula,
+	formulaIcon,
 	dragging,
 	dropTarget
 };

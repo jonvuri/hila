@@ -263,7 +263,16 @@ describe('column management through worker', () => {
 
   it('getColumns returns initial columns', async () => {
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
   }, 5000)
 
   it('addColumn adds to both registry and data table', async () => {
@@ -271,8 +280,22 @@ describe('column management through worker', () => {
 
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      { name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null },
-      { name: 'notes', type: 'TEXT', displayType: 'text', order: 1, options: null },
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+      {
+        name: 'notes',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 1,
+        options: null,
+        formula: null,
+      },
     ])
   }, 5000)
 
@@ -280,7 +303,16 @@ describe('column management through worker', () => {
     await removeColumn(matrixId, 'notes')
 
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
   }, 5000)
 
   it('renameColumn renames and preserves data', async () => {
@@ -289,7 +321,16 @@ describe('column management through worker', () => {
     await renameColumn(matrixId, 'title', 'label')
 
     const cols = await getColumns(matrixId)
-    expect(cols).toEqual([{ name: 'label', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'label',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
 
     const sql = `SELECT label FROM "mx_${matrixId}_data" WHERE label = 'keep-me'`
     const { nextResult, cleanup } = observeResults(sql)

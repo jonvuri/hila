@@ -1,3 +1,5 @@
+import type { ColumnDefinition } from '../core/matrix'
+
 export type SortConfig = {
   column: string
   direction: 'ASC' | 'DESC'
@@ -19,8 +21,19 @@ export const buildTableQuery = (
   matrixId: number,
   sort: SortConfig | null,
   filters: FilterConfig[],
+  columns?: ColumnDefinition[],
 ): string => {
-  let query = `SELECT * FROM "mx_${matrixId}_data"`
+  const formulaCols = columns?.filter((c) => c.formula !== null) ?? []
+
+  let selectClause: string
+  if (formulaCols.length > 0) {
+    const extras = formulaCols.map((c) => `(${c.formula}) AS ${quoteIdent(c.name)}`).join(', ')
+    selectClause = `SELECT *, ${extras} FROM "mx_${matrixId}_data"`
+  } else {
+    selectClause = `SELECT * FROM "mx_${matrixId}_data"`
+  }
+
+  let query = selectClause
 
   if (filters.length > 0) {
     const clauses = filters.map((f) => {

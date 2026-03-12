@@ -13,6 +13,7 @@ import {
   updateRow,
   insertDataRow,
   addColumn,
+  addFormulaColumn,
   removeColumn,
   renameColumn,
   updateColumnDisplayType,
@@ -102,7 +103,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   // -- Reactive queries -------
   const columnsQuery = () =>
-    `SELECT name, type, display_type AS displayType, "order", options FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
+    `SELECT name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
   const { result: columnsResult } = useQuery(columnsQuery)
 
   const columns = createMemo<ColumnDefinition[]>(() => {
@@ -112,10 +113,11 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   })
 
   const dataQuery = () => {
-    const colNames = new Set(columns().map((c) => c.name))
+    const cols = columns()
+    const colNames = new Set(cols.map((c) => c.name))
     const validSort = sort() && colNames.has(sort()!.column) ? sort() : null
     const validFilters = filters().filter((f) => colNames.has(f.column))
-    return buildTableQuery(matrixId(), validSort, validFilters)
+    return buildTableQuery(matrixId(), validSort, validFilters, cols)
   }
   const { result: dataResult } = useQuery(dataQuery)
 
@@ -134,6 +136,10 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   } | null>(null)
   const [addingFilter, setAddingFilter] = createSignal(false)
   const [showTypePicker, setShowTypePicker] = createSignal(false)
+  const [showFormulaDialog, setShowFormulaDialog] = createSignal(false)
+  const [formulaName, setFormulaName] = createSignal('')
+  const [formulaExpr, setFormulaExpr] = createSignal('')
+  const [formulaError, setFormulaError] = createSignal<string | null>(null)
 
   // -- Column drag reorder state -------
   const [dragCol, setDragCol] = createSignal<string | null>(null)
@@ -183,6 +189,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     const colDef = columns()[col]
     const rowData = rows()[row]
     if (!colDef || !rowData) return
+    if (colDef.formula !== null) return
 
     const rawValue = rowData[colDef.name]
     setEditValue(rawValue === null || rawValue === undefined ? '' : String(rawValue))
@@ -270,6 +277,22 @@ const TableFace: Component<FaceComponentProps> = (props) => {
       name = `New Column ${i++}`
     }
     await addColumn(matrixId(), name, colInfo.sqliteType, displayType)
+  }
+
+  const handleAddFormulaColumn = async () => {
+    const name = formulaName().trim()
+    const formula = formulaExpr().trim()
+    if (!name || !formula) return
+
+    try {
+      await addFormulaColumn(matrixId(), name, formula)
+      setShowFormulaDialog(false)
+      setFormulaName('')
+      setFormulaExpr('')
+      setFormulaError(null)
+    } catch (err) {
+      setFormulaError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const handleRemoveColumn = async (columnName: string) => {
@@ -401,7 +424,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
         // Start editing if a printable character is typed
         if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
           const colDef = columns()[sel.col]
-          if (colDef && colDef.displayType !== 'boolean') {
+          if (colDef && colDef.displayType !== 'boolean' && colDef.formula === null) {
             setEditValue(e.key)
             setEditingCell({ row: sel.row, col: sel.col })
             e.preventDefault()
@@ -432,6 +455,18 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   createEffect(() => {
     if (showTypePicker()) {
       const handleClick = () => setShowTypePicker(false)
+      setTimeout(() => document.addEventListener('click', handleClick))
+      onCleanup(() => document.removeEventListener('click', handleClick))
+    }
+  })
+
+  // Close formula dialog on outside click
+  createEffect(() => {
+    if (showFormulaDialog()) {
+      const handleClick = () => {
+        setShowFormulaDialog(false)
+        setFormulaError(null)
+      }
       setTimeout(() => document.addEventListener('click', handleClick))
       onCleanup(() => document.removeEventListener('click', handleClick))
     }
@@ -490,6 +525,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                     classList={{
                       [styles.dragging!]: dragCol() === col.name,
                       [styles.dropTarget!]: dropTarget() === col.name,
+                      [styles.thFormula!]: col.formula !== null,
                     }}
                     draggable={renamingCol() !== col.name}
                     onDragStart={(e) => handleColumnDragStart(col.name, e)}
@@ -522,7 +558,14 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                         onDblClick={() => startRenameColumn(col)}
                       >
                         <span>{col.name}</span>
-                        <span class={styles.typeLabel}>{col.displayType}</span>
+                        <Show when={col.formula !== null}>
+                          <span class={styles.formulaIcon} title={`Formula: ${col.formula}`}>
+                            fx
+                          </span>
+                        </Show>
+                        <span class={styles.typeLabel}>
+                          {col.formula !== null ? 'formula' : col.displayType}
+                        </span>
                         <Show when={sort()?.column === col.name}>
                           <span class={styles.sortIndicator}>
                             {sort()?.direction === 'ASC' ? '▲' : '▼'}
@@ -555,7 +598,32 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                           </button>
                         )}
                       </For>
+                      <button
+                        class={styles.typePickerItem}
+                        onClick={() => {
+                          setShowTypePicker(false)
+                          setShowFormulaDialog(true)
+                          setFormulaError(null)
+                        }}
+                      >
+                        <span class={styles.typePickerIcon}>fx</span>
+                        <span>Formula</span>
+                      </button>
                     </div>
+                  </Show>
+                  <Show when={showFormulaDialog()}>
+                    <FormulaDialog
+                      error={formulaError()}
+                      name={formulaName()}
+                      expr={formulaExpr()}
+                      onNameInput={setFormulaName}
+                      onExprInput={setFormulaExpr}
+                      onAdd={() => void handleAddFormulaColumn()}
+                      onClose={() => {
+                        setShowFormulaDialog(false)
+                        setFormulaError(null)
+                      }}
+                    />
                   </Show>
                 </div>
               </th>
@@ -571,21 +639,24 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                       const value = () => row[col.name]
                       const editing = () => isEditing(rowIdx(), colIdx())
                       const selected = () => isSelected(rowIdx(), colIdx())
+                      const isFormula = col.formula !== null
 
                       return (
                         <td class={styles.td}>
                           <Show
-                            when={editing()}
+                            when={editing() && !isFormula}
                             fallback={
                               <CellDisplay
                                 value={value()}
                                 displayType={col.displayType}
                                 options={col.options}
                                 selected={selected()}
+                                isFormula={isFormula}
                                 onClick={() =>
                                   setSelectedCell({ row: rowIdx(), col: colIdx() })
                                 }
                                 onDblClick={() => {
+                                  if (isFormula) return
                                   if (col.displayType === 'boolean') {
                                     void handleBooleanToggle(rowIdx(), colIdx())
                                   } else {
@@ -679,6 +750,7 @@ const CellDisplay: Component<{
   displayType: string
   options: string | null
   selected: boolean
+  isFormula?: boolean
   onClick: () => void
   onDblClick: () => void
   onBooleanToggle: () => void
@@ -694,6 +766,7 @@ const CellDisplay: Component<{
         [styles.cellBoolean!]: displayType() === 'boolean',
         [styles.cellDate!]: displayType() === 'date',
         [styles.cellSelect!]: displayType() === 'select',
+        [styles.cellFormula!]: !!props.isFormula,
       }}
       onClick={() => props.onClick()}
       onDblClick={() => props.onDblClick()}
@@ -799,6 +872,50 @@ const parseOptions = (optionsJson: string | null): string[] => {
     return []
   }
 }
+
+const FormulaDialog: Component<{
+  error: string | null
+  name: string
+  expr: string
+  onNameInput: (v: string) => void
+  onExprInput: (v: string) => void
+  onAdd: () => void
+  onClose: () => void
+}> = (props) => (
+  <div class={styles.filterPopover} onClick={(e) => e.stopPropagation()}>
+    <input
+      type="text"
+      value={props.name}
+      onInput={(e) => props.onNameInput(e.currentTarget.value)}
+      placeholder="Column name"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && props.name && props.expr) props.onAdd()
+        if (e.key === 'Escape') props.onClose()
+      }}
+      ref={(el) => setTimeout(() => el.focus())}
+    />
+    <input
+      type="text"
+      value={props.expr}
+      onInput={(e) => props.onExprInput(e.currentTarget.value)}
+      placeholder="SQL expression, e.g. length(title)"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' && props.name && props.expr) props.onAdd()
+        if (e.key === 'Escape') props.onClose()
+      }}
+      style={{ 'min-width': '200px' }}
+    />
+    <button style={{ background: '#2563eb', color: '#fff' }} onClick={() => props.onAdd()}>
+      Add
+    </button>
+    <button style={{ background: '#f0f0f0', color: '#333' }} onClick={() => props.onClose()}>
+      Cancel
+    </button>
+    <Show when={props.error}>
+      <span style={{ color: '#dc2626', 'font-size': '11px' }}>{props.error}</span>
+    </Show>
+  </div>
+)
 
 const FilterPopover: Component<{
   columns: ColumnDefinition[]

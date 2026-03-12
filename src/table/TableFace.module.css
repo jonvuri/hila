@@ -424,6 +424,29 @@
   color: #888;
 }
 
+/* ---- Formula columns ---- */
+
+.thFormula {
+  background: #f3f4f6;
+}
+
+.cellFormula {
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: default;
+}
+
+.cellFormula:hover {
+  background: #f3f4f6;
+}
+
+.formulaIcon {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-left: 2px;
+  font-style: italic;
+}
+
 /* ---- Drag reorder ---- */
 
 .dragging {

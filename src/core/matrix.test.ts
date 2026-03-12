@@ -22,6 +22,7 @@ import {
   getSources,
   getColumns,
   addColumn,
+  addFormulaColumn,
   removeColumn,
   renameColumn,
   getOrCreateDeviceId,
@@ -2083,7 +2084,16 @@ describe('Column schema management', () => {
     const id = createMatrix(db, 'M')
     const cols = getColumns(db, id)
 
-    expect(cols).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
   })
 
   test('createMatrix with custom columns stores them correctly', () => {
@@ -2095,9 +2105,30 @@ describe('Column schema management', () => {
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      { name: 'name', type: 'TEXT', displayType: 'text', order: 0, options: null },
-      { name: 'score', type: 'INTEGER', displayType: 'number', order: 1, options: null },
-      { name: 'active', type: 'INTEGER', displayType: 'number', order: 2, options: null },
+      {
+        name: 'name',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+      {
+        name: 'score',
+        type: 'INTEGER',
+        displayType: 'number',
+        order: 1,
+        options: null,
+        formula: null,
+      },
+      {
+        name: 'active',
+        type: 'INTEGER',
+        displayType: 'number',
+        order: 2,
+        options: null,
+        formula: null,
+      },
     ])
   })
 
@@ -2125,7 +2156,16 @@ describe('Column schema management', () => {
   test('ensureRootMatrix stores column definitions', () => {
     ensureRootMatrix(db)
     const cols = getColumns(db, 1)
-    expect(cols).toEqual([{ name: 'content', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'content',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
   })
 
   test('getColumns throws for non-existent matrix', () => {
@@ -2163,8 +2203,22 @@ describe('Column schema management', () => {
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      { name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null },
-      { name: 'notes', type: 'TEXT', displayType: 'text', order: 1, options: null },
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+      {
+        name: 'notes',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 1,
+        options: null,
+        formula: null,
+      },
     ])
 
     // Verify actual table schema
@@ -2258,7 +2312,16 @@ describe('Column schema management', () => {
     renameColumn(db, id, 'title', 'name')
 
     const cols = getColumns(db, id)
-    expect(cols).toEqual([{ name: 'name', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(cols).toEqual([
+      {
+        name: 'name',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
 
     // Verify actual table schema
     const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
@@ -2323,7 +2386,16 @@ describe('Column schema management', () => {
     expect(getColumns(db, id)).toHaveLength(2)
 
     removeColumn(db, id, 'temp')
-    expect(getColumns(db, id)).toEqual([{ name: 'title', type: 'TEXT', displayType: 'text', order: 0, options: null }])
+    expect(getColumns(db, id)).toEqual([
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+    ])
   })
 
   test('multiple addColumn calls assign incrementing order', () => {
@@ -2362,6 +2434,175 @@ describe('Column schema management', () => {
     expect(r2.title).toBe('row1')
     expect(r2.points).toBe(42)
     stmt2.finalize()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Formula columns
+// ---------------------------------------------------------------------------
+describe('Formula columns', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('addFormulaColumn registers a formula column in getColumns', () => {
+    const id = createMatrix(db, 'M')
+
+    addFormulaColumn(db, id, 'title_len', 'length(title)')
+
+    const cols = getColumns(db, id)
+    expect(cols).toEqual([
+      {
+        name: 'title',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 0,
+        options: null,
+        formula: null,
+      },
+      {
+        name: 'title_len',
+        type: 'TEXT',
+        displayType: 'text',
+        order: 1,
+        options: null,
+        formula: 'length(title)',
+      },
+    ])
+  })
+
+  test('formula column does not create a physical column', () => {
+    const id = createMatrix(db, 'M')
+
+    addFormulaColumn(db, id, 'computed', 'length(title)')
+
+    const pragmaStmt = db.prepare(`PRAGMA table_info("mx_${id}_data")`)
+    const names: string[] = []
+    while (pragmaStmt.step()) {
+      names.push((pragmaStmt.get({}) as { name: string }).name)
+    }
+    pragmaStmt.finalize()
+
+    expect(names).toContain('title')
+    expect(names).not.toContain('computed')
+  })
+
+  test('formula column values appear in query results', () => {
+    const id = createMatrix(db, 'M')
+
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('hello')`)
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('world!')`)
+
+    addFormulaColumn(db, id, 'title_len', 'length(title)')
+
+    const stmt = db.prepare(
+      `SELECT *, (length(title)) AS "title_len" FROM "mx_${id}_data" ORDER BY id`,
+    )
+    const results: { title: string; title_len: number }[] = []
+    while (stmt.step()) {
+      results.push(stmt.get({}) as { title: string; title_len: number })
+    }
+    stmt.finalize()
+
+    expect(results[0]!.title_len).toBe(5)
+    expect(results[1]!.title_len).toBe(6)
+  })
+
+  test('addFormulaColumn rejects invalid formula expressions', () => {
+    const id = createMatrix(db, 'M')
+
+    expect(() => addFormulaColumn(db, id, 'bad', 'INVALID_FUNCTION(title)')).toThrow(
+      'Invalid formula expression',
+    )
+  })
+
+  test('addFormulaColumn rejects duplicate name', () => {
+    const id = createMatrix(db, 'M')
+
+    expect(() => addFormulaColumn(db, id, 'title', 'length(title)')).toThrow(
+      'Column "title" already exists',
+    )
+  })
+
+  test('removeColumn works for formula columns', () => {
+    const id = createMatrix(db, 'M')
+
+    addFormulaColumn(db, id, 'title_len', 'length(title)')
+    expect(getColumns(db, id).map((c) => c.name)).toEqual(['title', 'title_len'])
+
+    removeColumn(db, id, 'title_len')
+    expect(getColumns(db, id).map((c) => c.name)).toEqual(['title'])
+  })
+
+  test('removeColumn for formula column does not affect data table', () => {
+    const id = createMatrix(db, 'M')
+
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('keep')`)
+    addFormulaColumn(db, id, 'computed', 'length(title)')
+    removeColumn(db, id, 'computed')
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${id}_data"`)
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string }).title).toBe('keep')
+    stmt.finalize()
+  })
+
+  test('updateRow rejects writes to formula columns', () => {
+    const id = createMatrix(db, 'M')
+    const rowId = insertDataRow(db, id, { title: 'hello' })
+
+    addFormulaColumn(db, id, 'title_len', 'length(title)')
+
+    expect(() => updateRow(db, { matrixId: id, rowId, values: { title_len: 42 } })).toThrow(
+      'Column "title_len" is a formula column and cannot be edited',
+    )
+  })
+
+  test('formula with arithmetic expression', () => {
+    const id = createMatrix(db, 'Prices', [
+      { name: 'price', type: 'REAL' },
+      { name: 'quantity', type: 'INTEGER' },
+    ])
+
+    db.exec(`INSERT INTO "mx_${id}_data" (price, quantity) VALUES (9.99, 3)`)
+    db.exec(`INSERT INTO "mx_${id}_data" (price, quantity) VALUES (4.50, 10)`)
+
+    addFormulaColumn(db, id, 'total', 'price * quantity')
+
+    const stmt = db.prepare(
+      `SELECT *, (price * quantity) AS "total" FROM "mx_${id}_data" ORDER BY id`,
+    )
+    const results: { total: number }[] = []
+    while (stmt.step()) {
+      results.push(stmt.get({}) as { total: number })
+    }
+    stmt.finalize()
+
+    expect(results[0]!.total).toBeCloseTo(29.97)
+    expect(results[1]!.total).toBeCloseTo(45.0)
+  })
+
+  test('formula with date expression', () => {
+    const id = createMatrix(db, 'M')
+
+    db.exec(`INSERT INTO "mx_${id}_data" (title) VALUES ('test')`)
+
+    addFormulaColumn(db, id, 'today', "date('now')")
+
+    const stmt = db.prepare(`SELECT (date('now')) AS "today" FROM "mx_${id}_data"`)
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { today: string }
+    stmt.finalize()
+
+    expect(row.today).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })
 

@@ -63,6 +63,7 @@ export const initMatrixSchema = (db: Database) => {
       display_type TEXT    NOT NULL DEFAULT 'text',
       "order"      INTEGER NOT NULL,
       options      TEXT,
+      formula      TEXT,
       PRIMARY KEY (matrix_id, name)
     ) STRICT;
 
@@ -168,6 +169,13 @@ export const initMatrixSchema = (db: Database) => {
   } catch {
     // Column already exists (new database or previously migrated)
   }
+
+  // Migration: add formula column to matrix_columns
+  try {
+    db.exec('ALTER TABLE matrix_columns ADD COLUMN formula TEXT')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
 }
 
 /**
@@ -211,6 +219,7 @@ export type ColumnDefinition = {
   displayType: string
   order: number
   options: string | null
+  formula: string | null
 }
 
 const sqliteTypeToDisplayType = (sqliteType: string): string => {
@@ -646,6 +655,7 @@ export const insertDataRow = (
 /**
  * Update column values for a data row in a matrix.
  * Validates column names against the matrix schema before executing.
+ * Rejects writes to formula (computed) columns.
  */
 export const updateRow = (
   db: Database,
@@ -660,10 +670,14 @@ export const updateRow = (
   if (entries.length === 0) return
 
   const columns = getColumns(db, matrixId)
-  const validNames = new Set(columns.map((c) => c.name))
+  const columnMap = new Map(columns.map((c) => [c.name, c]))
   for (const [name] of entries) {
-    if (!validNames.has(name)) {
+    const col = columnMap.get(name)
+    if (!col) {
       throw new Error(`Column "${name}" does not exist in matrix ${matrixId}`)
+    }
+    if (col.formula !== null) {
+      throw new Error(`Column "${name}" is a formula column and cannot be edited`)
     }
   }
 
@@ -1379,7 +1393,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   existsStmt.finalize()
 
   const stmt = db.prepare(
-    'SELECT name, type, display_type AS displayType, "order", options FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    'SELECT name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
   )
   stmt.bind([matrixId])
 
@@ -1433,24 +1447,31 @@ export const addColumn = (
 export const removeColumn = (db: Database, matrixId: number, columnName: string): void => {
   withTransaction(db, () => {
     const current = getColumns(db, matrixId)
+    const col = current.find((c) => c.name === columnName)
 
-    if (!current.some((c) => c.name === columnName)) {
+    if (!col) {
       throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
     }
 
-    // Drop triggers before ALTER TABLE — existing triggers reference the
-    // column being dropped and SQLite validates them after DROP COLUMN.
-    dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+    const isFormula = col.formula !== null
 
-    db.exec(`ALTER TABLE "mx_${matrixId}_data" DROP COLUMN ${quoteIdent(columnName)}`)
+    if (!isFormula) {
+      // Drop triggers before ALTER TABLE — existing triggers reference the
+      // column being dropped and SQLite validates them after DROP COLUMN.
+      dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+
+      db.exec(`ALTER TABLE "mx_${matrixId}_data" DROP COLUMN ${quoteIdent(columnName)}`)
+    }
 
     db.exec('DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?', {
       bind: [matrixId, columnName],
     })
 
-    const deviceId = getOrCreateDeviceId(db)
-    const remaining = current.filter((c) => c.name !== columnName)
-    installDataTableTriggers(db, matrixId, deviceId, remaining)
+    if (!isFormula) {
+      const deviceId = getOrCreateDeviceId(db)
+      const remaining = current.filter((c) => c.name !== columnName)
+      installDataTableTriggers(db, matrixId, deviceId, remaining)
+    }
   })
 }
 
@@ -1518,6 +1539,41 @@ export const updateColumnOptions = (
   }
   db.exec('UPDATE matrix_columns SET options = ? WHERE matrix_id = ? AND name = ?', {
     bind: [options, matrixId, columnName],
+  })
+}
+
+/** Add a formula (computed) column. No physical column is created. */
+export const addFormulaColumn = (
+  db: Database,
+  matrixId: number,
+  name: string,
+  formula: string,
+): void => {
+  withTransaction(db, () => {
+    const current = getColumns(db, matrixId)
+
+    if (current.some((c) => c.name === name)) {
+      throw new Error(`Column "${name}" already exists in matrix ${matrixId}`)
+    }
+
+    // Validate the formula by attempting a read-only probe query
+    try {
+      const probeStmt = db.prepare(`SELECT (${formula}) FROM "mx_${matrixId}_data" LIMIT 0`)
+      probeStmt.step()
+      probeStmt.finalize()
+    } catch (err) {
+      throw new Error(
+        `Invalid formula expression: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+
+    const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
+    db.exec(
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", formula) VALUES (?, ?, ?, ?, ?, ?)',
+      {
+        bind: [matrixId, name, 'TEXT', 'text', nextOrder, formula],
+      },
+    )
   })
 }
 

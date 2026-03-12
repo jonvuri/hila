@@ -17,6 +17,7 @@ import {
   getChildren,
   getColumns as getColumnsImpl,
   addColumn as addColumnImpl,
+  addFormulaColumn as addFormulaColumnImpl,
   removeColumn as removeColumnImpl,
   renameColumn as renameColumnImpl,
   updateColumnDisplayType as updateColumnDisplayTypeImpl,
@@ -360,6 +361,20 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'addColumnSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'addColumnError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'addFormulaColumn': {
+      const { id, matrixId, name, formula } = message
+      try {
+        const { db } = await sqliteWasm
+        addFormulaColumnImpl(db, matrixId, name, formula)
+        triggerSubscribedQueries(`mx_${matrixId}_data`)
+        triggerSubscribedQueries('matrix_columns')
+        postMessage({ type: 'addFormulaColumnSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'addFormulaColumnError', id, error: toError(err) })
       }
       break
     }

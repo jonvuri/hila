@@ -379,31 +379,31 @@ A general-purpose spreadsheet-like face for viewing and editing matrix data. Thi
 
 Read-only computed columns whose values are SQL expressions evaluated per-row. Provides the foundation for auto-fill and computed fields. See [Architecture - Query expression](./Architecture.md#query-expression).
 
-- [ ] Extend `matrix_columns` with a `formula` column:
+- [x] Extend `matrix_columns` with a `formula` column:
   ```sql
   ALTER TABLE matrix_columns ADD COLUMN formula TEXT;
   ```
   If `formula` is non-null, the column is a formula column. The `formula` value is a SQL expression (e.g. `date('now')`, `price * quantity`, `length(title)`).
 
-- [ ] Implement `addFormulaColumn(db, matrixId, name, formula)` in `matrix.ts`:
+- [x] Implement `addFormulaColumn(db, matrixId, name, formula)` in `matrix.ts`:
   - Inserts into `matrix_columns` with the formula expression. Does NOT add a physical column to the data table -- formula columns exist only in the query layer.
   - Validates the formula expression by attempting `SELECT ({formula}) FROM mx_{id}_data LIMIT 0` in a read-only sandbox. Rejects invalid expressions.
 
-- [ ] Update the identity face query to include formula columns:
+- [x] Update the identity face query to include formula columns:
   - For each formula column, add it as a computed expression in the SELECT: `SELECT *, ({formula}) AS {name} FROM mx_{id}_data`.
   - Formula columns appear in query results alongside literal columns.
 
-- [ ] Update `getColumns` to include formula columns (with a flag indicating they are formulas).
+- [x] Update `getColumns` to include formula columns (with a flag indicating they are formulas).
 
-- [ ] Render formula columns with a visual distinction in the table face:
+- [x] Render formula columns with a visual distinction in the table face:
   - Different background color (e.g. subtle gray).
   - Non-editable cells (clicking does not enter edit mode).
   - Tooltip or icon indicating "computed column."
 
-- [ ] Expose via worker: `addFormulaColumn(matrixId, name, formula)`, `removeColumn` works for formula columns too (removes from `matrix_columns`).
+- [x] Expose via worker: `addFormulaColumn(matrixId, name, formula)`, `removeColumn` works for formula columns too (removes from `matrix_columns`).
 
-- [ ] Tests: add a formula column `length(title)`, query the matrix, verify computed values appear. Add an invalid formula, verify rejection. Remove a formula column, verify it disappears from query results. Verify formula columns are non-editable in the table face (Vitest for data layer, Playwright for UI).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: add a formula column `length(title)`, query the matrix, verify computed values appear. Add an invalid formula, verify rejection. Remove a formula column, verify it disappears from query results. Verify formula columns are non-editable in the table face (Vitest for data layer, Playwright for UI).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 8. Notes plugin: matrix, traits, and faces
 
