@@ -803,6 +803,7 @@ export const reparentRow = (
         }
         stmt.finalize()
       } else {
+        let globalLowerBound = prevSiblingKey
         const stmt = db.prepare(`
           SELECT key FROM rank
           WHERE matrix_id = ? AND key > ?
@@ -818,12 +819,28 @@ export const reparentRow = (
           const prevSegments = parseKey(prevSiblingKey)
           const candidateSegments = parseKey(candidateKey)
           if (candidateSegments.length > prevSegments.length) {
-            upperBound = new Uint8Array(0)
+            globalLowerBound = nextPrefix(prevSiblingKey)
           } else {
             upperBound = candidateKey
           }
         }
         stmt.finalize()
+
+        if (upperBound.length === 0) {
+          const globalStmt = db.prepare(`
+            SELECT key FROM rank
+            WHERE key > ?
+              AND NOT (key >= ? AND key < ?)
+            ORDER BY key ASC
+            LIMIT 1
+          `)
+          globalStmt.bind([globalLowerBound, oldKey, oldUpperBound])
+          if (globalStmt.step()) {
+            const gResult = globalStmt.get({}) as { key: Uint8Array }
+            upperBound = new Uint8Array(gResult.key)
+          }
+          globalStmt.finalize()
+        }
       }
 
       newKey = between(prevSiblingKey, upperBound)

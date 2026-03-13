@@ -229,29 +229,29 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
             <Show when={error()}>
               <div class="face-config-error">{error()}</div>
             </Show>
-
-            {/* Actions */}
-            <div class="face-config-actions">
-              <Show when={props.onCancel}>
-                <button
-                  class="face-config-btn face-config-btn-cancel"
-                  onClick={() => props.onCancel?.()}
-                >
-                  Cancel
-                </button>
-              </Show>
-              <button
-                class="face-config-btn face-config-btn-apply"
-                onClick={handleApply}
-                disabled={applying() || !selectedFaceTypeId()}
-                data-testid="face-config-apply"
-              >
-                {applying() ? 'Applying...' : 'Apply Face'}
-              </button>
-            </div>
           </>
         )}
       </Show>
+
+      {/* Actions - always visible so Cancel is always accessible */}
+      <div class="face-config-actions">
+        <Show when={props.onCancel}>
+          <button
+            class="face-config-btn face-config-btn-cancel"
+            onClick={() => props.onCancel?.()}
+          >
+            Cancel
+          </button>
+        </Show>
+        <button
+          class="face-config-btn face-config-btn-apply"
+          onClick={handleApply}
+          disabled={applying() || !selectedFaceTypeId()}
+          data-testid="face-config-apply"
+        >
+          {applying() ? 'Applying...' : 'Apply Face'}
+        </button>
+      </div>
     </div>
   )
 }

@@ -534,9 +534,13 @@ const OutlineFace = (props: OutlineFaceProps) => {
       void reparentRow(props.matrixId, copyKey(row.key)!, {
         newParentKey,
         prevSiblingKey: copyKey(parentRow.key),
-      }).then(() => {
-        requestFocus(rowId, 'start')
       })
+        .then(() => {
+          requestFocus(rowId, 'start')
+        })
+        .catch((err: unknown) => {
+          console.error('onOutdent reparentRow failed:', err)
+        })
     },
 
     onArrowUp: () => {

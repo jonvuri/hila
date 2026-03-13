@@ -98,18 +98,20 @@ test.describe('Indent / outdent', () => {
     // Indent first
     await editors.nth(1).click()
     await page.keyboard.press('Tab')
-    await page.waitForTimeout(800)
 
-    const indentAfterTab = await getIndentWidth(page, 1)
-    expect(indentAfterTab).toBe(INDENT_PX)
+    await expect(async () => {
+      const indentAfterTab = await getIndentWidth(page, 1)
+      expect(indentAfterTab).toBe(INDENT_PX)
+    }).toPass({ timeout: 5000 })
 
     // Now outdent
     await editors.nth(1).click()
     await page.keyboard.press('Shift+Tab')
-    await page.waitForTimeout(800)
 
-    const indentAfterShiftTab = await getIndentWidth(page, 1)
-    expect(indentAfterShiftTab).toBe(0)
+    await expect(async () => {
+      const indentAfterShiftTab = await getIndentWidth(page, 1)
+      expect(indentAfterShiftTab).toBe(0)
+    }).toPass({ timeout: 5000 })
   })
 
   test('Tab on the first row (no previous sibling) is a no-op', async ({ page }) => {

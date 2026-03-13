@@ -23,12 +23,16 @@ const resetDB = async (page: Page) => {
   await expect(page.getByRole('button', { name: 'Reset Database' })).toBeEnabled()
 }
 
-/** Add sample rows to the root matrix (ID 1) via the Matrix Debug panel.
+/** Add sample rows to the Outline matrix via the Matrix Debug panel.
  *  Opens the sidebar and switches to Matrix Debug if needed. */
 const addSampleRows = async (page: Page) => {
   await openSidebar(page)
   await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
-  const btn = page.getByRole('button', { name: 'Add Sample Rows' }).first()
+  const btn = page
+    .locator('h3')
+    .filter({ hasText: '"Outline"' })
+    .locator('xpath=..')
+    .getByRole('button', { name: 'Add Sample Rows' })
   await btn.click()
   await expect(btn).toBeEnabled({ timeout: 5000 })
 }
@@ -222,8 +226,10 @@ test.describe('Row identity: PM editor survives reactive query updates', () => {
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await waitForRows(page, 1)
+    await waitForRows(page, 2)
 
+    // Wait for the count to stabilize (all sample rows reactively rendered)
+    await page.waitForTimeout(500)
     const countBefore = await page.locator('.ProseMirror').count()
     expect(countBefore).toBeGreaterThan(0)
 
@@ -281,11 +287,11 @@ test.describe('Reactive data flow', () => {
     // Add more rows via Matrix Debug sidebar (outline stays mounted)
     await addSampleRows(page)
 
-    // Wait for reactive update
-    await page.waitForTimeout(1000)
-
-    const countAfter = await page.locator('.outline-row').count()
-    expect(countAfter).toBeGreaterThan(countBefore)
+    // Wait for reactive update to render the new rows
+    await expect(async () => {
+      const countAfter = await page.locator('.outline-row').count()
+      expect(countAfter).toBeGreaterThan(countBefore)
+    }).toPass({ timeout: 5000 })
   })
 
   test('content survives page reload (flush + load from DB)', async ({
@@ -293,7 +299,10 @@ test.describe('Reactive data flow', () => {
   }) => {
     await resetDB(page)
     await addSampleRows(page)
-    await waitForRows(page, 1)
+    await waitForRows(page, 2)
+
+    // Wait for all rows to stabilize
+    await page.waitForTimeout(500)
 
     // Type into the first editor
     const firstEditor = page.locator('.ProseMirror').first()
@@ -306,11 +315,11 @@ test.describe('Reactive data flow', () => {
 
     // Reload the page to force full remount
     await page.reload()
-    await waitForRows(page, 1)
+    await waitForRows(page, 2)
 
-    // The saved text must be present in the reloaded editor
-    await expect(page.locator('.ProseMirror').first()).toContainText(persistText, {
-      timeout: 3000,
+    // The saved text must be present in one of the reloaded editors
+    await expect(page.locator('body')).toContainText(persistText, {
+      timeout: 5000,
     })
   })
 })

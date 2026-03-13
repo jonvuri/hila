@@ -23,16 +23,22 @@ const resetDB = async (page: Page) => {
 const addSampleRows = async (page: Page) => {
   await openSidebar(page)
   await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
-  const btn = page.getByRole('button', { name: 'Add Sample Rows' }).first()
+  const btn = page
+    .locator('h3')
+    .filter({ hasText: '"Outline"' })
+    .locator('xpath=..')
+    .getByRole('button', { name: 'Add Sample Rows' })
   await btn.click()
   await expect(btn).toBeEnabled({ timeout: 5000 })
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
-  const count = await page.locator('.outline-row').count()
-  expect(count).toBeGreaterThanOrEqual(minCount)
-  return count
+  await expect(async () => {
+    const count = await page.locator('.outline-row').count()
+    expect(count).toBeGreaterThanOrEqual(minCount)
+  }).toPass({ timeout: 5000 })
+  return page.locator('.outline-row').count()
 }
 
 const getEditorTexts = async (page: Page): Promise<string[]> => {
@@ -90,12 +96,13 @@ test.describe('Collapse / expand', () => {
 
     // Collapse
     await parentBullet.click()
-    await page.waitForTimeout(300)
 
-    await expect(parentBullet).toHaveText('▶')
+    await expect(parentBullet).toHaveText('▶', { timeout: 5000 })
 
-    const afterCount = await page.locator('.outline-row').count()
-    expect(afterCount).toBeLessThan(initialCount)
+    await expect(async () => {
+      const afterCount = await page.locator('.outline-row').count()
+      expect(afterCount).toBeLessThan(initialCount)
+    }).toPass({ timeout: 5000 })
   })
 
   test('clicking collapsed disclosure triangle restores descendant rows', async ({ page }) => {
@@ -108,16 +115,15 @@ test.describe('Collapse / expand', () => {
 
     // Collapse then expand
     await parentBullet.click()
-    await page.waitForTimeout(300)
-    await expect(parentBullet).toHaveText('▶')
+    await expect(parentBullet).toHaveText('▶', { timeout: 5000 })
 
     await parentBullet.click()
-    await page.waitForTimeout(300)
+    await expect(parentBullet).toHaveText('▼', { timeout: 5000 })
 
-    await expect(parentBullet).toHaveText('▼')
-
-    const afterCount = await page.locator('.outline-row').count()
-    expect(afterCount).toBe(initialCount)
+    await expect(async () => {
+      const afterCount = await page.locator('.outline-row').count()
+      expect(afterCount).toBe(initialCount)
+    }).toPass({ timeout: 5000 })
   })
 
   test('Mod-Enter toggles collapse on the focused parent row', async ({ page }) => {
@@ -135,19 +141,21 @@ test.describe('Collapse / expand', () => {
 
     // Collapse via keyboard
     await page.keyboard.press('Meta+Enter')
-    await page.waitForTimeout(300)
 
-    await expect(bullets.nth(parentIdx)).toHaveText('▶')
-    const collapsedCount = await page.locator('.outline-row').count()
-    expect(collapsedCount).toBeLessThan(initialCount)
+    await expect(bullets.nth(parentIdx)).toHaveText('▶', { timeout: 5000 })
+    await expect(async () => {
+      const collapsedCount = await page.locator('.outline-row').count()
+      expect(collapsedCount).toBeLessThan(initialCount)
+    }).toPass({ timeout: 5000 })
 
     // Expand via keyboard
     await page.keyboard.press('Meta+Enter')
-    await page.waitForTimeout(300)
 
-    await expect(bullets.nth(parentIdx)).toHaveText('▼')
-    const expandedCount = await page.locator('.outline-row').count()
-    expect(expandedCount).toBe(initialCount)
+    await expect(bullets.nth(parentIdx)).toHaveText('▼', { timeout: 5000 })
+    await expect(async () => {
+      const expandedCount = await page.locator('.outline-row').count()
+      expect(expandedCount).toBe(initialCount)
+    }).toPass({ timeout: 5000 })
   })
 
   test('leaf row bullet does not respond to collapse toggle', async ({ page }) => {
@@ -167,11 +175,11 @@ test.describe('Collapse / expand', () => {
     const initialCount = await page.locator('.outline-row').count()
 
     await bullets.nth(leafIdx).click()
-    await page.waitForTimeout(300)
+    await page.waitForTimeout(500)
 
     const afterCount = await page.locator('.outline-row').count()
     expect(afterCount).toBe(initialCount)
-    await expect(bullets.nth(leafIdx)).toHaveText('•')
+    await expect(bullets.nth(leafIdx)).toHaveText('•', { timeout: 3000 })
   })
 
   test('arrow-down from collapsed parent skips hidden children', async ({ page }) => {
@@ -185,10 +193,14 @@ test.describe('Collapse / expand', () => {
 
     // Collapse
     await bullets.nth(parentIdx).click()
-    await page.waitForTimeout(300)
-    await expect(bullets.nth(parentIdx)).toHaveText('▶')
+    await expect(bullets.nth(parentIdx)).toHaveText('▶', { timeout: 5000 })
 
-    const countAfterCollapse = await editors.count()
+    let countAfterCollapse = 0
+    await expect(async () => {
+      countAfterCollapse = await editors.count()
+      expect(countAfterCollapse).toBeLessThan(countBeforeCollapse)
+    }).toPass({ timeout: 5000 })
+
     const childrenHidden = countBeforeCollapse - countAfterCollapse
 
     // Only test ArrowDown if the parent is not the last visible row
@@ -217,8 +229,7 @@ test.describe('Collapse / expand', () => {
 
     // Collapse
     await bullets.nth(parentIdx).click()
-    await page.waitForTimeout(300)
-    await expect(bullets.nth(parentIdx)).toHaveText('▶')
+    await expect(bullets.nth(parentIdx)).toHaveText('▶', { timeout: 5000 })
 
     const collapsedCount = await page.locator('.outline-row').count()
 
