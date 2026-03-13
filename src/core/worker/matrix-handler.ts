@@ -35,7 +35,7 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
-import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl } from '../traits'
+import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl, hasTrait } from '../traits'
 
 import { triggerSubscribedQueries } from './sql-handler'
 import { sqliteWasm } from './worker-db'
@@ -168,18 +168,20 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
 
-        const parentKey = getParent(db, matrixId, key)
-        const children = getChildren(db, matrixId, key)
+        if (hasTrait(db, matrixId, 'closure')) {
+          const parentKey = getParent(db, matrixId, key)
+          const children = getChildren(db, matrixId, key)
 
-        let prevSiblingKey: Uint8Array | undefined = undefined
-        for (const childKey of children) {
-          const newKey = reparentRowImpl(db, {
-            matrixId,
-            nodeKey: childKey,
-            newParentKey: parentKey ?? undefined,
-            prevSiblingKey,
-          })
-          prevSiblingKey = newKey
+          let prevSiblingKey: Uint8Array | undefined = undefined
+          for (const childKey of children) {
+            const newKey = reparentRowImpl(db, {
+              matrixId,
+              nodeKey: childKey,
+              newParentKey: parentKey ?? undefined,
+              prevSiblingKey,
+            })
+            prevSiblingKey = newKey
+          }
         }
 
         deleteRowImpl(db, { matrixId, key })
@@ -324,6 +326,25 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'seedWelcomeRowSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'seedWelcomeRowError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'seedRow': {
+      const { id, matrixId, values } = message
+      try {
+        const { db } = await sqliteWasm
+        const checkStmt = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" LIMIT 1`)
+        const hasRows = checkStmt.step()
+        checkStmt.finalize()
+
+        if (!hasRows) {
+          const rowId = insertDataRowImpl(db, matrixId, values)
+          insertRowImpl(db, { matrixId, rowKind: 0, rowId })
+        }
+        postMessage({ type: 'seedRowSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'seedRowError', id, error: toError(err) })
       }
       break
     }

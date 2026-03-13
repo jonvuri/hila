@@ -14,19 +14,26 @@ import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
+import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixDebug = lazy(() => import('./MatrixDebug'))
 const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 const TableFace = lazy(() => import('./table/TableFace'))
+const NoteListFace = lazy(() => import('./notes/NoteListFace'))
+const NoteFace = lazy(() => import('./notes/NoteFace'))
+
+type ActiveView = 'outline' | 'table' | 'notes'
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
   const [outlineMatrixId, setOutlineMatrixId] = createSignal<number | null>(null)
-  const [activeView, setActiveView] = createSignal<'outline' | 'table'>('outline')
+  const [notesMatrixId, setNotesMatrixId] = createSignal<number | null>(null)
+  const [activeView, setActiveView] = createSignal<ActiveView>('outline')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
+  const [selectedNoteId, setSelectedNoteId] = createSignal<number | null>(null)
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
@@ -36,13 +43,18 @@ const App: Component = () => {
     registerFaceComponent('hila.table', TableFaceComponent)
 
     await registerOutlineFaceType()
-    const ctx = await registerPlugin(outlinePlugin)
-    const matrixId = ctx.matrixIds['root']!
+    const outlineCtx = await registerPlugin(outlinePlugin)
+    const matrixId = outlineCtx.matrixIds['root']!
     setOutlineMatrixId(matrixId)
 
     const configs = await getFaceConfigs(matrixId)
     const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
     if (tableConfig) setTableFaceConfig(tableConfig)
+
+    await registerNoteFaceTypes()
+    const notesCtx = await registerPlugin(notesPlugin)
+    const notesId = notesCtx.matrixIds['notes']!
+    setNotesMatrixId(notesId)
   }
 
   onMount(() => {
@@ -63,6 +75,10 @@ const App: Component = () => {
     })
   })
 
+  const handleSelectNote = (noteId: number) => setSelectedNoteId(noteId)
+
+  const handleBackToList = () => setSelectedNoteId(null)
+
   return (
     <div class="app-shell">
       <div class="app-main">
@@ -71,16 +87,29 @@ const App: Component = () => {
             <button
               class="view-tab"
               data-active={activeView() === 'outline'}
-              onClick={() => setActiveView('outline')}
+              onClick={() => {
+                setActiveView('outline')
+                setSelectedNoteId(null)
+              }}
             >
               Outline
             </button>
             <button
               class="view-tab"
               data-active={activeView() === 'table'}
-              onClick={() => setActiveView('table')}
+              onClick={() => {
+                setActiveView('table')
+                setSelectedNoteId(null)
+              }}
             >
               Table
+            </button>
+            <button
+              class="view-tab"
+              data-active={activeView() === 'notes'}
+              onClick={() => setActiveView('notes')}
+            >
+              Notes
             </button>
           </div>
         </Show>
@@ -88,14 +117,36 @@ const App: Component = () => {
           <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
             {(matrixId) => (
               <Show
-                when={activeView() === 'table' && tableFaceConfig()}
-                fallback={<OutlineFace matrixId={matrixId()} />}
+                when={activeView() === 'notes' && notesMatrixId()}
+                fallback={
+                  <Show
+                    when={activeView() === 'table' && tableFaceConfig()}
+                    fallback={<OutlineFace matrixId={matrixId()} />}
+                  >
+                    {(config) => (
+                      <TableFace
+                        config={config()}
+                        bindings={{ bindings: [], overflowColumns: [] }}
+                      />
+                    )}
+                  </Show>
+                }
               >
-                {(config) => (
-                  <TableFace
-                    config={config()}
-                    bindings={{ bindings: [], overflowColumns: [] }}
-                  />
+                {(notesId) => (
+                  <Show
+                    when={selectedNoteId()}
+                    fallback={
+                      <NoteListFace matrixId={notesId()} onSelectNote={handleSelectNote} />
+                    }
+                  >
+                    {(noteId) => (
+                      <NoteFace
+                        matrixId={notesId()}
+                        noteId={noteId()}
+                        onBack={handleBackToList}
+                      />
+                    )}
+                  </Show>
                 )}
               </Show>
             )}

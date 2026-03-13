@@ -409,7 +409,7 @@ Read-only computed columns whose values are SQL expressions evaluated per-row. P
 
 The second formal plugin, proving the plugin model with a different data shape and face type. See [Plugins - Notes plugin](./Plugins.md#notes-plugin) for the full spec.
 
-- [ ] Define the notes plugin in `src/notes/notes-plugin.ts`:
+- [x] Define the notes plugin in `src/notes/notes-plugin.ts`:
   ```typescript
   const notesPlugin: PluginDefinition = {
     id: 'hila.notes',
@@ -442,7 +442,7 @@ The second formal plugin, proving the plugin model with a different data shape a
   }
   ```
 
-- [ ] Register the note face types:
+- [x] Register the note face types:
   - **Note list face** (`hila.note-list`): sidebar list of notes with title and body preview.
     - Slots: none (renders title and body preview for each note).
     - Trait requirements: rank (for list ordering).
@@ -451,27 +451,27 @@ The second formal plugin, proving the plugin model with a different data shape a
     - Trait requirements: none (individual note view).
     - Overflow behavior: property-panel (Notion-style page properties for additional columns).
 
-- [ ] Create `src/notes/NoteListFace.tsx`:
+- [x] Create `src/notes/NoteListFace.tsx`:
   - Scrollable list of notes in rank order.
   - Each item shows the note title and a truncated body preview (first ~100 characters of text content extracted from the ProseMirror JSON).
   - Clicking a note opens it in the single-note face.
   - Add-note button at the top or bottom.
   - Keyboard: arrow keys to navigate, Enter to open, Mod-N (or similar) to create a new note.
 
-- [ ] Create `src/notes/NoteFace.tsx` (single-note face):
+- [x] Create `src/notes/NoteFace.tsx` (single-note face):
   - Title as an editable heading at the top of the pane (plain text input or single-line PM editor).
   - Body as a full ProseMirror editor below the title. Reuses the existing PM setup from the outline (`schema.ts`, `createEditorState.ts`, node views) extended with the wikilink node (task 9).
   - Content persistence: save title and body to the notes matrix via `updateRow` on change (debounced).
   - Overflow columns (if any additional columns exist beyond title and body): render in a collapsible property panel above the body, showing column name/value pairs as editable fields.
   - Backlinks panel below the body (task 9).
 
-- [ ] Wire into `App.tsx`:
+- [x] Wire into `App.tsx`:
   - Add a notes panel/view to the app layout. The notes list renders in the sidebar (a new tab alongside Matrix Debug) or as a dedicated panel. The single-note face renders in the main content area.
   - Register the notes plugin on startup alongside the outline plugin.
   - Navigation: selecting a note in the list opens it in the editor; a back button or breadcrumb returns to the list.
 
-- [ ] Tests: register the notes plugin, verify matrix and traits created. Create a note, verify it appears in the list. Edit the title and body, verify persistence. Verify the note list shows correct ordering. Verify overflow columns appear in the property panel.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: register the notes plugin, verify matrix and traits created. Create a note, verify it appears in the list. Edit the title and body, verify persistence. Verify the note list shows correct ordering. Verify overflow columns appear in the property panel.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 9. Wiki-link inline node, join sync, and backlinks
 

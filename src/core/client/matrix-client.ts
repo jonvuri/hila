@@ -88,6 +88,9 @@ export const getFaceConfigs = (matrixId: number): Promise<FaceConfig[]> =>
 export const seedWelcomeRow = (matrixId: number, content: string): Promise<void> =>
   workerCall('seedWelcomeRow', { matrixId, content })
 
+export const seedRow = (matrixId: number, values: Record<string, unknown>): Promise<void> =>
+  workerCall('seedRow', { matrixId, values })
+
 export const registerFaceType = (definition: FaceTypeDefinition): Promise<void> =>
   workerCall('registerFaceType', { definition })
 

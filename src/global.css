@@ -177,6 +177,231 @@ body,
   min-height: 0;
 }
 
+/* ---- Note list face ---- */
+
+.note-list-face {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  outline: none;
+}
+
+.note-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.note-list-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #222;
+}
+
+.note-list-add {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.note-list-add:hover {
+  background: #f0f0f0;
+  color: #333;
+  border-color: #ccc;
+}
+
+.note-list-error {
+  color: red;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.note-list-items {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.note-list-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  position: relative;
+}
+
+.note-list-item:hover,
+.note-list-item[data-focused='true'] {
+  background: #f5f7fa;
+}
+
+.note-list-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #222;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 24px;
+}
+
+.note-list-item-preview {
+  font-size: 12px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 24px;
+}
+
+.note-list-item-delete {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: #bbb;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.note-list-item:hover .note-list-item-delete {
+  opacity: 1;
+}
+
+.note-list-item-delete:hover {
+  color: #e53e3e;
+  background: #fee;
+}
+
+.note-list-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #888;
+  font-size: 14px;
+}
+
+.note-list-empty-add {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: 14px;
+}
+
+/* ---- Note face (single note editor) ---- */
+
+.note-face {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.note-face-toolbar {
+  padding: 8px 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.note-face-back {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #555;
+}
+
+.note-face-back:hover {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.note-property-panel {
+  padding: 8px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.note-property-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.note-property-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #888;
+  min-width: 80px;
+}
+
+.note-property-input {
+  flex: 1;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.note-property-input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.note-title-input {
+  display: block;
+  width: 100%;
+  border: none;
+  padding: 16px 16px 8px;
+  font-size: 24px;
+  font-weight: 600;
+  color: #222;
+  outline: none;
+  background: transparent;
+}
+
+.note-title-input::placeholder {
+  color: #ccc;
+}
+
+.note-body-editor {
+  flex: 1;
+  padding: 0 16px 16px;
+  min-height: 200px;
+}
+
+.note-body-editor .ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
+
+.note-body-editor .ProseMirror p {
+  margin: 0 0 4px;
+}
+
 /* ---- Responsive ---- */
 
 @media (max-width: 600px) {

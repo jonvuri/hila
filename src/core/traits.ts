@@ -76,6 +76,19 @@ export const getTraits = (db: Database, matrixId: number): TraitRow[] => {
 }
 
 /**
+ * Check whether a specific trait is provisioned for a matrix.
+ */
+export const hasTrait = (db: Database, matrixId: number, type: TraitType): boolean => {
+  const stmt = db.prepare(
+    'SELECT 1 FROM matrix_traits WHERE matrix_id = ? AND trait_type = ? LIMIT 1',
+  )
+  stmt.bind([matrixId, type])
+  const exists = stmt.step()
+  stmt.finalize()
+  return exists
+}
+
+/**
  * Assert that a matrix has all of the given trait types provisioned.
  * Throws with a clear message if any are missing.
  */

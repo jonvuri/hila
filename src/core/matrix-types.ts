@@ -87,6 +87,10 @@ export type MatrixOperationMap = {
     params: { matrixId: number; content: string }
     result: void
   }
+  seedRow: {
+    params: { matrixId: number; values: Record<string, unknown> }
+    result: void
+  }
   registerFaceType: {
     params: { definition: FaceTypeDefinition }
     result: void

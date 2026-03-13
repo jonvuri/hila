@@ -6,7 +6,7 @@ import {
   installDataTableTriggers,
   reinstallDataTableTriggers,
 } from './sync'
-import { ensureTrait, requireTraits } from './traits'
+import { ensureTrait, hasTrait, requireTraits } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -362,8 +362,9 @@ export const insertRow = (
   const { matrixId, parentKey, prevKey, nextKey, rowKind, rowId } = params
 
   return withTransaction(db, () => {
-    requireTraits(db, matrixId, ['rank', 'closure'])
-    // Compute the rank key
+    requireTraits(db, matrixId, ['rank'])
+    const closureProvisioned = hasTrait(db, matrixId, 'closure')
+
     let rankKey: Uint8Array
 
     if (prevKey && nextKey) {
@@ -567,44 +568,43 @@ export const insertRow = (
       },
     )
 
-    // Insert into closure table
-    // 1. Self-reference (depth 0)
-    db.exec(
-      `
-      INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-      VALUES (?, ?, 0)
-    `,
-      {
-        bind: [rankKey, rankKey],
-      },
-    )
+    if (closureProvisioned) {
+      // 1. Self-reference (depth 0)
+      db.exec(
+        `
+        INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+        VALUES (?, ?, 0)
+      `,
+        {
+          bind: [rankKey, rankKey],
+        },
+      )
 
-    // 2. If there's a parent, add closure entries for all ancestors
-    if (parentKey) {
-      // Get all ancestors of the parent
-      const ancestorsStmt = db.prepare(`
-        SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-        WHERE descendant_key = ?
-      `)
+      // 2. If there's a parent, add closure entries for all ancestors
+      if (parentKey) {
+        const ancestorsStmt = db.prepare(`
+          SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
+          WHERE descendant_key = ?
+        `)
 
-      const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
-      ancestorsStmt.bind([parentKey])
-      while (ancestorsStmt.step()) {
-        ancestors.push(ancestorsStmt.get({}) as { ancestor_key: Uint8Array; depth: number })
-      }
-      ancestorsStmt.finalize()
+        const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
+        ancestorsStmt.bind([parentKey])
+        while (ancestorsStmt.step()) {
+          ancestors.push(ancestorsStmt.get({}) as { ancestor_key: Uint8Array; depth: number })
+        }
+        ancestorsStmt.finalize()
 
-      // Add closure entries for each ancestor -> this new node
-      for (const ancestor of ancestors) {
-        db.exec(
-          `
-          INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-          VALUES (?, ?, ?)
-        `,
-          {
-            bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
-          },
-        )
+        for (const ancestor of ancestors) {
+          db.exec(
+            `
+            INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
+            VALUES (?, ?, ?)
+          `,
+            {
+              bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
+            },
+          )
+        }
       }
     }
 
@@ -999,12 +999,14 @@ export const deleteRow = (
       bind: [matrixId, key],
     })
 
-    // 2. Delete all closure entries where key is ancestor or descendant
-    db.exec(
-      `DELETE FROM "mx_${matrixId}_closure"
-       WHERE ancestor_key = ? OR descendant_key = ?`,
-      { bind: [key, key] },
-    )
+    // 2. Delete closure entries if closure trait is provisioned
+    if (hasTrait(db, matrixId, 'closure')) {
+      db.exec(
+        `DELETE FROM "mx_${matrixId}_closure"
+         WHERE ancestor_key = ? OR descendant_key = ?`,
+        { bind: [key, key] },
+      )
+    }
 
     // 3. Delete from data table (only for data rows, not child matrix refs)
     if (rowKind === 0) {

@@ -132,14 +132,14 @@ describe('Trait provisioning', () => {
     )
   })
 
-  test('insertRow errors when only rank is provisioned (missing closure)', () => {
+  test('insertRow succeeds with only rank provisioned (no closure)', () => {
     const matrixId = createMatrix(db, 'Test')
     ensureTrait(db, 'rank', matrixId)
     const rowId = insertDataRow(db, matrixId, { title: 'Test' })
 
-    expect(() => insertRow(db, { matrixId, rowKind: 0, rowId })).toThrow(
-      /does not have the 'closure' trait provisioned/,
-    )
+    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    expect(key).toBeInstanceOf(Uint8Array)
+    expect(key.length).toBeGreaterThan(0)
   })
 
   test('insertRow succeeds when both traits are provisioned', () => {
