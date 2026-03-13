@@ -10,7 +10,7 @@ import {
 
 import type { FaceConfig } from './core/face-types'
 import { registerFaceComponent } from './core/FaceRenderer'
-import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
+import { applyFaceToMatrix, getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
@@ -25,7 +25,7 @@ const NoteListFace = lazy(() => import('./notes/NoteListFace'))
 const NoteFace = lazy(() => import('./notes/NoteFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 
-type ActiveView = 'outline' | 'table' | 'notes'
+type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline'
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
@@ -35,6 +35,7 @@ const App: Component = () => {
   const [activeView, setActiveView] = createSignal<ActiveView>('outline')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [selectedNoteId, setSelectedNoteId] = createSignal<number | null>(null)
+  const [notesOutlineReady, setNotesOutlineReady] = createSignal(false)
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -116,6 +117,26 @@ const App: Component = () => {
             >
               Notes
             </button>
+            <Show when={notesMatrixId()}>
+              <button
+                class="view-tab"
+                data-active={activeView() === 'notes-outline'}
+                data-testid="notes-outline-tab"
+                onClick={() => {
+                  const mid = notesMatrixId()
+                  if (mid && !notesOutlineReady()) {
+                    void applyFaceToMatrix('hila.outline', mid).then(() => {
+                      setNotesOutlineReady(true)
+                      setActiveView('notes-outline')
+                    })
+                  } else {
+                    setActiveView('notes-outline')
+                  }
+                }}
+              >
+                Notes Outline
+              </button>
+            </Show>
             <button
               class="view-tab view-as-btn"
               onClick={() => {
@@ -150,38 +171,56 @@ const App: Component = () => {
           <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
             {(matrixId) => (
               <Show
-                when={activeView() === 'notes' && notesMatrixId()}
+                when={
+                  activeView() === 'notes-outline' && notesOutlineReady() && notesMatrixId()
+                }
                 fallback={
                   <Show
-                    when={activeView() === 'table' && tableFaceConfig()}
-                    fallback={<OutlineFace matrixId={matrixId()} />}
+                    when={activeView() === 'notes' && notesMatrixId()}
+                    fallback={
+                      <Show
+                        when={activeView() === 'table' && tableFaceConfig()}
+                        fallback={<OutlineFace matrixId={matrixId()} />}
+                      >
+                        {(config) => (
+                          <TableFace
+                            config={config()}
+                            bindings={{ bindings: [], overflowColumns: [] }}
+                          />
+                        )}
+                      </Show>
+                    }
                   >
-                    {(config) => (
-                      <TableFace
-                        config={config()}
-                        bindings={{ bindings: [], overflowColumns: [] }}
-                      />
+                    {(notesId) => (
+                      <Show
+                        when={selectedNoteId()}
+                        keyed
+                        fallback={
+                          <NoteListFace matrixId={notesId()} onSelectNote={handleSelectNote} />
+                        }
+                      >
+                        {(noteId) => (
+                          <NoteFace
+                            matrixId={notesId()}
+                            noteId={noteId}
+                            onBack={handleBackToList}
+                            onNavigateToNote={handleSelectNote}
+                          />
+                        )}
+                      </Show>
                     )}
                   </Show>
                 }
               >
                 {(notesId) => (
-                  <Show
-                    when={selectedNoteId()}
-                    keyed
-                    fallback={
-                      <NoteListFace matrixId={notesId()} onSelectNote={handleSelectNote} />
-                    }
-                  >
-                    {(noteId) => (
-                      <NoteFace
-                        matrixId={notesId()}
-                        noteId={noteId}
-                        onBack={handleBackToList}
-                        onNavigateToNote={handleSelectNote}
-                      />
-                    )}
-                  </Show>
+                  <OutlineFace
+                    matrixId={notesId()}
+                    contentColumn="title"
+                    contentIsPlainText={true}
+                    defaultRowValues={{
+                      body: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] }),
+                    }}
+                  />
                 )}
               </Show>
             )}

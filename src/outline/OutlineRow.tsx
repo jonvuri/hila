@@ -15,6 +15,28 @@ import { HeadingView } from './nodeviews/HeadingView'
 const INDENT_PX = 24
 const SAVE_DEBOUNCE_MS = 300
 
+const wrapPlainText = (text: string): string =>
+  JSON.stringify({
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: text ? [{ type: 'text', text }] : [],
+      },
+    ],
+  })
+
+const unwrapPlainText = (docJson: unknown): string => {
+  const doc = docJson as { content?: { content?: { text?: string }[] }[] }
+  if (!doc.content) return ''
+  return (
+    doc.content
+      .flatMap((block) => block.content ?? [])
+      .map((node) => node.text ?? '')
+      .join('') ?? ''
+  )
+}
+
 export type OutlineRowHandle = {
   focus: (pos?: number | 'start' | 'end') => void
   getView: () => EditorView | undefined
@@ -31,6 +53,8 @@ export type OutlineRowProps = {
   matrixId: number
   pageIndex: number
   callbacks: OutlineCallbacks
+  contentColumn?: string
+  contentIsPlainText?: boolean
   onHandle?: (handle: OutlineRowHandle) => void
   onEditorFocus?: () => void
   onToggleCollapse?: () => void
@@ -45,12 +69,20 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
   let saveTimer: ReturnType<typeof setTimeout> | undefined
   let pendingDoc: unknown | undefined
 
+  const colName = () => props.contentColumn ?? 'content'
+  const isPlain = () => props.contentIsPlainText ?? false
+
+  const serializeForSave = (docJson: unknown): Record<string, unknown> => {
+    const value = isPlain() ? unwrapPlainText(docJson) : JSON.stringify(docJson)
+    return { [colName()]: value }
+  }
+
   const debouncedSave = (docJson: unknown) => {
     pendingDoc = docJson
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       if (pendingDoc !== undefined) {
-        void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(pendingDoc) })
+        void updateRow(props.matrixId, props.rowId, serializeForSave(pendingDoc))
         pendingDoc = undefined
       }
     }, SAVE_DEBOUNCE_MS)
@@ -59,7 +91,7 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
   const flushSave = () => {
     clearTimeout(saveTimer)
     if (pendingDoc !== undefined) {
-      void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(pendingDoc) })
+      void updateRow(props.matrixId, props.rowId, serializeForSave(pendingDoc))
       pendingDoc = undefined
     }
   }
@@ -83,7 +115,14 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
   }
 
   const mountEditor = (el: HTMLDivElement) => {
-    const docJson = props.content ? (JSON.parse(props.content) as unknown) : undefined
+    let docJson: unknown | undefined
+    if (props.content) {
+      if (isPlain()) {
+        docJson = JSON.parse(wrapPlainText(props.content)) as unknown
+      } else {
+        docJson = JSON.parse(props.content) as unknown
+      }
+    }
     const state = createEditorState(docJson, props.callbacks)
 
     const view = new EditorView(el, {
@@ -230,6 +269,8 @@ export const OutlineRow = (props: OutlineRowProps) => (
       matrixId={props.matrixId}
       pageIndex={props.pageIndex}
       callbacks={props.callbacks}
+      contentColumn={props.contentColumn}
+      contentIsPlainText={props.contentIsPlainText}
       onHandle={props.onHandle}
       onEditorFocus={props.onEditorFocus}
       onToggleCollapse={props.onToggleCollapse}

@@ -4,7 +4,8 @@ import type { FaceConfig, FaceConfigRow } from './face-types'
 import { getFaceType } from './face-registry'
 import { resolveSlotBindings } from './slot-binding'
 import { getColumns } from './matrix'
-import { ensureTrait } from './traits'
+import { rebuildClosure } from './sync'
+import { ensureTrait, hasTrait } from './traits'
 import { withTransaction } from './transaction'
 
 const rowToFaceConfig = (row: FaceConfigRow): FaceConfig => ({
@@ -34,7 +35,11 @@ export const applyFaceToMatrix = (
 
   return withTransaction(db, () => {
     for (const req of faceType.traitRequirements) {
+      const alreadyExists = hasTrait(db, matrixId, req.type)
       ensureTrait(db, req.type, matrixId)
+      if (!alreadyExists && req.type === 'closure') {
+        rebuildClosure(db, matrixId)
+      }
     }
 
     const columns = getColumns(db, matrixId)

@@ -70,7 +70,7 @@ test.describe('Face configuration UI', () => {
 
   test('can change a slot binding via dropdown', async ({ page }) => {
     // Switch to Notes tab to target the notes matrix
-    await page.locator('.view-tab', { hasText: 'Notes' }).click()
+    await page.locator('.view-tab', { hasText: /^Notes$/ }).click()
     // Wait for notes view
     await expect(
       page.locator('.note-list-face, .note-list-empty, .note-list-items').first(),
@@ -116,7 +116,7 @@ test.describe('Face configuration UI', () => {
 
   test('overflow columns are displayed for face types with slots', async ({ page }) => {
     // Switch to Notes tab
-    await page.locator('.view-tab', { hasText: 'Notes' }).click()
+    await page.locator('.view-tab', { hasText: /^Notes$/ }).click()
     await expect(
       page.locator('.note-list-face, .note-list-empty, .note-list-items').first(),
     ).toBeVisible({ timeout: 5000 })

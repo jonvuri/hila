@@ -24,14 +24,21 @@ export const registerOutlineFaceType = async (): Promise<void> => {
   await registerFaceTypeWorker(outlineFaceTypeDefinition)
 }
 
-export const buildOutlineQuery = (matrixId: number, focusRootHex: string | null): string => {
+export const buildOutlineQuery = (
+  matrixId: number,
+  focusRootHex: string | null,
+  contentColumn = 'content',
+): string => {
   const rangeFilter =
     focusRootHex !== null ?
       `AND r.key >= X'${focusRootHex}' AND r.key < X'${focusRootHex.slice(0, -2)}01'`
     : ''
 
+  const contentExpr =
+    contentColumn === 'content' ? 'd.content' : `d."${contentColumn}" as content`
+
   return `
-SELECT r.key, r.row_id, d.content,
+SELECT r.key, r.row_id, ${contentExpr},
        COALESCE(c.depth, 0) as depth,
        CASE WHEN ch.ancestor_key IS NOT NULL THEN 1 ELSE 0 END as has_children
 FROM rank r

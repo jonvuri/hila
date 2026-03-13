@@ -48,7 +48,8 @@ const keyToHex = (key: Uint8Array): string =>
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
 
-const extractText = (contentJson: string): string => {
+const extractText = (contentJson: string, plainText = false): string => {
+  if (plainText) return contentJson || 'Untitled'
   try {
     const doc = JSON.parse(contentJson) as {
       content?: { content?: { text?: string }[] }[]
@@ -128,9 +129,14 @@ const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
 
 type OutlineFaceProps = {
   matrixId: number
+  contentColumn?: string
+  contentIsPlainText?: boolean
+  defaultRowValues?: Record<string, unknown>
 }
 
 const OutlineFace = (props: OutlineFaceProps) => {
+  const contentCol = () => props.contentColumn ?? 'content'
+  const isPlainText = () => props.contentIsPlainText ?? false
   // Focus view state: rank key of the subtree root, or null for full outline
   const [focusRoot, setFocusRoot] = createSignal<Uint8Array | null>(null)
 
@@ -139,7 +145,9 @@ const OutlineFace = (props: OutlineFaceProps) => {
     return root ? keyToHex(root) : null
   })
 
-  const outlineQuery = createMemo(() => buildOutlineQuery(props.matrixId, focusRootHex()))
+  const outlineQuery = createMemo(() =>
+    buildOutlineQuery(props.matrixId, focusRootHex(), contentCol()),
+  )
 
   const { result, error } = useQuery(() => outlineQuery())
 
@@ -400,17 +408,30 @@ const OutlineFace = (props: OutlineFaceProps) => {
       const doc = view.state.doc
       const atEnd = from === to && to >= doc.content.size - 1
 
+      const buildValues = (contentValue?: string): Record<string, unknown> => {
+        const base = { ...(props.defaultRowValues ?? {}) }
+        if (contentValue !== undefined) {
+          base[contentCol()] = contentValue
+        } else if (isPlainText()) {
+          base[contentCol()] = ''
+        }
+        return base
+      }
+
       if (atEnd) {
         void insertRow(props.matrixId, {
           parentKey,
           prevKey: copyKey(row.key),
+          values: buildValues(),
         }).then(({ rowId: newRowId }) => {
           requestFocus(newRowId, 'start')
         })
       } else {
         const pos = from
         const afterDoc = doc.cut(pos)
-        const afterJson = JSON.stringify(afterDoc.toJSON())
+
+        const afterValue =
+          isPlainText() ? afterDoc.textContent : JSON.stringify(afterDoc.toJSON())
 
         const tr = view.state.tr.replace(pos, doc.content.size, Slice.empty)
         view.dispatch(tr)
@@ -421,7 +442,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
         void insertRow(props.matrixId, {
           parentKey,
           prevKey: copyKey(row.key),
-          values: { content: afterJson },
+          values: buildValues(afterValue),
         }).then(({ rowId: newRowId }) => {
           requestFocus(newRowId, 'start')
         })
@@ -588,6 +609,8 @@ const OutlineFace = (props: OutlineFaceProps) => {
               matrixId={props.matrixId}
               pageIndex={windowProps.windowIndex}
               callbacks={callbacks}
+              contentColumn={contentCol()}
+              contentIsPlainText={isPlainText()}
               onHandle={(handle) => registerHandle(rowId, handle)}
               onEditorFocus={() => setFocusedRowId(rowId)}
               onToggleCollapse={() => toggleCollapse(row.key)}
@@ -638,7 +661,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
                   onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
                   data-testid="breadcrumb-ancestor"
                 >
-                  {extractText(crumb.content)}
+                  {extractText(crumb.content, isPlainText())}
                 </span>
               </>
             )}
@@ -651,7 +674,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
                   style={{ color: '#333', 'font-weight': 500 }}
                   data-testid="breadcrumb-current"
                 >
-                  {extractText(rootRow().content)}
+                  {extractText(rootRow().content, isPlainText())}
                 </span>
               </>
             )}
@@ -667,7 +690,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
           }}
           data-testid="focus-title"
         >
-          {focusRootRow() ? extractText(focusRootRow()!.content) : ''}
+          {focusRootRow() ? extractText(focusRootRow()!.content, isPlainText()) : ''}
         </div>
       </Show>
       <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
