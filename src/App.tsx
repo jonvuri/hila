@@ -135,6 +135,7 @@ const App: Component = () => {
                 {(notesId) => (
                   <Show
                     when={selectedNoteId()}
+                    keyed
                     fallback={
                       <NoteListFace matrixId={notesId()} onSelectNote={handleSelectNote} />
                     }
@@ -142,8 +143,9 @@ const App: Component = () => {
                     {(noteId) => (
                       <NoteFace
                         matrixId={notesId()}
-                        noteId={noteId()}
+                        noteId={noteId}
                         onBack={handleBackToList}
+                        onNavigateToNote={handleSelectNote}
                       />
                     )}
                   </Show>

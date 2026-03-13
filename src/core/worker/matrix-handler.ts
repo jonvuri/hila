@@ -23,6 +23,10 @@ import {
   updateColumnDisplayType as updateColumnDisplayTypeImpl,
   updateColumnOptions as updateColumnOptionsImpl,
   reorderColumns as reorderColumnsImpl,
+  insertJoin as insertJoinImpl,
+  deleteJoin as deleteJoinImpl,
+  getTargets as getTargetsImpl,
+  getSources as getSourcesImpl,
 } from '../matrix'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
@@ -475,6 +479,54 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'reorderColumnsSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'reorderColumnsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'insertJoin': {
+      const { id, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        insertJoinImpl(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)
+        postMessage({ type: 'insertJoinSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'insertJoinError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteJoin': {
+      const { id, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        deleteJoinImpl(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)
+        postMessage({ type: 'deleteJoinSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteJoinError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getTargets': {
+      const { id, sourceMatrixId, sourceRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        const targets = getTargetsImpl(db, sourceMatrixId, sourceRowId)
+        postMessage({ type: 'getTargetsSuccess', id, result: targets })
+      } catch (err: unknown) {
+        postMessage({ type: 'getTargetsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getSources': {
+      const { id, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        const sources = getSourcesImpl(db, targetMatrixId, targetRowId)
+        postMessage({ type: 'getSourcesSuccess', id, result: sources })
+      } catch (err: unknown) {
+        postMessage({ type: 'getSourcesError', id, error: toError(err) })
       }
       break
     }

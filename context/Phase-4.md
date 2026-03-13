@@ -477,7 +477,7 @@ The second formal plugin, proving the plugin model with a different data shape a
 
 Extend the ProseMirror schema with a `wikilink` inline node. Implement `[[` autocomplete for inserting links between notes. Sync wikilink markers to the join table on save. Display backlinks.
 
-- [ ] Add `wikilink` node to the ProseMirror schema (`src/outline/schema.ts` or a shared schema module):
+- [x] Add `wikilink` node to the ProseMirror schema (`src/outline/schema.ts` or a shared schema module):
   ```typescript
   wikilink: {
     group: 'inline',
@@ -492,20 +492,20 @@ Extend the ProseMirror schema with a `wikilink` inline node. Implement `[[` auto
   }
   ```
 
-- [ ] Create a `WikilinkView` Solid node view component (`src/notes/nodeviews/WikilinkView.tsx`):
+- [x] Create a `WikilinkView` Solid node view component (`src/notes/nodeviews/WikilinkView.tsx`):
   - Displays the target note's current title (resolved via a reactive query).
   - Styled distinctly (e.g. blue text, subtle background, link-like appearance).
   - Clicking the wikilink navigates to the target note (opens in the single-note face).
   - If the target row doesn't exist (deleted note), display a "broken link" indicator.
 
-- [ ] Implement `[[` autocomplete:
+- [x] Implement `[[` autocomplete:
   - A ProseMirror input rule or plugin that detects `[[` and opens an autocomplete dropdown.
   - The dropdown queries the notes matrix for notes matching the typed text (by title prefix or substring).
   - Selecting a note inserts a `wikilink` node with the target's `(matrixId, rowId)`.
   - Typing `]]` after selecting closes the autocomplete.
   - If the typed text doesn't match any existing note, offer a "Create new note" option that creates a new note and inserts the link.
 
-- [ ] Implement wiki-link → join table sync:
+- [x] Implement wiki-link → join table sync:
   - On ProseMirror doc save (in `NoteFace.tsx`), extract all `wikilink` nodes from the saved body JSON.
   - Compare with the current join table entries for this source note:
     ```sql
@@ -517,10 +517,10 @@ Extend the ProseMirror schema with a `wikilink` inline node. Implement `[[` auto
     - Removed links (in join table but not in doc): `deleteJoin` for each.
   - The join table is a materialized index; the PM doc is the source of truth.
 
-- [ ] Add worker message types for join operations if not already exposed:
+- [x] Add worker message types for join operations if not already exposed:
   - `insertJoin`, `deleteJoin`, `getTargets`, `getSources` should already exist from Phase 1 (verify and wire up if needed).
 
-- [ ] Implement the backlinks panel in `NoteFace.tsx`:
+- [x] Implement the backlinks panel in `NoteFace.tsx`:
   - Query the join table in reverse: all notes that link to the current note.
     ```sql
     SELECT j.source_row_id, d.title
@@ -533,8 +533,8 @@ Extend the ProseMirror schema with a `wikilink` inline node. Implement `[[` auto
   - Each backlink is clickable, navigating to that note.
   - Collapsible section, hidden if no backlinks exist.
 
-- [ ] Tests (Vitest): insert a wikilink node in a PM doc, save, verify join table row created. Remove the wikilink, save, verify join table row deleted. Insert multiple wikilinks, verify all join rows created. Query backlinks, verify reverse lookup correctness.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Vitest): insert a wikilink node in a PM doc, save, verify join table row created. Remove the wikilink, save, verify join table row deleted. Insert multiple wikilinks, verify all join rows created. Query backlinks, verify reverse lookup correctness.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 10. Face configuration UI
 

@@ -140,3 +140,31 @@ export const updateColumnOptions = (
 
 export const reorderColumns = (matrixId: number, columnNames: string[]): Promise<void> =>
   workerCall('reorderColumns', { matrixId, columnNames })
+
+export const insertJoin = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): Promise<void> =>
+  workerCall('insertJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId })
+
+export const deleteJoin = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): Promise<void> =>
+  workerCall('deleteJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId })
+
+export const getTargets = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+): Promise<{ targetMatrixId: number; targetRowId: number }[]> =>
+  workerCall('getTargets', { sourceMatrixId, sourceRowId })
+
+export const getSources = (
+  targetMatrixId: number,
+  targetRowId: number,
+): Promise<{ sourceMatrixId: number; sourceRowId: number }[]> =>
+  workerCall('getSources', { targetMatrixId, targetRowId })

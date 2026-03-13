@@ -402,6 +402,121 @@ body,
   margin: 0 0 4px;
 }
 
+/* ---- Wikilink inline node ---- */
+
+.wikilink {
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.wikilink:hover {
+  background: #dbeafe;
+  text-decoration: underline;
+}
+
+.wikilink-broken {
+  color: #9ca3af;
+  background: #f3f4f6;
+  text-decoration: line-through;
+  cursor: default;
+}
+
+.wikilink-broken:hover {
+  background: #f3f4f6;
+  text-decoration: line-through;
+}
+
+/* ---- Wikilink autocomplete dropdown ---- */
+
+.wikilink-autocomplete {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.wikilink-autocomplete-item {
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wikilink-autocomplete-item:hover,
+.wikilink-autocomplete-selected {
+  background: #f0f4ff;
+  color: #1d4ed8;
+}
+
+.wikilink-autocomplete-create {
+  color: #6b7280;
+  font-style: italic;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ---- Backlinks panel ---- */
+
+.note-backlinks {
+  border-top: 1px solid #e0e0e0;
+  padding: 8px 16px 16px;
+}
+
+.note-backlinks-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  padding: 4px 0;
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+.note-backlinks-toggle:hover {
+  color: #555;
+}
+
+.note-backlinks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.note-backlinks-item {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #2563eb;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-backlinks-item:hover {
+  background: #f0f4ff;
+}
+
 /* ---- Responsive ---- */
 
 @media (max-width: 600px) {

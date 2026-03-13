@@ -33,6 +33,38 @@ export const schema = new Schema({
       },
     },
 
+    wikilink: {
+      group: 'inline',
+      inline: true,
+      atom: true,
+      attrs: {
+        matrixId: { default: null },
+        rowId: { default: null },
+      },
+      toDOM(node) {
+        return [
+          'span',
+          {
+            class: 'wikilink',
+            'data-matrix-id': String(node.attrs.matrixId),
+            'data-row-id': String(node.attrs.rowId),
+          },
+          '',
+        ]
+      },
+      parseDOM: [
+        {
+          tag: 'span.wikilink',
+          getAttrs(dom) {
+            return {
+              matrixId: Number((dom as HTMLElement).getAttribute('data-matrix-id')),
+              rowId: Number((dom as HTMLElement).getAttribute('data-row-id')),
+            }
+          },
+        },
+      ],
+    },
+
     hard_break: {
       inline: true,
       group: 'inline',

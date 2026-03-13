@@ -141,6 +141,32 @@ export type MatrixOperationMap = {
     params: { matrixId: number; columnNames: string[] }
     result: void
   }
+  insertJoin: {
+    params: {
+      sourceMatrixId: number
+      sourceRowId: number
+      targetMatrixId: number
+      targetRowId: number
+    }
+    result: void
+  }
+  deleteJoin: {
+    params: {
+      sourceMatrixId: number
+      sourceRowId: number
+      targetMatrixId: number
+      targetRowId: number
+    }
+    result: void
+  }
+  getTargets: {
+    params: { sourceMatrixId: number; sourceRowId: number }
+    result: { targetMatrixId: number; targetRowId: number }[]
+  }
+  getSources: {
+    params: { targetMatrixId: number; targetRowId: number }
+    result: { sourceMatrixId: number; sourceRowId: number }[]
+  }
 }
 
 export type MatrixOperationType = keyof MatrixOperationMap

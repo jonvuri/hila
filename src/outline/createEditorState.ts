@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state'
+import { EditorState, type Plugin as StatePlugin } from 'prosemirror-state'
 import { Node } from 'prosemirror-model'
 import { history } from 'prosemirror-history'
 import { keymap } from 'prosemirror-keymap'
@@ -44,13 +44,17 @@ const markdownInputRules = inputRules({
 export const createEditorState = (
   docJson?: unknown,
   callbacks?: OutlineCallbacks,
+  extraPlugins?: StatePlugin[],
 ): EditorState => {
   let doc: Node | undefined
   if (docJson) {
     doc = Node.fromJSON(schema, docJson)
   }
 
-  const plugins = [history(), markdownInputRules]
+  const plugins: StatePlugin[] = [history(), markdownInputRules]
+  if (extraPlugins) {
+    plugins.push(...extraPlugins)
+  }
   if (callbacks) {
     plugins.push(keymap(createOutlineKeymap(callbacks)))
   }
