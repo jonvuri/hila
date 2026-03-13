@@ -23,6 +23,7 @@ const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 const TableFace = lazy(() => import('./table/TableFace'))
 const NoteListFace = lazy(() => import('./notes/NoteListFace'))
 const NoteFace = lazy(() => import('./notes/NoteFace'))
+const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 
 type ActiveView = 'outline' | 'table' | 'notes'
 
@@ -34,6 +35,10 @@ const App: Component = () => {
   const [activeView, setActiveView] = createSignal<ActiveView>('outline')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [selectedNoteId, setSelectedNoteId] = createSignal<number | null>(null)
+  const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
+    matrixId: number
+    initialFaceTypeId?: string
+  } | null>(null)
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
@@ -111,9 +116,37 @@ const App: Component = () => {
             >
               Notes
             </button>
+            <button
+              class="view-tab view-as-btn"
+              onClick={() => {
+                const mid = activeView() === 'notes' ? notesMatrixId() : outlineMatrixId()
+                if (mid) setFaceConfigTarget({ matrixId: mid })
+              }}
+              data-testid="view-as-button"
+            >
+              View as…
+            </button>
           </div>
         </Show>
         <Suspense fallback={<div class="app-loading">Loading…</div>}>
+          <Show when={faceConfigTarget()}>
+            {(target) => (
+              <div class="face-config-overlay">
+                <FaceConfigPanel
+                  matrixId={target().matrixId}
+                  initialFaceTypeId={target().initialFaceTypeId}
+                  onApply={(config) => {
+                    setFaceConfigTarget(null)
+                    if (config.faceTypeId === 'hila.table') {
+                      setTableFaceConfig(config)
+                      setActiveView('table')
+                    }
+                  }}
+                  onCancel={() => setFaceConfigTarget(null)}
+                />
+              </div>
+            )}
+          </Show>
           <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
             {(matrixId) => (
               <Show

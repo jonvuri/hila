@@ -401,7 +401,10 @@ export const insertRow = (
         }
         nextSiblingStmt.finalize()
       } else {
-        // No parent specified, find next root-level row
+        // No parent specified, find next root-level row in this matrix.
+        // globalLowerBound tracks the minimum key the global collision
+        // check should search from (advanced past subtrees if needed).
+        let globalLowerBound = prevKey
         const nextSiblingStmt = db.prepare(`
           SELECT key FROM rank
           WHERE matrix_id = ? AND key > ?
@@ -418,16 +421,34 @@ export const insertRow = (
           const prevSegments = parseKey(prevKey)
           const candidateSegments = parseKey(candidateKey)
 
-          // If candidateKey has more segments, it might be a child of prevKey
-          // We want to skip over all children of prevKey
           if (candidateSegments.length > prevSegments.length) {
-            // candidateKey might be in prevKey's subtree, use empty upperBound
-            upperBound = new Uint8Array(0)
+            // candidateKey is in prevKey's subtree. We need to insert
+            // AFTER the entire subtree. Advance the global search past
+            // the subtree boundary.
+            globalLowerBound = nextPrefix(prevKey)
           } else {
             upperBound = candidateKey
           }
         }
         nextSiblingStmt.finalize()
+
+        if (upperBound.length === 0) {
+          // No local upper bound found. The rank table is global, so
+          // check for any key beyond the current position (or subtree)
+          // to avoid cross-matrix key collisions.
+          const globalNextStmt = db.prepare(`
+            SELECT key FROM rank
+            WHERE key > ?
+            ORDER BY key ASC
+            LIMIT 1
+          `)
+          globalNextStmt.bind([globalLowerBound])
+          if (globalNextStmt.step()) {
+            const gResult = globalNextStmt.get({}) as { key: Uint8Array }
+            upperBound = new Uint8Array(gResult.key)
+          }
+          globalNextStmt.finalize()
+        }
       }
 
       rankKey = between(prevKey, upperBound)
@@ -466,7 +487,7 @@ export const insertRow = (
         }
         prevSiblingStmt.finalize()
       } else {
-        // No parent specified, find previous root-level row
+        // No parent specified, find previous root-level row in this matrix
         const prevSiblingStmt = db.prepare(`
           SELECT key FROM rank
           WHERE matrix_id = ? AND key < ?
@@ -490,6 +511,24 @@ export const insertRow = (
           }
         }
         prevSiblingStmt.finalize()
+
+        // Check the global rank table for a closer lower bound to avoid
+        // generating a key that collides with another matrix's key.
+        const globalPrevStmt = db.prepare(`
+          SELECT key FROM rank
+          WHERE key < ?
+          ORDER BY key DESC
+          LIMIT 1
+        `)
+        globalPrevStmt.bind([nextKey])
+        if (globalPrevStmt.step()) {
+          const gResult = globalPrevStmt.get({}) as { key: Uint8Array }
+          const globalPrevKey = new Uint8Array(gResult.key)
+          if (compareKeys(globalPrevKey, lowerBound) > 0) {
+            lowerBound = globalPrevKey
+          }
+        }
+        globalPrevStmt.finalize()
       }
 
       rankKey = between(lowerBound, nextKey)

@@ -540,7 +540,7 @@ Extend the ProseMirror schema with a `wikilink` inline node. Implement `[[` auto
 
 The UI for applying a face type to a matrix and configuring slot bindings. This makes face application a user-visible operation rather than a code-level wiring. See [Plugins - Face configuration](./Plugins.md#face-configuration).
 
-- [ ] Create `src/core/FaceConfigPanel.tsx`:
+- [x] Create `src/core/FaceConfigPanel.tsx`:
   - Receives: a matrix ID and an optional initial face type ID.
   - Left column: the face's slots (name, preferred type, current binding).
   - Right column: the matrix's columns (name, type, whether already bound).
@@ -548,22 +548,22 @@ The UI for applying a face type to a matrix and configuring slot bindings. This 
   - Each slot has a dropdown to override the auto-binding with any column.
   - Overflow columns section showing which columns are unbound.
 
-- [ ] "Apply face" action:
+- [x] "Apply face" action:
   - Calls `applyFaceToMatrix` (auto-provisions traits).
   - Saves the face config with the user's chosen slot bindings.
   - Opens the face in the appropriate view area.
 
-- [ ] Face type picker:
+- [x] Face type picker:
   - A dropdown or grid of available face types (from the face type registry).
   - Each option shows the face type name and its slot declarations.
   - Selecting a face type populates the binding UI.
 
-- [ ] Integrate into the app:
+- [x] Integrate into the app:
   - Accessible from a matrix's context menu or the admin browser (task 12).
   - "View as..." option that opens the face config panel for a matrix.
 
-- [ ] Tests (Playwright): open the face config panel for a matrix, verify slots and columns are shown. Change a binding via dropdown, apply, verify the face renders with the new binding.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): open the face config panel for a matrix, verify slots and columns are shown. Change a binding via dropdown, apply, verify the face renders with the new binding.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 11. Cross-face data sharing
 
