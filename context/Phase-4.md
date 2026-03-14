@@ -598,28 +598,28 @@ The capstone validation: apply the outline face to the note matrix and demonstra
 
 Evolve the existing `MatrixDebug.tsx` into a proper system-level admin surface. This provides visibility into all matrixes, their traits, plugins, face configs, and raw data.
 
-- [ ] Restructure `MatrixDebug.tsx` (or create a new `src/admin/MatrixBrowser.tsx`):
+- [x] Restructure `MatrixDebug.tsx` (or create a new `src/admin/MatrixBrowser.tsx`):
   - List all matrixes in the registry with metadata: ID, title, source plugin, column count, row count.
   - Filter by source plugin (dropdown populated from `plugins` table).
   - Filter/search by matrix title.
 
-- [ ] Per-matrix detail view:
+- [x] Per-matrix detail view:
   - **Data tab:** the matrix's data table rendered as a read-only table (or a simplified version of the table face). Shows all columns and rows.
   - **Trait state tab:** lists provisioned traits (`matrix_traits`), shows the rank table filtered to this matrix, shows the closure table.
   - **Join state tab:** forward and reverse join references for each row.
   - **Face configs tab:** lists all face configurations for this matrix, with face type and slot bindings.
   - **Schema tab:** column definitions, formula columns, column types.
 
-- [ ] Quick actions:
+- [x] Quick actions:
   - Create matrix (with column definition).
   - Add sample rows.
   - Reset database (with confirmation).
   - Apply a face to a matrix (opens the face config panel).
 
-- [ ] Keep the SQL Runner as a separate tab alongside the matrix browser.
+- [x] Keep the SQL Runner as a separate tab alongside the matrix browser.
 
-- [ ] Tests: verify the matrix browser shows plugin-created matrixes with correct `source_plugin_id`. Verify trait state is displayed after provisioning.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: verify the matrix browser shows plugin-created matrixes with correct `source_plugin_id`. Verify trait state is displayed after provisioning.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 13. Playwright E2E tests
 

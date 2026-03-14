@@ -18,7 +18,7 @@ import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
-const MatrixDebug = lazy(() => import('./MatrixDebug'))
+const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
 const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 const TableFace = lazy(() => import('./table/TableFace'))
 const NoteListFace = lazy(() => import('./notes/NoteListFace'))
@@ -257,7 +257,7 @@ const App: Component = () => {
               data-active={activePanel() === 'matrix'}
               onClick={() => setActivePanel('matrix')}
             >
-              Matrix Debug
+              Matrix Browser
             </button>
             <button
               class="sidebar-tab"
@@ -269,7 +269,12 @@ const App: Component = () => {
           </div>
           <Suspense fallback={<div class="app-loading">Loading…</div>}>
             <div class="sidebar-content">
-              {activePanel() === 'matrix' && <MatrixDebug onReset={initPlugins} />}
+              {activePanel() === 'matrix' && (
+                <MatrixBrowser
+                  onReset={initPlugins}
+                  onApplyFace={(matrixId) => setFaceConfigTarget({ matrixId })}
+                />
+              )}
               {activePanel() === 'sql' && <SqlRunner />}
             </div>
           </Suspense>
