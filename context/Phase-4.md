@@ -625,7 +625,7 @@ Evolve the existing `MatrixDebug.tsx` into a proper system-level admin surface. 
 
 Extend the Playwright test suite to cover the new Phase 4 behaviors. Build incrementally as each task completes.
 
-- [ ] **Table face tests:**
+- [x] **Table face tests:**
   - Open a matrix's table face.
   - Click a cell to edit, type a value, press Enter, verify the value is saved.
   - Add a column via the "+" button, specify a type, verify it appears.
@@ -634,39 +634,39 @@ Extend the Playwright test suite to cover the new Phase 4 behaviors. Build incre
   - Sort by clicking a column header, verify row ordering changes.
   - Keyboard navigation: arrow keys between cells, Tab to advance.
 
-- [ ] **Note face tests:**
+- [x] **Note face tests:**
   - Create a new note, verify it appears in the note list.
   - Click a note in the list, verify the single-note face opens with title and body.
   - Edit the title, verify persistence (navigate away and back).
   - Edit the body with rich text (bold, headings), verify persistence.
   - Verify overflow columns appear in the property panel.
 
-- [ ] **Wiki-link tests:**
+- [x] **Wiki-link tests:**
   - In a note body, type `[[`, verify the autocomplete dropdown appears.
   - Type a note title, select from autocomplete, verify the wikilink node is inserted.
   - Click the wikilink, verify navigation to the target note.
   - Verify the backlinks panel on the target note shows the source note.
 
-- [ ] **Face configuration UI tests:**
+- [x] **Face configuration UI tests:**
   - Open the face config panel for a matrix.
   - Verify slots and columns are listed.
   - Change a slot binding via dropdown.
   - Apply the face, verify it renders with the correct binding.
 
-- [ ] **Cross-face data sharing tests:**
+- [x] **Cross-face data sharing tests:**
   - Create notes in the note face.
   - Open the outline face for the notes matrix.
   - Verify notes appear as outline rows with titles.
   - Edit a note title in the outline, verify the change in the note face.
   - Edit a note title in the note face, verify the change in the outline.
 
-- [ ] **Formula column tests:**
+- [x] **Formula column tests:**
   - Add a formula column to a matrix.
   - Verify it appears in the table face with computed values.
   - Verify it's non-editable (click doesn't enter edit mode).
 
-- [ ] Run `npx playwright test` -- all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
+- [x] Run `npx playwright test` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
 
 ---
 

@@ -10,11 +10,12 @@ const openSidebar = async (page: Page) => {
 
 const resetDB = async (page: Page) => {
   await page.goto('/')
-
   await openSidebar(page)
-  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
-  await page.getByRole('button', { name: 'Reset Database' }).click()
-  await expect(page.getByRole('button', { name: 'Reset Database' })).toBeEnabled()
+  const resetBtn = page.getByTestId('reset-db-btn')
+  await resetBtn.click()
+  await expect(resetBtn).toContainText('Confirm', { timeout: 3000 })
+  await resetBtn.click()
+  await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
 const waitForOutline = async (page: Page) => {

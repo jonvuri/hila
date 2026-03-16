@@ -16,25 +16,23 @@ const openSidebar = async (page: Page) => {
 /** Navigate to the app and reset the database to a clean state. */
 const resetDB = async (page: Page) => {
   await page.goto('/')
-
   await openSidebar(page)
-  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
-  await page.getByRole('button', { name: 'Reset Database' }).click()
-  await expect(page.getByRole('button', { name: 'Reset Database' })).toBeEnabled()
+  const resetBtn = page.getByTestId('reset-db-btn')
+  await resetBtn.click()
+  await expect(resetBtn).toContainText('Confirm', { timeout: 3000 })
+  await resetBtn.click()
+  await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-/** Add sample rows to the Outline matrix via the Matrix Debug panel.
- *  Opens the sidebar and switches to Matrix Debug if needed. */
+/** Add sample rows to the Outline matrix via the Matrix Browser panel. */
 const addSampleRows = async (page: Page) => {
   await openSidebar(page)
-  await page.locator('.sidebar-tab', { hasText: 'Matrix Debug' }).click()
-  const btn = page
-    .locator('h3')
-    .filter({ hasText: '"Outline"' })
-    .locator('xpath=..')
-    .getByRole('button', { name: 'Add Sample Rows' })
+  await page.locator('.mb-matrix-item', { hasText: 'Outline' }).click()
+  await expect(page.getByTestId('matrix-detail')).toBeVisible({ timeout: 3000 })
+  const btn = page.getByTestId('add-sample-rows')
   await btn.click()
-  await expect(btn).toBeEnabled({ timeout: 5000 })
+  await expect(btn).toBeEnabled({ timeout: 10000 })
+  await page.getByTestId('matrix-detail-back').click()
 }
 
 /** Switch to the SQL Runner panel in the sidebar. */
@@ -276,7 +274,7 @@ test.describe('Reactive data flow', () => {
     await expect(page.locator('body')).toContainText(savedText, { timeout: 3000 })
   })
 
-  test('new rows appear in the outline reactively after being added via Matrix Debug', async ({
+  test('new rows appear in the outline reactively after being added via Matrix Browser', async ({
     page,
   }) => {
     await resetDB(page)
@@ -284,7 +282,7 @@ test.describe('Reactive data flow', () => {
 
     const countBefore = await waitForRows(page, 1)
 
-    // Add more rows via Matrix Debug sidebar (outline stays mounted)
+    // Add more rows via Matrix Browser sidebar (outline stays mounted)
     await addSampleRows(page)
 
     // Wait for reactive update to render the new rows
