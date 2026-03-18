@@ -1,0 +1,19 @@
+.heading {
+  display: inline-block;
+  background: var(--c-invert-bg);
+  color: var(--c-invert-fg);
+  padding: var(--sp-4) var(--sp-8);
+  font-weight: 600;
+}
+
+.sm {
+  font-size: var(--text-sm);
+}
+
+.md {
+  font-size: var(--text-md);
+}
+
+.lg {
+  font-size: var(--text-lg);
+}

@@ -550,6 +550,16 @@ What we have and its status relative to this plan:
 
 ---
 
+## Design system
+
+The design system provides design tokens, structural primitives, interactive components, and a responsive grid. It is documented in [Design.md](Design.md) and demonstrated in Storybook (`pnpm storybook`).
+
+The initial build covers elemental components (buttons, inputs, tabs, badges, context menus, structural containers) and the token system (colors, spacing, typography). Complex face themes (outline face variants, table face variants) are planned separately — see [Design-Faces.md](Design-Faces.md).
+
+The existing `src/global.css` application styles have not been migrated to the token system yet. This migration will happen incrementally as face components are rebuilt.
+
+---
+
 ## Open design questions
 
 These don't need answers now but should be resolved as their phases approach.

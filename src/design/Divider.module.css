@@ -1,0 +1,13 @@
+.divider {
+  height: 1px;
+  background: var(--c-border);
+  border: none;
+}
+
+.short {
+  width: 32px;
+}
+
+.full {
+  width: 100%;
+}

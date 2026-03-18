@@ -1,0 +1,27 @@
+.bar {
+  display: flex;
+  gap: var(--sp-16);
+  border-bottom: 1px solid var(--c-border-2);
+}
+
+.tab {
+  font-size: var(--text-sm);
+  color: var(--c-fg-3);
+  padding: var(--sp-8) 0;
+  cursor: pointer;
+  border: none;
+  background: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-family: var(--font-sans);
+  line-height: 1;
+}
+
+.tab:hover {
+  color: var(--c-fg-2);
+}
+
+.active {
+  color: var(--c-fg);
+  border-bottom-color: var(--c-fg);
+}

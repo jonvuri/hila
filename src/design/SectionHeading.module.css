@@ -1,0 +1,5 @@
+.heading {
+  font-size: var(--text-2xl);
+  font-weight: 300;
+  color: var(--c-fg-2);
+}

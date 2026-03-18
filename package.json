@@ -13,12 +13,16 @@
     "test:run": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build"
   },
   "license": "MIT",
   "devDependencies": {
     "@eslint/js": "^9.29.0",
     "@playwright/test": "^1.58.2",
+    "@storybook/addon-a11y": "^10.2.19",
+    "@storybook/addon-docs": "^10.2.19",
     "@types/node": "^24.2.1",
     "@vitest/web-worker": "^3.2.4",
     "eslint": "^9.29.0",
@@ -35,6 +39,8 @@
     "postcss-nested": "^7.0.2",
     "postcss-simple-vars": "^7.0.1",
     "prettier": "^3.5.3",
+    "storybook": "^10.2.19",
+    "storybook-solidjs-vite": "^10.0.9",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.34.1",
     "vite": "^6.3.5",

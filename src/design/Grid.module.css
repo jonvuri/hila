@@ -1,0 +1,73 @@
+.container {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 0 var(--sp-16);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: var(--sp-16);
+}
+
+/* Generate .col-1 through .col-16 */
+@for $i from 1 to 16 {
+  .col-$(i) {
+    grid-column: span $(i);
+  }
+}
+
+/* Small screens: collapse to full width by default, sm overrides */
+@media (max-width: 511px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  @for $i from 1 to 16 {
+    .col-$(i) {
+      grid-column: span 1;
+    }
+  }
+}
+
+/* sm breakpoint: 512px — 8-column grid */
+@media (min-width: 512px) and (max-width: 767px) {
+  .row {
+    grid-template-columns: repeat(8, 1fr);
+  }
+
+  @for $i from 1 to 8 {
+    .sm-$(i) {
+      grid-column: span $(i);
+    }
+  }
+
+  /* Clamp columns larger than 8 */
+  @for $i from 9 to 16 {
+    .col-$(i) {
+      grid-column: span 8;
+    }
+  }
+}
+
+/* md breakpoint: 768px — 12-column grid */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .row {
+    grid-template-columns: repeat(12, 1fr);
+  }
+
+  @for $i from 1 to 12 {
+    .md-$(i) {
+      grid-column: span $(i);
+    }
+  }
+
+  /* Clamp columns larger than 12 */
+  @for $i from 13 to 16 {
+    .col-$(i) {
+      grid-column: span 12;
+    }
+  }
+}
+
+/* lg breakpoint: 1024px+ — full 16-column grid (default) */

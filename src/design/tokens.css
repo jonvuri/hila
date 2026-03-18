@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Spacing — powers of 2 */
+:root {
+  --sp-1: 1px;
+  --sp-2: 2px;
+  --sp-4: 4px;
+  --sp-8: 8px;
+  --sp-16: 16px;
+  --sp-32: 32px;
+  --sp-64: 64px;
+
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+  --text-3xl: 32px;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Dark theme (default) */
+[data-theme='dark'] {
+  --c-bg: #0e0e0e;
+  --c-surface: #1a1a1a;
+  --c-elevated: #222;
+  --c-fg: #e0e0e0;
+  --c-fg-2: #999;
+  --c-fg-3: #666;
+  --c-fg-4: #444;
+  --c-border: #383838;
+  --c-border-2: #282828;
+  --c-hover: #1e1e1e;
+  --c-active: #282828;
+  --c-invert-bg: #e0e0e0;
+  --c-invert-fg: #0e0e0e;
+  --c-accent: #8b5cf6;
+  --c-accent-2: #a78bfa;
+  --c-accent-3: rgba(139, 92, 246, 0.12);
+  --c-accent-border: #7c3aed;
+}
+
+/* Light theme */
+[data-theme='light'] {
+  --c-bg: #fff;
+  --c-surface: #f5f5f5;
+  --c-elevated: #fff;
+  --c-fg: #1a1a1a;
+  --c-fg-2: #555;
+  --c-fg-3: #999;
+  --c-fg-4: #ccc;
+  --c-border: #ddd;
+  --c-border-2: #eee;
+  --c-hover: #f5f5f5;
+  --c-active: #eee;
+  --c-invert-bg: #1a1a1a;
+  --c-invert-fg: #fff;
+  --c-accent: #7c3aed;
+  --c-accent-2: #a78bfa;
+  --c-accent-3: rgba(124, 58, 237, 0.08);
+  --c-accent-border: #8b5cf6;
+}

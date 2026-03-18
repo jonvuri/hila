@@ -1,0 +1,26 @@
+.box {
+  position: relative;
+  padding: var(--sp-16);
+}
+
+.box::before,
+.box::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+}
+
+.box::before {
+  top: 0;
+  left: 0;
+  border-top: 1px solid var(--c-border);
+  border-left: 1px solid var(--c-border);
+}
+
+.box::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 1px solid var(--c-border);
+  border-right: 1px solid var(--c-border);
+}
