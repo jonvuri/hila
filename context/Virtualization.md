@@ -1,0 +1,209 @@
+# Virtualization
+
+Pagination-first windowed rendering architecture. All data paths assume bounded, paginated loading. No unbounded queries.
+
+## Design constraint
+
+Every query, every render path, every data structure should assume windowed access. The system must never depend on having the full dataset in memory. Large buffers are fine; unbounded is not. Target: sub-50ms for all interactions.
+
+## Current architecture
+
+### Data flow (today)
+
+```
+SQL query (unbounded)
+  → full result set in JS
+  → client-side collapse filtering → visibleRows[]
+  → ScrollVirtualizer (totalWindows=1, single monolithic window)
+  → <For each={visibleRows()}> renders all rows
+```
+
+### ScrollVirtualizer
+
+The virtualizer uses a **latch-pair** model: two IntersectionObserver-tracked windows define the viewport center, and a `THRESHOLD_DISTANCE` (currently 2) extends the rendered range on each side.
+
+For latch pair `[A, B]`, the rendered range is `[A-2, B+2]`:
+
+```
+... [A-2: buffer] [A-1: candidate] [A: visible] [B: visible] [B+1: candidate] [B+2: buffer] ...
+```
+
+- **Visible**: in the viewport (tracked by IntersectionObserver)
+- **Candidate**: adjacent to visible, likely to enter viewport next on scroll
+- **Buffer**: one beyond each candidate, providing forward/backward context
+
+Windows outside the range transition to GHOST state (not rendered). Windows entering the range become VISIBLE.
+
+### Outline query
+
+`buildOutlineQuery` in `outline-plugin.ts` produces an unbounded `SELECT ... ORDER BY r.key` with no LIMIT. The full result for the matrix (or focus subtree) is returned. Collapse filtering happens client-side by scanning the full `visibleRows()` array.
+
+### Query subscriptions
+
+`useQuery` subscribes to a SQL string via the worker's observer system. When underlying tables change, the observer re-fires with fresh results. Currently returns the complete result set per invocation.
+
+## Required changes
+
+### 1. Window row count floor
+
+**Requirement**: Each window must contain at least 100 rows.
+
+**Current state**: Windows are sized by pixel height (`minWindowHeight`), not row count. With `totalWindows=1`, row count is irrelevant.
+
+**Change needed**: Introduce a `rowsPerWindow` concept (floor: 100, configurable higher). The page size for data loading aligns with this. `totalWindows` becomes `ceil(totalVisibleRows / rowsPerWindow)`.
+
+The virtualizer itself may not need to enforce the row count directly — the data loading layer can ensure pages are ≥100 rows, and the virtualizer renders what it's given. But the contract between the two must specify the minimum.
+
+### 2. Buffer window adequacy
+
+**Requirement**: One buffer window below (and above) any window that is a candidate for becoming visible — that is, any window adjacent to a currently visible window.
+
+**Current state**: `THRESHOLD_DISTANCE = 2` already satisfies this. For latch pair `[A, B]`:
+- Candidates: `A-1`, `B+1`
+- Buffers: `A-2`, `B+2`
+
+Each candidate has exactly one buffer window beyond it.
+
+**Conclusion**: The current threshold is sufficient. However, this is an **architectural invariant** that future changes must preserve: `THRESHOLD_DISTANCE >= 2` is a hard requirement, not a tuning parameter. Document it as such.
+
+**Why the buffer matters**: Decoration computation (guide continuation, vector field angles) requires forward-looking context. A buffer window of ≥100 rows guarantees that every rendered row has at least 100 rows of forward context. The vector field angle ceiling (see [Outline component design](#outline-component-design)) is set to match this buffer size, so decoration computation never needs data beyond what the buffer provides.
+
+### 3. Paginated outline queries
+
+**Current**: `buildOutlineQuery` returns all rows for a matrix. No LIMIT.
+
+**Change needed**: The query must be paginated. Approach:
+
+**Keyset pagination via rank key.** The rank table orders rows by a lexicographic key. Pages are bounded by key ranges:
+
+```sql
+SELECT ... FROM rank r
+WHERE r.matrix_id = ? AND r.key > ? -- after previous page's last key
+ORDER BY r.key
+LIMIT ?                              -- page size
+```
+
+**Challenges**:
+
+- **Collapse filtering in SQL.** Currently collapse is client-side (skip rows below collapsed nodes). With pagination, collapsed subtrees should be excluded from the query to keep page sizes predictable. This requires the query to know which keys are collapsed, potentially via a temp table or CTE of collapsed keys. Alternatively, collapse could use key-range exclusion (`NOT BETWEEN collapsed_key AND collapsed_key_prefix_end`) since the rank key range of a subtree is a contiguous range.
+
+- **Total count for `totalWindows`.** The virtualizer needs to know total page count. A parallel `SELECT COUNT(*)` with the same filters provides this. The count query should be efficient (indexed on rank key + matrix_id).
+
+- **Focus subtree pagination.** When focused on a subtree, the rank key range filter already bounds the result. Pagination adds a further LIMIT within that range.
+
+### 4. Data loading coordination
+
+**Current**: One `useQuery` call returns the full result. Solid `reconcile` diffs it into a store.
+
+**Change needed**: Multiple concurrent page queries, one per loaded window. A page-aware data manager replaces the single `useQuery` pattern:
+
+- Maintain a map of `windowIndex → page data`
+- When the virtualizer's visible range changes, load/unload pages
+- Buffer pages are loaded but not rendered
+- Pages are keyed by their starting rank key for cache stability
+- On mutation (insert/delete/reparent), invalidate affected pages and re-fetch
+
+The Solid store could hold a sparse array of pages, or a flat array of all loaded rows with page boundary metadata. The decoration computation runs on the contiguous loaded range.
+
+### 5. Collapse state integration
+
+**Options**:
+
+**A. SQL-side collapse (preferred).** The paginated query excludes collapsed subtrees via rank-key-range exclusion. The client sends collapsed keys to the query builder. Page sizes reflect visible rows only. Predictable, efficient.
+
+**B. Client-side collapse on loaded pages.** Pages are loaded without collapse filtering. Client-side filtering produces unpredictable visible row counts per page. Worse for performance and predictability.
+
+**Recommendation**: Option A. Collapse keys can be sent as a set of key ranges to exclude. The outline query's `WHERE` clause adds `AND r.key NOT BETWEEN ? AND ?` for each collapsed subtree. This leverages the rank key's lexicographic subtree range property.
+
+### 6. Keyboard navigation and mutations
+
+**Arrow key navigation at page boundaries**: When the cursor moves past the first/last row of the visible range, the adjacent page must already be loaded. The buffer window ensures this — the buffer page contains the rows the cursor would navigate into.
+
+**Insert/delete/reparent**: These mutations change the row set. The page containing the mutation and potentially adjacent pages need re-fetching. Strategy:
+
+- After mutation, invalidate all loaded pages (let the reactive query system re-fire them)
+- Alternatively, invalidate only the affected page and pages that might have shifted
+- Focus/cursor state must survive page re-fetches (keyed by row ID, not position)
+
+### 7. Scroll position stability
+
+When pages re-fetch due to mutations, the virtualizer's scroll position must remain stable. The current repositioning logic (virtual offset + scroll compensation in `requestAnimationFrame`) handles this for window state changes. Page data changes that don't alter the window set should be transparent to the virtualizer — only the content within a rendered window changes.
+
+## Outline component design
+
+### Buffer-ceiling alignment
+
+The 100-row window floor and the vector-field angle ceiling at distance 100 are deliberately aligned:
+
+- Each buffer window contains ≥100 rows
+- The angle formula reaches 90° (vertical) at distance 100
+- Any subtree extending beyond the loaded buffer renders as a vertical line
+- This is visually correct: "this subtree continues far below"
+- No visual jumps as the user scrolls and buffer windows shift
+
+This alignment means the decoration computation is always exact for rendered rows, with no approximation or special-casing.
+
+### Decoration computation on partial data
+
+`computeDecorations(theme, loadedRows)` runs on the contiguous loaded row range (visible + buffer windows). For rendered rows (visible windows only), the buffer provides sufficient forward context for all theme computations:
+
+- **Guide continuation** (`continues[]`): requires forward-scan to next row at same depth. Buffer of 100 rows covers this for all practical tree structures.
+- **Vector field angles**: `distToLastInSubtree` caps at 100. Buffer provides exact data up to the cap.
+- **isVisualLast**: one-row lookahead. Buffer covers this trivially.
+
+Rows at the trailing edge of the buffer may have incomplete forward context, but they are never rendered — they exist solely to provide context for visible rows.
+
+## Migration path
+
+### Step 1 — Design system outline row component ✅
+
+Refactored `src/design/outline/` to the pagination-ready interface:
+
+- **`OutlineRow`**: Single component, `theme` as a string enum prop. Internally switches on theme to render the correct DOM structure. Fully self-contained given its props — no cross-row dependencies at render time.
+- **`computeDecorations(theme, rows)`**: Precomputes per-row decoration data from a contiguous slice of rows. Theme-selective (only computes what the theme needs). Produces `RowDecoration` per row containing `continues: boolean[]` (guide continuation), `isVisualLast: boolean` (corner-notches), and optionally `vectorSlots` (vector-field).
+- **`outlineThemeClass(theme)`**: Returns the CSS class string for the container wrapping row elements, for use by the virtualizer's render callback.
+- **Guide algorithm fix**: Replaced the one-row-lookahead approximation with a correct backward-pass algorithm that properly handles ancestor guide continuation across subtree boundaries.
+- **Vector field angle ceiling**: Updated `distToAngle` to reach exactly 90° at distance 100 via a squared-log blend, aligned with the buffer window floor. Subtrees beyond loaded data appear as vertical guide lines.
+- **`Outline` convenience wrapper**: Retained for Storybook and non-virtualized use. Accepts `OutlineNode[]` tree data, manages collapse state, calls `computeDecorations`, renders `OutlineRow` instances. Not used in the real app.
+
+### Step 2 — Integrate with existing OutlineFace
+
+Connect the design system row component to the existing `src/outline/OutlineFace.tsx`:
+
+- **Adapt `OutlineRowData` to `FlatRow`**: Map the SQL query result fields (`row_id`, `key`, `depth`, `has_children`, `content`) to the `FlatRow` interface (`id`, `depth`, `hasChildren`, `expanded`, `content`).
+- **Replace `OutlineRow` rendering**: The current `OutlineRow` (ProseMirror-based) renders indent + drag handle + bullet + editor. The design `OutlineRow` handles indent/bullet/guides per theme. The ProseMirror editor plugs in via `renderContent`. Drag handles, focus management, and keyboard callbacks need to be composed alongside or within the design row.
+- **Apply `outlineThemeClass`** on the virtualizer's window container so theme-scoped CSS rules reach the row elements.
+- **Compute decorations from `visibleRows()`**: Call `computeDecorations(theme, visibleRows())` once per reactive update. Index into the decoration array when rendering each row.
+- **Theme selection**: Wire up a theme setting (user preference or hardcoded default) that feeds into `OutlineRow` and `computeDecorations`.
+
+### Step 3 — Multi-window virtualizer
+
+Switch from `totalWindows=1` to proper multi-window rendering:
+
+- Set `rowsPerWindow` (floor: 100).
+- Compute `totalWindows = ceil(visibleRows.length / rowsPerWindow)`.
+- Each `renderWindow` callback renders its slice of rows.
+- `THRESHOLD_DISTANCE >= 2` remains a hard invariant (buffer window adequacy).
+
+### Step 4 — Paginated outline queries
+
+Implement bounded data loading:
+
+- Keyset pagination via rank key with LIMIT.
+- SQL-side collapse filtering via rank-key-range exclusion.
+- Parallel count query for `totalWindows`.
+- Focus subtree pagination within the rank key range filter.
+
+### Step 5 — Page-aware data manager
+
+Replace the single `useQuery` pattern:
+
+- Map of `windowIndex → page data` with reactive loading/unloading.
+- Buffer pages loaded but not rendered.
+- Pages keyed by starting rank key for cache stability.
+- Mutation invalidation and re-fetch strategy.
+- Focus/cursor state survives page re-fetches (keyed by row ID).
+
+### Step 6 — Remove unbounded query path
+
+Delete the unbounded `buildOutlineQuery`. All outline data flows through paginated queries.

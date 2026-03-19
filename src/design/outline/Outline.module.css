@@ -1,0 +1,303 @@
+/* ============================================================
+   BASE
+   ============================================================ */
+
+.outline {
+  font-size: var(--text-base);
+  color: var(--c-fg);
+  background: var(--c-bg);
+  padding: var(--sp-16);
+  border: 1px solid var(--c-border-2);
+}
+
+.row {
+  display: flex;
+  min-height: 28px;
+  position: relative;
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+}
+
+.text {
+  display: block;
+  line-height: 1.6;
+  padding: 4px 0;
+}
+
+.indent {
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   GUIDE SLOTS — shared structure for workflowy themes
+   ============================================================ */
+
+.guidePassThrough,
+.guidePassThroughEnd,
+.guideConnector,
+.guideConnectorLast {
+  width: 20px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* Vertical line — spans full row height so guides cover multi-line content */
+.guidePassThrough::before,
+.guidePassThroughEnd::before,
+.guideConnector::before,
+.guideConnectorLast::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+}
+
+/* Horizontal branch (at first-line center) */
+.guideConnector::after,
+.guideConnectorLast::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  height: 0;
+}
+
+/* ============================================================
+   THEME A — Workflowy Clone
+   ============================================================ */
+
+.themeWorkflowyClone .guidePassThrough::before,
+.themeWorkflowyClone .guidePassThroughEnd::before,
+.themeWorkflowyClone .guideConnector::before,
+.themeWorkflowyClone .guideConnectorLast::before {
+  left: 16px;
+  border-left: 1px solid var(--c-border);
+}
+
+.themeWorkflowyClone .guideConnector::after,
+.themeWorkflowyClone .guideConnectorLast::after {
+  display: none;
+}
+
+.caret {
+  width: 14px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-fg-4);
+  font-size: calc(var(--text-base) * 1.5);
+  padding: 0;
+  user-select: none;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.caret:hover {
+  color: var(--c-fg-2);
+}
+
+.caretSpacer {
+  width: 14px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.bulletDot {
+  width: 5px;
+  height: 5px;
+  background: var(--c-fg-2);
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 12px;
+  margin-right: var(--sp-8);
+}
+
+/* ============================================================
+   THEME B — Workflowy Geometric
+   ============================================================ */
+
+.themeWorkflowyGeometric .guidePassThrough::before,
+.themeWorkflowyGeometric .guidePassThroughEnd::before,
+.themeWorkflowyGeometric .guideConnector::before,
+.themeWorkflowyGeometric .guideConnectorLast::before {
+  left: 5px;
+  border-left: 1px solid var(--c-fg-4);
+}
+
+.themeWorkflowyGeometric .guideConnector::after,
+.themeWorkflowyGeometric .guideConnectorLast::after {
+  display: none;
+}
+
+.bulletDash {
+  width: 10px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--sp-8);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+
+.bulletDash::before {
+  content: '';
+  display: block;
+  width: 10px;
+  height: 1px;
+  background: var(--c-fg-2);
+}
+
+.bulletDashParent {
+  cursor: pointer;
+}
+
+.bulletDashParent:hover::before {
+  height: 2px;
+  background: var(--c-fg);
+}
+
+.plusMark {
+  width: 10px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--sp-8);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.plusMark::before,
+.plusMark::after {
+  content: '';
+  position: absolute;
+  background: var(--c-fg-2);
+}
+
+.plusMark::before {
+  width: 10px;
+  height: 1px;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.plusMark::after {
+  width: 1px;
+  height: 10px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.plusMark:hover::before,
+.plusMark:hover::after {
+  background: var(--c-fg);
+}
+
+/* ============================================================
+   THEME C — Vector Field
+   ============================================================ */
+
+.themeVectorField .content {
+  cursor: text;
+  margin-left: 4px;
+}
+
+.themeVectorField .text {
+  padding: 3px 0;
+}
+
+.vectorGutter {
+  display: flex;
+  flex-shrink: 0;
+  align-items: flex-start;
+}
+
+.vectorSlot {
+  width: 16px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.vectorGutterClickable {
+  cursor: pointer;
+}
+
+/* ============================================================
+   THEME D — Corner Notches
+   ============================================================ */
+
+.notchTL {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+
+.notchBR {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.themeCornerNotches .text {
+  padding: 6px 0;
+}
+
+/* ============================================================
+   THEME E — Whitespace Only
+   ============================================================ */
+
+.caretFaint {
+  width: 18px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-fg-4);
+  font-size: 14px;
+  padding: 0;
+  user-select: none;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.caretFaint:hover {
+  color: var(--c-fg-2);
+}
+
+.caretFaintSpacer {
+  width: 18px;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.themeWhitespace .text {
+  padding: 5px 0;
+}
