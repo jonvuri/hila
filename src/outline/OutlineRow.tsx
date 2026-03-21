@@ -12,7 +12,6 @@ import type { OutlineCallbacks } from './keymap'
 import { ParagraphView } from './nodeviews/ParagraphView'
 import { HeadingView } from './nodeviews/HeadingView'
 
-const INDENT_PX = 24
 const SAVE_DEBOUNCE_MS = 300
 
 const wrapPlainText = (text: string): string =>
@@ -43,13 +42,9 @@ export type OutlineRowHandle = {
   flushSave: () => void
 }
 
-export type OutlineRowProps = {
+export type OutlineRowContentProps = {
   rowId: number
-  rankKey: Uint8Array
   content: string
-  depth: number
-  hasChildren: boolean
-  collapsed?: boolean
   matrixId: number
   pageIndex: number
   callbacks: OutlineCallbacks
@@ -57,13 +52,9 @@ export type OutlineRowProps = {
   contentIsPlainText?: boolean
   onHandle?: (handle: OutlineRowHandle) => void
   onEditorFocus?: () => void
-  onToggleCollapse?: () => void
-  onZoomIn?: () => void
-  onDragHandlePointerDown?: (e: PointerEvent) => void
-  isDragging?: boolean
 }
 
-const OutlineRowEditor = (props: OutlineRowProps) => {
+const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -177,95 +168,18 @@ const OutlineRowEditor = (props: OutlineRowProps) => {
 
   return (
     <div
-      class="outline-row"
-      data-row-id={props.rowId}
-      style={{
-        display: 'flex',
-        'align-items': 'flex-start',
-        opacity: props.isDragging ? 0.25 : 1,
-        transition: 'opacity 0.15s',
-      }}
-    >
-      <div
-        class="outline-row-indent"
-        style={{ width: `${props.depth * INDENT_PX}px`, 'flex-shrink': 0 }}
-      />
-      <div
-        class="outline-row-handle"
-        style={{
-          width: '20px',
-          'flex-shrink': 0,
-          cursor: 'grab',
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'center',
-          'user-select': 'none',
-          opacity: 0.4,
-          'padding-top': '2px',
-        }}
-        onPointerDown={(e: PointerEvent) => {
-          if (props.onDragHandlePointerDown) {
-            e.preventDefault()
-            props.onDragHandlePointerDown(e)
-          }
-        }}
-      >
-        ⠿
-      </div>
-      <div
-        class="outline-row-bullet"
-        role={props.hasChildren ? 'button' : undefined}
-        aria-label={
-          props.hasChildren ?
-            props.collapsed ?
-              'Expand'
-            : 'Collapse'
-          : 'Bullet'
-        }
-        style={{
-          width: '20px',
-          'flex-shrink': 0,
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'center',
-          'user-select': 'none',
-          'padding-top': '2px',
-          cursor: props.hasChildren ? 'pointer' : 'default',
-          'font-size': props.hasChildren ? '10px' : '16px',
-          opacity: props.hasChildren ? 0.7 : 0.35,
-        }}
-        onClick={() => {
-          if (props.hasChildren) props.onToggleCollapse?.()
-        }}
-        onDblClick={() => {
-          props.onZoomIn?.()
-        }}
-        data-testid="outline-bullet"
-      >
-        {props.hasChildren ?
-          props.collapsed ?
-            '▶'
-          : '▼'
-        : '•'}
-      </div>
-      <div
-        class="outline-row-editor"
-        ref={(el) => mountEditor(el)}
-        style={{ flex: 1, 'min-width': 0 }}
-      />
-    </div>
+      class="outline-row-editor"
+      ref={(el) => mountEditor(el)}
+      style={{ flex: 1, 'min-width': 0 }}
+    />
   )
 }
 
-export const OutlineRow = (props: OutlineRowProps) => (
+export const OutlineRowContent = (props: OutlineRowContentProps) => (
   <ProsemirrorAdapterProvider>
-    <OutlineRowEditor
+    <OutlineRowEditorInner
       rowId={props.rowId}
-      rankKey={props.rankKey}
       content={props.content}
-      depth={props.depth}
-      hasChildren={props.hasChildren}
-      collapsed={props.collapsed}
       matrixId={props.matrixId}
       pageIndex={props.pageIndex}
       callbacks={props.callbacks}
@@ -273,10 +187,6 @@ export const OutlineRow = (props: OutlineRowProps) => (
       contentIsPlainText={props.contentIsPlainText}
       onHandle={props.onHandle}
       onEditorFocus={props.onEditorFocus}
-      onToggleCollapse={props.onToggleCollapse}
-      onZoomIn={props.onZoomIn}
-      onDragHandlePointerDown={props.onDragHandlePointerDown}
-      isDragging={props.isDragging}
     />
   </ProsemirrorAdapterProvider>
 )

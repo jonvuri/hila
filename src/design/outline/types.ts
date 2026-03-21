@@ -33,6 +33,7 @@ export type OutlineRowProps = {
   row: FlatRow
   decoration: RowDecoration
   onToggle?: (id: string) => void
+  onZoomIn?: (id: string) => void
   renderContent?: (row: FlatRow) => JSX.Element
 }
 

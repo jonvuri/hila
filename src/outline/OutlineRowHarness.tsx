@@ -1,7 +1,14 @@
-import { createSignal, For } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
+
+import {
+  OutlineRow as DesignOutlineRow,
+  outlineThemeClass,
+  computeDecorations,
+} from '../design/outline/Outline'
+import type { FlatRow, OutlineTheme } from '../design/outline/types'
 
 import type { OutlineCallbacks } from './keymap'
-import { OutlineRow } from './OutlineRow'
+import { OutlineRowContent } from './OutlineRow'
 
 const makeDoc = (text: string) =>
   JSON.stringify({
@@ -88,6 +95,7 @@ const INITIAL_ROWS: MockRow[] = [
 const OutlineRowHarness = () => {
   const [log, setLog] = createSignal<string[]>([])
   const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
+  const [theme] = createSignal<OutlineTheme>('workflowy-clone')
 
   const appendLog = (msg: string) => {
     setLog((prev) => [...prev.slice(-19), msg])
@@ -111,23 +119,6 @@ const OutlineRowHarness = () => {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('')
 
-  const toggleCollapse = (key: Uint8Array) => {
-    const k = keyStr(key)
-    setCollapsedKeys((prev) => {
-      const next = new Set(prev)
-      if (next.has(k)) {
-        next.delete(k)
-        appendLog(`[collapse] Expanded: ${k}`)
-      } else {
-        next.add(k)
-        appendLog(`[collapse] Collapsed: ${k}`)
-      }
-      return next
-    })
-  }
-
-  const isCollapsed = (key: Uint8Array) => collapsedKeys().has(keyStr(key))
-
   const isHiddenByCollapse = (row: MockRow) => {
     for (const other of INITIAL_ROWS) {
       if (!other.hasChildren) continue
@@ -140,7 +131,34 @@ const OutlineRowHarness = () => {
     return false
   }
 
-  const visibleRows = () => INITIAL_ROWS.filter((r) => !isHiddenByCollapse(r))
+  const visibleMockRows = () => INITIAL_ROWS.filter((r) => !isHiddenByCollapse(r))
+
+  const flatRows = createMemo((): FlatRow[] => {
+    const collapsed = collapsedKeys()
+    return visibleMockRows().map((row) => ({
+      id: keyStr(row.rankKey),
+      content: row.content,
+      depth: row.depth,
+      hasChildren: row.hasChildren,
+      expanded: row.hasChildren && !collapsed.has(keyStr(row.rankKey)),
+    }))
+  })
+
+  const decorations = createMemo(() => computeDecorations(theme(), flatRows()))
+
+  const toggleCollapseByHex = (hexKey: string) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(hexKey)) {
+        next.delete(hexKey)
+        appendLog(`[collapse] Expanded: ${hexKey}`)
+      } else {
+        next.add(hexKey)
+        appendLog(`[collapse] Collapsed: ${hexKey}`)
+      }
+      return next
+    })
+  }
 
   return (
     <div data-testid="outline-row-harness">
@@ -152,31 +170,38 @@ const OutlineRowHarness = () => {
 
       <div
         data-testid="outline-rows"
+        class={outlineThemeClass(theme())}
         style={{
-          border: '1px solid #ddd',
           'border-radius': '4px',
           padding: '4px 0',
         }}
       >
-        <For each={visibleRows()}>
-          {(row) => (
+        <For each={visibleMockRows()}>
+          {(row, i) => (
             <div
               data-testid={`row-${row.label}`}
               data-depth={row.depth}
               data-has-children={row.hasChildren}
+              class="outline-row"
+              style={{ display: 'flex', 'align-items': 'flex-start' }}
             >
-              <OutlineRow
-                rowId={row.rowId}
-                rankKey={row.rankKey}
-                content={row.content}
-                depth={row.depth}
-                hasChildren={row.hasChildren}
-                collapsed={isCollapsed(row.rankKey)}
-                matrixId={0}
-                pageIndex={0}
-                callbacks={callbacks}
-                onToggleCollapse={() => toggleCollapse(row.rankKey)}
-              />
+              <div style={{ flex: 1, 'min-width': 0 }}>
+                <DesignOutlineRow
+                  theme={theme()}
+                  row={flatRows()[i()]!}
+                  decoration={decorations()[i()]!}
+                  onToggle={toggleCollapseByHex}
+                  renderContent={() => (
+                    <OutlineRowContent
+                      rowId={row.rowId}
+                      content={row.content}
+                      matrixId={0}
+                      pageIndex={0}
+                      callbacks={callbacks}
+                    />
+                  )}
+                />
+              </div>
             </div>
           )}
         </For>

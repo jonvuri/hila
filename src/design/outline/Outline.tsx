@@ -47,6 +47,7 @@ export const OutlineRow = (props: OutlineRowProps) => {
           row={props.row}
           decoration={props.decoration}
           onToggle={props.onToggle}
+          onZoomIn={props.onZoomIn}
           renderContent={renderContent}
         />
       </Match>
@@ -55,6 +56,7 @@ export const OutlineRow = (props: OutlineRowProps) => {
           row={props.row}
           decoration={props.decoration}
           onToggle={props.onToggle}
+          onZoomIn={props.onZoomIn}
           renderContent={renderContent}
         />
       </Match>
@@ -63,6 +65,7 @@ export const OutlineRow = (props: OutlineRowProps) => {
           row={props.row}
           decoration={props.decoration}
           onToggle={props.onToggle}
+          onZoomIn={props.onZoomIn}
           renderContent={renderContent}
         />
       </Match>
@@ -71,6 +74,7 @@ export const OutlineRow = (props: OutlineRowProps) => {
           row={props.row}
           decoration={props.decoration}
           onToggle={props.onToggle}
+          onZoomIn={props.onZoomIn}
           renderContent={renderContent}
         />
       </Match>
@@ -79,6 +83,7 @@ export const OutlineRow = (props: OutlineRowProps) => {
           row={props.row}
           decoration={props.decoration}
           onToggle={props.onToggle}
+          onZoomIn={props.onZoomIn}
           renderContent={renderContent}
         />
       </Match>
@@ -132,6 +137,7 @@ type InternalRowProps = {
   row: FlatRow
   decoration: RowDecoration
   onToggle?: (id: string) => void
+  onZoomIn?: (id: string) => void
   renderContent: (row: FlatRow) => JSX.Element
 }
 
@@ -160,74 +166,121 @@ const Guides = (props: { continues: boolean[]; depth: number }) => (
 
 /* ---- Workflowy Clone ---- */
 
-const WorkflowyCloneRowInner = (props: InternalRowProps) => (
-  <div class={styles.row}>
-    <Guides continues={props.decoration.continues} depth={props.row.depth} />
-    <Show when={props.row.hasChildren} fallback={<div class={styles.caretSpacer} />}>
-      <button class={styles.caret} onClick={() => props.onToggle?.(props.row.id)}>
-        {props.row.expanded ? '▾' : '▸'}
-      </button>
-    </Show>
-    <div class={styles.bulletDot} />
-    <div class={styles.content}>{props.renderContent(props.row)}</div>
-  </div>
-)
+const WorkflowyCloneRowInner = (props: InternalRowProps) => {
+  // eslint-disable-next-line solid/reactivity -- stable content slot; must not recreate on row updates
+  const content = props.renderContent(props.row)
+  return (
+    <div class={styles.row}>
+      <Guides continues={props.decoration.continues} depth={props.row.depth} />
+      <Show when={props.row.hasChildren} fallback={<div class={styles.caretSpacer} />}>
+        <button
+          class={styles.caret}
+          data-testid="outline-bullet"
+          role="button"
+          aria-label={props.row.expanded ? 'Collapse' : 'Expand'}
+          onClick={() => props.onToggle?.(props.row.id)}
+          onDblClick={() => props.onZoomIn?.(props.row.id)}
+        >
+          {props.row.expanded ? '▼' : '▶'}
+        </button>
+      </Show>
+      <div
+        class={styles.bulletDot}
+        data-testid={props.row.hasChildren ? undefined : 'outline-bullet'}
+        aria-label={props.row.hasChildren ? undefined : 'Bullet'}
+        onDblClick={() => props.onZoomIn?.(props.row.id)}
+      />
+      <div class={styles.content}>{content}</div>
+    </div>
+  )
+}
 
 /* ---- Workflowy Geometric ---- */
 
-const WorkflowyGeometricRowInner = (props: InternalRowProps) => (
-  <div class={styles.row}>
-    <Guides continues={props.decoration.continues} depth={props.row.depth} />
-    <Show
-      when={props.row.hasChildren && !props.row.expanded}
-      fallback={
+const WorkflowyGeometricRowInner = (props: InternalRowProps) => {
+  // eslint-disable-next-line solid/reactivity -- stable content slot; must not recreate on row updates
+  const content = props.renderContent(props.row)
+  return (
+    <div class={styles.row}>
+      <Guides continues={props.decoration.continues} depth={props.row.depth} />
+      <Show
+        when={props.row.hasChildren && !props.row.expanded}
+        fallback={
+          <button
+            class={`${styles.bulletDash} ${props.row.hasChildren ? styles.bulletDashParent : ''}`}
+            data-testid="outline-bullet"
+            aria-label={props.row.hasChildren ? 'Collapse' : 'Bullet'}
+            role={props.row.hasChildren ? 'button' : undefined}
+            onClick={props.row.hasChildren ? () => props.onToggle?.(props.row.id) : undefined}
+            onDblClick={
+              props.row.hasChildren ? () => props.onZoomIn?.(props.row.id) : undefined
+            }
+          />
+        }
+      >
         <button
-          class={`${styles.bulletDash} ${props.row.hasChildren ? styles.bulletDashParent : ''}`}
-          onClick={props.row.hasChildren ? () => props.onToggle?.(props.row.id) : undefined}
+          class={styles.plusMark}
+          data-testid="outline-bullet"
+          role="button"
+          aria-label="Expand"
+          onClick={() => props.onToggle?.(props.row.id)}
+          onDblClick={() => props.onZoomIn?.(props.row.id)}
         />
-      }
-    >
-      <button class={styles.plusMark} onClick={() => props.onToggle?.(props.row.id)} />
-    </Show>
-    <div class={styles.content}>{props.renderContent(props.row)}</div>
-  </div>
-)
+      </Show>
+      <div class={styles.content}>{content}</div>
+    </div>
+  )
+}
 
 /* ---- Vector Field ---- */
 
-const VectorFieldRowInner = (props: InternalRowProps) => (
-  <div class={styles.row}>
-    <div
-      class={`${styles.vectorGutter} ${props.row.hasChildren ? styles.vectorGutterClickable : ''}`}
-      onClick={() => {
-        if (props.row.hasChildren) props.onToggle?.(props.row.id)
-      }}
-    >
-      <For each={props.decoration.vectorSlots ?? []}>
-        {(slot) => (
-          <div class={styles.vectorSlot}>
-            <svg width="14" height="14" viewBox="0 0 14 14">
-              <line
-                x1={slot.short ? 4 : 2}
-                y1="7"
-                x2={slot.short ? 10 : 12}
-                y2="7"
-                transform={slot.short ? undefined : `rotate(${slot.angle}, 7, 7)`}
-                style={{
-                  stroke: 'var(--c-fg-2)',
-                  'stroke-width': `${slot.strokeWidth}`,
-                  'stroke-linecap': 'round',
-                  opacity: `${slot.opacity}`,
-                }}
-              />
-            </svg>
-          </div>
-        )}
-      </For>
+const VectorFieldRowInner = (props: InternalRowProps) => {
+  // eslint-disable-next-line solid/reactivity -- stable content slot; must not recreate on row updates
+  const content = props.renderContent(props.row)
+  return (
+    <div class={styles.row}>
+      <div
+        class={`${styles.vectorGutter} ${props.row.hasChildren ? styles.vectorGutterClickable : ''}`}
+        data-testid="outline-bullet"
+        role={props.row.hasChildren ? 'button' : undefined}
+        aria-label={
+          props.row.hasChildren ?
+            props.row.expanded ?
+              'Collapse'
+            : 'Expand'
+          : 'Bullet'
+        }
+        onClick={() => {
+          if (props.row.hasChildren) props.onToggle?.(props.row.id)
+        }}
+        onDblClick={() => props.onZoomIn?.(props.row.id)}
+      >
+        <For each={props.decoration.vectorSlots ?? []}>
+          {(slot) => (
+            <div class={styles.vectorSlot}>
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                <line
+                  x1={slot.short ? 4 : 2}
+                  y1="7"
+                  x2={slot.short ? 10 : 12}
+                  y2="7"
+                  transform={slot.short ? undefined : `rotate(${slot.angle}, 7, 7)`}
+                  style={{
+                    stroke: 'var(--c-fg-2)',
+                    'stroke-width': `${slot.strokeWidth}`,
+                    'stroke-linecap': 'round',
+                    opacity: `${slot.opacity}`,
+                  }}
+                />
+              </svg>
+            </div>
+          )}
+        </For>
+      </div>
+      <div class={styles.content}>{content}</div>
     </div>
-    <div class={styles.content}>{props.renderContent(props.row)}</div>
-  </div>
-)
+  )
+}
 
 /* ---- Corner Notches ---- */
 
@@ -236,6 +289,8 @@ const notchColor = (depth: number): string => NOTCH_COLORS[Math.min(depth, 2)]!
 
 const CornerNotchesRowInner = (props: InternalRowProps) => {
   const color = () => notchColor(props.row.depth)
+  // eslint-disable-next-line solid/reactivity -- stable content slot; must not recreate on row updates
+  const content = props.renderContent(props.row)
   return (
     <div class={styles.row}>
       <svg
@@ -254,26 +309,58 @@ const CornerNotchesRowInner = (props: InternalRowProps) => {
         </svg>
       </Show>
       <div class={styles.indent} style={{ width: `${props.row.depth * 20}px` }} />
-      <Show when={props.row.hasChildren} fallback={<div class={styles.caretSpacer} />}>
-        <button class={styles.caret} onClick={() => props.onToggle?.(props.row.id)}>
-          {props.row.expanded ? '▾' : '▸'}
+      <Show
+        when={props.row.hasChildren}
+        fallback={
+          <div class={styles.caretSpacer} data-testid="outline-bullet" aria-label="Bullet" />
+        }
+      >
+        <button
+          class={styles.caret}
+          data-testid="outline-bullet"
+          role="button"
+          aria-label={props.row.expanded ? 'Collapse' : 'Expand'}
+          onClick={() => props.onToggle?.(props.row.id)}
+          onDblClick={() => props.onZoomIn?.(props.row.id)}
+        >
+          {props.row.expanded ? '▼' : '▶'}
         </button>
       </Show>
-      <div class={styles.content}>{props.renderContent(props.row)}</div>
+      <div class={styles.content}>{content}</div>
     </div>
   )
 }
 
 /* ---- Whitespace Only ---- */
 
-const WhitespaceRowInner = (props: InternalRowProps) => (
-  <div class={styles.row}>
-    <div class={styles.indent} style={{ width: `${props.row.depth * 20}px` }} />
-    <Show when={props.row.hasChildren} fallback={<div class={styles.caretFaintSpacer} />}>
-      <button class={styles.caretFaint} onClick={() => props.onToggle?.(props.row.id)}>
-        {props.row.expanded ? '▾' : '▸'}
-      </button>
-    </Show>
-    <div class={styles.content}>{props.renderContent(props.row)}</div>
-  </div>
-)
+const WhitespaceRowInner = (props: InternalRowProps) => {
+  // eslint-disable-next-line solid/reactivity -- stable content slot; must not recreate on row updates
+  const content = props.renderContent(props.row)
+  return (
+    <div class={styles.row}>
+      <div class={styles.indent} style={{ width: `${props.row.depth * 20}px` }} />
+      <Show
+        when={props.row.hasChildren}
+        fallback={
+          <div
+            class={styles.caretFaintSpacer}
+            data-testid="outline-bullet"
+            aria-label="Bullet"
+          />
+        }
+      >
+        <button
+          class={styles.caretFaint}
+          data-testid="outline-bullet"
+          role="button"
+          aria-label={props.row.expanded ? 'Collapse' : 'Expand'}
+          onClick={() => props.onToggle?.(props.row.id)}
+          onDblClick={() => props.onZoomIn?.(props.row.id)}
+        >
+          {props.row.expanded ? '▼' : '▶'}
+        </button>
+      </Show>
+      <div class={styles.content}>{content}</div>
+    </div>
+  )
+}

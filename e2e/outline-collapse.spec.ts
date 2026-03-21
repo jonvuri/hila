@@ -164,8 +164,8 @@ test.describe('Collapse / expand', () => {
 
     let leafIdx = -1
     for (let i = 0; i < count; i++) {
-      const text = (await bullets.nth(i).textContent())?.trim()
-      if (text === '•') {
+      const label = await bullets.nth(i).getAttribute('aria-label')
+      if (label === 'Bullet') {
         leafIdx = i
         break
       }
@@ -179,7 +179,7 @@ test.describe('Collapse / expand', () => {
 
     const afterCount = await page.locator('.outline-row').count()
     expect(afterCount).toBe(initialCount)
-    await expect(bullets.nth(leafIdx)).toHaveText('•', { timeout: 3000 })
+    await expect(bullets.nth(leafIdx)).toHaveAttribute('aria-label', 'Bullet', { timeout: 3000 })
   })
 
   test('arrow-down from collapsed parent skips hidden children', async ({ page }) => {

@@ -148,7 +148,7 @@ test.describe('Cross-face data sharing', () => {
     await page.keyboard.press('Tab')
 
     // After indent, the first row should have a collapse indicator (has children)
-    await expect(page.locator('.outline-row-bullet').first()).toContainText('▼', {
+    await expect(page.locator('[data-testid="outline-bullet"]').first()).toContainText('▼', {
       timeout: 5000,
     })
   })

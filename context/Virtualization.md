@@ -166,15 +166,16 @@ Refactored `src/design/outline/` to the pagination-ready interface:
 - **Vector field angle ceiling**: Updated `distToAngle` to reach exactly 90° at distance 100 via a squared-log blend, aligned with the buffer window floor. Subtrees beyond loaded data appear as vertical guide lines.
 - **`Outline` convenience wrapper**: Retained for Storybook and non-virtualized use. Accepts `OutlineNode[]` tree data, manages collapse state, calls `computeDecorations`, renders `OutlineRow` instances. Not used in the real app.
 
-### Step 2 — Integrate with existing OutlineFace
+### Step 2 — Integrate with existing OutlineFace ✅
 
-Connect the design system row component to the existing `src/outline/OutlineFace.tsx`:
+Connected the design system row component to `src/outline/OutlineFace.tsx`:
 
-- **Adapt `OutlineRowData` to `FlatRow`**: Map the SQL query result fields (`row_id`, `key`, `depth`, `has_children`, `content`) to the `FlatRow` interface (`id`, `depth`, `hasChildren`, `expanded`, `content`).
-- **Replace `OutlineRow` rendering**: The current `OutlineRow` (ProseMirror-based) renders indent + drag handle + bullet + editor. The design `OutlineRow` handles indent/bullet/guides per theme. The ProseMirror editor plugs in via `renderContent`. Drag handles, focus management, and keyboard callbacks need to be composed alongside or within the design row.
-- **Apply `outlineThemeClass`** on the virtualizer's window container so theme-scoped CSS rules reach the row elements.
-- **Compute decorations from `visibleRows()`**: Call `computeDecorations(theme, visibleRows())` once per reactive update. Index into the decoration array when rendering each row.
-- **Theme selection**: Wire up a theme setting (user preference or hardcoded default) that feeds into `OutlineRow` and `computeDecorations`.
+- **Adapted `OutlineRowData` to `FlatRow`**: `flatRows()` memo maps visible rows to `FlatRow` using hex rank key as `id`, `has_children === 1` → `hasChildren`, and `!collapsedKeys.has(hexKey)` → `expanded`. `data-depth` attribute on each row wrapper for test accessibility.
+- **Replaced `OutlineRow` rendering**: Extracted ProseMirror editor into `OutlineRowContent` (editor-only component). Design `OutlineRow` handles indent/bullet/guides per theme. ProseMirror plugs in via `renderContent` (called once at component creation, not reactively, to avoid editor destruction on row updates). Drag handle composed as a sibling to the left of the design row.
+- **Applied `outlineThemeClass`** on a wrapper div around the `ScrollVirtualizer`. Design tokens CSS imported in `src/index.tsx`; `data-theme="dark"` on `<body>`.
+- **Computed decorations from `visibleRows()`**: `decorations()` memo calls `computeDecorations(theme(), flatRows())` once per reactive update. Indexed per row in the `<For>` render loop.
+- **Theme selection**: Signal with hardcoded default `'workflowy-clone'`. Ready for user preference wiring.
+- **Design system extensions**: Added `onZoomIn` callback prop (wired to double-click on caret/bullet). Added `data-testid="outline-bullet"`, `role`, and `aria-label` attributes to caret/bullet elements for E2E test compatibility.
 
 ### Step 3 — Multi-window virtualizer
 

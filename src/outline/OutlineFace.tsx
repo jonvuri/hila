@@ -8,12 +8,18 @@ import MutationLogOverlay from '../debug/MutationLogOverlay'
 import PageBoundaryOverlay from '../debug/PageBoundaryOverlay'
 import { insertRow, deleteRow, reparentRow } from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
+import {
+  OutlineRow as DesignOutlineRow,
+  outlineThemeClass,
+  computeDecorations,
+} from '../design/outline/Outline'
+import type { FlatRow, OutlineTheme } from '../design/outline/types'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import type { OutlineCallbacks } from './keymap'
 import { buildOutlineQuery, buildBreadcrumbQuery } from './outline-plugin'
-import { OutlineRow, type OutlineRowHandle } from './OutlineRow'
+import { OutlineRowContent, type OutlineRowHandle } from './OutlineRow'
 
 const DRAG_THRESHOLD_PX = 5
 
@@ -137,6 +143,10 @@ type OutlineFaceProps = {
 const OutlineFace = (props: OutlineFaceProps) => {
   const contentCol = () => props.contentColumn ?? 'content'
   const isPlainText = () => props.contentIsPlainText ?? false
+
+  // Theme selection (hardcoded default; will be wired to user preference)
+  const [theme] = createSignal<OutlineTheme>('workflowy-clone')
+
   // Focus view state: rank key of the subtree root, or null for full outline
   const [focusRoot, setFocusRoot] = createSignal<Uint8Array | null>(null)
 
@@ -204,7 +214,14 @@ const OutlineFace = (props: OutlineFaceProps) => {
     })
   }
 
-  const isCollapsed = (key: Uint8Array): boolean => collapsedKeys().has(keyToHex(key))
+  const toggleCollapseByHex = (hexKey: string) => {
+    setCollapsedKeys((prev) => {
+      const next = new Set(prev)
+      if (next.has(hexKey)) next.delete(hexKey)
+      else next.add(hexKey)
+      return next
+    })
+  }
 
   const visibleRows = createMemo((): OutlineRowData[] => {
     const collapsed = collapsedKeys()
@@ -229,6 +246,23 @@ const OutlineFace = (props: OutlineFaceProps) => {
 
     return filtered
   })
+
+  // Map visible rows to the design system's FlatRow interface
+  const flatRows = createMemo((): FlatRow[] => {
+    const vRows = visibleRows()
+    const offset = focusDepthOffset()
+    const collapsed = collapsedKeys()
+    return vRows.map((row) => ({
+      id: keyToHex(row.key),
+      content: row.content ?? '',
+      depth: row.depth - offset,
+      hasChildren: row.has_children === 1,
+      expanded: row.has_children === 1 && !collapsed.has(keyToHex(row.key)),
+    }))
+  })
+
+  // Precompute decorations (guide continuations, isVisualLast, vector slots)
+  const decorations = createMemo(() => computeDecorations(theme(), flatRows()))
 
   // Focus management
   const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
@@ -590,6 +624,15 @@ const OutlineFace = (props: OutlineFaceProps) => {
     },
   })
 
+  // Build a lookup from hex key → row for zoom-in from the design row
+  const hexToRow = createMemo(() => {
+    const map = new Map<string, OutlineRowData>()
+    for (const row of visibleRows()) {
+      map.set(keyToHex(row.key), row)
+    }
+    return map
+  })
+
   const depthOffset = focusDepthOffset
 
   const renderWindow = (windowProps: { windowIndex: number }) => (
@@ -598,30 +641,69 @@ const OutlineFace = (props: OutlineFaceProps) => {
         <PageBoundaryOverlay pageIndex={windowProps.windowIndex} rows={rows} />
       </Show>
       <For each={visibleRows()}>
-        {(row) => {
+        {(row, i) => {
           const rowId = row.row_id
           const callbacks = makeCallbacks(rowId)
           onCleanup(() => unregisterHandle(rowId))
           return (
-            <OutlineRow
-              rowId={row.row_id}
-              rankKey={row.key}
-              content={row.content ?? ''}
-              depth={row.depth - depthOffset()}
-              hasChildren={row.has_children === 1}
-              collapsed={isCollapsed(row.key)}
-              matrixId={props.matrixId}
-              pageIndex={windowProps.windowIndex}
-              callbacks={callbacks}
-              contentColumn={contentCol()}
-              contentIsPlainText={isPlainText()}
-              onHandle={(handle) => registerHandle(rowId, handle)}
-              onEditorFocus={() => setFocusedRowId(rowId)}
-              onToggleCollapse={() => toggleCollapse(row.key)}
-              onZoomIn={() => setFocusRoot(new Uint8Array(row.key))}
-              onDragHandlePointerDown={(e) => startDrag(rowId, e)}
-              isDragging={dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated}
-            />
+            <div
+              class="outline-row"
+              data-row-id={rowId}
+              data-depth={row.depth - depthOffset()}
+              style={{
+                display: 'flex',
+                'align-items': 'flex-start',
+                opacity:
+                  dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated ? 0.25 : 1,
+                transition: 'opacity 0.15s',
+              }}
+            >
+              <div
+                class="outline-row-handle"
+                style={{
+                  width: '20px',
+                  'flex-shrink': 0,
+                  cursor: 'grab',
+                  display: 'flex',
+                  'align-items': 'center',
+                  'justify-content': 'center',
+                  'user-select': 'none',
+                  opacity: 0.4,
+                  'padding-top': '2px',
+                }}
+                onPointerDown={(e: PointerEvent) => {
+                  e.preventDefault()
+                  startDrag(rowId, e)
+                }}
+              >
+                ⠿
+              </div>
+              <div style={{ flex: 1, 'min-width': 0 }}>
+                <DesignOutlineRow
+                  theme={theme()}
+                  row={flatRows()[i()]!}
+                  decoration={decorations()[i()]!}
+                  onToggle={toggleCollapseByHex}
+                  onZoomIn={(hexKey) => {
+                    const r = hexToRow().get(hexKey)
+                    if (r) setFocusRoot(new Uint8Array(r.key))
+                  }}
+                  renderContent={() => (
+                    <OutlineRowContent
+                      rowId={rowId}
+                      content={row.content ?? ''}
+                      matrixId={props.matrixId}
+                      pageIndex={windowProps.windowIndex}
+                      callbacks={callbacks}
+                      contentColumn={contentCol()}
+                      contentIsPlainText={isPlainText()}
+                      onHandle={(handle) => registerHandle(rowId, handle)}
+                      onEditorFocus={() => setFocusedRowId(rowId)}
+                    />
+                  )}
+                />
+              </div>
+            </div>
           )
         }}
       </For>
@@ -697,7 +779,9 @@ const OutlineFace = (props: OutlineFaceProps) => {
           {focusRootRow() ? extractText(focusRootRow()!.content, isPlainText()) : ''}
         </div>
       </Show>
-      <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
+      <div class={outlineThemeClass(theme())} style={{ padding: 0, border: 'none' }}>
+        <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
+      </div>
       <Show when={dropTarget()}>
         {(target) => (
           <div

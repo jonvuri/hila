@@ -1,6 +1,7 @@
 /* @refresh reload */
 import { render } from 'solid-js/web'
 
+import './design/tokens.css'
 import './global.css'
 import App from './App'
 

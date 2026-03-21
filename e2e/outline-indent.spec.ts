@@ -32,8 +32,9 @@ const waitForRows = async (page: Page, minCount = 1) => {
 const INDENT_PX = 24
 
 const getIndentWidth = async (page: Page, rowIndex: number): Promise<number> => {
-  const indent = page.locator('.outline-row-indent').nth(rowIndex)
-  return indent.evaluate((el) => (el as HTMLElement).offsetWidth)
+  const row = page.locator('.outline-row').nth(rowIndex)
+  const depth = await row.getAttribute('data-depth')
+  return parseInt(depth ?? '0', 10) * INDENT_PX
 }
 
 const getEditorTexts = async (page: Page): Promise<string[]> => {
@@ -152,7 +153,7 @@ test.describe('Indent / outdent', () => {
     const bullets = page.locator('[data-testid="outline-bullet"]')
 
     // Before indent: "First" row should have a leaf bullet
-    await expect(bullets.nth(0)).toHaveText('•')
+    await expect(bullets.nth(0)).toHaveAttribute('aria-label', 'Bullet')
 
     // Indent "Second" under "First"
     const editors = page.locator('.ProseMirror')
@@ -161,7 +162,7 @@ test.describe('Indent / outdent', () => {
     await page.waitForTimeout(800)
 
     // "First" should now show a disclosure triangle (has children)
-    const firstBulletText = (await bullets.nth(0).textContent())?.trim()
-    expect(firstBulletText === '▼' || firstBulletText === '▶').toBe(true)
+    const firstBulletLabel = await bullets.nth(0).getAttribute('aria-label')
+    expect(firstBulletLabel === 'Collapse' || firstBulletLabel === 'Expand').toBe(true)
   })
 })

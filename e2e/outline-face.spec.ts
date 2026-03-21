@@ -110,17 +110,14 @@ test.describe('Outline query: depth and hasChildren', () => {
     await addSampleRows(page)
     await waitForRows(page, 2)
 
-    // Find all indent spacers -- at least one should have non-zero computed width
-    const indentSpacers = page.locator('.outline-row-indent')
-    const count = await indentSpacers.count()
+    const rows = page.locator('.outline-row')
+    const count = await rows.count()
     expect(count).toBeGreaterThan(0)
 
     let foundIndented = false
     for (let i = 0; i < count; i++) {
-      const width = await indentSpacers.nth(i).evaluate((el) => {
-        return (el as HTMLElement).offsetWidth
-      })
-      if (width > 0) {
+      const depth = await rows.nth(i).getAttribute('data-depth')
+      if (parseInt(depth ?? '0', 10) > 0) {
         foundIndented = true
         break
       }
@@ -134,17 +131,19 @@ test.describe('Outline query: depth and hasChildren', () => {
     const count = await bullets.count()
     expect(count).toBeGreaterThan(0)
 
-    const texts = await bullets.allTextContents()
-    const bulletChars = new Set(texts.map((t) => t.trim()))
-
-    // Must have at least a leaf bullet (•)
-    expect(bulletChars.has('•')).toBe(true)
-
-    // If any parent rows exist, they show ▼ (expanded) or ▶ (collapsed)
-    const hasParentBullet = bulletChars.has('▼') || bulletChars.has('▶')
-    if (texts.some((t) => t.trim() === '▼' || t.trim() === '▶')) {
-      expect(hasParentBullet).toBe(true)
+    let hasLeaf = false
+    let hasParent = false
+    for (let i = 0; i < count; i++) {
+      const label = await bullets.nth(i).getAttribute('aria-label')
+      if (label === 'Bullet') hasLeaf = true
+      if (label === 'Collapse' || label === 'Expand') hasParent = true
     }
+
+    // Must have at least a leaf bullet
+    expect(hasLeaf).toBe(true)
+
+    // If any parent rows exist, they show a collapse/expand control
+    // (hasParent may be false if all rows are leaves — that's fine)
   })
 
   test('parent row bullet has role=button, leaf bullet has no button role', async ({ page }) => {
@@ -153,27 +152,25 @@ test.describe('Outline query: depth and hasChildren', () => {
 
     for (let i = 0; i < count; i++) {
       const bullet = bullets.nth(i)
-      const text = (await bullet.textContent())?.trim() ?? ''
+      const label = await bullet.getAttribute('aria-label')
       const role = await bullet.getAttribute('role')
 
-      if (text === '▼' || text === '▶') {
+      if (label === 'Collapse' || label === 'Expand') {
         expect(role).toBe('button')
-      } else if (text === '•') {
+      } else if (label === 'Bullet') {
         expect(role).toBeNull()
       }
     }
   })
 
-  test('depth values produce correct pixel indentation increments', async ({ page }) => {
-    // The INDENT_PX constant is 24 -- verify actual DOM widths match multiples of 24
-    const indentSpacers = page.locator('.outline-row-indent')
-    const count = await indentSpacers.count()
+  test('depth values are non-negative integers', async ({ page }) => {
+    const rows = page.locator('.outline-row')
+    const count = await rows.count()
 
     for (let i = 0; i < count; i++) {
-      const width = await indentSpacers.nth(i).evaluate((el) => (el as HTMLElement).offsetWidth)
-      // Width must be a non-negative multiple of 24 (INDENT_PX = 24)
-      expect(width % 24).toBe(0)
-      expect(width).toBeGreaterThanOrEqual(0)
+      const depth = parseInt((await rows.nth(i).getAttribute('data-depth')) ?? '-1', 10)
+      expect(depth).toBeGreaterThanOrEqual(0)
+      expect(Number.isInteger(depth)).toBe(true)
     }
   })
 })
