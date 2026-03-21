@@ -1,0 +1,58 @@
+/* ── Base ── */
+
+.table {
+  width: 100%;
+  font-size: var(--text-base);
+  border-collapse: collapse;
+  color: var(--c-fg);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--sp-8) var(--sp-16);
+}
+
+.table th {
+  color: var(--c-fg-max);
+}
+
+/* ── Theme A — Thin header line ── */
+
+.themeThinLine th {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--c-fg);
+}
+
+.themeThinLine td {
+  border-bottom: 1px solid var(--c-border-2);
+}
+
+/* ── Theme B — Corner notch container ── */
+
+.themeCornerNotch th {
+  font-weight: 600;
+}
+
+.themeCornerNotch td {
+  border-bottom: 1px solid var(--c-border-2);
+}
+
+/* ── Theme C — Cell dots ── */
+
+.themeCellDots th,
+.themeCellDots td {
+  position: relative;
+}
+
+.cellDot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  top: 6px;
+  left: 4px;
+  border-radius: 0;
+}

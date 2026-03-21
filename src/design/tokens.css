@@ -28,6 +28,7 @@
   --c-bg: #0e0e0e;
   --c-surface: #1a1a1a;
   --c-elevated: #222;
+  --c-fg-max: #fff;
   --c-fg: #e0e0e0;
   --c-fg-2: #999;
   --c-fg-3: #666;
@@ -49,6 +50,7 @@
   --c-bg: #fff;
   --c-surface: #f5f5f5;
   --c-elevated: #fff;
+  --c-fg-max: #000;
   --c-fg: #1a1a1a;
   --c-fg-2: #555;
   --c-fg-3: #999;

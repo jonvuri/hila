@@ -72,24 +72,22 @@ The design exploration (`design-demo.html` section 6) defines three visual treat
 
 ### Data contract
 
-The table face receives:
-- `columns: Array<{ key: string; label: string }>` — column definitions
-- `rows: Array<Record<string, string>>` — row data
+Each table row is independently renderable given its props, enabling windowed rendering via the virtualizer. The data contract mirrors the outline's `FlatRow` / `RowDecoration` pattern:
+
+- `columns: Column[]` where `Column = { key: string; label: string }` — column definitions, stable across windows
+- `rows: FlatTableRow[]` where `FlatTableRow = { id: string; cells: Record<string, string> }` — row data keyed by column key, with `id` for stable keying across virtualizer window boundaries
+- `computeTableDecorations(theme, columns, rows, startIndex?)` returns a `RowDecoration[]` with per-cell decoration data. The `startIndex` parameter supports windowed rendering — row index parity (for cell-dot color alternation) must reflect the row's global position, not its position within the window.
+- `TableRowProps` bundles everything needed to render a single row in isolation: `theme`, `columns`, `row`, `decoration`, and an optional `renderCell` callback.
+
+The theme renderer receives a flat array of these rows and renders them with the appropriate visual treatment. The header row (`TableHeaderRow`) is separate and always visible (not virtualized).
 
 ### CSS architecture
 
-Similar to outline themes: separate CSS modules per theme, shared token references.
-
-- `TableThemeA.module.css`, `TableThemeB.module.css`, etc.
-- Theme B reuses the `CornerNotchBox` primitive from the design system.
+All themes share a single CSS module (`Table.module.css`) with a base `.table` class and theme-scoped descendant rules (`.themeThinLine`, `.themeCornerNotch`, `.themeCellDots`). The active theme class is applied via `tableThemeClass(theme)`, which returns the combined class string for the `<table>` element. Theme B reuses the `CornerNotchBox` primitive from the design system as a wrapper component.
 
 ### Implementation phases
 
-**Phase 1: Theme A.** Simplest treatment, establishes the table theme pattern.
-
-**Phase 2: Theme B.** Wraps the table in a `CornerNotchBox`, demonstrating composition with design system primitives.
-
-**Phase 3: Theme C.** Cell-dot decoration via `::before` pseudo-elements.
+**Phase 1: All three themes.** The table themes are structurally simple (no SVGs, no cross-row dependencies), so all three are implemented together. Theme A establishes the base, Theme B composes with `CornerNotchBox`, Theme C adds per-cell dot decorations.
 
 ## Shared infrastructure
 
