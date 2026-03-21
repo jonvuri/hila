@@ -23,6 +23,9 @@ import { OutlineRowContent, type OutlineRowHandle } from './OutlineRow'
 
 const DRAG_THRESHOLD_PX = 5
 
+const ROWS_PER_WINDOW = 100
+const ESTIMATED_ROW_HEIGHT_PX = 28
+
 type OutlineRowData = {
   row_id: number
   key: Uint8Array
@@ -262,7 +265,14 @@ const OutlineFace = (props: OutlineFaceProps) => {
   })
 
   // Precompute decorations (guide continuations, isVisualLast, vector slots)
+  // Computed on the full flatRows() array so buffer windows provide forward
+  // context for visible windows' decoration computation.
   const decorations = createMemo(() => computeDecorations(theme(), flatRows()))
+
+  const totalWindows = createMemo(() => {
+    const len = visibleRows().length
+    return len === 0 ? 0 : Math.ceil(len / ROWS_PER_WINDOW)
+  })
 
   // Focus management
   const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
@@ -635,80 +645,91 @@ const OutlineFace = (props: OutlineFaceProps) => {
 
   const depthOffset = focusDepthOffset
 
-  const renderWindow = (windowProps: { windowIndex: number }) => (
-    <>
-      <Show when={debugFlags.pageBoundary()}>
-        <PageBoundaryOverlay pageIndex={windowProps.windowIndex} rows={rows} />
-      </Show>
-      <For each={visibleRows()}>
-        {(row, i) => {
-          const rowId = row.row_id
-          const callbacks = makeCallbacks(rowId)
-          onCleanup(() => unregisterHandle(rowId))
-          return (
-            <div
-              class="outline-row"
-              data-row-id={rowId}
-              data-depth={row.depth - depthOffset()}
-              style={{
-                display: 'flex',
-                'align-items': 'flex-start',
-                opacity:
-                  dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated ? 0.25 : 1,
-                transition: 'opacity 0.15s',
-              }}
-            >
+  const renderWindow = (windowProps: { windowIndex: number }) => {
+    // eslint-disable-next-line solid/reactivity -- windowIndex is a static number from WindowComponent, not a reactive prop
+    const wIdx = windowProps.windowIndex
+    const startIdx = wIdx * ROWS_PER_WINDOW
+
+    const windowRows = createMemo(() =>
+      visibleRows().slice(startIdx, startIdx + ROWS_PER_WINDOW),
+    )
+
+    return (
+      <>
+        <Show when={debugFlags.pageBoundary()}>
+          <PageBoundaryOverlay pageIndex={wIdx} rows={windowRows()} />
+        </Show>
+        <For each={windowRows()}>
+          {(row, localI) => {
+            const globalIdx = () => startIdx + localI()
+            const rowId = row.row_id
+            const callbacks = makeCallbacks(rowId)
+            onCleanup(() => unregisterHandle(rowId))
+            return (
               <div
-                class="outline-row-handle"
+                class="outline-row"
+                data-row-id={rowId}
+                data-depth={row.depth - depthOffset()}
                 style={{
-                  width: '20px',
-                  'flex-shrink': 0,
-                  cursor: 'grab',
                   display: 'flex',
-                  'align-items': 'center',
-                  'justify-content': 'center',
-                  'user-select': 'none',
-                  opacity: 0.4,
-                  'padding-top': '2px',
-                }}
-                onPointerDown={(e: PointerEvent) => {
-                  e.preventDefault()
-                  startDrag(rowId, e)
+                  'align-items': 'flex-start',
+                  opacity:
+                    dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated ? 0.25 : 1,
+                  transition: 'opacity 0.15s',
                 }}
               >
-                ⠿
-              </div>
-              <div style={{ flex: 1, 'min-width': 0 }}>
-                <DesignOutlineRow
-                  theme={theme()}
-                  row={flatRows()[i()]!}
-                  decoration={decorations()[i()]!}
-                  onToggle={toggleCollapseByHex}
-                  onZoomIn={(hexKey) => {
-                    const r = hexToRow().get(hexKey)
-                    if (r) setFocusRoot(new Uint8Array(r.key))
+                <div
+                  class="outline-row-handle"
+                  style={{
+                    width: '20px',
+                    'flex-shrink': 0,
+                    cursor: 'grab',
+                    display: 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'center',
+                    'user-select': 'none',
+                    opacity: 0.4,
+                    'padding-top': '2px',
                   }}
-                  renderContent={() => (
-                    <OutlineRowContent
-                      rowId={rowId}
-                      content={row.content ?? ''}
-                      matrixId={props.matrixId}
-                      pageIndex={windowProps.windowIndex}
-                      callbacks={callbacks}
-                      contentColumn={contentCol()}
-                      contentIsPlainText={isPlainText()}
-                      onHandle={(handle) => registerHandle(rowId, handle)}
-                      onEditorFocus={() => setFocusedRowId(rowId)}
-                    />
-                  )}
-                />
+                  onPointerDown={(e: PointerEvent) => {
+                    e.preventDefault()
+                    startDrag(rowId, e)
+                  }}
+                >
+                  ⠿
+                </div>
+                <div style={{ flex: 1, 'min-width': 0 }}>
+                  <DesignOutlineRow
+                    theme={theme()}
+                    row={flatRows()[globalIdx()]!}
+                    decoration={decorations()[globalIdx()]!}
+                    onToggle={toggleCollapseByHex}
+                    onZoomIn={(hexKey) => {
+                      const r = hexToRow().get(hexKey)
+                      if (r) setFocusRoot(new Uint8Array(r.key))
+                    }}
+                    renderContent={() => (
+                      <OutlineRowContent
+                        rowId={rowId}
+                        content={row.content ?? ''}
+                        matrixId={props.matrixId}
+                        pageIndex={wIdx}
+                        callbacks={callbacks}
+                        contentColumn={contentCol()}
+                        contentIsPlainText={isPlainText()}
+                        onHandle={(handle) => registerHandle(rowId, handle)}
+                        onEditorFocus={() => setFocusedRowId(rowId)}
+                      />
+                    )}
+                  />
+                </div>
               </div>
-            </div>
-          )
-        }}
-      </For>
-    </>
-  )
+            )
+          }}
+        </For>
+      </>
+    )
+  }
 
   return (
     <div class="outline-face">
@@ -780,7 +801,11 @@ const OutlineFace = (props: OutlineFaceProps) => {
         </div>
       </Show>
       <div class={outlineThemeClass(theme())} style={{ padding: 0, border: 'none' }}>
-        <ScrollVirtualizer renderWindow={renderWindow} totalWindows={1} minWindowHeight={100} />
+        <ScrollVirtualizer
+          renderWindow={renderWindow}
+          totalWindows={totalWindows()}
+          minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
+        />
       </div>
       <Show when={dropTarget()}>
         {(target) => (

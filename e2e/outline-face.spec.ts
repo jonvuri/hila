@@ -54,40 +54,36 @@ const waitForRows = async (page: Page, minCount = 1) => {
 }
 
 // ---------------------------------------------------------------------------
-// Virtualizer: totalWindows capping
+// Virtualizer: multi-window rendering
 // ---------------------------------------------------------------------------
 
-test.describe('Virtualizer totalWindows capping', () => {
+test.describe('Virtualizer windowing', () => {
   test('after reset: exactly one window exists with the welcome row', async ({ page }) => {
     await resetDB(page)
 
-    // Wait for the virtualizer to mount (outline is always visible)
     await expect(page.locator('[data-window-index]')).toBeVisible({ timeout: 5000 })
 
-    // With totalWindows=1, exactly one window should exist
+    // 1 row < ROWS_PER_WINDOW (100) → 1 window
     await expect(page.locator('[data-window-index]')).toHaveCount(1)
 
-    // After reset, seedWelcomeRow creates a single "Welcome to Hila" row
     await expect(page.locator('.outline-row')).toHaveCount(1)
   })
 
-  test('populated state: still exactly one window regardless of row count', async ({ page }) => {
+  test('populated state: one window when row count is under ROWS_PER_WINDOW', async ({ page }) => {
     await resetDB(page)
     await addSampleRows(page)
 
-    // Wait for rows to appear (outline is always visible)
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 
-    // totalWindows=1 means the virtualizer must never create more than one window
+    // Sample rows produce well under 100 visible rows → still 1 window
     await expect(page.locator('[data-window-index]')).toHaveCount(1)
   })
 
-  test('window index is exactly 0', async ({ page }) => {
+  test('window 0 always exists when there are rows', async ({ page }) => {
     await resetDB(page)
 
     await expect(page.locator('[data-window-index]')).toBeVisible({ timeout: 5000 })
 
-    // The single window should have index 0
     await expect(page.locator('[data-window-index="0"]')).toHaveCount(1)
   })
 })

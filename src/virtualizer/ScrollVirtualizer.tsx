@@ -3,8 +3,11 @@ import { JSX } from 'solid-js/jsx-runtime'
 
 import styles from './ScrollVirtualizer.module.css'
 
-// Configuration
-const THRESHOLD_DISTANCE = 2 // windows beyond viewport to keep visible
+// Hard invariant: THRESHOLD_DISTANCE >= 2.
+// For latch pair [A, B], the rendered range is [A-T, B+T].
+// T=2 guarantees one buffer window beyond each candidate (adjacent-to-visible)
+// window, so decoration computation always has sufficient forward context.
+const THRESHOLD_DISTANCE = 2
 const CONTAINER_HEIGHT = 500
 const BLOCK_SIZE = 4 + THRESHOLD_DISTANCE * 2 // Size of window blocks for repositioning
 
@@ -23,7 +26,6 @@ type WindowComponentProps = {
   containerRef: HTMLDivElement | undefined
   getPosition: (windowIndex: number) => number
   renderWindow: WindowRendererFunction
-  minWindowHeight: number
 }
 
 // Window component that manages its own observers
@@ -71,7 +73,7 @@ const WindowComponent = (props: WindowComponentProps) => {
       class={styles.window}
       style={{
         transform: `translateY(${props.getPosition(props.windowIndex)}px)`,
-        'min-height': `${props.minWindowHeight}px`,
+        'min-height': '1px',
       }}
     >
       {props.renderWindow({
@@ -114,22 +116,26 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
 
   let containerRef: HTMLDivElement | undefined
 
-  // Getter for window content height that ensures minimum window height
+  // Return the measured height for a window, or minWindowHeight as the
+  // estimate for windows that haven't been rendered/measured yet.
   const getTotalHeight = (windowIndex: number): number => {
-    const height = windowHeights()[windowIndex] ?? 0
-    return Math.max(height, props.minWindowHeight)
+    const height = windowHeights()[windowIndex]
+    return height != null && height > 0 ? height : props.minWindowHeight
   }
 
-  // Calculate virtual positions of all windows (cumulative from virtual origin 0)
+  // Calculate virtual positions of all windows (cumulative from virtual origin 0).
+  // Iterates up to totalWindows so unmeasured windows contribute their estimated
+  // height to the scroll area, preventing an undersized scroll region.
   const virtualPositions = createMemo(() => {
     const heights = windowHeights()
+    const total = props.totalWindows ?? heights.length
+    const count = Math.max(heights.length, total)
     const positions: number[] = []
 
-    if (heights.length === 0) return positions
+    if (count === 0) return positions
 
-    // Calculate cumulative positions from virtual origin
     let cumulativePosition = 0
-    for (let i = 0; i < heights.length; i++) {
+    for (let i = 0; i < count; i++) {
       positions[i] = cumulativePosition
       cumulativePosition += getTotalHeight(i)
     }
@@ -212,27 +218,14 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     }
   })
 
-  // Handle window resize changes
   const handleWindowResize = (windowIndex: number, newHeight: number) => {
-    // Ignore 0-height measurements during initial mount/layout
-    if (newHeight === 0) {
-      return
-    }
-
-    if (newHeight < props.minWindowHeight) {
-      console.error(
-        `RESIZE: Window ${windowIndex} height ${newHeight}px is less than minimum ${props.minWindowHeight}px`,
-      )
-    }
-
-    // Enforce minimum height constraint
-    const constrainedHeight = Math.max(newHeight, props.minWindowHeight)
+    if (newHeight === 0) return
 
     setWindowHeights((prev) => {
       const current = prev[windowIndex]
-      if (current !== constrainedHeight) {
+      if (current !== newHeight) {
         const newHeights = [...prev]
-        newHeights[windowIndex] = constrainedHeight
+        newHeights[windowIndex] = newHeight
         return newHeights
       }
       return prev
@@ -431,7 +424,6 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
                 containerRef={containerRef}
                 getPosition={getPhysicalPosition}
                 renderWindow={props.renderWindow}
-                minWindowHeight={props.minWindowHeight}
               />
             )}
           </For>

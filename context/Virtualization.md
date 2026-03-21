@@ -177,14 +177,28 @@ Connected the design system row component to `src/outline/OutlineFace.tsx`:
 - **Theme selection**: Signal with hardcoded default `'workflowy-clone'`. Ready for user preference wiring.
 - **Design system extensions**: Added `onZoomIn` callback prop (wired to double-click on caret/bullet). Added `data-testid="outline-bullet"`, `role`, and `aria-label` attributes to caret/bullet elements for E2E test compatibility.
 
-### Step 3 — Multi-window virtualizer
+### Step 3 — Multi-window virtualizer ✅
 
-Switch from `totalWindows=1` to proper multi-window rendering:
+Switched from `totalWindows=1` to dynamic multi-window rendering:
 
-- Set `rowsPerWindow` (floor: 100).
-- Compute `totalWindows = ceil(visibleRows.length / rowsPerWindow)`.
-- Each `renderWindow` callback renders its slice of rows.
-- `THRESHOLD_DISTANCE >= 2` remains a hard invariant (buffer window adequacy).
+- **`ROWS_PER_WINDOW = 100`** constant in OutlineFace. Each window renders a slice of `visibleRows()` at indices `[wIdx * 100, (wIdx+1) * 100)`.
+- **`totalWindows = ceil(visibleRows.length / ROWS_PER_WINDOW)`** as a reactive memo. Drives the virtualizer's window count.
+- **`renderWindow`** slices `visibleRows()` per window via a `createMemo`, uses global indices into `flatRows()` and `decorations()` for correct decoration alignment. Decorations are computed on the full row set (all visible rows) so buffer windows provide forward context for rendered windows.
+- **`THRESHOLD_DISTANCE >= 2`** documented as a hard invariant in `ScrollVirtualizer.tsx`. The latch-pair model is unchanged.
+- **ScrollVirtualizer fixes for multi-window correctness**:
+  - `virtualPositions` iterates up to `totalWindows` (not just measured windows) so unmeasured ghost windows contribute their estimated height to the scroll area.
+  - `getTotalHeight` returns measured height when available, `minWindowHeight` only as fallback for unmeasured windows (no longer enforces a floor on measured heights).
+  - `minWindowHeight` decoupled from CSS `min-height` on window DOM elements (now hardcoded `1px`). `minWindowHeight` is purely a height estimation hint, set to `ROWS_PER_WINDOW * 28` for accurate scroll area sizing.
+  - `handleWindowResize` trusts measured heights without clamping.
+- **E2E tests** updated: renamed "Virtualizer totalWindows capping" to "Virtualizer windowing" with updated assertions. All 85 existing tests pass.
+
+**E2E tests needed (for a later testing pass):**
+- Verify multi-window rendering with > 100 rows (window count > 1, correct row distribution per window).
+- Scroll to bottom and verify all rows are accessible (no undersized scroll area).
+- Verify ProseMirror editors survive window transitions (row shifting between windows on insert/delete).
+- Verify keyboard navigation across window boundaries (ArrowDown from last row of window N to first row of window N+1).
+- Verify collapse/expand updates `totalWindows` correctly (large collapse reducing window count).
+- Verify drag-and-drop works across window boundaries.
 
 ### Step 4 — Paginated outline queries
 
