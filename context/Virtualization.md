@@ -200,14 +200,15 @@ Switched from `totalWindows=1` to dynamic multi-window rendering:
 - Verify collapse/expand updates `totalWindows` correctly (large collapse reducing window count).
 - Verify drag-and-drop works across window boundaries.
 
-### Step 4 — Paginated outline queries
+### Step 4 — Paginated outline queries ✅
 
-Implement bounded data loading:
+Implemented bounded data loading infrastructure:
 
-- Keyset pagination via rank key with LIMIT.
-- SQL-side collapse filtering via rank-key-range exclusion.
-- Parallel count query for `totalWindows`.
-- Focus subtree pagination within the rank key range filter.
+- **`buildPaginatedOutlineQuery`** in `outline-plugin.ts`: Supports keyset pagination (`afterKeyHex` + `LIMIT`), SQL-side collapse filtering (rank-key-range exclusion via `collapsedKeyHexes`), and focus subtree filtering. Composed from a shared `buildFilterClauses` helper. The old `buildOutlineQuery` delegates to it for backward compatibility.
+- **`buildOutlineCountQuery`**: Parallel count query with the same filter clauses (focus + collapse), ready for Step 5's page-aware data manager to compute `totalWindows` from the count rather than loaded data.
+- **SQL-side collapse in `OutlineFace.tsx`**: `outlineQuery` memo now passes `collapsedKeyHexes` to the paginated query builder. Client-side collapse filtering removed from `visibleRows()` — the SQL query itself excludes collapsed subtrees via `AND NOT (r.key > X'<key>' AND r.key < X'<nextPrefix>')`. The only client-side filter remaining is focus root row exclusion (shown as title, not a row).
+- **`addSampleRows` fix**: Rewrote to use proper `insertRow`/`insertDataRow` (lexorank `between()`) instead of `generateRankKey`. The old `generateRankKey` created keys with text separators that broke the key-range subtree property required by SQL-side collapse.
+- **Unit tests** (`outline-queries.test.ts`): 22 tests covering paginated query, count query, collapse exclusion, keyset pagination, LIMIT, focus + collapse combinations, and custom content columns — all run against real in-memory SQLite.
 
 ### Step 5 — Page-aware data manager
 

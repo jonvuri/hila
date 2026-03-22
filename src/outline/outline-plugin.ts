@@ -29,13 +29,61 @@ export const buildOutlineQuery = (
   focusRootHex: string | null,
   contentColumn = 'content',
 ): string => {
-  const rangeFilter =
-    focusRootHex !== null ?
-      `AND r.key >= X'${focusRootHex}' AND r.key < X'${focusRootHex.slice(0, -2)}01'`
-    : ''
+  return buildPaginatedOutlineQuery(matrixId, { focusRootHex, contentColumn })
+}
 
+// Increment final 0x00 terminator (as two hex chars) to 0x01 for subtree upper bound.
+const nextPrefixHex = (hex: string): string => hex.slice(0, -2) + '01'
+
+const buildFilterClauses = (opts: {
+  focusRootHex?: string | null
+  collapsedKeyHexes?: string[]
+  afterKeyHex?: string | null
+}): string => {
+  const parts: string[] = []
+
+  if (opts.focusRootHex) {
+    parts.push(
+      `AND r.key >= X'${opts.focusRootHex}' AND r.key < X'${nextPrefixHex(opts.focusRootHex)}'`,
+    )
+  }
+
+  if (opts.collapsedKeyHexes) {
+    for (const hex of opts.collapsedKeyHexes) {
+      parts.push(`AND NOT (r.key > X'${hex}' AND r.key < X'${nextPrefixHex(hex)}')`)
+    }
+  }
+
+  if (opts.afterKeyHex) {
+    parts.push(`AND r.key > X'${opts.afterKeyHex}'`)
+  }
+
+  return parts.join('\n')
+}
+
+export type PaginatedOutlineQueryOpts = {
+  focusRootHex?: string | null
+  collapsedKeyHexes?: string[]
+  afterKeyHex?: string | null
+  limit?: number
+  contentColumn?: string
+}
+
+export const buildPaginatedOutlineQuery = (
+  matrixId: number,
+  opts: PaginatedOutlineQueryOpts = {},
+): string => {
+  const contentColumn = opts.contentColumn ?? 'content'
   const contentExpr =
     contentColumn === 'content' ? 'd.content' : `d."${contentColumn}" as content`
+
+  const filterClauses = buildFilterClauses({
+    focusRootHex: opts.focusRootHex ?? null,
+    collapsedKeyHexes: opts.collapsedKeyHexes,
+    afterKeyHex: opts.afterKeyHex ?? null,
+  })
+
+  const limitClause = opts.limit !== undefined ? `LIMIT ${opts.limit}` : ''
 
   return `
 SELECT r.key, r.row_id, ${contentExpr},
@@ -54,8 +102,31 @@ LEFT JOIN (
   WHERE depth = 1
 ) ch ON r.key = ch.ancestor_key
 WHERE r.matrix_id = ${matrixId}
-${rangeFilter}
+${filterClauses}
 ORDER BY r.key
+${limitClause}
+`
+}
+
+export type OutlineCountQueryOpts = {
+  focusRootHex?: string | null
+  collapsedKeyHexes?: string[]
+}
+
+export const buildOutlineCountQuery = (
+  matrixId: number,
+  opts: OutlineCountQueryOpts = {},
+): string => {
+  const filterClauses = buildFilterClauses({
+    focusRootHex: opts.focusRootHex ?? null,
+    collapsedKeyHexes: opts.collapsedKeyHexes,
+  })
+
+  return `
+SELECT COUNT(*) as count
+FROM rank r
+WHERE r.matrix_id = ${matrixId}
+${filterClauses}
 `
 }
 
@@ -84,7 +155,8 @@ export const outlinePlugin: PluginDefinition = {
     { type: 'closure', matrixKey: 'root' },
   ],
   namedQueries: {
-    outlinePage: 'buildOutlineQuery(matrixId, focusRootHex)',
+    outlinePage: 'buildPaginatedOutlineQuery(matrixId, opts)',
+    outlineCount: 'buildOutlineCountQuery(matrixId, opts)',
     breadcrumbs: 'buildBreadcrumbQuery(matrixId, focusRootHex)',
   },
   namedMutations: {},

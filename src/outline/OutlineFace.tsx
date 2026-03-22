@@ -18,7 +18,7 @@ import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import type { OutlineCallbacks } from './keymap'
-import { buildOutlineQuery, buildBreadcrumbQuery } from './outline-plugin'
+import { buildPaginatedOutlineQuery, buildBreadcrumbQuery } from './outline-plugin'
 import { OutlineRowContent, type OutlineRowHandle } from './OutlineRow'
 
 const DRAG_THRESHOLD_PX = 5
@@ -158,8 +158,16 @@ const OutlineFace = (props: OutlineFaceProps) => {
     return root ? keyToHex(root) : null
   })
 
+  // Collapse state (in-memory; resets on reload)
+  // Declared before outlineQuery since it's a dependency of the query memo.
+  const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
+
   const outlineQuery = createMemo(() =>
-    buildOutlineQuery(props.matrixId, focusRootHex(), contentCol()),
+    buildPaginatedOutlineQuery(props.matrixId, {
+      focusRootHex: focusRootHex(),
+      collapsedKeyHexes: Array.from(collapsedKeys()),
+      contentColumn: contentCol(),
+    }),
   )
 
   const { result, error } = useQuery(() => outlineQuery())
@@ -204,9 +212,6 @@ const OutlineFace = (props: OutlineFaceProps) => {
     return rootRow.depth + 1
   })
 
-  // Collapse state (in-memory; resets on reload)
-  const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
-
   const toggleCollapse = (key: Uint8Array) => {
     const k = keyToHex(key)
     setCollapsedKeys((prev) => {
@@ -226,27 +231,19 @@ const OutlineFace = (props: OutlineFaceProps) => {
     })
   }
 
+  // Collapse filtering is SQL-side (via collapsedKeyHexes in the query).
+  // The only client-side filter is excluding the focus root row, which is
+  // rendered as a title above the outline rather than as an outline row.
   const visibleRows = createMemo((): OutlineRowData[] => {
-    const collapsed = collapsedKeys()
     const rootHex = focusRootHex()
+    if (!rootHex) return [...rows]
 
     const filtered: OutlineRowData[] = []
-    let skipBelowDepth: number | null = null
-
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]!
-      if (skipBelowDepth !== null && row.depth > skipBelowDepth) continue
-      skipBelowDepth = null
-
-      // Skip the focus root row (rendered as a title, not an outline row)
-      if (rootHex && keyToHex(row.key) === rootHex) continue
-
-      filtered.push(row)
-      if (row.has_children === 1 && collapsed.has(keyToHex(row.key))) {
-        skipBelowDepth = row.depth
+      if (keyToHex(rows[i]!.key) !== rootHex) {
+        filtered.push(rows[i]!)
       }
     }
-
     return filtered
   })
 

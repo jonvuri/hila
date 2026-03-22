@@ -1224,37 +1224,18 @@ export const getDepth = (db: Database, matrixId: number, key: Uint8Array): numbe
   return null
 }
 
-// Simple utility to generate rank keys (lexicographic BLOB order)
-const generateRankKey = (prefix: string = '', counter: number = 1): Uint8Array => {
-  // Convert prefix and counter to bytes, ensuring lexicographic ordering
-  const prefixBytes = new TextEncoder().encode(prefix)
-  const counterStr = counter.toString().padStart(8, '0')
-  const counterBytes = new TextEncoder().encode(counterStr)
-
-  // Create key with terminator
-  const key = new Uint8Array(prefixBytes.length + counterBytes.length + 1)
-  key.set(prefixBytes, 0)
-  key.set(counterBytes, prefixBytes.length)
-  key[key.length - 1] = 0x00 // terminator
-
-  return key
-}
-
-// Add sample rows to a matrix
 export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
   withTransaction(db, () => {
-    // Get existing rows count to determine if we should create children
-    const existingRowsStmt = db.prepare(`
-      SELECT COUNT(*) as count FROM rank 
-      WHERE matrix_id = ? AND row_kind = 0
-    `)
-    existingRowsStmt.bind([matrixId])
-    if (!existingRowsStmt.step()) {
-      existingRowsStmt.finalize()
-      throw new Error('Failed to get existing rows count')
+    // Get existing rank keys to determine parent candidates and insertion points
+    const existingStmt = db.prepare(
+      'SELECT key FROM rank WHERE matrix_id = ? AND row_kind = 0 ORDER BY key',
+    )
+    existingStmt.bind([matrixId])
+    const existingKeys: Uint8Array[] = []
+    while (existingStmt.step()) {
+      existingKeys.push(new Uint8Array((existingStmt.get({}) as { key: Uint8Array }).key))
     }
-    const existingCount = (existingRowsStmt.get({}) as unknown as { count: number }).count
-    existingRowsStmt.finalize()
+    existingStmt.finalize()
 
     // Look up matrix columns to generate appropriate sample data
     const colStmt = db.prepare(
@@ -1271,119 +1252,45 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       throw new Error(`Matrix ${matrixId} has no columns`)
     }
 
+    const makeSampleValues = (): Record<string, unknown> => {
+      const randomSuffix = Math.floor(Math.random() * 1000)
+      const values: Record<string, unknown> = {}
+      for (const col of columns) {
+        if (col.name === 'content') {
+          values[col.name] = JSON.stringify({
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: `Sample row ${randomSuffix}` }],
+              },
+            ],
+          })
+        } else {
+          values[col.name] = `Sample row ${randomSuffix}`
+        }
+      }
+      return values
+    }
+
     const rowsToAdd = Math.floor(Math.random() * 2) + 2 // 2-3 rows
+    let lastInsertedKey: Uint8Array | undefined
 
     for (let i = 0; i < rowsToAdd; i++) {
-      const randomSuffix = Math.floor(Math.random() * 1000)
+      const dataRowId = insertDataRow(db, matrixId, makeSampleValues())
 
-      const colNames = ['id', ...columns.map((c) => quoteIdent(c.name))].join(', ')
-      const placeholders = [SQL_RANDOM_ID, ...columns.map(() => '?')].join(', ')
-      const values = columns.map((c) => {
-        if (c.name === 'content') {
-          const text = `Sample row ${randomSuffix}`
-          return JSON.stringify({
-            type: 'doc',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
-          })
-        }
-        return `Sample row ${randomSuffix}`
-      })
-
-      const dataInsertStmt = db.prepare(`
-        INSERT INTO "mx_${matrixId}_data" (${colNames})
-        VALUES (${placeholders}) RETURNING id
-      `)
-      dataInsertStmt.bind(values)
-      if (!dataInsertStmt.step()) {
-        dataInsertStmt.finalize()
-        throw new Error('Failed to insert data row')
-      }
-      const dataResult = dataInsertStmt.get({}) as unknown as { id: number }
-      const dataRowId = dataResult.id
-      dataInsertStmt.finalize()
-
-      // Determine if this should be a child of an existing row
-      let rankKey: Uint8Array
-      let parentKey: Uint8Array | null = null
-
-      if (existingCount > 0 && i === rowsToAdd - 1) {
-        // Make the last row a child of an existing row
-        const parentStmt = db.prepare(`
-          SELECT key FROM rank 
-          WHERE matrix_id = ? AND row_kind = 0 
-          ORDER BY RANDOM() LIMIT 1
-        `)
-        parentStmt.bind([matrixId])
-        let parentResult: { key: Uint8Array } | undefined
-        if (parentStmt.step()) {
-          parentResult = parentStmt.get({}) as unknown as { key: Uint8Array }
-        }
-        parentStmt.finalize()
-
-        if (parentResult) {
-          parentKey = parentResult.key
-          // Create child key by extending parent key
-          const parentKeyStr = new TextDecoder().decode(parentResult.key.slice(0, -1)) // remove terminator
-          rankKey = generateRankKey(parentKeyStr + '_', i + 1)
-        } else {
-          rankKey = generateRankKey('root_', existingCount + i + 1)
-        }
+      if (existingKeys.length > 0 && i === rowsToAdd - 1) {
+        // Make the last row a child of a random existing row
+        const parentKey = existingKeys[Math.floor(Math.random() * existingKeys.length)]!
+        const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, parentKey })
+        existingKeys.push(key)
+        lastInsertedKey = key
       } else {
-        // Create root-level entry
-        rankKey = generateRankKey('root_', existingCount + i + 1)
-      }
-
-      // Insert into rank table
-      db.exec(
-        `
-        INSERT INTO rank (key, matrix_id, row_kind, row_id)
-        VALUES (?, ?, 0, ?)
-      `,
-        {
-          bind: [rankKey, matrixId, dataRowId],
-        },
-      )
-
-      // Insert into closure table (self-reference with depth 0)
-      db.exec(
-        `
-        INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-        VALUES (?, ?, 0)
-      `,
-        {
-          bind: [rankKey, rankKey],
-        },
-      )
-
-      // If this is a child, add closure entries for all ancestors
-      if (parentKey) {
-        // Get all ancestors of the parent
-        const ancestorsStmt = db.prepare(`
-          SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-          WHERE descendant_key = ?
-        `)
-
-        const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
-        ancestorsStmt.bind([parentKey])
-        while (ancestorsStmt.step()) {
-          ancestors.push(
-            ancestorsStmt.get({}) as unknown as { ancestor_key: Uint8Array; depth: number },
-          )
-        }
-        ancestorsStmt.finalize()
-
-        // Add closure entries for each ancestor -> this new node
-        for (const ancestor of ancestors) {
-          db.exec(
-            `
-            INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-            VALUES (?, ?, ?)
-          `,
-            {
-              bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
-            },
-          )
-        }
+        // Append as a root-level row after the last existing key
+        const prevKey = lastInsertedKey ?? existingKeys[existingKeys.length - 1]
+        const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, prevKey })
+        existingKeys.push(key)
+        lastInsertedKey = key
       }
     }
   })
