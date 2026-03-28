@@ -1,5 +1,4 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
-import { createStore, reconcile } from 'solid-js/store'
 import { Slice } from 'prosemirror-model'
 import type { EditorView } from 'prosemirror-view'
 
@@ -18,21 +17,17 @@ import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import type { OutlineCallbacks } from './keymap'
-import { buildPaginatedOutlineQuery, buildBreadcrumbQuery } from './outline-plugin'
+import { buildBreadcrumbQuery } from './outline-plugin'
 import { OutlineRowContent, type OutlineRowHandle } from './OutlineRow'
+import {
+  usePagedOutlineData,
+  ROWS_PER_WINDOW,
+  type OutlineRowData,
+} from './usePagedOutlineData'
 
 const DRAG_THRESHOLD_PX = 5
 
-const ROWS_PER_WINDOW = 100
 const ESTIMATED_ROW_HEIGHT_PX = 28
-
-type OutlineRowData = {
-  row_id: number
-  key: Uint8Array
-  content: string
-  depth: number
-  has_children: number
-}
 
 type BreadcrumbData = {
   key: Uint8Array
@@ -159,26 +154,19 @@ const OutlineFace = (props: OutlineFaceProps) => {
   })
 
   // Collapse state (in-memory; resets on reload)
-  // Declared before outlineQuery since it's a dependency of the query memo.
   const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
 
-  const outlineQuery = createMemo(() =>
-    buildPaginatedOutlineQuery(props.matrixId, {
-      focusRootHex: focusRootHex(),
-      collapsedKeyHexes: Array.from(collapsedKeys()),
-      contentColumn: contentCol(),
-    }),
-  )
-
-  const { result, error } = useQuery(() => outlineQuery())
-
-  const [rows, setRows] = createStore<OutlineRowData[]>([])
-
-  createEffect(() => {
-    const data = result()
-    if (!data) return
-    setRows(reconcile(data as unknown as OutlineRowData[], { key: 'row_id' }))
+  // Page-aware data manager: count query, per-page range queries, focus root query
+  const matrixId = props.matrixId // eslint-disable-line solid/reactivity -- stable for component lifetime
+  const pageData = usePagedOutlineData({
+    matrixId,
+    focusRootHex,
+    collapsedKeyHexes: () => Array.from(collapsedKeys()),
+    contentColumn: contentCol,
   })
+
+  const error = pageData.error
+  const rows = pageData.rows
 
   // Breadcrumb query: ancestors of focus root, ordered root-to-parent
   const breadcrumbQuery = createMemo(() => {
@@ -195,15 +183,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
     return data as unknown as BreadcrumbData[]
   })
 
-  // The focus root row itself (first row in query results when focused)
-  const focusRootRow = createMemo((): OutlineRowData | null => {
-    const hex = focusRootHex()
-    if (!hex) return null
-    for (let i = 0; i < rows.length; i++) {
-      if (keyToHex(rows[i]!.key) === hex) return rows[i]!
-    }
-    return null
-  })
+  const focusRootRow = () => pageData.focusRootRow()
 
   // Depth offset: children of focus root display at depth 0
   const focusDepthOffset = createMemo(() => {
@@ -231,21 +211,9 @@ const OutlineFace = (props: OutlineFaceProps) => {
     })
   }
 
-  // Collapse filtering is SQL-side (via collapsedKeyHexes in the query).
-  // The only client-side filter is excluding the focus root row, which is
-  // rendered as a title above the outline rather than as an outline row.
-  const visibleRows = createMemo((): OutlineRowData[] => {
-    const rootHex = focusRootHex()
-    if (!rootHex) return [...rows]
-
-    const filtered: OutlineRowData[] = []
-    for (let i = 0; i < rows.length; i++) {
-      if (keyToHex(rows[i]!.key) !== rootHex) {
-        filtered.push(rows[i]!)
-      }
-    }
-    return filtered
-  })
+  // All filtering (collapse, focus root exclusion) is SQL-side.
+  // The page data manager uses afterKeyHex to skip the focus root in focus mode.
+  const visibleRows = createMemo((): OutlineRowData[] => [...rows])
 
   // Map visible rows to the design system's FlatRow interface
   const flatRows = createMemo((): FlatRow[] => {
@@ -266,10 +234,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
   // context for visible windows' decoration computation.
   const decorations = createMemo(() => computeDecorations(theme(), flatRows()))
 
-  const totalWindows = createMemo(() => {
-    const len = visibleRows().length
-    return len === 0 ? 0 : Math.ceil(len / ROWS_PER_WINDOW)
-  })
+  const totalWindows = () => pageData.totalWindows()
 
   // Focus management
   const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
@@ -306,8 +271,9 @@ const OutlineFace = (props: OutlineFaceProps) => {
   }
 
   createEffect(() => {
-    if (rows.length > 0 && focusedRowId() === null) {
-      requestFocus(rows[0]!.row_id, 'start')
+    const vRows = visibleRows()
+    if (vRows.length > 0 && focusedRowId() === null) {
+      requestFocus(vRows[0]!.row_id, 'start')
     }
   })
 
@@ -645,10 +611,15 @@ const OutlineFace = (props: OutlineFaceProps) => {
   const renderWindow = (windowProps: { windowIndex: number }) => {
     // eslint-disable-next-line solid/reactivity -- windowIndex is a static number from WindowComponent, not a reactive prop
     const wIdx = windowProps.windowIndex
-    const startIdx = wIdx * ROWS_PER_WINDOW
+
+    const startIdx = createMemo(() => {
+      const range = pageData.loadedRange()
+      const minPage = range ? range[0] : 0
+      return (wIdx - minPage) * ROWS_PER_WINDOW
+    })
 
     const windowRows = createMemo(() =>
-      visibleRows().slice(startIdx, startIdx + ROWS_PER_WINDOW),
+      visibleRows().slice(startIdx(), startIdx() + ROWS_PER_WINDOW),
     )
 
     return (
@@ -658,7 +629,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
         </Show>
         <For each={windowRows()}>
           {(row, localI) => {
-            const globalIdx = () => startIdx + localI()
+            const globalIdx = () => startIdx() + localI()
             const rowId = row.row_id
             const callbacks = makeCallbacks(rowId)
             onCleanup(() => unregisterHandle(rowId))
@@ -802,6 +773,9 @@ const OutlineFace = (props: OutlineFaceProps) => {
           renderWindow={renderWindow}
           totalWindows={totalWindows()}
           minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
+          onVisibleRangeChange={(range) => {
+            if (range.size > 0) pageData.setNeededWindows(range)
+          }}
         />
       </div>
       <Show when={dropTarget()}>

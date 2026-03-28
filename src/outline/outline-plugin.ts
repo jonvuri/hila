@@ -24,14 +24,6 @@ export const registerOutlineFaceType = async (): Promise<void> => {
   await registerFaceTypeWorker(outlineFaceTypeDefinition)
 }
 
-export const buildOutlineQuery = (
-  matrixId: number,
-  focusRootHex: string | null,
-  contentColumn = 'content',
-): string => {
-  return buildPaginatedOutlineQuery(matrixId, { focusRootHex, contentColumn })
-}
-
 // Increment final 0x00 terminator (as two hex chars) to 0x01 for subtree upper bound.
 const nextPrefixHex = (hex: string): string => hex.slice(0, -2) + '01'
 
@@ -65,6 +57,7 @@ export type PaginatedOutlineQueryOpts = {
   focusRootHex?: string | null
   collapsedKeyHexes?: string[]
   afterKeyHex?: string | null
+  offset?: number
   limit?: number
   contentColumn?: string
 }
@@ -84,6 +77,10 @@ export const buildPaginatedOutlineQuery = (
   })
 
   const limitClause = opts.limit !== undefined ? `LIMIT ${opts.limit}` : ''
+  const offsetClause =
+    opts.offset !== undefined && opts.offset > 0 && opts.limit !== undefined ?
+      `OFFSET ${opts.offset}`
+    : ''
 
   return `
 SELECT r.key, r.row_id, ${contentExpr},
@@ -104,7 +101,7 @@ LEFT JOIN (
 WHERE r.matrix_id = ${matrixId}
 ${filterClauses}
 ORDER BY r.key
-${limitClause}
+${limitClause}${offsetClause ? ` ${offsetClause}` : ''}
 `
 }
 
@@ -123,7 +120,7 @@ export const buildOutlineCountQuery = (
   })
 
   return `
-SELECT COUNT(*) as count
+SELECT COUNT(*) as row_count
 FROM rank r
 WHERE r.matrix_id = ${matrixId}
 ${filterClauses}

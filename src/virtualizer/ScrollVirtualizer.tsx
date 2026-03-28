@@ -87,6 +87,7 @@ type ScrollVirtualizerProps = {
   renderWindow: WindowRendererFunction
   minWindowHeight: number
   totalWindows?: number
+  onVisibleRangeChange?: (range: Set<number>) => void
 } & JSX.HTMLAttributes<HTMLDivElement>
 
 const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
@@ -388,6 +389,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     const physicalHeight = totalVirtual - offset
 
     return Math.max(physicalHeight + CONTAINER_HEIGHT, CONTAINER_HEIGHT * 2)
+  })
+
+  createEffect(() => {
+    props.onVisibleRangeChange?.(currentVisibleRange())
   })
 
   onMount(() => {

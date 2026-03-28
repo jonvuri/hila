@@ -44,9 +44,9 @@ const runQuery = (sql: string): QueryRow[] => {
 const runCount = (sql: string): number => {
   const stmt = db.prepare(sql)
   stmt.step()
-  const row = stmt.get({}) as { count: number }
+  const row = stmt.get({}) as { row_count: number }
   stmt.finalize()
-  return row.count
+  return row.row_count
 }
 
 const makeDoc = (text: string) =>
@@ -299,9 +299,74 @@ describe('buildPaginatedOutlineQuery', () => {
     expect(rows[0]!.row_id).toBe(rowId)
   })
 
+  test('offset skips initial rows', () => {
+    const { c, d, e, f, g } = buildTree()
+    const sql = buildPaginatedOutlineQuery(matrixId, {
+      limit: 10,
+      offset: 2,
+    })
+    const rows = runQuery(sql)
+
+    // Skip first 2 rows (A, B), return rest: C, D, E, F, G
+    expect(rows.map((r) => r.row_id)).toEqual([c.rowId, d.rowId, e.rowId, f.rowId, g.rowId])
+  })
+
+  test('offset + limit for a page window', () => {
+    const { c, d, e } = buildTree()
+    const sql = buildPaginatedOutlineQuery(matrixId, {
+      limit: 3,
+      offset: 2,
+    })
+    const rows = runQuery(sql)
+
+    // Skip 2, take 3: C, D, E
+    expect(rows.map((r) => r.row_id)).toEqual([c.rowId, d.rowId, e.rowId])
+  })
+
+  test('offset is ignored without limit', () => {
+    buildTree()
+    const sql = buildPaginatedOutlineQuery(matrixId, {
+      offset: 2,
+    })
+    const rows = runQuery(sql)
+
+    // Without LIMIT, OFFSET is not applied — all 7 rows returned
+    expect(rows).toHaveLength(7)
+  })
+
+  test('afterKeyHex + offset + limit for focus-mode paging', () => {
+    const { a, d, e } = buildTree()
+    // In focus mode, afterKeyHex = focusRootHex to skip the root.
+    // Then offset paginates within the remaining rows.
+    const sql = buildPaginatedOutlineQuery(matrixId, {
+      focusRootHex: a.hex,
+      afterKeyHex: a.hex,
+      limit: 2,
+      offset: 2,
+    })
+    const rows = runQuery(sql)
+
+    // Focus subtree after A: B, C, D, E (4 rows)
+    // Offset 2 skips B, C → returns D, E
+    expect(rows.map((r) => r.row_id)).toEqual([d.rowId, e.rowId])
+  })
+
+  test('collapse + offset + limit combined', () => {
+    const { b, e, f } = buildTree()
+    const sql = buildPaginatedOutlineQuery(matrixId, {
+      collapsedKeyHexes: [b.hex],
+      limit: 2,
+      offset: 2,
+    })
+    const rows = runQuery(sql)
+
+    // With B collapsed: A, B, E, F, G (5 rows)
+    // Offset 2 skips A, B → returns E, F
+    expect(rows.map((r) => r.row_id)).toEqual([e.rowId, f.rowId])
+  })
+
   test('empty result set with restrictive focus', () => {
     buildTree()
-    // Use a focus hex that doesn't match any key
     const sql = buildPaginatedOutlineQuery(matrixId, {
       focusRootHex: 'ff00',
     })

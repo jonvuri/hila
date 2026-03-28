@@ -18,7 +18,6 @@ export const useQuery = (
     const currentSql = sql()
     if (!currentSql) return
 
-    setResult(null)
     setError(null)
 
     const observer: SqlObserver = (r, e) => {

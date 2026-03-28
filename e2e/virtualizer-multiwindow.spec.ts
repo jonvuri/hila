@@ -64,6 +64,7 @@ test.describe('Multi-window virtualizer', () => {
     test.setTimeout(BULK_TIMEOUT)
     await resetDB(page)
     await addManyRows(page, BULK_CLICKS)
+
     await waitForRows(page, 101)
 
     const totalRows = await page.locator('.outline-row').count()

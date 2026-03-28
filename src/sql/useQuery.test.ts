@@ -162,7 +162,7 @@ describe('useQuery', () => {
     dispose()
   })
 
-  it('should reset result and error when SQL changes', () => {
+  it('should preserve stale result when SQL changes (stale-while-revalidate)', () => {
     let result!: Accessor<SqlResult | null>
     let error!: Accessor<Error | null>
     let setSql!: (v: string) => void
@@ -182,8 +182,39 @@ describe('useQuery', () => {
 
     setSql('SELECT 2')
 
-    expect(result()).toBeNull()
+    expect(result()).toEqual([{ id: 1 }])
     expect(error()).toBeNull()
+
+    const newObserver = getLastObserver()
+    newObserver([{ id: 2 }], null)
+    expect(result()).toEqual([{ id: 2 }])
+
+    dispose()
+  })
+
+  it('should clear error when SQL changes even if previous query errored', () => {
+    let result!: Accessor<SqlResult | null>
+    let error!: Accessor<Error | null>
+    let setSql!: (v: string) => void
+
+    const dispose = createRoot((dispose) => {
+      const [sql, _setSql] = createSignal('SELECT 1')
+      setSql = _setSql
+      const query = useQuery(sql)
+      result = query.result
+      error = query.error
+      return dispose
+    })
+
+    const observer = getLastObserver()
+    observer(null, new Error('query failed'))
+    expect(error()).toBeTruthy()
+    expect(result()).toBeNull()
+
+    setSql('SELECT 2')
+
+    expect(error()).toBeNull()
+    expect(result()).toBeNull()
 
     dispose()
   })

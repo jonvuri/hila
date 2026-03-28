@@ -44,6 +44,14 @@ const App: Component = () => {
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
   const initPlugins = async () => {
+    // Clear stale state so Show guards go falsy → truthy, forcing face
+    // remount with fresh matrixIds (critical after DB reset).
+    setOutlineMatrixId(null)
+    setNotesMatrixId(null)
+    setNotesOutlineReady(false)
+    setTableFaceConfig(null)
+    setSelectedNoteId(null)
+
     await registerTableFaceType()
     const TableFaceComponent = (await import('./table/TableFace')).default
     registerFaceComponent('hila.table', TableFaceComponent)

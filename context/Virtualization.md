@@ -210,16 +210,21 @@ Implemented bounded data loading infrastructure:
 - **`addSampleRows` fix**: Rewrote to use proper `insertRow`/`insertDataRow` (lexorank `between()`) instead of `generateRankKey`. The old `generateRankKey` created keys with text separators that broke the key-range subtree property required by SQL-side collapse.
 - **Unit tests** (`outline-queries.test.ts`): 22 tests covering paginated query, count query, collapse exclusion, keyset pagination, LIMIT, focus + collapse combinations, and custom content columns — all run against real in-memory SQLite.
 
-### Step 5 — Page-aware data manager
+### Step 5 — Page-aware data manager ✅
 
-Replace the single `useQuery` pattern:
+Replaced the single `useQuery` pattern with `usePagedOutlineData`:
 
-- Map of `windowIndex → page data` with reactive loading/unloading.
-- Buffer pages loaded but not rendered.
-- Pages keyed by starting rank key for cache stability.
-- Mutation invalidation and re-fetch strategy.
-- Focus/cursor state survives page re-fetches (keyed by row ID).
+- **Count-driven `totalWindows`**: A reactive `buildOutlineCountQuery` subscription computes visible row count and `totalWindows = ceil(count / ROWS_PER_WINDOW)`, decoupled from loaded data length. In focus mode, the focus root is subtracted from the count.
+- **Single range query for the loaded window set**: The virtualizer's `onVisibleRangeChange` callback reports needed windows. A single paginated query (`LIMIT + OFFSET`) covers the contiguous range `[minPage, maxPage]`. When the range shifts on scroll, the subscription updates automatically.
+- **Focus root loaded separately**: In focus mode, `afterKeyHex = focusRootHex` excludes the focus root from page data. A separate `LIMIT 1` query loads the focus root row for breadcrumb/title display. No client-side focus-root filtering.
+- **SQL-side collapse**: Collapsed subtrees are excluded in the SQL query (unchanged from Step 4). Client-side collapse filtering is fully eliminated.
+- **Mutation invalidation**: The reactive query subscription system handles invalidation automatically — when underlying tables change, the observer re-fires each active subscription.
+- **Focus/cursor state keyed by row ID**: `focusedRowId`, `pendingFocus`, and `handleMap` are keyed by `row_id`, not position. Focus survives page re-fetches.
+- **Bootstrap preload**: `neededWindows` initialized to `{0, 1, 2, 3}` so the first data query fires immediately, in parallel with the count query. The virtualizer refines the range via `onVisibleRangeChange` once `totalWindows` is known.
+- **`onVisibleRangeChange` callback on ScrollVirtualizer**: New prop that fires whenever `currentVisibleRange` changes, enabling the data manager to load/unload pages reactively.
+- **OFFSET support in `buildPaginatedOutlineQuery`**: Added `offset` option alongside existing `limit` and `afterKeyHex`. Combined with `afterKeyHex` for focus-mode paging (skip focus root, then paginate via offset). OFFSET is omitted when 0 (semantically equivalent, avoids potential parser issues).
+- **Count alias**: `buildOutlineCountQuery` uses `COUNT(*) as row_count`. The alias must not be a SQL reserved word (`count`, `select`, etc.) or `node-sql-parser` silently fails to parse the SQL, preventing the subscription system from tracking which tables the count query references — which would mean the count subscription never re-fires after mutations.
 
-### Step 6 — Remove unbounded query path
+### Step 6 — Remove unbounded query path ✅
 
-Delete the unbounded `buildOutlineQuery`. All outline data flows through paginated queries.
+Deleted `buildOutlineQuery` (the backward-compatible wrapper that delegated to `buildPaginatedOutlineQuery` without a `LIMIT`). All outline data now flows through paginated queries — either the range query (with `LIMIT + OFFSET`) or the count query.

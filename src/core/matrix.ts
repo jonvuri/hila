@@ -1273,8 +1273,13 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       return values
     }
 
+    // Root-level keys have exactly one segment (no parent in the closure table).
+    // Using a child key as prevKey for root-level insertion would place the new
+    // key inside a subtree's key range, breaking SQL-side collapse filtering.
+    const rootKeys = existingKeys.filter((k) => parseKey(k).length === 1)
+
     const rowsToAdd = Math.floor(Math.random() * 2) + 2 // 2-3 rows
-    let lastInsertedKey: Uint8Array | undefined
+    let lastInsertedRootKey: Uint8Array | undefined
 
     for (let i = 0; i < rowsToAdd; i++) {
       const dataRowId = insertDataRow(db, matrixId, makeSampleValues())
@@ -1284,13 +1289,13 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
         const parentKey = existingKeys[Math.floor(Math.random() * existingKeys.length)]!
         const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, parentKey })
         existingKeys.push(key)
-        lastInsertedKey = key
       } else {
-        // Append as a root-level row after the last existing key
-        const prevKey = lastInsertedKey ?? existingKeys[existingKeys.length - 1]
+        // Append as a root-level row after the last root-level key
+        const prevKey = lastInsertedRootKey ?? rootKeys[rootKeys.length - 1]
         const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, prevKey })
         existingKeys.push(key)
-        lastInsertedKey = key
+        rootKeys.push(key)
+        lastInsertedRootKey = key
       }
     }
   })
