@@ -10,7 +10,8 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, ensureRootMatrix, insertDataRow, insertRow } from '../core/matrix'
+import { initMatrixSchema, ensureRootMatrix, insertDataRow } from '../core/matrix'
+import { createTreePosition } from '../core/tree'
 import { ensureTrait } from '../core/traits'
 
 import { buildPaginatedOutlineQuery, buildOutlineCountQuery } from './outline-plugin'
@@ -61,10 +62,7 @@ const insertContentRow = (
 ) => {
   const content = makeDoc(text)
   const rowId = insertDataRow(db, matrixId, { content })
-  const key = insertRow(db, {
-    matrixId,
-    rowKind: 0,
-    rowId,
+  const key = createTreePosition(db, matrixId, rowId, {
     parentKey: opts?.parentKey,
     prevKey: opts?.prevKey,
   })
@@ -290,7 +288,7 @@ describe('buildPaginatedOutlineQuery', () => {
       returnValue: 'resultRows',
     })[0]![0] as number
 
-    insertRow(db, { matrixId: mId, rowKind: 0, rowId })
+    createTreePosition(db, mId, rowId)
     const sql = buildPaginatedOutlineQuery(mId, { contentColumn: 'title' })
     const rows = runQuery(sql)
 
@@ -323,15 +321,15 @@ describe('buildPaginatedOutlineQuery', () => {
     expect(rows.map((r) => r.row_id)).toEqual([c.rowId, d.rowId, e.rowId])
   })
 
-  test('offset is ignored without limit', () => {
+  test('offset applies with default limit', () => {
     buildTree()
     const sql = buildPaginatedOutlineQuery(matrixId, {
       offset: 2,
     })
     const rows = runQuery(sql)
 
-    // Without LIMIT, OFFSET is not applied — all 7 rows returned
-    expect(rows).toHaveLength(7)
+    // Default LIMIT (10000) is always present, so OFFSET applies — 5 of 7 rows returned
+    expect(rows).toHaveLength(5)
   })
 
   test('afterKeyHex + offset + limit for focus-mode paging', () => {

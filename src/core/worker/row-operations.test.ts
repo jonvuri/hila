@@ -80,8 +80,8 @@ describe('row operations through worker', () => {
     // jsdom structured clone returns an ArrayBuffer-backed object, not
     // necessarily a Uint8Array instance from the same realm
     expect(key).toBeTruthy()
-    expect(key.length).toBeGreaterThan(0)
-    expect(key[key.length - 1]).toBe(0x00) // terminator byte
+    expect(key!.length).toBeGreaterThan(0)
+    expect(key![key!.length - 1]).toBe(0x00) // terminator byte
     expect(rowId).toBeTypeOf('number')
     expect(rowId).toBeGreaterThan(0)
   }, 5000)

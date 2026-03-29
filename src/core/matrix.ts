@@ -1,12 +1,13 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { between, compareKeys, makeKey, nextPrefix, parseKey } from './lexorank'
+import { parseKey } from './lexorank'
 import {
   dropChangeTrackingTriggers,
   installDataTableTriggers,
   reinstallDataTableTriggers,
 } from './sync'
-import { ensureTrait, hasTrait, requireTraits } from './traits'
+import { createTreePosition, removeTreePosition } from './tree'
+import { ensureTrait, hasTrait } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -336,322 +337,6 @@ export const ensureRootMatrix = (db: Database): number => {
 }
 
 /**
- * Insert a row into a matrix with proper rank and closure relationships.
- *
- * @param db - Database instance
- * @param params - Insert parameters
- * @param params.matrixId - ID of the matrix to insert into
- * @param params.parentKey - Key of the parent row (optional for root-level rows)
- * @param params.prevKey - Key of the row to insert after (optional)
- * @param params.nextKey - Key of the row to insert before (optional)
- * @param params.rowKind - 0 for data row, 1 for child matrix reference
- * @param params.rowId - ID of the row (data row ID or child matrix ID)
- * @returns The generated rank key for the new row
- */
-export const insertRow = (
-  db: Database,
-  params: {
-    matrixId: number
-    parentKey?: Uint8Array
-    prevKey?: Uint8Array
-    nextKey?: Uint8Array
-    rowKind: 0 | 1
-    rowId: number
-  },
-): Uint8Array => {
-  const { matrixId, parentKey, prevKey, nextKey, rowKind, rowId } = params
-
-  return withTransaction(db, () => {
-    requireTraits(db, matrixId, ['rank'])
-    const closureProvisioned = hasTrait(db, matrixId, 'closure')
-
-    let rankKey: Uint8Array
-
-    if (prevKey && nextKey) {
-      // Insert between two siblings
-      rankKey = between(prevKey, nextKey)
-    } else if (prevKey) {
-      // Insert after prevKey
-      // Need to find what comes after prevKey to use as upper bound
-      let upperBound = new Uint8Array(0)
-
-      if (parentKey) {
-        // We have a parent, so we need to stay within the parent's subtree
-        const parentUpperBound = nextPrefix(parentKey)
-        const nextSiblingStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key > ? AND key < ?
-          ORDER BY key ASC
-          LIMIT 1
-        `)
-        nextSiblingStmt.bind([matrixId, prevKey, parentUpperBound])
-
-        if (nextSiblingStmt.step()) {
-          const result = nextSiblingStmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-
-          // Check if this is a direct sibling (same parent)
-          const candidateSegments = parseKey(candidateKey)
-          const parentSegments = parseKey(parentKey)
-          if (candidateSegments.length === parentSegments.length + 1) {
-            // It's a direct child of the same parent
-            upperBound = candidateKey
-          }
-          // Otherwise, upperBound remains empty (insert at end of parent's children)
-        }
-        nextSiblingStmt.finalize()
-      } else {
-        // No parent specified, find next root-level row in this matrix.
-        // globalLowerBound tracks the minimum key the global collision
-        // check should search from (advanced past subtrees if needed).
-        let globalLowerBound = prevKey
-        const nextSiblingStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key > ?
-          ORDER BY key ASC
-          LIMIT 1
-        `)
-        nextSiblingStmt.bind([matrixId, prevKey])
-
-        if (nextSiblingStmt.step()) {
-          const result = nextSiblingStmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-
-          // Check if prevKey is a parent of candidateKey
-          const prevSegments = parseKey(prevKey)
-          const candidateSegments = parseKey(candidateKey)
-
-          if (candidateSegments.length > prevSegments.length) {
-            // candidateKey is in prevKey's subtree. We need to insert
-            // AFTER the entire subtree. Advance the global search past
-            // the subtree boundary.
-            globalLowerBound = nextPrefix(prevKey)
-          } else {
-            upperBound = candidateKey
-          }
-        }
-        nextSiblingStmt.finalize()
-
-        if (upperBound.length === 0) {
-          // No local upper bound found. The rank table is global, so
-          // check for any key beyond the current position (or subtree)
-          // to avoid cross-matrix key collisions.
-          const globalNextStmt = db.prepare(`
-            SELECT key FROM rank
-            WHERE key > ?
-            ORDER BY key ASC
-            LIMIT 1
-          `)
-          globalNextStmt.bind([globalLowerBound])
-          if (globalNextStmt.step()) {
-            const gResult = globalNextStmt.get({}) as { key: Uint8Array }
-            upperBound = new Uint8Array(gResult.key)
-          }
-          globalNextStmt.finalize()
-        }
-      }
-
-      rankKey = between(prevKey, upperBound)
-    } else if (nextKey) {
-      // Insert before nextKey
-      // Need to find what comes before nextKey to use as lower bound
-      let lowerBound = new Uint8Array(0)
-
-      if (parentKey) {
-        // We have a parent, so we need to stay within the parent's subtree
-        const prevSiblingStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key < ? AND key > ?
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        prevSiblingStmt.bind([matrixId, nextKey, parentKey])
-
-        if (prevSiblingStmt.step()) {
-          const result = prevSiblingStmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-
-          // Check if this is a direct sibling (same parent)
-          const candidateSegments = parseKey(candidateKey)
-          const parentSegments = parseKey(parentKey)
-          if (candidateSegments.length === parentSegments.length + 1) {
-            // It's a direct child of the same parent
-            lowerBound = candidateKey
-          } else {
-            // Use parent key as lower bound (insert as first child)
-            lowerBound = new Uint8Array(parentKey)
-          }
-        } else {
-          // No previous sibling, use parent key as lower bound
-          lowerBound = new Uint8Array(parentKey)
-        }
-        prevSiblingStmt.finalize()
-      } else {
-        // No parent specified, find previous root-level row in this matrix
-        const prevSiblingStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key < ?
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        prevSiblingStmt.bind([matrixId, nextKey])
-
-        if (prevSiblingStmt.step()) {
-          const result = prevSiblingStmt.get({}) as { key: Uint8Array }
-          lowerBound = new Uint8Array(result.key)
-
-          // Check if this previous row might have children between it and nextKey
-          const lowerBoundSegments = parseKey(lowerBound)
-          const nextKeySegments = parseKey(nextKey)
-
-          // If they have different numbers of segments, we might be crossing levels
-          if (lowerBoundSegments.length !== nextKeySegments.length) {
-            // Use empty lower bound to be safe
-            lowerBound = new Uint8Array(0)
-          }
-        }
-        prevSiblingStmt.finalize()
-
-        // Check the global rank table for a closer lower bound to avoid
-        // generating a key that collides with another matrix's key.
-        const globalPrevStmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE key < ?
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        globalPrevStmt.bind([nextKey])
-        if (globalPrevStmt.step()) {
-          const gResult = globalPrevStmt.get({}) as { key: Uint8Array }
-          const globalPrevKey = new Uint8Array(gResult.key)
-          if (compareKeys(globalPrevKey, lowerBound) > 0) {
-            lowerBound = globalPrevKey
-          }
-        }
-        globalPrevStmt.finalize()
-      }
-
-      rankKey = between(lowerBound, nextKey)
-    } else if (parentKey) {
-      // Insert as first child of parent
-      // Find first existing child
-      const firstChildStmt = db.prepare(`
-        SELECT key FROM rank
-        WHERE matrix_id = ? AND key > ? AND key < ?
-        ORDER BY key ASC
-        LIMIT 1
-      `)
-      const upperBound = nextPrefix(parentKey)
-      firstChildStmt.bind([matrixId, parentKey, upperBound])
-
-      if (firstChildStmt.step()) {
-        // There's an existing first child, insert before it
-        const result = firstChildStmt.get({}) as { key: Uint8Array }
-        const nextChild = new Uint8Array(result.key)
-        firstChildStmt.finalize()
-        rankKey = between(parentKey, nextChild)
-      } else {
-        // No existing children, create first child by extending parent key
-        firstChildStmt.finalize()
-        // Parse parent key segments and add a new segment
-        const parentSegments = parseKey(parentKey)
-        const newSegment = new Uint8Array([0x80]) // Midpoint value for first child
-        rankKey = makeKey([...parentSegments, newSegment])
-      }
-    } else {
-      // Insert at root level with no siblings specified.
-      // Check both the matrix-local last key and the global last
-      // single-segment key, using whichever is greater. The rank table
-      // is global so keys must be unique across all matrices.
-      const lastRootStmt = db.prepare(`
-        SELECT key FROM rank
-        WHERE matrix_id = ?
-        ORDER BY key DESC
-        LIMIT 1
-      `)
-      lastRootStmt.bind([matrixId])
-
-      let lastKey = new Uint8Array(0)
-      if (lastRootStmt.step()) {
-        const result = lastRootStmt.get({}) as { key: Uint8Array }
-        lastKey = new Uint8Array(result.key)
-      }
-      lastRootStmt.finalize()
-
-      const globalLastStmt = db.prepare(`
-        SELECT key FROM rank
-        WHERE instr(substr(key, 1, length(key) - 1), X'00') = 0
-        ORDER BY key DESC
-        LIMIT 1
-      `)
-      if (globalLastStmt.step()) {
-        const result = globalLastStmt.get({}) as { key: Uint8Array }
-        const globalLast = new Uint8Array(result.key)
-        if (compareKeys(globalLast, lastKey) > 0) {
-          lastKey = globalLast
-        }
-      }
-      globalLastStmt.finalize()
-
-      rankKey = between(lastKey, new Uint8Array(0))
-    }
-
-    // Insert into rank table
-    db.exec(
-      `
-      INSERT INTO rank (key, matrix_id, row_kind, row_id)
-      VALUES (?, ?, ?, ?)
-    `,
-      {
-        bind: [rankKey, matrixId, rowKind, rowId],
-      },
-    )
-
-    if (closureProvisioned) {
-      // 1. Self-reference (depth 0)
-      db.exec(
-        `
-        INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-        VALUES (?, ?, 0)
-      `,
-        {
-          bind: [rankKey, rankKey],
-        },
-      )
-
-      // 2. If there's a parent, add closure entries for all ancestors
-      if (parentKey) {
-        const ancestorsStmt = db.prepare(`
-          SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-          WHERE descendant_key = ?
-        `)
-
-        const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
-        ancestorsStmt.bind([parentKey])
-        while (ancestorsStmt.step()) {
-          ancestors.push(ancestorsStmt.get({}) as { ancestor_key: Uint8Array; depth: number })
-        }
-        ancestorsStmt.finalize()
-
-        for (const ancestor of ancestors) {
-          db.exec(
-            `
-            INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-            VALUES (?, ?, ?)
-          `,
-            {
-              bind: [ancestor.ancestor_key, rankKey, ancestor.depth + 1],
-            },
-          )
-        }
-      }
-    }
-
-    return rankKey
-  })
-}
-
-/**
  * Insert a new data row into a matrix's data table.
  *
  * @returns The new row's id
@@ -729,499 +414,67 @@ export const updateRow = (
 }
 
 /**
- * Reparent a row (and its subtree) to a new parent/position.
+ * Unified row insert: creates a data row and auto-handles provisioned traits.
  *
- * This rewrites rank keys for the entire subtree, updates the closure table
- * (removes old ancestor links, grafts onto new parent), all in one transaction.
+ * If the matrix has the rank trait, a rank entry is created. Pass positioning
+ * params (parentKey, prevKey, nextKey) for explicit tree placement; if omitted,
+ * the row is appended at root level.
  *
- * @param db - Database instance
- * @param params - Reparent parameters
- * @param params.matrixId - ID of the matrix
- * @param params.nodeKey - Current rank key of the node to reparent
- * @param params.newParentKey - Key of the new parent (omit to reparent to root)
- * @param params.prevSiblingKey - Key of the sibling to place after (at destination)
- * @param params.nextSiblingKey - Key of the sibling to place before (at destination)
- * @returns The new rank key for the reparented node
+ * If the matrix has the closure trait, closure entries are created based on the
+ * parentKey (or as a root-level row if no parentKey).
+ *
+ * @returns The new row's data ID and rank key (null if no rank trait).
  */
-export const reparentRow = (
+export const insertRow = (
   db: Database,
-  params: {
-    matrixId: number
-    nodeKey: Uint8Array
-    newParentKey?: Uint8Array
-    prevSiblingKey?: Uint8Array
-    nextSiblingKey?: Uint8Array
+  matrixId: number,
+  opts?: {
+    values?: Record<string, unknown>
+    parentKey?: Uint8Array
+    prevKey?: Uint8Array
+    nextKey?: Uint8Array
   },
-): Uint8Array => {
-  const { matrixId, nodeKey, newParentKey, prevSiblingKey, nextSiblingKey } = params
-
+): { rowId: number; key: Uint8Array | null } => {
   return withTransaction(db, () => {
-    const oldKey = nodeKey
-    const oldUpperBound = nextPrefix(oldKey)
+    const rowId = insertDataRow(db, matrixId, opts?.values)
+    let key: Uint8Array | null = null
 
-    // Guard: cannot reparent a node under one of its own descendants
-    if (newParentKey) {
-      const cycleStmt = db.prepare(`
-        SELECT 1 FROM "mx_${matrixId}_closure"
-        WHERE ancestor_key = ? AND descendant_key = ? AND depth > 0
-      `)
-      cycleStmt.bind([oldKey, newParentKey])
-      if (cycleStmt.step()) {
-        cycleStmt.finalize()
-        throw new Error('Cannot reparent a node under one of its own descendants')
-      }
-      cycleStmt.finalize()
-    }
-
-    // --- Step 1: Compute new rank key at destination ---
-    let newKey: Uint8Array
-
-    if (prevSiblingKey && nextSiblingKey) {
-      newKey = between(prevSiblingKey, nextSiblingKey)
-    } else if (prevSiblingKey) {
-      let upperBound = new Uint8Array(0)
-
-      if (newParentKey) {
-        const parentUpper = nextPrefix(newParentKey)
-        const stmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key > ? AND key < ?
-            AND NOT (key >= ? AND key < ?)
-          ORDER BY key ASC
-          LIMIT 1
-        `)
-        stmt.bind([matrixId, prevSiblingKey, parentUpper, oldKey, oldUpperBound])
-
-        if (stmt.step()) {
-          const result = stmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-          const candidateSegments = parseKey(candidateKey)
-          const parentSegments = parseKey(newParentKey)
-          if (candidateSegments.length === parentSegments.length + 1) {
-            upperBound = candidateKey
-          }
-        }
-        stmt.finalize()
-      } else {
-        let globalLowerBound = prevSiblingKey
-        const stmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key > ?
-            AND NOT (key >= ? AND key < ?)
-          ORDER BY key ASC
-          LIMIT 1
-        `)
-        stmt.bind([matrixId, prevSiblingKey, oldKey, oldUpperBound])
-
-        if (stmt.step()) {
-          const result = stmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-          const prevSegments = parseKey(prevSiblingKey)
-          const candidateSegments = parseKey(candidateKey)
-          if (candidateSegments.length > prevSegments.length) {
-            globalLowerBound = nextPrefix(prevSiblingKey)
-          } else {
-            upperBound = candidateKey
-          }
-        }
-        stmt.finalize()
-
-        if (upperBound.length === 0) {
-          const globalStmt = db.prepare(`
-            SELECT key FROM rank
-            WHERE key > ?
-              AND NOT (key >= ? AND key < ?)
-            ORDER BY key ASC
-            LIMIT 1
-          `)
-          globalStmt.bind([globalLowerBound, oldKey, oldUpperBound])
-          if (globalStmt.step()) {
-            const gResult = globalStmt.get({}) as { key: Uint8Array }
-            upperBound = new Uint8Array(gResult.key)
-          }
-          globalStmt.finalize()
-        }
-      }
-
-      newKey = between(prevSiblingKey, upperBound)
-    } else if (nextSiblingKey) {
-      let lowerBound = new Uint8Array(0)
-
-      if (newParentKey) {
-        const stmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key < ? AND key > ?
-            AND NOT (key >= ? AND key < ?)
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        stmt.bind([matrixId, nextSiblingKey, newParentKey, oldKey, oldUpperBound])
-
-        if (stmt.step()) {
-          const result = stmt.get({}) as { key: Uint8Array }
-          const candidateKey = new Uint8Array(result.key)
-          const candidateSegments = parseKey(candidateKey)
-          const parentSegments = parseKey(newParentKey)
-          if (candidateSegments.length === parentSegments.length + 1) {
-            lowerBound = candidateKey
-          } else {
-            lowerBound = new Uint8Array(newParentKey)
-          }
-        } else {
-          lowerBound = new Uint8Array(newParentKey)
-        }
-        stmt.finalize()
-      } else {
-        const stmt = db.prepare(`
-          SELECT key FROM rank
-          WHERE matrix_id = ? AND key < ?
-            AND NOT (key >= ? AND key < ?)
-          ORDER BY key DESC
-          LIMIT 1
-        `)
-        stmt.bind([matrixId, nextSiblingKey, oldKey, oldUpperBound])
-
-        if (stmt.step()) {
-          const result = stmt.get({}) as { key: Uint8Array }
-          lowerBound = new Uint8Array(result.key)
-        }
-        stmt.finalize()
-      }
-
-      newKey = between(lowerBound, nextSiblingKey)
-    } else if (newParentKey) {
-      // Insert as first/only child of new parent
-      const parentUpper = nextPrefix(newParentKey)
-      const stmt = db.prepare(`
-        SELECT key FROM rank
-        WHERE matrix_id = ? AND key > ? AND key < ?
-          AND NOT (key >= ? AND key < ?)
-        ORDER BY key ASC
-        LIMIT 1
-      `)
-      stmt.bind([matrixId, newParentKey, parentUpper, oldKey, oldUpperBound])
-
-      if (stmt.step()) {
-        const result = stmt.get({}) as { key: Uint8Array }
-        const nextChild = new Uint8Array(result.key)
-        stmt.finalize()
-        newKey = between(newParentKey, nextChild)
-      } else {
-        stmt.finalize()
-        const parentSegments = parseKey(newParentKey)
-        const newSegment = new Uint8Array([0x80])
-        newKey = makeKey([...parentSegments, newSegment])
-      }
-    } else {
-      // Reparent to root level, no positioning: insert at end
-      const stmt = db.prepare(`
-        SELECT key FROM rank
-        WHERE matrix_id = ?
-          AND NOT (key >= ? AND key < ?)
-        ORDER BY key DESC
-        LIMIT 1
-      `)
-      stmt.bind([matrixId, oldKey, oldUpperBound])
-
-      let lastKey = new Uint8Array(0)
-      if (stmt.step()) {
-        const result = stmt.get({}) as { key: Uint8Array }
-        lastKey = new Uint8Array(result.key)
-      }
-      stmt.finalize()
-
-      newKey = between(lastKey, new Uint8Array(0))
-    }
-
-    // --- Step 2: Delete old external closure relationships ---
-    // Preserves subtree-internal links (where both ancestor and descendant are in the subtree)
-    db.exec(
-      `
-      DELETE FROM "mx_${matrixId}_closure"
-      WHERE descendant_key IN (
-          SELECT descendant_key FROM "mx_${matrixId}_closure" WHERE ancestor_key = ?
-        )
-        AND ancestor_key NOT IN (
-          SELECT descendant_key FROM "mx_${matrixId}_closure" WHERE ancestor_key = ?
-        )
-    `,
-      { bind: [oldKey, oldKey] },
-    )
-
-    // --- Step 3: Graft onto new parent ---
-    // Cross-join: new parent's ancestors × node's subtree descendants
-    if (newParentKey) {
-      db.exec(
-        `
-        INSERT INTO "mx_${matrixId}_closure" (ancestor_key, descendant_key, depth)
-        SELECT a.ancestor_key, d.descendant_key, a.depth + d.depth + 1
-        FROM "mx_${matrixId}_closure" a
-        CROSS JOIN "mx_${matrixId}_closure" d
-        WHERE a.descendant_key = ?
-          AND d.ancestor_key = ?
-      `,
-        { bind: [newParentKey, oldKey] },
-      )
-    }
-
-    // --- Step 4: Rewrite rank keys for the subtree ---
-    // SQLite's || operator always produces TEXT, even with BLOB operands.
-    // Round-trip through HEX/UNHEX to get proper BLOB concatenation in STRICT tables.
-    const substrStart = oldKey.length + 1
-    db.exec(
-      `
-      UPDATE rank
-      SET key = UNHEX(HEX(?) || HEX(substr(key, ?)))
-      WHERE matrix_id = ? AND key >= ? AND key < ?
-    `,
-      { bind: [newKey, substrStart, matrixId, oldKey, oldUpperBound] },
-    )
-
-    // --- Step 5: Rewrite closure keys for the subtree ---
-    // Entries where both keys are in the subtree (subtree-internal)
-    db.exec(
-      `
-      UPDATE "mx_${matrixId}_closure"
-      SET ancestor_key = UNHEX(HEX(?) || HEX(substr(ancestor_key, ?))),
-          descendant_key = UNHEX(HEX(?) || HEX(substr(descendant_key, ?)))
-      WHERE (ancestor_key >= ? AND ancestor_key < ?)
-        AND (descendant_key >= ? AND descendant_key < ?)
-    `,
-      {
-        bind: [
-          newKey,
-          substrStart,
-          newKey,
-          substrStart,
-          oldKey,
-          oldUpperBound,
-          oldKey,
-          oldUpperBound,
-        ],
-      },
-    )
-    // Entries where only descendant_key is in the subtree (graft entries from step 3)
-    db.exec(
-      `
-      UPDATE "mx_${matrixId}_closure"
-      SET descendant_key = UNHEX(HEX(?) || HEX(substr(descendant_key, ?)))
-      WHERE (descendant_key >= ? AND descendant_key < ?)
-        AND NOT (ancestor_key >= ? AND ancestor_key < ?)
-    `,
-      {
-        bind: [newKey, substrStart, oldKey, oldUpperBound, oldKey, oldUpperBound],
-      },
-    )
-
-    return newKey
-  })
-}
-
-/**
- * Delete a single row from a matrix. Removes the rank entry, all closure
- * relationships involving the key, and the data table row.
- *
- * Does NOT delete children -- orphan handling is a policy decision for the
- * caller. The outline will re-parent children to the deleted row's parent
- * before calling delete.
- */
-export const deleteRow = (
-  db: Database,
-  params: {
-    matrixId: number
-    key: Uint8Array
-  },
-): void => {
-  const { matrixId, key } = params
-
-  withTransaction(db, () => {
-    // Look up row_id so we can delete from the data table
-    const rowStmt = db.prepare(
-      'SELECT row_id, row_kind FROM rank WHERE matrix_id = ? AND key = ?',
-    )
-    rowStmt.bind([matrixId, key])
-    if (!rowStmt.step()) {
-      rowStmt.finalize()
-      throw new Error('Row not found in rank table')
-    }
-    const { row_id: rowId, row_kind: rowKind } = rowStmt.get({}) as {
-      row_id: number
-      row_kind: number
-    }
-    rowStmt.finalize()
-
-    // 1. Delete from rank table
-    db.exec('DELETE FROM rank WHERE matrix_id = ? AND key = ?', {
-      bind: [matrixId, key],
-    })
-
-    // 2. Delete closure entries if closure trait is provisioned
-    if (hasTrait(db, matrixId, 'closure')) {
-      db.exec(
-        `DELETE FROM "mx_${matrixId}_closure"
-         WHERE ancestor_key = ? OR descendant_key = ?`,
-        { bind: [key, key] },
-      )
-    }
-
-    // 3. Delete from data table (only for data rows, not child matrix refs)
-    if (rowKind === 0) {
-      db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
-        bind: [rowId],
+    if (hasTrait(db, matrixId, 'rank')) {
+      key = createTreePosition(db, matrixId, rowId, {
+        parentKey: opts?.parentKey,
+        prevKey: opts?.prevKey,
+        nextKey: opts?.nextKey,
       })
     }
+
+    return { rowId, key }
   })
 }
 
 /**
- * Delete a row and all its descendants from a matrix. Removes rank entries,
- * all closure relationships involving any subtree key, and data table rows.
+ * Unified row delete: removes a data row and auto-cleans provisioned traits.
  *
- * Uses the subtree range query [key, nextPrefix(key)) for efficient bulk deletion.
+ * If the matrix has rank+closure traits, children are reparented to the deleted
+ * row's parent (or promoted to root) before the rank and closure entries are
+ * removed. Join references involving the row are also cleaned up.
  */
-export const deleteSubtree = (
-  db: Database,
-  params: {
-    matrixId: number
-    key: Uint8Array
-  },
-): void => {
-  const { matrixId, key } = params
-  const upperBound = nextPrefix(key)
-
+export const deleteRow = (db: Database, matrixId: number, rowId: number): void => {
   withTransaction(db, () => {
-    // 1. Collect row_ids for data rows in the subtree (need these before deleting rank)
-    const subtreeStmt = db.prepare(`
-      SELECT row_id, row_kind FROM rank
-      WHERE matrix_id = ? AND key >= ? AND key < ?
-    `)
-    subtreeStmt.bind([matrixId, key, upperBound])
-
-    const dataRowIds: number[] = []
-    while (subtreeStmt.step()) {
-      const row = subtreeStmt.get({}) as { row_id: number; row_kind: number }
-      if (row.row_kind === 0) {
-        dataRowIds.push(row.row_id)
-      }
-    }
-    subtreeStmt.finalize()
-
-    if (dataRowIds.length === 0) {
-      // No rows found in subtree -- check if the key itself doesn't exist
-      const existsStmt = db.prepare('SELECT 1 FROM rank WHERE matrix_id = ? AND key = ?')
-      existsStmt.bind([matrixId, key])
-      if (!existsStmt.step()) {
-        existsStmt.finalize()
-        throw new Error('Row not found in rank table')
-      }
-      existsStmt.finalize()
+    if (hasTrait(db, matrixId, 'rank')) {
+      removeTreePosition(db, matrixId, rowId)
     }
 
-    // 2. Delete all closure entries where ancestor or descendant is in the subtree
-    db.exec(
-      `DELETE FROM "mx_${matrixId}_closure"
-       WHERE ancestor_key >= ? AND ancestor_key < ?`,
-      { bind: [key, upperBound] },
-    )
-    db.exec(
-      `DELETE FROM "mx_${matrixId}_closure"
-       WHERE descendant_key >= ? AND descendant_key < ?`,
-      { bind: [key, upperBound] },
-    )
-
-    // 3. Delete from rank table (all rows in subtree range)
-    db.exec('DELETE FROM rank WHERE matrix_id = ? AND key >= ? AND key < ?', {
-      bind: [matrixId, key, upperBound],
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
+      bind: [rowId],
     })
 
-    // 4. Delete from data table
-    for (const rowId of dataRowIds) {
-      db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
-        bind: [rowId],
-      })
-    }
+    db.exec(
+      `DELETE FROM joins
+       WHERE (source_matrix_id = ? AND source_row_id = ?)
+          OR (target_matrix_id = ? AND target_row_id = ?)`,
+      { bind: [matrixId, rowId, matrixId, rowId] },
+    )
   })
-}
-
-/**
- * Get direct children of a node in rank order.
- * Queries the closure table for depth=1 descendants and joins with the rank
- * table for ordering.
- *
- * @returns Array of child keys in rank (display) order, empty if no children
- */
-export const getChildren = (
-  db: Database,
-  matrixId: number,
-  parentKey: Uint8Array,
-): Uint8Array[] => {
-  const stmt = db.prepare(`
-    SELECT c.descendant_key
-    FROM "mx_${matrixId}_closure" c
-    JOIN rank r ON r.key = c.descendant_key AND r.matrix_id = ?
-    WHERE c.ancestor_key = ? AND c.depth = 1
-    ORDER BY r.key
-  `)
-  stmt.bind([matrixId, parentKey])
-
-  const children: Uint8Array[] = []
-  while (stmt.step()) {
-    const row = stmt.get({}) as { descendant_key: Uint8Array }
-    children.push(new Uint8Array(row.descendant_key))
-  }
-  stmt.finalize()
-  return children
-}
-
-/**
- * Get the parent key of a node, or null if the node is at root level.
- * Queries the closure table for the ancestor at depth=1.
- */
-export const getParent = (
-  db: Database,
-  matrixId: number,
-  childKey: Uint8Array,
-): Uint8Array | null => {
-  const stmt = db.prepare(`
-    SELECT ancestor_key
-    FROM "mx_${matrixId}_closure"
-    WHERE descendant_key = ? AND depth = 1
-  `)
-  stmt.bind([childKey])
-
-  if (stmt.step()) {
-    const row = stmt.get({}) as { ancestor_key: Uint8Array }
-    const result = new Uint8Array(row.ancestor_key)
-    stmt.finalize()
-    return result
-  }
-
-  stmt.finalize()
-  return null
-}
-
-/**
- * Get the depth of a node in the hierarchy.
- * Returns the max depth in the closure table where descendant_key = key.
- * Root nodes return 0 (only the self-reference at depth 0 exists).
- * Returns null if the key has no closure entries (not found).
- */
-export const getDepth = (db: Database, matrixId: number, key: Uint8Array): number | null => {
-  const stmt = db.prepare(`
-    SELECT MAX(depth) as max_depth
-    FROM "mx_${matrixId}_closure"
-    WHERE descendant_key = ?
-  `)
-  stmt.bind([key])
-
-  if (stmt.step()) {
-    const row = stmt.get({}) as { max_depth: number | null }
-    stmt.finalize()
-    return row.max_depth
-  }
-
-  stmt.finalize()
-  return null
 }
 
 export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
@@ -1287,12 +540,12 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       if (existingKeys.length > 0 && i === rowsToAdd - 1) {
         // Make the last row a child of a random existing row
         const parentKey = existingKeys[Math.floor(Math.random() * existingKeys.length)]!
-        const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, parentKey })
+        const key = createTreePosition(db, matrixId, dataRowId, { parentKey })
         existingKeys.push(key)
       } else {
         // Append as a root-level row after the last root-level key
         const prevKey = lastInsertedRootKey ?? rootKeys[rootKeys.length - 1]
-        const key = insertRow(db, { matrixId, rowKind: 0, rowId: dataRowId, prevKey })
+        const key = createTreePosition(db, matrixId, dataRowId, { prevKey })
         existingKeys.push(key)
         rootKeys.push(key)
         lastInsertedRootKey = key
@@ -1310,43 +563,6 @@ export const getAllMatrices = (db: Database) => {
   }
   stmt.finalize()
   return matrices
-}
-
-// Get matrix data for debugging
-export const getMatrixDebugData = (db: Database, matrixId: number) => {
-  const dataStmt = db.prepare(`SELECT * FROM "mx_${matrixId}_data"`)
-  const data: unknown[] = []
-  while (dataStmt.step()) {
-    data.push(dataStmt.get({}))
-  }
-  dataStmt.finalize()
-
-  const rankStmt = db.prepare(`
-    SELECT key, row_kind, row_id 
-    FROM rank 
-    WHERE matrix_id = ? 
-    ORDER BY key
-  `)
-  const rank: unknown[] = []
-  rankStmt.bind([matrixId])
-  while (rankStmt.step()) {
-    rank.push(rankStmt.get({}))
-  }
-  rankStmt.finalize()
-
-  const closureStmt = db.prepare(`
-    SELECT ancestor_key, descendant_key, depth 
-    FROM "mx_${matrixId}_closure" 
-    ORDER BY ancestor_key, depth
-  `)
-  const closure: unknown[] = []
-  closureStmt.bind([matrixId])
-  while (closureStmt.step()) {
-    closure.push(closureStmt.get({}))
-  }
-  closureStmt.finalize()
-
-  return { data, rank, closure }
 }
 
 // -- Column schema management -------------------------------------------------

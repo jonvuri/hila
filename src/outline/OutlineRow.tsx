@@ -6,11 +6,10 @@ import 'prosemirror-view/style/prosemirror.css'
 
 import { updateRow } from '../core/client/matrix-client'
 import { logPmMount, logPmUnmount, logPmContentSync } from '../debug/debugState'
-
-import { createEditorState } from './createEditorState'
-import type { OutlineCallbacks } from './keymap'
-import { ParagraphView } from './nodeviews/ParagraphView'
-import { HeadingView } from './nodeviews/HeadingView'
+import { createEditorState } from '../editor/createEditorState'
+import type { OutlineCallbacks } from '../editor/keymap'
+import { ParagraphView } from '../editor/nodeviews/ParagraphView'
+import { HeadingView } from '../editor/nodeviews/HeadingView'
 
 const SAVE_DEBOUNCE_MS = 300
 

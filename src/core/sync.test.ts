@@ -9,17 +9,20 @@ import {
   createMatrix,
   insertDataRow,
   updateRow,
-  deleteRow,
-  insertRow,
-  getChildren,
-  getParent,
-  getDepth,
   addColumn,
   removeColumn,
   renameColumn,
   getColumns,
 } from './matrix'
 import { makeKey, parseKey } from './lexorank'
+import {
+  createTreePosition,
+  removeTreePosition,
+  getChildren,
+  getParent,
+  getDepth,
+  rebuildClosure,
+} from './tree'
 import { ensureTrait } from './traits'
 import {
   installCoreTableTriggers,
@@ -28,7 +31,6 @@ import {
   getLastUploadedSeq,
   setLastUploadedSeq,
   applyRemoteChanges,
-  rebuildClosure,
   compactChangelog,
 } from './sync'
 import type { Changeset } from './sync-types'
@@ -148,10 +150,11 @@ describe('Change tracking infrastructure', () => {
   test('DELETE on data table logs changelog entry with data=NULL', () => {
     const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Doomed' })
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    createTreePosition(db, matrixId, rowId)
     clearChangelog()
 
-    deleteRow(db, { matrixId, key })
+    removeTreePosition(db, matrixId, rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId] })
 
     const log = getChangelog()
     const deleteEntries = log.filter((e) => e.operation === 'DELETE')
@@ -293,7 +296,7 @@ describe('Change tracking infrastructure', () => {
     const rowId = insertDataRow(db, matrixId, { title: 'Ranked' })
     clearChangelog()
 
-    insertRow(db, { matrixId, rowKind: 0, rowId })
+    createTreePosition(db, matrixId, rowId)
 
     const log = getChangelog()
     const rankInsert = log.find((e) => e.table_name === 'rank' && e.operation === 'INSERT')
@@ -347,8 +350,9 @@ describe('Change tracking infrastructure', () => {
     const rowId = insertDataRow(db, matrixId, { title: 'Created' })
     updateRow(db, { matrixId, rowId, values: { title: 'Updated' } })
 
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
-    deleteRow(db, { matrixId, key })
+    createTreePosition(db, matrixId, rowId)
+    removeTreePosition(db, matrixId, rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId] })
 
     const log = getChangelog()
     const dataOps = log.filter((e) => e.table_name === `mx_${matrixId}_data`)
@@ -444,10 +448,11 @@ describe('Change tracking infrastructure', () => {
     test('getLocalChanges includes DELETE entries with null data', () => {
       const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Gone' })
-      const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+      createTreePosition(db, matrixId, rowId)
       clearChangelog()
 
-      deleteRow(db, { matrixId, key })
+      removeTreePosition(db, matrixId, rowId)
+      db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId] })
 
       const cs = getLocalChanges(db, 0)
       const dataDelete = cs.entries.find(
@@ -968,21 +973,13 @@ describe('Change tracking infrastructure', () => {
 
         // Build a hierarchy: parent → child → grandchild
         const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
-        const parentKey = insertRow(db, { matrixId, rowKind: 0, rowId: parentRowId })
+        const parentKey = createTreePosition(db, matrixId, parentRowId)
 
         const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
-        const childKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: childRowId,
-          parentKey,
-        })
+        const childKey = createTreePosition(db, matrixId, childRowId, { parentKey })
 
         const grandchildRowId = insertDataRow(db, matrixId, { title: 'Grandchild' })
-        const grandchildKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: grandchildRowId,
+        const grandchildKey = createTreePosition(db, matrixId, grandchildRowId, {
           parentKey: childKey,
         })
 
@@ -1018,34 +1015,19 @@ describe('Change tracking infrastructure', () => {
         // Build: P1 → C1, P2 → C2 → GC
         // Insert both root nodes first to avoid key ordering issues
         const p1RowId = insertDataRow(db, matrixId, { title: 'P1' })
-        const p1Key = insertRow(db, { matrixId, rowKind: 0, rowId: p1RowId })
+        const p1Key = createTreePosition(db, matrixId, p1RowId)
 
         const p2RowId = insertDataRow(db, matrixId, { title: 'P2' })
-        const p2Key = insertRow(db, { matrixId, rowKind: 0, rowId: p2RowId })
+        const p2Key = createTreePosition(db, matrixId, p2RowId)
 
         const c1RowId = insertDataRow(db, matrixId, { title: 'C1' })
-        const c1Key = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: c1RowId,
-          parentKey: p1Key,
-        })
+        const c1Key = createTreePosition(db, matrixId, c1RowId, { parentKey: p1Key })
 
         const c2RowId = insertDataRow(db, matrixId, { title: 'C2' })
-        const c2Key = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: c2RowId,
-          parentKey: p2Key,
-        })
+        const c2Key = createTreePosition(db, matrixId, c2RowId, { parentKey: p2Key })
 
         const gcRowId = insertDataRow(db, matrixId, { title: 'GC' })
-        const gcKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: gcRowId,
-          parentKey: c2Key,
-        })
+        const gcKey = createTreePosition(db, matrixId, gcRowId, { parentKey: c2Key })
 
         // Verify initial: GC is under P2 → C2
         expect(getParent(db, matrixId, gcKey)).toEqual(c2Key)
@@ -1098,15 +1080,10 @@ describe('Change tracking infrastructure', () => {
 
         // Create a parent and child
         const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
-        const parentKey = insertRow(db, { matrixId, rowKind: 0, rowId: parentRowId })
+        const parentKey = createTreePosition(db, matrixId, parentRowId)
 
         const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
-        insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: childRowId,
-          parentKey,
-        })
+        createTreePosition(db, matrixId, childRowId, { parentKey })
 
         clearChangelog()
 
@@ -1160,31 +1137,16 @@ describe('Change tracking infrastructure', () => {
 
         // Build a tree: root → A, root → B → C
         const rootRowId = insertDataRow(db, matrixId, { title: 'Root' })
-        const rootKey = insertRow(db, { matrixId, rowKind: 0, rowId: rootRowId })
+        const rootKey = createTreePosition(db, matrixId, rootRowId)
 
         const aRowId = insertDataRow(db, matrixId, { title: 'A' })
-        const aKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: aRowId,
-          parentKey: rootKey,
-        })
+        const aKey = createTreePosition(db, matrixId, aRowId, { parentKey: rootKey })
 
         const bRowId = insertDataRow(db, matrixId, { title: 'B' })
-        const bKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: bRowId,
-          parentKey: rootKey,
-        })
+        const bKey = createTreePosition(db, matrixId, bRowId, { parentKey: rootKey })
 
         const cRowId = insertDataRow(db, matrixId, { title: 'C' })
-        const cKey = insertRow(db, {
-          matrixId,
-          rowKind: 0,
-          rowId: cRowId,
-          parentKey: bKey,
-        })
+        const cKey = createTreePosition(db, matrixId, cRowId, { parentKey: bKey })
 
         // Rebuild closure from scratch
         rebuildClosure(db, matrixId)

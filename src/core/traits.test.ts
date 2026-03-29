@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, createMatrix, insertDataRow, insertRow } from './matrix'
+import { initMatrixSchema, createMatrix, insertDataRow } from './matrix'
+import { createTreePosition } from './tree'
 import { ensureTrait, getTraits } from './traits'
 
 describe('Trait provisioning', () => {
@@ -102,7 +103,7 @@ describe('Trait provisioning', () => {
     ensureTrait(db, 'closure', matrixId)
 
     const rowId = insertDataRow(db, matrixId, { title: 'Existing' })
-    insertRow(db, { matrixId, rowKind: 0, rowId })
+    createTreePosition(db, matrixId, rowId)
 
     const beforeStmt = db.prepare('SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?')
     beforeStmt.bind([matrixId])
@@ -127,7 +128,7 @@ describe('Trait provisioning', () => {
     const matrixId = createMatrix(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Test' })
 
-    expect(() => insertRow(db, { matrixId, rowKind: 0, rowId })).toThrow(
+    expect(() => createTreePosition(db, matrixId, rowId)).toThrow(
       /does not have the 'rank' trait provisioned/,
     )
   })
@@ -137,7 +138,7 @@ describe('Trait provisioning', () => {
     ensureTrait(db, 'rank', matrixId)
     const rowId = insertDataRow(db, matrixId, { title: 'Test' })
 
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    const key = createTreePosition(db, matrixId, rowId)
     expect(key).toBeInstanceOf(Uint8Array)
     expect(key.length).toBeGreaterThan(0)
   })
@@ -148,7 +149,7 @@ describe('Trait provisioning', () => {
     ensureTrait(db, 'closure', matrixId)
     const rowId = insertDataRow(db, matrixId, { title: 'Test' })
 
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    const key = createTreePosition(db, matrixId, rowId)
     expect(key).toBeTruthy()
     expect(key.length).toBeGreaterThan(0)
   })

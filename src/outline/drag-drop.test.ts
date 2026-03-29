@@ -11,15 +11,8 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import {
-  initMatrixSchema,
-  ensureRootMatrix,
-  insertDataRow,
-  insertRow,
-  reparentRow,
-  getChildren,
-  getParent,
-} from '../core/matrix'
+import { initMatrixSchema, ensureRootMatrix, insertDataRow } from '../core/matrix'
+import { createTreePosition, reparentRow, getChildren, getParent } from '../core/tree'
 import { compareKeys, parseKey } from '../core/lexorank'
 
 import { computeDropPosition, clampDropDepth, isNoOpDrop, type RowInfo } from './drag-drop'
@@ -226,12 +219,9 @@ describe('drag-and-drop data integration', () => {
     opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
   ) => {
     const rowId = insertDataRow(db, matrixId, { content: title })
-    const key = insertRow(db, {
-      matrixId,
+    const key = createTreePosition(db, matrixId, rowId, {
       parentKey: opts.parentKey,
       prevKey: opts.prevKey,
-      rowKind: 0,
-      rowId,
     })
     return { key, rowId }
   }

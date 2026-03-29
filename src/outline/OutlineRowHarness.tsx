@@ -6,8 +6,8 @@ import {
   computeDecorations,
 } from '../design/outline/Outline'
 import type { FlatRow, OutlineTheme } from '../design/outline/types'
+import type { OutlineCallbacks } from '../editor/keymap'
 
-import type { OutlineCallbacks } from './keymap'
 import { OutlineRowContent } from './OutlineRow'
 
 const makeDoc = (text: string) =>

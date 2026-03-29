@@ -3,7 +3,7 @@ import type { EditorView } from 'prosemirror-view'
 
 import { execQuery } from '../core/client/sql-client'
 import { insertRow } from '../core/client/matrix-client'
-import { schema } from '../outline/schema'
+import { schema } from '../editor/schema'
 
 type NoteOption = { id: number; title: string }
 

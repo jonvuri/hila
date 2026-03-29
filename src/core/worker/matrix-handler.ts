@@ -7,14 +7,9 @@ import {
   resetDeviceIdCache,
   createMatrix as createMatrixImpl,
   addSampleRowsToMatrix,
-  insertDataRow as insertDataRowImpl,
   insertRow as insertRowImpl,
-  updateRow as updateRowImpl,
   deleteRow as deleteRowImpl,
-  deleteSubtree as deleteSubtreeImpl,
-  reparentRow as reparentRowImpl,
-  getParent,
-  getChildren,
+  updateRow as updateRowImpl,
   getColumns as getColumnsImpl,
   addColumn as addColumnImpl,
   addFormulaColumn as addFormulaColumnImpl,
@@ -28,6 +23,7 @@ import {
   getTargets as getTargetsImpl,
   getSources as getSourcesImpl,
 } from '../matrix'
+import { reparentRow as reparentRowImpl, deleteSubtree as deleteSubtreeImpl } from '../tree'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
   saveFaceConfig as saveFaceConfigImpl,
@@ -39,7 +35,7 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
-import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl, hasTrait } from '../traits'
+import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl } from '../traits'
 
 import { triggerSubscribedQueries } from './sql-handler'
 import { sqliteWasm } from './worker-db'
@@ -59,8 +55,7 @@ const seedWelcomeRow = (db: Database, matrixId: number, content: string) => {
 
   if (hasRows) return
 
-  const rowId = insertDataRowImpl(db, matrixId, { content })
-  insertRowImpl(db, { matrixId, rowKind: 0, rowId })
+  insertRowImpl(db, matrixId, { values: { content } })
 }
 
 export const initMatrixHandler = (db: Database) => {
@@ -130,7 +125,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
 
-        // If the matrix has a content column and no content is provided, set the empty-doc default
         let resolvedValues = values
         if (resolvedValues === undefined || !('content' in resolvedValues)) {
           const columns = getColumnsImpl(db, matrixId)
@@ -139,16 +133,13 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           }
         }
 
-        const rowId = insertDataRowImpl(db, matrixId, resolvedValues)
-        const key = insertRowImpl(db, {
-          matrixId,
+        const result = insertRowImpl(db, matrixId, {
+          values: resolvedValues,
           parentKey,
           prevKey,
           nextKey,
-          rowKind: 0,
-          rowId,
         })
-        postMessage({ type: 'insertRowSuccess', id, result: { key, rowId } })
+        postMessage({ type: 'insertRowSuccess', id, result })
       } catch (err: unknown) {
         postMessage({ type: 'insertRowError', id, error: toError(err) })
       }
@@ -168,27 +159,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'deleteRow': {
-      const { matrixId, id, key } = message
+      const { matrixId, id, rowId } = message
       try {
         const { db } = await sqliteWasm
-
-        if (hasTrait(db, matrixId, 'closure')) {
-          const parentKey = getParent(db, matrixId, key)
-          const children = getChildren(db, matrixId, key)
-
-          let prevSiblingKey: Uint8Array | undefined = undefined
-          for (const childKey of children) {
-            const newKey = reparentRowImpl(db, {
-              matrixId,
-              nodeKey: childKey,
-              newParentKey: parentKey ?? undefined,
-              prevSiblingKey,
-            })
-            prevSiblingKey = newKey
-          }
-        }
-
-        deleteRowImpl(db, { matrixId, key })
+        deleteRowImpl(db, matrixId, rowId)
         postMessage({ type: 'deleteRowSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteRowError', id, error: toError(err) })
@@ -343,8 +317,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         checkStmt.finalize()
 
         if (!hasRows) {
-          const rowId = insertDataRowImpl(db, matrixId, values)
-          insertRowImpl(db, { matrixId, rowKind: 0, rowId })
+          insertRowImpl(db, matrixId, { values })
         }
         postMessage({ type: 'seedRowSuccess', id, result: undefined })
       } catch (err: unknown) {
@@ -360,18 +333,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'registerFaceTypeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'registerFaceTypeError', id, error: toError(err) })
-      }
-      break
-    }
-
-    case 'insertDataRow': {
-      const { id, matrixId, values } = message
-      try {
-        const { db } = await sqliteWasm
-        const rowId = insertDataRowImpl(db, matrixId, values)
-        postMessage({ type: 'insertDataRowSuccess', id, result: rowId })
-      } catch (err: unknown) {
-        postMessage({ type: 'insertDataRowError', id, error: toError(err) })
       }
       break
     }

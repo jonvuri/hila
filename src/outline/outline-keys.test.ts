@@ -11,17 +11,14 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import { initMatrixSchema, ensureRootMatrix, insertDataRow, updateRow } from '../core/matrix'
 import {
-  initMatrixSchema,
-  ensureRootMatrix,
-  insertDataRow,
-  insertRow,
-  updateRow,
-  deleteRow,
+  createTreePosition,
+  removeTreePosition,
   reparentRow,
   getChildren,
   getParent,
-} from '../core/matrix'
+} from '../core/tree'
 import { compareKeys } from '../core/lexorank'
 
 let db: Database
@@ -41,10 +38,7 @@ const insertContentRow = (
 ) => {
   const content = text ? makeDoc(text) : EMPTY_DOC
   const rowId = insertDataRow(db, matrixId, { content })
-  const key = insertRow(db, {
-    matrixId,
-    rowKind: 0,
-    rowId,
+  const key = createTreePosition(db, matrixId, rowId, {
     parentKey: opts?.parentKey,
     prevKey: opts?.prevKey,
   })
@@ -314,7 +308,8 @@ describe('Backspace — delete empty row', () => {
     const keysBefore = allRankKeys()
     expect(keysBefore).toHaveLength(2)
 
-    deleteRow(db, { matrixId, key: b.key })
+    removeTreePosition(db, matrixId, b.rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     const keysAfter = allRankKeys()
     expect(keysAfter).toHaveLength(1)
@@ -339,7 +334,8 @@ describe('Backspace — delete empty row', () => {
       })
       prevKey = newKey
     }
-    deleteRow(db, { matrixId, key: b.key })
+    removeTreePosition(db, matrixId, b.rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     // Children are now root-level
     const keys = allRankKeys()
@@ -362,7 +358,8 @@ describe('Backspace — merge content with previous row', () => {
       rowId: a.rowId,
       values: { content: makeDoc('Hello World') },
     })
-    deleteRow(db, { matrixId, key: b.key })
+    removeTreePosition(db, matrixId, b.rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     expect(getRowContent(a.rowId)).toBe(makeDoc('Hello World'))
     const keys = allRankKeys()
@@ -390,7 +387,8 @@ describe('Backspace — merge content with previous row', () => {
       rowId: a.rowId,
       values: { content: makeDoc('Hello World') },
     })
-    deleteRow(db, { matrixId, key: b.key })
+    removeTreePosition(db, matrixId, b.rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     expect(getRowContent(a.rowId)).toBe(makeDoc('Hello World'))
     const keys = allRankKeys()

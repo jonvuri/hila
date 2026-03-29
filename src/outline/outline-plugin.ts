@@ -76,11 +76,10 @@ export const buildPaginatedOutlineQuery = (
     afterKeyHex: opts.afterKeyHex ?? null,
   })
 
-  const limitClause = opts.limit !== undefined ? `LIMIT ${opts.limit}` : ''
+  const effectiveLimit = opts.limit ?? 10000
+  const limitClause = `LIMIT ${effectiveLimit}`
   const offsetClause =
-    opts.offset !== undefined && opts.offset > 0 && opts.limit !== undefined ?
-      `OFFSET ${opts.offset}`
-    : ''
+    opts.offset !== undefined && opts.offset > 0 ? `OFFSET ${opts.offset}` : ''
 
   return `
 SELECT r.key, r.row_id, ${contentExpr},

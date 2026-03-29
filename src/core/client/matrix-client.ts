@@ -40,8 +40,8 @@ export const insertRow = (
 export const updateRow = (matrixId: number, rowId: number, values: Record<string, unknown>) =>
   workerCall('updateRow', { matrixId, rowId, values })
 
-export const deleteRow = (matrixId: number, key: Uint8Array) =>
-  workerCall('deleteRow', { matrixId, key })
+export const deleteRow = (matrixId: number, rowId: number) =>
+  workerCall('deleteRow', { matrixId, rowId })
 
 export const reparentRow = (
   matrixId: number,
@@ -93,11 +93,6 @@ export const seedRow = (matrixId: number, values: Record<string, unknown>): Prom
 
 export const registerFaceType = (definition: FaceTypeDefinition): Promise<void> =>
   workerCall('registerFaceType', { definition })
-
-export const insertDataRow = (
-  matrixId: number,
-  values?: Record<string, unknown>,
-): Promise<number> => workerCall('insertDataRow', { matrixId, values })
 
 export const addColumn = (
   matrixId: number,

@@ -14,9 +14,9 @@ import {
 } from '../design/outline/Outline'
 import type { FlatRow, OutlineTheme } from '../design/outline/types'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
+import type { OutlineCallbacks } from '../editor/keymap'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
-import type { OutlineCallbacks } from './keymap'
 import { buildBreadcrumbQuery } from './outline-plugin'
 import { OutlineRowContent, type OutlineRowHandle } from './OutlineRow'
 import {
@@ -473,13 +473,13 @@ const OutlineFace = (props: OutlineFaceProps) => {
 
       if (isEmpty && !hasChildren) {
         const targetRowId = prevRow.row_id
-        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, row.row_id).then(() => {
           requestFocus(targetRowId, 'end')
         })
       } else if (isEmpty && hasChildren) {
         const firstChild = findFirstChild(vRows, index)
         const targetRowId = firstChild?.row_id ?? prevRow.row_id
-        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, row.row_id).then(() => {
           requestFocus(targetRowId, 'start')
         })
       } else {
@@ -498,7 +498,7 @@ const OutlineFace = (props: OutlineFaceProps) => {
         prevView.dispatch(tr)
         prevHandle.flushSave()
 
-        void deleteRow(props.matrixId, copyKey(row.key)!).then(() => {
+        void deleteRow(props.matrixId, row.row_id).then(() => {
           requestFocus(prevRow.row_id, mergePoint)
         })
       }

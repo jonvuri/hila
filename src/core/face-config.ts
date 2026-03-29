@@ -4,7 +4,7 @@ import type { FaceConfig, FaceConfigRow } from './face-types'
 import { getFaceType } from './face-registry'
 import { resolveSlotBindings } from './slot-binding'
 import { getColumns } from './matrix'
-import { rebuildClosure } from './sync'
+import { rebuildClosure } from './tree'
 import { ensureTrait, hasTrait } from './traits'
 import { withTransaction } from './transaction'
 

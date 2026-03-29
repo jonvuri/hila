@@ -3,10 +3,10 @@ import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-ada
 import { EditorView } from 'prosemirror-view'
 import 'prosemirror-view/style/prosemirror.css'
 
-import { createEditorState } from './createEditorState'
-import type { OutlineCallbacks } from './keymap'
-import { ParagraphView } from './nodeviews/ParagraphView'
-import { HeadingView } from './nodeviews/HeadingView'
+import { createEditorState } from '../editor/createEditorState'
+import type { OutlineCallbacks } from '../editor/keymap'
+import { ParagraphView } from '../editor/nodeviews/ParagraphView'
+import { HeadingView } from '../editor/nodeviews/HeadingView'
 
 const EditorInner = () => {
   const nodeViewFactory = useNodeViewFactory()

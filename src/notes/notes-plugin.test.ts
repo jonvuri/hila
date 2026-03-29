@@ -6,7 +6,6 @@ import { Node } from 'prosemirror-model'
 import {
   initMatrixSchema,
   createMatrix,
-  insertRow,
   insertDataRow,
   updateRow,
   insertJoin,
@@ -14,12 +13,13 @@ import {
   getTargets,
   getSources,
 } from '../core/matrix'
+import { createTreePosition, removeTreePosition } from '../core/tree'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
 import { ensureTrait, getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
-import { schema } from '../outline/schema'
+import { schema } from '../editor/schema'
 
 import {
   noteListFaceTypeDefinition,
@@ -107,7 +107,7 @@ describe('Notes plugin', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const rowId = insertDataRow(db, matrixId, { title: 'My Note', body: EMPTY_DOC_JSON })
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    const key = createTreePosition(db, matrixId, rowId)
 
     expect(key).toBeInstanceOf(Uint8Array)
     expect(key.length).toBeGreaterThan(0)
@@ -128,13 +128,13 @@ describe('Notes plugin', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const id1 = insertDataRow(db, matrixId, { title: 'First', body: EMPTY_DOC_JSON })
-    const key1 = insertRow(db, { matrixId, rowKind: 0, rowId: id1 })
+    const key1 = createTreePosition(db, matrixId, id1)
 
     const id2 = insertDataRow(db, matrixId, { title: 'Second', body: EMPTY_DOC_JSON })
-    const key2 = insertRow(db, { matrixId, rowKind: 0, rowId: id2, prevKey: key1 })
+    const key2 = createTreePosition(db, matrixId, id2, { prevKey: key1 })
 
     const id3 = insertDataRow(db, matrixId, { title: 'Third', body: EMPTY_DOC_JSON })
-    insertRow(db, { matrixId, rowKind: 0, rowId: id3, prevKey: key2 })
+    createTreePosition(db, matrixId, id3, { prevKey: key2 })
 
     const query = buildAllNotesQuery(matrixId)
     const stmt = db.prepare(query)
@@ -156,7 +156,7 @@ describe('Notes plugin', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const rowId = insertDataRow(db, matrixId, { title: 'Original', body: EMPTY_DOC_JSON })
-    insertRow(db, { matrixId, rowKind: 0, rowId })
+    createTreePosition(db, matrixId, rowId)
 
     const newBody = JSON.stringify({
       type: 'doc',
@@ -180,20 +180,19 @@ describe('Notes plugin', () => {
     ])
     ensureTrait(db, 'rank', matrixId)
 
-    const { deleteRow } = await import('../core/matrix')
-
     const rowId = insertDataRow(db, matrixId, { title: 'Doomed', body: EMPTY_DOC_JSON })
-    const key = insertRow(db, { matrixId, rowKind: 0, rowId })
+    createTreePosition(db, matrixId, rowId)
 
-    deleteRow(db, { matrixId, key })
+    removeTreePosition(db, matrixId, rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId] })
 
     const stmt = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(false)
     stmt.finalize()
 
-    const rankStmt = db.prepare('SELECT 1 FROM rank WHERE matrix_id = ? AND key = ?')
-    rankStmt.bind([matrixId, key])
+    const rankStmt = db.prepare('SELECT 1 FROM rank WHERE matrix_id = ? AND row_id = ?')
+    rankStmt.bind([matrixId, rowId])
     expect(rankStmt.step()).toBe(false)
     rankStmt.finalize()
   })
@@ -335,10 +334,10 @@ describe('Wikilink join sync (direct DB)', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: srcId })
+    createTreePosition(db, matrixId, srcId)
 
     const tgtId = insertDataRow(db, matrixId, { title: 'Target', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgtId })
+    createTreePosition(db, matrixId, tgtId)
 
     insertJoin(db, matrixId, srcId, matrixId, tgtId)
 
@@ -354,10 +353,10 @@ describe('Wikilink join sync (direct DB)', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: srcId })
+    createTreePosition(db, matrixId, srcId)
 
     const tgtId = insertDataRow(db, matrixId, { title: 'Target', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgtId })
+    createTreePosition(db, matrixId, tgtId)
 
     insertJoin(db, matrixId, srcId, matrixId, tgtId)
     expect(getTargets(db, matrixId, srcId)).toHaveLength(1)
@@ -374,16 +373,16 @@ describe('Wikilink join sync (direct DB)', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: srcId })
+    createTreePosition(db, matrixId, srcId)
 
     const tgt1 = insertDataRow(db, matrixId, { title: 'Target 1', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgt1 })
+    createTreePosition(db, matrixId, tgt1)
 
     const tgt2 = insertDataRow(db, matrixId, { title: 'Target 2', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgt2 })
+    createTreePosition(db, matrixId, tgt2)
 
     const tgt3 = insertDataRow(db, matrixId, { title: 'Target 3', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgt3 })
+    createTreePosition(db, matrixId, tgt3)
 
     insertJoin(db, matrixId, srcId, matrixId, tgt1)
     insertJoin(db, matrixId, srcId, matrixId, tgt2)
@@ -403,13 +402,13 @@ describe('Wikilink join sync (direct DB)', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const note1 = insertDataRow(db, matrixId, { title: 'Note 1', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: note1 })
+    createTreePosition(db, matrixId, note1)
 
     const note2 = insertDataRow(db, matrixId, { title: 'Note 2', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: note2 })
+    createTreePosition(db, matrixId, note2)
 
     const note3 = insertDataRow(db, matrixId, { title: 'Note 3', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: note3 })
+    createTreePosition(db, matrixId, note3)
 
     // note1 and note2 both link to note3
     insertJoin(db, matrixId, note1, matrixId, note3)
@@ -429,10 +428,10 @@ describe('Wikilink join sync (direct DB)', () => {
     ensureTrait(db, 'rank', matrixId)
 
     const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: srcId })
+    createTreePosition(db, matrixId, srcId)
 
     const tgtId = insertDataRow(db, matrixId, { title: 'Target', body: '' })
-    insertRow(db, { matrixId, rowKind: 0, rowId: tgtId })
+    createTreePosition(db, matrixId, tgtId)
 
     insertJoin(db, matrixId, srcId, matrixId, tgtId)
     insertJoin(db, matrixId, srcId, matrixId, tgtId)

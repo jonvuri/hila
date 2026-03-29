@@ -11,7 +11,8 @@ import {
 import type { FaceComponentProps } from '../core/FaceRenderer'
 import {
   updateRow,
-  insertDataRow,
+  insertRow,
+  deleteRow,
   addColumn,
   addFormulaColumn,
   removeColumn,
@@ -251,7 +252,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   // -- Row operations -------
   const addRow = async () => {
-    await insertDataRow(matrixId())
+    await insertRow(matrixId())
   }
 
   const deleteSelectedRow = async () => {
@@ -260,10 +261,8 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     const rowData = rows()[sel.row]
     if (!rowData) return
 
-    // TODO: for identity face, we delete from the data table directly.
-    // This currently uses insertDataRow's reverse; a direct DELETE is simplest.
-    // For now we'll use SQL exec via the query system.
-    // In a full implementation this would be a dedicated deleteDataRow API.
+    const rowId = rowData['id'] as number
+    await deleteRow(matrixId(), rowId)
   }
 
   // -- Column operations -------

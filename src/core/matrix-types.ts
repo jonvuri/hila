@@ -22,19 +22,19 @@ export type MatrixOperationMap = {
   insertRow: {
     params: {
       matrixId: number
+      values?: Record<string, unknown>
       parentKey?: Uint8Array
       prevKey?: Uint8Array
       nextKey?: Uint8Array
-      values?: Record<string, unknown>
     }
-    result: { key: Uint8Array; rowId: number }
+    result: { rowId: number; key: Uint8Array | null }
   }
   updateRow: {
     params: { matrixId: number; rowId: number; values: Record<string, unknown> }
     result: void
   }
   deleteRow: {
-    params: { matrixId: number; key: Uint8Array }
+    params: { matrixId: number; rowId: number }
     result: void
   }
   reparentRow: {
@@ -94,10 +94,6 @@ export type MatrixOperationMap = {
   registerFaceType: {
     params: { definition: FaceTypeDefinition }
     result: void
-  }
-  insertDataRow: {
-    params: { matrixId: number; values?: Record<string, unknown> }
-    result: number
   }
   addColumn: {
     params: {

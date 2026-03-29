@@ -76,7 +76,7 @@ const NoteListFace: Component<NoteListFaceProps> = (props) => {
 
   const handleDeleteNote = (e: MouseEvent, row: NoteRowData) => {
     e.stopPropagation()
-    void deleteRow(props.matrixId, copyKey(row.key)!)
+    void deleteRow(props.matrixId, row.row_id)
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
