@@ -1,5 +1,5 @@
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
-import type { ColumnDefinition } from './matrix'
+import type { ColumnDefinition, JoinKind } from './matrix'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from './traits'
 
@@ -143,6 +143,7 @@ export type MatrixOperationMap = {
       sourceRowId: number
       targetMatrixId: number
       targetRowId: number
+      kind?: JoinKind
     }
     result: void
   }
@@ -157,11 +158,11 @@ export type MatrixOperationMap = {
   }
   getTargets: {
     params: { sourceMatrixId: number; sourceRowId: number }
-    result: { targetMatrixId: number; targetRowId: number }[]
+    result: { targetMatrixId: number; targetRowId: number; kind: JoinKind }[]
   }
   getSources: {
     params: { targetMatrixId: number; targetRowId: number }
-    result: { sourceMatrixId: number; sourceRowId: number }[]
+    result: { sourceMatrixId: number; sourceRowId: number; kind: JoinKind }[]
   }
 }
 

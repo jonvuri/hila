@@ -98,6 +98,7 @@ export const initMatrixSchema = (db: Database) => {
       source_row_id     INTEGER NOT NULL,
       target_matrix_id  INTEGER NOT NULL,
       target_row_id     INTEGER NOT NULL,
+      kind              TEXT NOT NULL DEFAULT 'ref',
       PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
     ) STRICT;
 
@@ -174,6 +175,13 @@ export const initMatrixSchema = (db: Database) => {
   // Migration: add formula column to matrix_columns
   try {
     db.exec('ALTER TABLE matrix_columns ADD COLUMN formula TEXT')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+
+  // Migration: add kind column to joins table
+  try {
+    db.exec("ALTER TABLE joins ADD COLUMN kind TEXT NOT NULL DEFAULT 'ref'")
   } catch {
     // Column already exists (new database or previously migrated)
   }
@@ -787,11 +795,14 @@ export const reorderColumns = (db: Database, matrixId: number, columnNames: stri
 
 // -- Join operations ----------------------------------------------------------
 
+export type JoinKind = 'ref' | 'own'
+
 export type JoinRow = {
   source_matrix_id: number
   source_row_id: number
   target_matrix_id: number
   target_row_id: number
+  kind: JoinKind
 }
 
 /**
@@ -804,12 +815,24 @@ export const insertJoin = (
   sourceRowId: number,
   targetMatrixId: number,
   targetRowId: number,
+  kind: JoinKind = 'ref',
 ): void => {
   db.exec(
-    `INSERT OR IGNORE INTO joins (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
-     VALUES (?, ?, ?, ?)`,
-    { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId] },
+    `INSERT OR IGNORE INTO joins (source_matrix_id, source_row_id, target_matrix_id, target_row_id, kind)
+     VALUES (?, ?, ?, ?, ?)`,
+    { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind] },
   )
+}
+
+/** Insert a ref-kind join (explicit alias for insertJoin with kind='ref'). */
+export const createRefJoin = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'ref')
 }
 
 /** Delete a specific join. */
@@ -833,17 +856,25 @@ export const getTargets = (
   db: Database,
   sourceMatrixId: number,
   sourceRowId: number,
-): { targetMatrixId: number; targetRowId: number }[] => {
+): { targetMatrixId: number; targetRowId: number; kind: JoinKind }[] => {
   const stmt = db.prepare(
-    `SELECT target_matrix_id, target_row_id FROM joins
+    `SELECT target_matrix_id, target_row_id, kind FROM joins
      WHERE source_matrix_id = ? AND source_row_id = ?`,
   )
   stmt.bind([sourceMatrixId, sourceRowId])
 
-  const results: { targetMatrixId: number; targetRowId: number }[] = []
+  const results: { targetMatrixId: number; targetRowId: number; kind: JoinKind }[] = []
   while (stmt.step()) {
-    const row = stmt.get({}) as { target_matrix_id: number; target_row_id: number }
-    results.push({ targetMatrixId: row.target_matrix_id, targetRowId: row.target_row_id })
+    const row = stmt.get({}) as {
+      target_matrix_id: number
+      target_row_id: number
+      kind: JoinKind
+    }
+    results.push({
+      targetMatrixId: row.target_matrix_id,
+      targetRowId: row.target_row_id,
+      kind: row.kind,
+    })
   }
   stmt.finalize()
   return results
@@ -854,17 +885,25 @@ export const getSources = (
   db: Database,
   targetMatrixId: number,
   targetRowId: number,
-): { sourceMatrixId: number; sourceRowId: number }[] => {
+): { sourceMatrixId: number; sourceRowId: number; kind: JoinKind }[] => {
   const stmt = db.prepare(
-    `SELECT source_matrix_id, source_row_id FROM joins
+    `SELECT source_matrix_id, source_row_id, kind FROM joins
      WHERE target_matrix_id = ? AND target_row_id = ?`,
   )
   stmt.bind([targetMatrixId, targetRowId])
 
-  const results: { sourceMatrixId: number; sourceRowId: number }[] = []
+  const results: { sourceMatrixId: number; sourceRowId: number; kind: JoinKind }[] = []
   while (stmt.step()) {
-    const row = stmt.get({}) as { source_matrix_id: number; source_row_id: number }
-    results.push({ sourceMatrixId: row.source_matrix_id, sourceRowId: row.source_row_id })
+    const row = stmt.get({}) as {
+      source_matrix_id: number
+      source_row_id: number
+      kind: JoinKind
+    }
+    results.push({
+      sourceMatrixId: row.source_matrix_id,
+      sourceRowId: row.source_row_id,
+      kind: row.kind,
+    })
   }
   stmt.finalize()
   return results

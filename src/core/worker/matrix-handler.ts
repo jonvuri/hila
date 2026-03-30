@@ -445,10 +445,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'insertJoin': {
-      const { id, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId } = message
+      const { id, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind } = message
       try {
         const { db } = await sqliteWasm
-        insertJoinImpl(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)
+        insertJoinImpl(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind)
         postMessage({ type: 'insertJoinSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'insertJoinError', id, error: toError(err) })

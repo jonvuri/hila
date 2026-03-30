@@ -342,7 +342,7 @@ describe('Wikilink join sync (direct DB)', () => {
     insertJoin(db, matrixId, srcId, matrixId, tgtId)
 
     const targets = getTargets(db, matrixId, srcId)
-    expect(targets).toEqual([{ targetMatrixId: matrixId, targetRowId: tgtId }])
+    expect(targets).toEqual([{ targetMatrixId: matrixId, targetRowId: tgtId, kind: 'ref' }])
   })
 
   test('deleting a wikilink removes the join table row', () => {

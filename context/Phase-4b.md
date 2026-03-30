@@ -18,7 +18,7 @@ The `#` tag trigger, tag type registry, and tag property panel are Phase 5 scope
 
 Add the `kind` column to the join table schema and migrate existing data. See [Traits - Join kinds](./Traits.md#join-kinds).
 
-- [ ] Update `initMatrixSchema` in `src/core/matrix.ts` to include `kind` in the `joins` table DDL:
+- [x] Update `initMatrixSchema` in `src/core/matrix.ts` to include `kind` in the `joins` table DDL:
   ```sql
   CREATE TABLE IF NOT EXISTS joins (
     source_matrix_id  INTEGER NOT NULL,
@@ -30,13 +30,13 @@ Add the `kind` column to the join table schema and migrate existing data. See [T
   ) STRICT;
   ```
 
-- [ ] Add migration logic for existing databases: if `joins` table exists but lacks the `kind` column, `ALTER TABLE joins ADD COLUMN kind TEXT NOT NULL DEFAULT 'ref'`. Existing wiki-link joins automatically get `kind = 'ref'`, which is correct.
+- [x] Add migration logic for existing databases: if `joins` table exists but lacks the `kind` column, `ALTER TABLE joins ADD COLUMN kind TEXT NOT NULL DEFAULT 'ref'`. Existing wiki-link joins automatically get `kind = 'ref'`, which is correct.
 
-- [ ] Update sync changelog triggers on the `joins` table to include the `kind` column (Phase 3 infrastructure).
+- [x] Update sync changelog triggers on the `joins` table to include the `kind` column (Phase 3 infrastructure).
 
-- [ ] Update the `JoinRow` type in `matrix.ts` to include `kind: 'ref' | 'own'`.
+- [x] Update the `JoinRow` type in `matrix.ts` to include `kind: 'ref' | 'own'`. Added `JoinKind` type alias exported from `matrix.ts`.
 
-- [ ] Update `insertJoin` to accept an optional `kind` parameter (default `'ref'`):
+- [x] Update `insertJoin` to accept an optional `kind` parameter (default `'ref'`):
   ```typescript
   export const insertJoin = (
     db: Database, sourceMatrixId: number, sourceRowId: number,
@@ -44,16 +44,16 @@ Add the `kind` column to the join table schema and migrate existing data. See [T
   ): void
   ```
 
-- [ ] Add `createRefJoin` as an alias for `insertJoin` with `kind = 'ref'` (explicit API per [Traits - Core operations](./Traits.md#core-operations)).
+- [x] Add `createRefJoin` as an alias for `insertJoin` with `kind = 'ref'` (explicit API per [Traits - Core operations](./Traits.md#core-operations)). Added in both `matrix.ts` (core) and `matrix-client.ts` (client).
 
-- [ ] Update `getTargets` and `getSources` to return `kind` in their results.
+- [x] Update `getTargets` and `getSources` to return `kind` in their results.
 
-- [ ] Update worker message types in `matrix-types.ts`: `insertJoin` params gain `kind?: 'ref' | 'own'`. `getTargets` and `getSources` results gain `kind`.
+- [x] Update worker message types in `matrix-types.ts`: `insertJoin` params gain `kind?: JoinKind`. `getTargets` and `getSources` results gain `kind`. Imports `JoinKind` from `matrix.ts`.
 
-- [ ] Update worker handler and client functions accordingly.
+- [x] Update worker handler and client functions accordingly. Worker handler passes `kind` through. Client `insertJoin` accepts optional `kind`. Client adds `createRefJoin` convenience function. Client return types for `getTargets`/`getSources` updated.
 
-- [ ] Tests: verify migration adds `kind` column. Insert a join with default kind, verify `kind = 'ref'`. Insert a join with `kind = 'own'`, verify it persists. `getTargets` and `getSources` return the correct `kind` value. Existing wiki-link joins have `kind = 'ref'` after migration.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: verify migration adds `kind` column. Insert a join with default kind, verify `kind = 'ref'`. Insert a join with `kind = 'own'`, verify it persists. `getTargets` and `getSources` return the correct `kind` value. Mixed ref/own joins coexist correctly. `createRefJoin` alias works. Schema column presence verified. All existing join tests updated to include `kind: 'ref'` in assertions (including `notes-plugin.test.ts`).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (459 tests)
 
 ## 2. Owned join lifecycle: `createDependentRow` and cascade deletion
 

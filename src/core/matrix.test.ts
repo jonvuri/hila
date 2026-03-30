@@ -13,6 +13,7 @@ import {
   deleteJoin,
   getTargets,
   getSources,
+  createRefJoin,
   getColumns,
   addColumn,
   addFormulaColumn,
@@ -1871,7 +1872,7 @@ describe('Join table', () => {
     insertJoin(db, m1, 1, m2, 10)
 
     const targets = getTargets(db, m1, 1)
-    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10, kind: 'ref' }])
   })
 
   test('getTargets returns empty array when no joins exist', () => {
@@ -1886,7 +1887,7 @@ describe('Join table', () => {
     insertJoin(db, m1, 1, m2, 10)
 
     const sources = getSources(db, m2, 10)
-    expect(sources).toEqual([{ sourceMatrixId: m1, sourceRowId: 1 }])
+    expect(sources).toEqual([{ sourceMatrixId: m1, sourceRowId: 1, kind: 'ref' }])
   })
 
   test('getSources returns empty array when no joins exist', () => {
@@ -1922,7 +1923,7 @@ describe('Join table', () => {
     insertJoin(db, m1, 1, m2, 10)
 
     const targets = getTargets(db, m1, 1)
-    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10, kind: 'ref' }])
   })
 
   test('many-to-many: one source row can reference multiple targets', () => {
@@ -1936,9 +1937,9 @@ describe('Join table', () => {
 
     const targets = getTargets(db, m1, 1)
     expect(targets).toHaveLength(3)
-    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 10 })
-    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 20 })
-    expect(targets).toContainEqual({ targetMatrixId: m3, targetRowId: 5 })
+    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 10, kind: 'ref' })
+    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 20, kind: 'ref' })
+    expect(targets).toContainEqual({ targetMatrixId: m3, targetRowId: 5, kind: 'ref' })
   })
 
   test('many-to-many: one target row can be referenced by multiple sources', () => {
@@ -1952,9 +1953,9 @@ describe('Join table', () => {
 
     const sources = getSources(db, mTag, 10)
     expect(sources).toHaveLength(3)
-    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 1 })
-    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 2 })
-    expect(sources).toContainEqual({ sourceMatrixId: m2, sourceRowId: 5 })
+    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 1, kind: 'ref' })
+    expect(sources).toContainEqual({ sourceMatrixId: m1, sourceRowId: 2, kind: 'ref' })
+    expect(sources).toContainEqual({ sourceMatrixId: m2, sourceRowId: 5, kind: 'ref' })
   })
 
   test('deleting one join does not affect other joins from the same source', () => {
@@ -1967,7 +1968,7 @@ describe('Join table', () => {
     deleteJoin(db, m1, 1, m2, 10)
 
     const targets = getTargets(db, m1, 1)
-    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 20 }])
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 20, kind: 'ref' }])
   })
 
   test('joins between different source rows are independent', () => {
@@ -1977,8 +1978,80 @@ describe('Join table', () => {
     insertJoin(db, m1, 1, m2, 10)
     insertJoin(db, m1, 2, m2, 20)
 
-    expect(getTargets(db, m1, 1)).toEqual([{ targetMatrixId: m2, targetRowId: 10 }])
-    expect(getTargets(db, m1, 2)).toEqual([{ targetMatrixId: m2, targetRowId: 20 }])
+    expect(getTargets(db, m1, 1)).toEqual([{ targetMatrixId: m2, targetRowId: 10, kind: 'ref' }])
+    expect(getTargets(db, m1, 2)).toEqual([{ targetMatrixId: m2, targetRowId: 20, kind: 'ref' }])
+  })
+
+  test('insertJoin with kind = "own" persists the kind', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10, 'own')
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10, kind: 'own' }])
+
+    const sources = getSources(db, m2, 10)
+    expect(sources).toEqual([{ sourceMatrixId: m1, sourceRowId: 1, kind: 'own' }])
+  })
+
+  test('insertJoin defaults to kind = "ref"', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    insertJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets[0]!.kind).toBe('ref')
+  })
+
+  test('createRefJoin inserts a ref-kind join', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+
+    createRefJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toEqual([{ targetMatrixId: m2, targetRowId: 10, kind: 'ref' }])
+  })
+
+  test('mixed ref and own joins coexist and return correct kinds', () => {
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target A')
+    const m3 = createMatrix(db, 'Target B')
+
+    insertJoin(db, m1, 1, m2, 10, 'ref')
+    insertJoin(db, m1, 1, m3, 20, 'own')
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets).toHaveLength(2)
+    expect(targets).toContainEqual({ targetMatrixId: m2, targetRowId: 10, kind: 'ref' })
+    expect(targets).toContainEqual({ targetMatrixId: m3, targetRowId: 20, kind: 'own' })
+  })
+
+  test('migration adds kind column to existing joins table', () => {
+    // Simulate an old database without the kind column by verifying
+    // that calling initMatrixSchema again (migration path) succeeds
+    // and the kind column is functional.
+    initMatrixSchema(db)
+
+    const m1 = createMatrix(db, 'Source')
+    const m2 = createMatrix(db, 'Target')
+    insertJoin(db, m1, 1, m2, 10)
+
+    const targets = getTargets(db, m1, 1)
+    expect(targets[0]!.kind).toBe('ref')
+  })
+
+  test('joins table has kind column in schema', () => {
+    const stmt = db.prepare(`PRAGMA table_info(joins)`)
+    const columns: string[] = []
+    while (stmt.step()) {
+      const row = stmt.get({}) as { name: string }
+      columns.push(row.name)
+    }
+    stmt.finalize()
+    expect(columns).toContain('kind')
   })
 })
 

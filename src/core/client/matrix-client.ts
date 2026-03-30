@@ -1,5 +1,5 @@
 import type { FaceConfig, FaceTypeDefinition } from '../face-types'
-import type { ColumnDefinition } from '../matrix'
+import type { ColumnDefinition, JoinKind } from '../matrix'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -141,8 +141,17 @@ export const insertJoin = (
   sourceRowId: number,
   targetMatrixId: number,
   targetRowId: number,
+  kind?: JoinKind,
 ): Promise<void> =>
-  workerCall('insertJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId })
+  workerCall('insertJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind })
+
+export const createRefJoin = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): Promise<void> =>
+  workerCall('insertJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind: 'ref' })
 
 export const deleteJoin = (
   sourceMatrixId: number,
@@ -155,11 +164,11 @@ export const deleteJoin = (
 export const getTargets = (
   sourceMatrixId: number,
   sourceRowId: number,
-): Promise<{ targetMatrixId: number; targetRowId: number }[]> =>
+): Promise<{ targetMatrixId: number; targetRowId: number; kind: JoinKind }[]> =>
   workerCall('getTargets', { sourceMatrixId, sourceRowId })
 
 export const getSources = (
   targetMatrixId: number,
   targetRowId: number,
-): Promise<{ sourceMatrixId: number; sourceRowId: number }[]> =>
+): Promise<{ sourceMatrixId: number; sourceRowId: number; kind: JoinKind }[]> =>
   workerCall('getSources', { targetMatrixId, targetRowId })

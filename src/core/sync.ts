@@ -114,6 +114,7 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'source_row_id', type: 'INTEGER' },
     { name: 'target_matrix_id', type: 'INTEGER' },
     { name: 'target_row_id', type: 'INTEGER' },
+    { name: 'kind', type: 'TEXT' },
   ],
   face_configs: [
     { name: 'id', type: 'TEXT' },
