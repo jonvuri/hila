@@ -204,14 +204,14 @@ ORDER BY c.depth DESC;
 
 ### Notes plugin
 
-The notes plugin provides an Obsidian-like document editing experience: titled notes with rich text bodies and wiki-links between them.
+The notes plugin provides an Obsidian-like document editing experience: titled notes with rich text bodies and `@`-references between them.
 
 **Matrixes and traits:**
 
 - A note matrix with `title` (text) and `body` (rich text, ProseMirror JSON) columns.
 - A rank trait for user-defined ordering in the note list.
-- No closure trait (notes are flat, connected by wiki-links rather than tree hierarchy).
-- Join table rows for wiki-link references between notes.
+- No closure trait (notes are flat, connected by `@`-references rather than tree hierarchy).
+- Join table rows for cross-note references are managed by the inline references plugin.
 
 **Slot declaration:**
 - `title` (prefers: text) -- rendered as the heading at the top of the note.
@@ -233,12 +233,10 @@ SELECT d.title, d.body
 FROM mx_{mid}_data d
 WHERE d.id = :row_id;
 
--- Backlinks: all notes that link to a given note (via join table)
-SELECT j.source_row_id, d.title
+-- Backlinks: all rows that reference a given note (via join table)
+SELECT j.source_matrix_id, j.source_row_id, j.kind
 FROM joins j
-JOIN mx_{mid}_data d ON j.source_row_id = d.id
-WHERE j.target_matrix_id = :mid AND j.target_row_id = :target_rid
-  AND j.source_matrix_id = :mid;
+WHERE j.target_matrix_id = :mid AND j.target_row_id = :target_rid;
 ```
 
 **Named mutations:**
@@ -252,100 +250,112 @@ VALUES (:row_id, :title, :default_body);
 UPDATE mx_{mid}_data SET title = :title, body = :body WHERE id = :row_id;
 ```
 
-**Wiki-link sync (TypeScript orchestration):**
-
-On ProseMirror doc save, extract all `wikilink` inline nodes from the body JSON and sync them to the join table:
-1. Get all current wiki-link targets from the saved doc.
-2. Get all current join table rows for this source note.
-3. Insert new links, delete removed links (set-difference).
-
-The join table is a **materialized index** of wiki-links for fast querying. The ProseMirror document is the source of truth.
-
 **Faces:**
 
 - Note list face (sidebar): scrollable list of all notes showing title and body preview, searchable.
 - Single-note face (main pane): title as editable heading, body as ProseMirror editor, backlinks panel below.
-- `[[` triggers wiki-link autocomplete: search notes by title, select to insert a `wikilink` inline node with the target's `(matrixId, rowId)`.
 
-**Wiki-link inline node:**
+The notes plugin uses the inline references plugin (below) for `@`-references between notes and `#`-tags in note body text.
+
+### Inline references plugin
+
+The inline references plugin provides the shared infrastructure for cross-matrix references inside rich text and table cells. It implements both `@` (reference) and `#` (tag) modes as a unified system built on the core's join table with `ref`/`own` kind semantics. See [Architecture - Inline references](./Architecture.md#inline-references).
+
+**Two trigger modes, one mechanism:**
+
+- **`@` (reference mode).** Creates a `ref`-kind join. Autocomplete searches existing rows across matrixes. Can create references to nonexistent targets (empty state) that resolve on demand when the user clicks through. Used for wiki-links between notes, cross-matrix references in table cells, and any independent link.
+
+- **`#` (tag mode).** Creates an `own`-kind join via `createDependentRow`. Always creates a new row in the tag's matrix. The tag row is a lifecycle-bound aspect of the source row -- deleting the source row or removing the tag from text cascade-deletes the aspect row. Used for inline structured data (tasks, reviews, etc.) where the tag classifies the source row.
+
+**ProseMirror inline node:**
+
+Both modes use the same inline node shape:
 
 ```
-{ type: 'wikilink', attrs: { matrixId: 5, rowId: 42 } }
+{ type: 'inlineref', attrs: {
+  targetMatrixId: 5,       // null if target doesn't exist yet
+  targetRowId: 42,         // null if target doesn't exist yet
+  kind: 'ref',             // 'ref' or 'own'
+  cachedTitle: "My Note",  // last known or intended display text
+}}
 ```
 
-Displayed as the target note's current title (resolved via a named query). Survives renames because the ID is stored, not the title text.
+The ProseMirror document is the source of truth for which inline references exist in the text. The join table is synced from the document on save: new inline nodes create join entries, removed nodes delete join entries (triggering cascade deletion for `own`-kind entries). The `cachedTitle` attr is refreshed from the target's current state on save and serves as the fallback for empty and ghost states. See [Architecture - Inline references - Reference states](./Architecture.md#reference-states).
+
+**Table cell references:**
+
+Table columns can have a "reference" type that holds a join to a row in another matrix, analogous to a foreign key. The cell stores `(targetMatrixId, targetRowId, kind)`. Cell references share UX patterns and iconography with inline text references (same autocomplete, same live/empty/ghost states) but are optimized for the table surface (no ProseMirror overhead). `ref`-kind cells are independent foreign keys; `own`-kind cells are cascade-delete foreign keys.
+
+**Join table sync (TypeScript orchestration):**
+
+On ProseMirror doc save, the plugin diffs inline reference nodes against the join table:
+1. Extract all `inlineref` nodes from the saved doc.
+2. Get all current join entries for this source row.
+3. Insert new joins (with the appropriate `kind`), delete removed joins.
+4. For removed `own`-kind joins, the core cascade-deletes the target row.
+5. Refresh `cachedTitle` attrs in the doc from current target state.
+
+**Faces:**
+
+- Reference autocomplete: `@` triggers search across all matrixes; `#` triggers search across registered tag types.
+- Backlinks panel: reverse join lookup showing all rows that reference the current row (for notes, outlines, or any matrix).
+
+**Rendering:**
+
+- `@` references render as a linked title badge. Live state shows the target's current title. Empty state shows the cached intended title with a "create" affordance. Ghost state shows the cached last-known title with a deletion indicator.
+- `#` tags render as a colored badge with the tag type name and optional property chips (key fields from the aspect row). Clicking opens the tag property editor.
 
 ### Tags plugin
 
-The tags plugin provides inline tagging of note text, where each tag type is a matrix with its own schema (properties).
+The tags plugin manages tag type creation and the tag-specific UX built on top of the inline references plugin's `#` mode.
 
-**Matrixes and traits:**
+**Tag types are matrixes.** Each tag type (e.g. `#task`, `#movie-review`) is a regular matrix with a user-defined schema (columns for due date, priority, rating, etc.). The tags plugin maintains a lightweight registry of which matrixes are tag types, used to populate the `#` autocomplete. Creating a new tag type creates a new matrix; the matrix's identity face provides the aggregate "all instances" view (like a spreadsheet of all tasks).
 
-- Tag type matrixes (e.g. a `#task` matrix with `due_date` and `priority` columns, a `#person` matrix with `name` and `email` columns).
-- Join table rows linking note rows to tag rows.
-- A lightweight registry of tag types (possibly metadata in the matrix table, or its own table).
+**Aspect rows.** When a user types `#task` on an outline row, the inline references plugin calls `createDependentRow` to create a new row in the task matrix with an `own`-kind join. The task row is an aspect of the outline row -- it stores the task-specific fields (due date, priority, status) for that row. The outline row IS a task; the aspect row is where the task data lives.
+
+**Tag type creation is inline.** When a user types a tag type name that doesn't exist yet (e.g. `#project`), the tags plugin creates a new matrix for it with default columns. The new matrix exists in the registry and is surfaced through the tag browser or can be pinned into the outline by the user.
 
 **Named queries:**
 
 ```sql
--- All tag types
+-- All tag types (plugin-managed registry)
 SELECT * FROM tag_types;
 
--- Tags applied to a specific row (via join table)
-SELECT t.*, j.target_row_id
+-- Aspect row for a specific source row and tag type
+SELECT t.*
 FROM mx_{tag_mid}_data t
 JOIN joins j ON j.target_matrix_id = :tag_mid AND j.target_row_id = t.id
-WHERE j.source_matrix_id = :source_mid AND j.source_row_id = :source_rid;
+WHERE j.source_matrix_id = :source_mid AND j.source_row_id = :source_rid
+  AND j.kind = 'own';
 
--- All rows with a specific tag (reverse lookup)
+-- All source rows with a specific tag type (reverse lookup)
 SELECT j.source_matrix_id, j.source_row_id
 FROM joins j
-WHERE j.target_matrix_id = :tag_mid AND j.target_row_id = :tag_rid;
+WHERE j.target_matrix_id = :tag_mid AND j.kind = 'own';
 ```
 
 **Faces:**
 
-- Tag browser: list all tag types and their rows (bound to the all-tags query).
-- Tag autocomplete: inline suggestions when the user types `#` in a note.
-- Tag property editor: inline or sidebar editing of a tag row's properties. This face shows hydrated columns from the tag matrix, making them live-editable from wherever the tag appears.
-
-**Inline tag design:**
-
-Tags are referenced inside note text using inline markers. The text itself is the source of truth for which tags appear where:
-
-```
-Buy groceries [[tag:8:42]] before Friday
-```
-
-Where `8` is the tag matrix ID and `42` is the tag row ID. The join table is maintained as a **materialized index** of these markers for fast querying, not as an independent source of truth.
-
-This means:
-
-- Text edits naturally move tags around without offset bookkeeping.
-- The join table can be rebuilt from text content if needed.
-- Queries like "all notes referencing task X" go through the join table for speed.
-
-**Tag instances are shared entities.** When two notes reference `#task:42`, they reference the same row in the task matrix. Changing the due date updates it everywhere. The join table expresses the many-to-many relationship.
-
-**Tag type creation is inline.** When a user types a tag type that doesn't exist yet (e.g. `#project`), the tags plugin creates a new matrix for it. The new matrix (and its identity face) exists in the registry but is not placed in any outline. It is surfaced through the tag browser face or can be optionally pinned into the outline by the user.
+- Tag browser: list all tag types and their instances (each tag type links to its matrix's identity face for spreadsheet-style viewing).
+- Tag property editor: popover or sidebar showing a tag aspect row's columns as editable fields. Hydrated columns from the tag matrix, live-editable from wherever the tag appears. Edits write back to the tag matrix; changes propagate to all faces showing the same row.
 
 ## Cross-plugin interaction examples
 
-### Rendering a tagged note
+### Rendering inline references and tags
 
-1. The **outline plugin** renders a note row. It sees text content with `[[tag:8:42]]` markers.
-2. It delegates marker rendering to the **tags plugin**, which resolves matrix 8, row 42 via a named query and returns the tag data (name, properties).
-3. The outline face renders the tag inline with its properties, using a component provided by the tags plugin's face library. The tag's columns are hydrated -- they flow from the tag matrix unmodified -- so they are live-editable in place.
-4. If the user clicks the inline tag, the tags plugin's property editor face opens, showing the tag row's full properties.
-5. Edits to the tag row are executed as named mutations through the tags plugin. Changes propagate through the shared matrix -- any other note referencing the same tag row sees the update via reactive query invalidation.
+1. The **outline plugin** renders a row. The ProseMirror content contains `inlineref` nodes (both `@`-references and `#`-tags).
+2. The **inline references plugin** renders each node: `@`-references resolve to the target row's current title via a reactive query; `#`-tags resolve to the tag type name and key property values from the aspect row.
+3. The tag's aspect columns are hydrated -- they flow from the tag matrix unmodified -- so they are live-editable in place via the tag property editor.
+4. If the user clicks an `@`-reference, it navigates to the target row. If they click a `#`-tag, the **tags plugin's** property editor opens, showing the aspect row's full properties.
+5. Edits to the aspect row propagate through the shared tag matrix -- any face showing the same data sees the update via reactive query invalidation.
 
-All of this happens through SQL (join table queries, matrix reads, named mutations) and face composition, not through a direct coupling between the outline and tags plugin code.
+All of this happens through SQL (join table queries, matrix reads, named mutations) and face composition, not through a direct coupling between the outline, inline references, and tags plugin code.
 
 ### Cross-face data sharing: note matrix through multiple faces
 
 The same note matrix viewed through two different face types:
 
-1. **Note face (default view).** The user works in the notes plugin. `title` and `body` columns auto-bind by name to the note face's slots. The user sees titled documents with rich text bodies, wiki-links, and backlinks. Additional columns (if any) appear in a property panel.
+1. **Note face (default view).** The user works in the notes plugin. `title` and `body` columns auto-bind by name to the note face's slots. The user sees titled documents with rich text bodies, `@`-references, and backlinks. Additional columns (if any) appear in a property panel.
 
 2. **Outline face (applied view).** The user applies the outline face to the note matrix. The system auto-provisions rank and closure traits for the matrix. The `title` column binds to the outline's `primary_content` slot (first text column). The `body` column becomes an overflow side-column, visible as a secondary cell alongside the title in each row. The user now has a hierarchical outline of their notes with bodies visible inline.
 

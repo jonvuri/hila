@@ -7,9 +7,9 @@ Six use cases serve as a north star. Each one proves out different slices of the
 | Use case                                           | What it proves                                                                                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Outline with rich text**                         | Core data loop (SQLite → reactive query → UI → edit → SQLite), ProseMirror integration, rank + closure traits, virtualization, keyboard-driven UX |
-| **Notes with wiki-links**                          | Face slot model, cross-face data sharing, wiki-link joins, trait auto-provisioning, Obsidian-like document editing                          |
-| **Tasks** (due dates, priority, reminders)         | Supertag pattern, scheduling infrastructure, notification system, structured data in spreadsheet view                                      |
-| **Movie reviews** (name, rating, auto-filled date) | Supertag pattern, auto-fill/default values, custom cell renderers, lightweight structured data                                             |
+| **Notes with inline references**                   | Face slot model, cross-face data sharing, `@`-references with `ref`-kind joins, trait auto-provisioning, Obsidian-like document editing     |
+| **Tasks** (due dates, priority, reminders)         | Tag aspects via `#` and `own`-kind joins, scheduling infrastructure, notification system, structured data in spreadsheet view               |
+| **Movie reviews** (name, rating, auto-filled date) | Tag aspects via `#` and `own`-kind joins, auto-fill/default values, custom cell renderers, lightweight structured data                      |
 | **Spaced-repetition flashcards**                   | Custom face types with unique interaction models, time-based scheduling, join-based card sources                                           |
 | **Micro-journaling** (timed prompts)               | Form-based faces, timed notification triggers, configurable schedules, aggregate/timeline views                                            |
 
@@ -35,7 +35,7 @@ These threads run across multiple use cases and should be built as shared infras
 3. **Face composition** -- nesting faces within each other, embedding live query faces in notes, progressive depth (outline bullet ↔ note). See cross-face workflows above.
 4. **Trait provisioning** -- auto-provisioned, shared per-matrix metadata tables (rank, closure) requested by plugins or triggered by face application.
 5. **Matrix schemas + table faces** -- structured data management as spreadsheet-like tables (tasks, reviews, SRS cards, journal entries all have typed columns).
-6. **Tags / joins (supertags)** -- inline structured data attached to notes (tasks and reviews are supertags; SRS cards reference source material via joins).
+6. **Inline references + tags** -- `@`-references (independent `ref`-kind joins) and `#`-tags (lifecycle-bound `own`-kind joins creating aspect rows). Tasks and reviews are tag aspects; SRS cards reference source material via `@`-joins. See [Architecture - Inline references](./Architecture.md#inline-references).
 7. **Scheduling & time** -- time-based triggers and state machines (task reminders, SRS intervals, journal prompts).
 8. **Custom faces** -- non-outline views with unique interaction (note editor, flashcard review, journal quick-entry, notification tray).
 9. **Notifications** -- proactive alerts that surface across the app (task due dates, journal prompts, SRS review reminders).
@@ -136,11 +136,17 @@ Core infrastructure changes to make the schema sync-safe and all data mutations 
 
 ---
 
-### Phase 4 -- Plugin system, faces, and notes
+### Phase 4 -- Plugin system, faces, and notes (COMPLETE)
 
 > Detailed task list: [Phase-4.md](Phase-4.md)
 
-Formalize the plugin model from the outline's patterns. Build the face slot system. Introduce the notes plugin as the second consumer. Define how faces separate data from presentation and how the same matrix can be viewed through different face types.
+Formalize the plugin model from the outline's patterns. Build the face slot system. Introduce the notes plugin as the second consumer with wiki-links. Define how faces separate data from presentation and how the same matrix can be viewed through different face types.
+
+### Phase 4b -- Inline references and owned joins
+
+> Detailed task list: [Phase-4b.md](Phase-4b.md)
+
+Retrofit the Phase 4 wiki-link implementation with the generalized inline reference system. Add `ref`/`own` join kinds to the core with cascade deletion lifecycle. Evolve the `wikilink` PM node to `inlineref` with `@`/`[[` triggers, live/empty/ghost states, and cached metadata. Add reference-type cells to the table face. Build the foundation for Phase 5's `#` tag mode.
 
 **Work:**
 
@@ -174,9 +180,19 @@ Formalize the plugin model from the outline's patterns. Build the face slot syst
   - No slots (every column is a table column). The universal face and the default identity face for all matrixes.
   - Column headers with name and type. Click to rename, drag to reorder.
   - Inline cell editing: click a cell to edit, type to confirm.
-  - Column type system: text, number, date, boolean, select (enum with options). Each type has an appropriate editor and display renderer.
+  - Column type system: text, number, date, boolean, select (enum with options), reference (`ref`-kind or `own`-kind join to a row in another matrix). Each type has an appropriate editor and display renderer.
   - Add column (with type picker), delete column, add row, delete row.
   - Basic sort and filter controls.
+
+- **Inline references plugin.**
+
+  - Shared infrastructure for cross-matrix references in rich text and table cells, providing both `@` (reference, `ref`-kind join) and `#` (tag, `own`-kind join) modes. See [Architecture - Inline references](./Architecture.md#inline-references) and [Plugins - Inline references plugin](./Plugins.md#inline-references-plugin).
+  - **ProseMirror inline node**: `{ type: 'inlineref', attrs: { targetMatrixId, targetRowId, kind, cachedTitle } }`. Renders as a linked title badge (`@`) or colored tag badge (`#`).
+  - **Reference states**: live (target exists, shows current title via reactive query), empty (target doesn't exist yet, shows cached intended title), ghost (target deleted, shows cached last-known title with deletion indicator).
+  - **Join table sync**: on doc save, diff inline `inlineref` nodes against join table entries. Insert new joins, remove stale joins. Removed `own`-kind joins trigger cascade deletion of the target row. Refresh `cachedTitle` attrs from current target state.
+  - **Table cell reference type**: a column type holding a join to a row in another matrix. Shares UX and iconography with inline text references. `ref`-kind cells are independent foreign keys; `own`-kind cells are cascade-delete foreign keys.
+  - **`@` autocomplete**: typing `@` (or `[[`) searches existing rows across matrixes. Selecting inserts a `ref`-kind inline node. Typing a nonexistent name creates an empty-state reference.
+  - **Backlinks**: reverse join lookup showing all rows that reference the current row.
 
 - **Notes plugin.**
 
@@ -185,9 +201,7 @@ Formalize the plugin model from the outline's patterns. Build the face slot syst
   - **Note face** with slots: `title` (prefers text), `body` (prefers rich text). Overflow columns render in a Notion-style property panel.
   - Note list face (sidebar): scrollable list of notes with title and body preview.
   - Single-note face (main pane): title as editable heading, body as ProseMirror editor, backlinks panel below.
-  - **Wiki-link ProseMirror inline node**: `{ type: 'wikilink', attrs: { matrixId, rowId } }`. Displayed as the target note's current title. `[[` triggers autocomplete.
-  - **Wiki-link → join table sync**: on doc save, sync inline wikilink nodes to join table rows. The join table is a materialized index; the PM doc is the source of truth.
-  - **Backlinks**: reverse join lookup showing all notes that link to the current note.
+  - `@`-references between notes use the inline references plugin. Backlinks are reverse join lookups.
 
 - **Cross-face data sharing demo.**
 
@@ -207,59 +221,60 @@ Formalize the plugin model from the outline's patterns. Build the face slot syst
   - Rendered with a visual distinction (e.g. gray background) to indicate non-editability.
   - Provides the foundation for auto-fill and computed fields.
 
-**Testing:** Vitest for plugin registration, trait provisioning (idempotent, shared, face-triggered), face config serialization, slot binding resolution, wiki-link → join table sync, formula column evaluation. Playwright for table face interactions, note face (create note, edit title/body, insert wiki-link via `[[` autocomplete, backlinks panel), face configuration UI (slot binding), cross-face data sharing (edit in note face, verify in outline face).
+**Testing:** Vitest for plugin registration, trait provisioning (idempotent, shared, face-triggered), face config serialization, slot binding resolution, inline reference → join table sync (both `ref` and `own` kinds), cascade deletion through owned joins, reference state transitions (live/empty/ghost), formula column evaluation. Playwright for table face interactions (including reference-type cells), note face (create note, edit title/body, insert `@`-reference via autocomplete, backlinks panel), face configuration UI (slot binding), cross-face data sharing (edit in note face, verify in outline face).
 
-**Proves:** The plugin model works for two real consumers (outline + notes). The face slot system cleanly separates data from presentation. The same matrix can be viewed through different face types with different slot bindings. Trait auto-provisioning works when a face is applied. Wiki-links use the join table. The table face provides spreadsheet-like editing. Formula columns enable computed data.
+**Proves:** The plugin model works for multiple real consumers (outline + notes + inline references). The face slot system cleanly separates data from presentation. The same matrix can be viewed through different face types with different slot bindings. Trait auto-provisioning works when a face is applied. Inline references use the join table with `ref`/`own` lifecycle semantics. The table face provides spreadsheet-like editing with reference-type cells. Formula columns enable computed data.
 
 ---
 
-### Phase 5 -- Tags plugin (supertags)
+### Phase 5 -- Tags plugin (aspects via owned joins)
 
-The third plugin, proving cross-plugin composition through SQL and the join table.
+The tags plugin, proving cross-plugin composition through SQL and the join table's `own`-kind lifecycle semantics. Tags build on the inline references plugin from Phase 4.
 
 **Work:**
 
 - **Tag type creation.**
 
-  - Each tag type is a matrix with a user-defined schema (columns/types).
-  - Tag type registry: metadata indicating which matrixes are tag types (could be a flag in the matrix registry or a separate tags plugin table).
-  - Creating a new tag type (e.g. `#task`) creates a new matrix with default columns.
+  - Each tag type is a regular matrix with a user-defined schema (columns/types).
+  - Tag type registry: a plugin-managed table indicating which matrixes are tag types (used to populate `#` autocomplete).
+  - Creating a new tag type (e.g. `#task`) creates a new matrix with default columns. Typing a nonexistent tag type name in `#` autocomplete offers to create it inline.
 
-- **Inline tag markers in ProseMirror.**
+- **`#` tag mode in inline references.**
 
-  - Custom ProseMirror inline node for tags: `{ type: 'tag', attrs: { matrixId, rowId } }`.
-  - Rendered inline with the tag name and optionally key properties (e.g. "Buy groceries `#task` ⏰ Friday").
-  - Tag autocomplete: typing `#` opens a search/create dropdown. Selecting a tag type either creates a new row in that tag's matrix and inserts the marker, or links to an existing row.
-  - Tags can appear in both outline text and note body text -- the inline node pattern is shared with wiki-links.
+  - Extends the inline references plugin with `#` trigger and tag-specific autocomplete (searches registered tag types).
+  - Typing `#task` creates a new row in the task matrix via `createDependentRow` (atomic: insert row + `own`-kind join in one transaction). The inline `inlineref` node is inserted with `kind: 'own'`.
+  - Tags can appear in both outline text and note body text.
+  - Rendered inline as a colored badge with the tag type name and optionally key properties (e.g. "Buy groceries `#task` ⏰ Friday").
 
-- **Join table wiring.**
+- **Lifecycle through owned joins.**
 
-  - On ProseMirror doc save, sync inline tag markers → join table rows. The join table is a materialized index; the PM document is the source of truth for which tags appear in which notes.
-  - Forward lookup (note → its tags) and reverse lookup (tag → all notes referencing it) via prepared queries.
+  - Removing a `#`-tag from text (or deleting the source row) cascade-deletes the aspect row via the core's owned join lifecycle rules. No plugin-level lifecycle management needed.
+  - Deleting an aspect row from the tag matrix's identity face removes the inline `#` node from the source row's text (reverse cleanup).
+  - Forward lookup (row → its tags) and reverse lookup (tag type → all tagged rows) via prepared queries over the join table filtered by `kind = 'own'`.
 
 - **Tag property panel.**
 
-  - Clicking an inline tag opens a property editor (popover or sidebar).
-  - Shows the tag row's columns as editable fields (hydrated columns from the tag matrix).
-  - Edits write back to the tag matrix; changes propagate to all notes referencing the same tag row.
+  - Clicking an inline `#`-tag opens a property editor (popover or sidebar).
+  - Shows the aspect row's columns as editable fields (hydrated columns from the tag matrix).
+  - Edits write back to the tag matrix; changes propagate to all faces showing the same data.
 
 - **Tag browser face.**
 
   - A face listing all tag types and their instances.
-  - Each tag type can open a table face showing all its rows (the tag matrix as a spreadsheet).
-  - Reverse lookup: select a tag row to see all notes that reference it.
+  - Each tag type links to its matrix's identity face for spreadsheet-style viewing of all instances.
+  - Reverse lookup: select a tag row to see all source rows that have this tag.
 
-- **Solidify plugin API.** With three real consumers (outline + notes + tags), extract and formalize the plugin registration, lifecycle, and cross-plugin patterns.
+- **Solidify plugin API.** With multiple real consumers (outline + notes + inline references + tags), extract and formalize the plugin registration, lifecycle, and cross-plugin patterns.
 
-**Testing:** Vitest for join table sync logic (PM doc → join rows), tag type creation, forward/reverse lookup queries. Playwright for inline tag insertion (typing `#`, autocomplete interaction), tag property panel editing, tag browser navigation.
+**Testing:** Vitest for tag type creation, `createDependentRow` integration, cascade deletion (remove tag from text → aspect row deleted, delete source row → aspect row deleted, delete aspect row from identity face → inline node removed), forward/reverse lookup queries. Playwright for inline tag insertion (typing `#`, autocomplete interaction), tag property panel editing, tag browser navigation, lifecycle scenarios (delete row with tags, verify aspect rows are cleaned up).
 
-**Proves:** Cross-plugin interaction through SQL and the join table. Inline structured data in rich text (ProseMirror custom nodes). The supertag pattern works. Plugin-to-plugin rendering delegation (outline/notes delegate tag rendering to tags plugin).
+**Proves:** Cross-plugin interaction through SQL and the join table with lifecycle semantics. Owned joins as a core primitive work end-to-end. Tags as aspects (not independent entities) with automatic lifecycle management. Plugin-to-plugin rendering delegation (outline/notes delegate tag rendering to inline references + tags plugin).
 
 ---
 
-### Phase 6 -- Tasks and movie reviews (supertags in practice)
+### Phase 6 -- Tasks and movie reviews (tag aspects in practice)
 
-Concrete use of the tag system for two different real-world patterns.
+Concrete use of the tag system for two different real-world patterns. Each tag type is a matrix whose rows are created as owned aspects of source rows via `#`-tagging.
 
 **Work:**
 
@@ -287,7 +302,7 @@ Concrete use of the tag system for two different real-world patterns.
 
 **Testing:** Vitest for default value application on row creation, formula/expression evaluation. Playwright for custom cell renderers (star rating click interaction, status toggle, date picker), inline task status toggling from the outline.
 
-**Proves:** The supertag pattern handles diverse structured data. Spreadsheet-like editing works for real use cases. Custom cell renderers extend the table face. Default values reduce friction for data entry.
+**Proves:** Tag aspects handle diverse structured data through owned joins. Spreadsheet-like editing works for real use cases. Custom cell renderers extend the table face. Default values reduce friction for data entry.
 
 ---
 
@@ -456,8 +471,8 @@ Basic responsiveness from the start. At a mobile-sized breakpoint (~600px), layo
 Every operation should be keyboard-accessible. Build a shortcut system early (Phase 2) and extend it per phase:
 
 - Phase 2: Outline navigation, editing, reorder, indent/outdent.
-- Phase 4: Table navigation (arrow keys between cells), column operations, note face navigation, wiki-link insertion (`[[` trigger).
-- Phase 5: Tag insertion (`#` trigger), tag property navigation.
+- Phase 4: Table navigation (arrow keys between cells), column operations, note face navigation, `@`-reference insertion (`[[` or `@` trigger), `#`-tag insertion (`#` trigger).
+- Phase 5: Tag type autocomplete, tag property navigation.
 - Phase 6+: Context-specific shortcuts for each face type.
 
 ### Undo / redo
@@ -498,7 +513,11 @@ Phase 3 (Sync-readiness)
   ├───────────────────────────┐
   ▼                           ▼
 Phase 4 (Plugins, Faces,    Phase 7 (Scheduling
-  Notes, Traits, Slots)       + Notifications)
+  Notes, Traits, Slots) ✓      + Notifications)
+  │                           │
+  ▼                           │
+Phase 4b (Inline Refs,        │
+  Owned Joins)                │
   │                           │
   ▼                           │
 Phase 5 (Tags)                │
@@ -518,7 +537,7 @@ Phase 10 (Live sync, files, Dropbox) ◄── Phase 3
    independent of Phases 4-9)
 ```
 
-Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 is the heaviest phase: it formalizes the plugin system, builds the face slot model, introduces trait auto-provisioning, and delivers the notes plugin as the second consumer alongside the refactored outline. Phase 5 (tags) is the third plugin, proving cross-plugin composition. Phase 6 (tasks and movie reviews as supertag types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
+Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
 
 ---
 
@@ -545,7 +564,7 @@ What we have and its status relative to this plan:
 | ProseMirror setup (`createEditorView.ts`)          | **Port and adapt.** Core editor creation, keymap, node view factories.                |
 | Custom node views (`Paragraph.tsx`, `Heading.tsx`) | **Port and adapt.** Solid component-based node views.                                 |
 | `@prosemirror-adapter/solid` integration           | **Adopt.** The bridge between ProseMirror and Solid.js.                               |
-| Widget views (`Hashes.tsx`)                        | **Reference.** Pattern for ProseMirror decorations; adapt for wiki-links and tag markers. |
+| Widget views (`Hashes.tsx`)                        | **Reference.** Pattern for ProseMirror decorations; adapt for inline reference rendering. |
 | Custom commands (`commands.ts`)                    | **Port selectively.** Enter handling, heading cycling. Extend for outline operations. |
 
 ---
@@ -567,3 +586,7 @@ These don't need answers now but should be resolved as their phases approach.
 1. **Undo scope.** ProseMirror handles text undo. Structural and data undo is harder. Per-face undo stacks? Global transaction log? Defer until the pain is real?
 
 2. **Full-text search timing.** FTS5 index over all matrix content. Deferred for now -- the ProseMirror JSON supports simple text extraction, so the index can be added later without schema changes. Revisit when there's enough content to warrant it (likely Phase 5+).
+
+3. **Singleton tags and shared aspects.** The current design treats `#`-tags as always creating a new owned aspect row (instance tags). Singleton tags -- where `#project-alpha` references an existing, independently-living row -- are deferred. The `@`-reference mechanism covers the "link to an existing entity" use case. If singleton tags prove necessary (e.g. for a more tag-like UX around selecting from a curated list), they could be added as a `#` autocomplete option that creates a `ref`-kind join instead of `own`-kind. Revisit when real usage patterns emerge.
+
+4. **Labeled/typed joins.** The join table currently carries `kind` (`ref`/`own`) but no role or label (e.g. "author", "assignee"). Tana-style instance fields (a field that references nodes of a specific supertag type) would benefit from labeled joins for richer reverse lookups ("appears as Author in...", "appears as Assignee in..."). Deferred until structured field references are needed (likely Phase 5-6).

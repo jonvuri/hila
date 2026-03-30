@@ -102,7 +102,7 @@ Traits are not plugins and have no independent agency. They are purpose-specific
 
 **Provisioning model.** Any consumer can request `ensureTrait(type, matrixId)`. If the backing table exists, the existing handle is returned. If not, the core creates it. Traits are idempotent to request, shared across consumers, provisioned lazily on demand, and persistent (they survive plugin removal).
 
-**The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits.md#join).
+**The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references with lifecycle semantics. Each join entry carries a `kind` -- either `ref` (independent reference) or `own` (lifecycle-bound ownership). Owned joins enable cascade deletion: when a source row is deleted or the join is severed, the owned target row is automatically cleaned up. This is the core primitive that supports tags (as owned aspect rows), file attachments, and other lifecycle-bound cross-matrix patterns. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits.md#join).
 
 ### Plugins
 
@@ -248,6 +248,8 @@ The identity face is also the **source** in the hydration model -- the pool from
 
 A matrix can also be viewed through **specialized face types** with slot bindings (outline, note, flashcard, etc.). These are additional views, not replacements for the identity face. The identity face remains the authoritative surface for schema and destructive operations. A note matrix's primary user-facing view might be the note face, but its identity face (the table view) is always accessible for full-authority management.
 
+**Dependent rows and the identity face.** A matrix may contain rows created as owned aspects of rows in other matrixes (via `own`-kind joins -- see [Traits - Join kinds](./Traits.md#join-kinds)). These dependent rows appear in the identity face like any other row. Deleting a dependent row from the identity face is permitted -- the core removes the `own` join entry and the plugin managing the source-side reference handles cleanup (removing an inline tag node from rich text, or nulling a cell value in a table). Cascade deletion through owned joins is an automatic lifecycle consequence, not a manual destructive operation -- it does not require the identity face.
+
 ### Hydration
 
 The hydration model governs what is editable and what is read-only across all faces. Data originates at its **source** (the identity face for a matrix) and **flows** downstream through query expressions to other faces.
@@ -256,7 +258,7 @@ The hydration model governs what is editable and what is read-only across all fa
 
 A column in a face's query result is **hydrated** if it has flowed from its source matrix without modification -- the face has the matrix ID, the rowid, and the column value corresponds directly to a literal column in the source table. Hydrated columns are live and editable from any face, because editing them writes back to a specific, identifiable cell in a specific source row. Hydration applies equally to slot-bound columns and overflow columns -- editability depends on whether the column traces back to a source cell, not on which slot (if any) it occupies.
 
-Join reference columns are hydrated like any other column. A visible join reference can be edited (relinked to a different target row), cleared (unlinked), or filled (creating a new link). These operations translate to changes on the join table, but from the user's perspective it is simply editing a visible cell value. If the join reference column is not selected in the query, the join relationship is invisible and untouchable.
+Join reference columns are hydrated like any other column. A visible join reference can be edited (relinked to a different target row), cleared (unlinked), or filled (creating a new link). These operations translate to changes on the join table, but from the user's perspective it is simply editing a visible cell value. If the join reference column is not selected in the query, the join relationship is invisible and untouchable. Clearing a join reference cell respects the join's `kind`: clearing a `ref`-kind cell removes the join entry; clearing an `own`-kind cell removes the join entry and cascade-deletes the target row.
 
 #### Dry columns
 
@@ -282,6 +284,34 @@ This does not mean deletion is absolutely never available outside the identity f
 | Delete a row                | ✗ (default)               | ✓             |
 | Modify schema               | ✗                         | ✓             |
 | Delete the matrix           | ✗                         | ✓             |
+
+### Inline references
+
+Inline references are the user-facing mechanism for creating and displaying cross-matrix joins inside rich text and table cells. They appear in two modes that share rendering infrastructure but differ in creation behavior and join kind:
+
+- **`@` (reference mode).** Links to an existing row in another matrix. Creates a `ref`-kind join. The target row has independent lifecycle. Autocomplete searches existing rows. Referencing a nonexistent target (e.g. a note title that doesn't exist yet) creates the reference in an "empty" state with no join entry -- the user can later click to create the target on demand. This is the wiki-link pattern.
+
+- **`#` (tag mode).** Classifies the current row by creating a new dependent row in the tag's matrix. Creates an `own`-kind join via `createDependentRow`. The target row is a lifecycle-bound aspect of the source row. Autocomplete shows available tag types (matrixes registered for tag use).
+
+Both modes are provided by plugins, not the core. The core provides the join table with `kind` semantics and the `createDependentRow` / `createRefJoin` operations. Plugins provide the inline node types, autocomplete, rendering, and cache management.
+
+#### Surfaces
+
+Inline references appear on two surfaces:
+
+- **Rich text (ProseMirror).** Inline nodes embedded in outline row or note body text. Rendered as badges (title link for `@`, colored badge with optional property chips for `#`). The ProseMirror document is the source of truth for which references exist in the text; the join table is synced from the document on save.
+
+- **Table cells.** A column type that holds a reference to a row in another matrix, analogous to a foreign key. `ref`-kind cells are independent references; `own`-kind cells are cascade-delete foreign keys. Cell references share UX patterns and iconography with inline text references but may be more optimized (no ProseMirror overhead).
+
+#### Reference states
+
+An inline reference can be in one of three states:
+
+- **Live.** The target row exists. The reference resolves dynamically, showing the target's current title or content preview via a reactive query.
+- **Empty.** The target doesn't exist yet (a forward reference to something the user intends to create). No join entry exists. The reference carries a cached "desired" state (e.g. the intended note title) in the ProseMirror document attrs. Clicking the reference offers to create the target.
+- **Ghost.** The target existed but has been deleted. The join entry is gone. The reference retains cached metadata (last known title) from the ProseMirror document attrs and renders with a visual indicator (e.g. trash icon). Clicking offers to restore the target if recoverable.
+
+The ProseMirror document attrs serve as the persistent cache for reference metadata (title, preview, status). Live rendering always prefers the reactive query result; cached data is the fallback for empty and ghost states. The cache is refreshed on document save.
 
 ## UI concepts
 

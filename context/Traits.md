@@ -217,22 +217,58 @@ CREATE TABLE IF NOT EXISTS joins (
   source_row_id     INTEGER NOT NULL,
   target_matrix_id  INTEGER NOT NULL,
   target_row_id     INTEGER NOT NULL,
+  kind              TEXT NOT NULL DEFAULT 'ref',
   PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
 ) STRICT;
 ```
 
 Indexes should support efficient queries in both directions (source -> targets, target -> sources).
 
+### Join kinds
+
+The `kind` column distinguishes two flavors of cross-matrix relationship:
+
+- **`ref`** (reference). An independent link -- "this row mentions that row." Neither end affects the other's lifecycle. Removing the join or deleting the source row has no effect on the target row. This is the default and the kind used by `@`-references (wiki-links, foreign-key cell values, backlinks).
+
+- **`own`** (owned). A lifecycle-bound relationship -- "this row created and owns that row as an aspect." The target row exists *because of* this join. When the join is removed or the source row is deleted, the target row is cascade-deleted. This is the kind used by `#`-tags, where tagging a row creates a dependent aspect row in the tag's matrix.
+
+Each row has at most one `own` join pointing to it (single ownership). Multiple `ref` joins may point to the same target. Ownership is not transferable -- it is set at creation time and follows the relationship until it is severed.
+
+### Lifecycle rules
+
+The core enforces two rules based on join kind:
+
+1. **Source deletion cascades to owned targets.** When `deleteRow(matrixId, rowId)` is called, all join entries where `(source_matrix_id, source_row_id) = (matrixId, rowId)` and `kind = 'own'` trigger cascade deletion of their target rows. The cascade is recursive -- if an owned target itself owns further targets, those cascade too.
+
+2. **Removing an `own` join deletes the target.** When an `own` join entry is removed (e.g. because an inline `#`-tag was deleted from rich text, or a cell was cleared), the target row is deleted. This is the same cascade as rule 1, applied to join removal rather than source row deletion.
+
+`ref` joins have no lifecycle side effects. Removing a `ref` join or deleting its source row simply removes the join entry.
+
+**Reverse deletion from the identity face.** A dependent (owned) row is a real row in its target matrix and appears in that matrix's identity face. Deleting it from the identity face is permitted -- the core removes the `own` join entry and cleans up the source-side reference (nulling the cell value, or removing the inline node from the source row's rich text content). The specifics of source-side cleanup depend on the reference surface (inline text vs. table cell) and are handled by the plugin that manages that surface.
+
+### Core operations
+
+**`createDependentRow(sourceMatrixId, sourceRowId, targetMatrixId, columnValues)`** atomically:
+1. Inserts a new row in the target matrix with the given column values.
+2. Inserts a join entry with `kind = 'own'`.
+3. Returns the new target row ID.
+
+This is used by any plugin that needs lifecycle-bound cross-matrix rows (tags, file attachments, inline embeds, etc.).
+
+**`createRefJoin(sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)`** inserts a join entry with `kind = 'ref'`. The target row must already exist.
+
 ### Semantics
 
-- A join row says "this row in this matrix references that row in that matrix."
+- A join row says "this row in this matrix references that row in that matrix," with `kind` indicating whether the relationship carries lifecycle ownership.
 - Joins are many-to-many: a single row can reference multiple rows across multiple matrixes, and a single row can be referenced by many others.
 - Joins are orthogonal to traits. A note can join to a tag row in a matrix that has no rank or closure traits.
-- Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline tag markers or wiki-links in note text), or as the **primary source of truth** for a relationship, depending on the plugin's design.
+- Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline references in rich text), or as the **primary source of truth** for a relationship (e.g. a foreign-key cell in a table), depending on the surface.
 
 ### Hydration
 
-Join reference columns follow the same hydration rules as any other column. When a query selects a join reference (the target matrix and row IDs), that column is **hydrated** -- it is live and editable. The user can relink, unlink, or create links by editing the visible reference value. If the join reference is not selected in the query, the relationship is invisible and cannot be modified from that face.
+Join reference columns follow the same hydration rules as any other column. When a query selects a join reference (the target matrix and row IDs), that column is **hydrated** -- it is live and editable. The user can relink, unlink, or create links by editing the visible reference value. If the join reference is not selected in the query, the join relationship is invisible and cannot be modified from that face.
+
+Edits to join reference cells respect the `kind` semantics: clearing an `own`-kind cell deletes the target row; clearing a `ref`-kind cell just removes the join entry.
 
 See [Architecture - Hydration](./Architecture.md#hydration) for the full editability model.
 
@@ -240,14 +276,18 @@ See [Architecture - Hydration](./Architecture.md#hydration) for the full editabi
 
 ```sql
 -- Forward lookup: all targets for a source row
-SELECT target_matrix_id, target_row_id FROM joins
+SELECT target_matrix_id, target_row_id, kind FROM joins
 WHERE source_matrix_id = :mid AND source_row_id = :rid;
 
 -- Reverse lookup: all sources referencing a target row
-SELECT source_matrix_id, source_row_id FROM joins
+SELECT source_matrix_id, source_row_id, kind FROM joins
 WHERE target_matrix_id = :mid AND target_row_id = :rid;
 
 -- All rows in matrix A that reference any row in matrix B
 SELECT DISTINCT source_row_id FROM joins
 WHERE source_matrix_id = :a AND target_matrix_id = :b;
+
+-- Find owned targets for cascade deletion
+SELECT target_matrix_id, target_row_id FROM joins
+WHERE source_matrix_id = :mid AND source_row_id = :rid AND kind = 'own';
 ```
