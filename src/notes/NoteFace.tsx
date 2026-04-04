@@ -19,7 +19,7 @@ import { createEditorState } from '../editor/createEditorState'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 
-import { WikilinkView } from './nodeviews/WikilinkView'
+import { InlineRefView } from './nodeviews/InlineRefView'
 import { createWikilinkPlugin } from './wikilink-plugin'
 import { syncWikilinks } from './wikilink-sync'
 import { buildSingleNoteQuery } from './notes-plugin'
@@ -156,8 +156,8 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
         heading: nodeViewFactory({
           component: HeadingView,
         }),
-        wikilink: nodeViewFactory({
-          component: WikilinkView,
+        inlineref: nodeViewFactory({
+          component: InlineRefView,
           as: 'span',
         }),
       },

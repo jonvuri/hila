@@ -229,29 +229,42 @@ describe('Notes plugin', () => {
   })
 })
 
-describe('Wikilink schema node', () => {
-  test('wikilink node type exists in the schema', () => {
-    expect(schema.nodes.wikilink).toBeDefined()
+describe('Inlineref schema node', () => {
+  test('inlineref node type exists in the schema', () => {
+    expect(schema.nodes.inlineref).toBeDefined()
   })
 
-  test('wikilink node is inline and atom', () => {
-    const spec = schema.nodes.wikilink!.spec
+  test('inlineref node is inline and atom', () => {
+    const spec = schema.nodes.inlineref!.spec
     expect(spec.inline).toBe(true)
     expect(spec.atom).toBe(true)
     expect(spec.group).toBe('inline')
   })
 
-  test('wikilink node can be created with matrixId and rowId attrs', () => {
-    const node = schema.nodes.wikilink!.create({ matrixId: 1, rowId: 42 })
-    expect(node.attrs.matrixId).toBe(1)
-    expect(node.attrs.rowId).toBe(42)
+  test('inlineref node can be created with targetMatrixId and targetRowId attrs', () => {
+    const node = schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 42 })
+    expect(node.attrs.targetMatrixId).toBe(1)
+    expect(node.attrs.targetRowId).toBe(42)
+    expect(node.attrs.kind).toBe('ref')
+    expect(node.attrs.cachedTitle).toBeNull()
   })
 
-  test('wikilink node roundtrips through JSON serialization', () => {
+  test('inlineref node supports kind and cachedTitle attrs', () => {
+    const node = schema.nodes.inlineref!.create({
+      targetMatrixId: 1,
+      targetRowId: 42,
+      kind: 'own',
+      cachedTitle: 'My Tag',
+    })
+    expect(node.attrs.kind).toBe('own')
+    expect(node.attrs.cachedTitle).toBe('My Tag')
+  })
+
+  test('inlineref node roundtrips through JSON serialization', () => {
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [
         schema.text('before '),
-        schema.nodes.wikilink!.create({ matrixId: 5, rowId: 10 }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 5, targetRowId: 10 }),
         schema.text(' after'),
       ]),
     ])
@@ -259,26 +272,27 @@ describe('Wikilink schema node', () => {
     const json = doc.toJSON()
     const restored = Node.fromJSON(schema, json)
 
-    let foundWikilink = false
+    let found = false
     restored.descendants((node) => {
-      if (node.type.name === 'wikilink') {
-        expect(node.attrs.matrixId).toBe(5)
-        expect(node.attrs.rowId).toBe(10)
-        foundWikilink = true
+      if (node.type.name === 'inlineref') {
+        expect(node.attrs.targetMatrixId).toBe(5)
+        expect(node.attrs.targetRowId).toBe(10)
+        expect(node.attrs.kind).toBe('ref')
+        found = true
       }
     })
-    expect(foundWikilink).toBe(true)
+    expect(found).toBe(true)
   })
 })
 
 describe('extractWikilinks', () => {
-  test('extracts wikilinks from a PM doc', () => {
+  test('extracts inlineref links from a PM doc', () => {
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [
         schema.text('see '),
-        schema.nodes.wikilink!.create({ matrixId: 1, rowId: 2 }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 2 }),
         schema.text(' and '),
-        schema.nodes.wikilink!.create({ matrixId: 1, rowId: 3 }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 3 }),
       ]),
     ])
 
@@ -289,7 +303,7 @@ describe('extractWikilinks', () => {
     ])
   })
 
-  test('returns empty array for doc without wikilinks', () => {
+  test('returns empty array for doc without inlineref nodes', () => {
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [schema.text('plain text')]),
     ])
@@ -297,13 +311,13 @@ describe('extractWikilinks', () => {
     expect(extractWikilinks(doc)).toEqual([])
   })
 
-  test('extracts wikilinks across multiple paragraphs', () => {
+  test('extracts inlineref links across multiple paragraphs', () => {
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [
-        schema.nodes.wikilink!.create({ matrixId: 1, rowId: 10 }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 10 }),
       ]),
       schema.node('paragraph', null, [
-        schema.nodes.wikilink!.create({ matrixId: 1, rowId: 20 }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 20 }),
       ]),
     ])
 
@@ -311,6 +325,18 @@ describe('extractWikilinks', () => {
     expect(links).toHaveLength(2)
     expect(links[0]).toEqual({ matrixId: 1, rowId: 10 })
     expect(links[1]).toEqual({ matrixId: 1, rowId: 20 })
+  })
+
+  test('skips inlineref nodes with null target IDs', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('paragraph', null, [
+        schema.nodes.inlineref!.create({ targetMatrixId: null, targetRowId: null }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 5 }),
+      ]),
+    ])
+
+    const links = extractWikilinks(doc)
+    expect(links).toEqual([{ matrixId: 1, rowId: 5 }])
   })
 })
 

@@ -103,7 +103,7 @@ Implement the core lifecycle rules for `own`-kind joins per [Traits - Lifecycle 
 
 Rename and expand the ProseMirror inline node to support the generalized inline reference model. Migrate existing document data.
 
-- [ ] Update the PM schema in `src/editor/schema.ts`. Replace the `wikilink` node with `inlineref`:
+- [x] Update the PM schema in `src/editor/schema.ts`. Replace the `wikilink` node with `inlineref`:
   ```typescript
   inlineref: {
     group: 'inline',
@@ -145,20 +145,20 @@ Rename and expand the ProseMirror inline node to support the generalized inline 
   - `"attrs": { "matrixId": N, "rowId": M }` → `"attrs": { "targetMatrixId": N, "targetRowId": M, "kind": "ref", "cachedTitle": null }`
   Run this migration in `initMatrixSchema` (or a dedicated migration step) on database open. Only touch rows that contain `"wikilink"` in their JSON to minimize writes.
 
-- [ ] Rename `src/notes/nodeviews/WikilinkView.tsx` → `src/notes/nodeviews/InlineRefView.tsx` (or a shared location like `src/editor/nodeviews/InlineRefView.tsx`). Update all imports.
+- [x] Rename `src/notes/nodeviews/WikilinkView.tsx` → `src/notes/nodeviews/InlineRefView.tsx` (or a shared location like `src/editor/nodeviews/InlineRefView.tsx`). Update all imports.
 
-- [ ] Evolve `InlineRefView` to read the new attrs (`targetMatrixId`, `targetRowId`, `kind`, `cachedTitle`) and implement the three reference states:
+- [x] Evolve `InlineRefView` to read the new attrs (`targetMatrixId`, `targetRowId`, `kind`, `cachedTitle`) and implement the three reference states:
   - **Live**: target exists. Resolve title via reactive query (as before). Render as linked badge.
   - **Empty**: `targetMatrixId` and `targetRowId` are null. Render `cachedTitle` with a "create" affordance (dimmed or dashed style, click to create the target).
   - **Ghost**: `targetMatrixId` and `targetRowId` are non-null but the query returns no row. Render `cachedTitle` with a deletion indicator (trash icon or strikethrough).
   - For `kind = 'own'`, render as a colored tag-style badge (foundation for Phase 5 `#` tags). For `kind = 'ref'`, render as a linked title badge (current wikilink style).
 
-- [ ] Update `NoteFace.tsx` to wire `InlineRefView` as the node view for `inlineref` (replacing `wikilink`).
+- [x] Update `NoteFace.tsx` to wire `InlineRefView` as the node view for `inlineref` (replacing `wikilink`).
 
-- [ ] Update all CSS class names: `.wikilink` → `.inlineref`, `.wikilink-broken` → `.inlineref-ghost`, etc. in `global.css` or CSS modules.
+- [x] Update all CSS class names: `.wikilink` → `.inlineref`, `.wikilink-broken` → `.inlineref-ghost`, etc. in `global.css` or CSS modules.
 
 - [ ] Tests: verify old PM JSON with `wikilink` nodes migrates to `inlineref`. Verify `InlineRefView` renders live state correctly (title from query). Verify ghost state when target row is deleted (shows cached title + indicator). Verify empty state with null IDs.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Autocomplete: `@` trigger and empty references
 

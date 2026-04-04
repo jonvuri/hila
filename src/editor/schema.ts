@@ -33,32 +33,45 @@ export const schema = new Schema({
       },
     },
 
-    wikilink: {
+    inlineref: {
       group: 'inline',
       inline: true,
       atom: true,
       attrs: {
-        matrixId: { default: null },
-        rowId: { default: null },
+        targetMatrixId: { default: null },
+        targetRowId: { default: null },
+        kind: { default: 'ref' },
+        cachedTitle: { default: null },
       },
       toDOM(node) {
         return [
           'span',
           {
-            class: 'wikilink',
-            'data-matrix-id': String(node.attrs.matrixId),
-            'data-row-id': String(node.attrs.rowId),
+            class: 'inlineref',
+            'data-target-matrix-id': String(node.attrs.targetMatrixId),
+            'data-target-row-id': String(node.attrs.targetRowId),
+            'data-kind': String(node.attrs.kind),
+            'data-cached-title': String(node.attrs.cachedTitle ?? ''),
           },
           '',
         ]
       },
       parseDOM: [
         {
-          tag: 'span.wikilink',
+          tag: 'span.inlineref',
           getAttrs(dom) {
+            const el = dom as HTMLElement
             return {
-              matrixId: Number((dom as HTMLElement).getAttribute('data-matrix-id')),
-              rowId: Number((dom as HTMLElement).getAttribute('data-row-id')),
+              targetMatrixId:
+                el.getAttribute('data-target-matrix-id') ?
+                  Number(el.getAttribute('data-target-matrix-id'))
+                : null,
+              targetRowId:
+                el.getAttribute('data-target-row-id') ?
+                  Number(el.getAttribute('data-target-row-id'))
+                : null,
+              kind: el.getAttribute('data-kind') || 'ref',
+              cachedTitle: el.getAttribute('data-cached-title') || null,
             }
           },
         },

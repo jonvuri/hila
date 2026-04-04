@@ -107,8 +107,8 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
   const insertWikilinkNode = (view: EditorView, matrixIdAttr: number, rowId: number) => {
     const state = getAutocompleteState(view)
     if (!state.active) return
-    const wikilinkType = schema.nodes.wikilink!
-    const node = wikilinkType.create({ matrixId: matrixIdAttr, rowId })
+    const inlinerefType = schema.nodes.inlineref!
+    const node = inlinerefType.create({ targetMatrixId: matrixIdAttr, targetRowId: rowId })
     const deleteFrom = state.from - 2
     const deleteTo = state.from + state.query.length
     const tr = view.state.tr.replaceWith(deleteFrom, deleteTo, node)

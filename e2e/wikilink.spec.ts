@@ -99,9 +99,9 @@ test.describe('Wiki-links', () => {
     // Press Enter to select the first option
     await page.keyboard.press('Enter')
 
-    // The wikilink node should be inserted in the editor
-    await expect(editor.locator('.wikilink')).toBeVisible({ timeout: 5000 })
-    await expect(editor.locator('.wikilink')).toContainText('Target Note')
+    // The inlineref node should be inserted in the editor
+    await expect(editor.locator('.inlineref')).toBeVisible({ timeout: 5000 })
+    await expect(editor.locator('.inlineref')).toContainText('Target Note')
 
     // Autocomplete should be closed
     await expect(page.locator('.wikilink-autocomplete')).not.toBeVisible()
@@ -132,11 +132,11 @@ test.describe('Wiki-links', () => {
     ).toBeVisible({ timeout: 5000 })
     await page.keyboard.press('Enter')
 
-    await expect(editor.locator('.wikilink')).toBeVisible({ timeout: 5000 })
+    await expect(editor.locator('.inlineref')).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(500) // wait for save
 
-    // Click the wikilink to navigate
-    await editor.locator('.wikilink').click()
+    // Click the inlineref to navigate
+    await editor.locator('.inlineref').click()
 
     // Should navigate to the target note — title should show "Linked Note"
     await expect(page.locator('.note-title-input')).toHaveValue('Linked Note', { timeout: 5000 })
@@ -169,7 +169,7 @@ test.describe('Wiki-links', () => {
     ).toBeVisible({ timeout: 5000 })
     await page.keyboard.press('Enter')
 
-    await expect(editor.locator('.wikilink')).toBeVisible({ timeout: 5000 })
+    await expect(editor.locator('.inlineref')).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(500) // wait for save and wikilink sync
 
     // Navigate to the Welcome note to check backlinks

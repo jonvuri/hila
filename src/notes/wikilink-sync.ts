@@ -9,9 +9,9 @@ const linkKey = (ref: LinkRef) => `${ref.matrixId}:${ref.rowId}`
 export const extractWikilinks = (doc: Node): LinkRef[] => {
   const links: LinkRef[] = []
   doc.descendants((node) => {
-    if (node.type.name === 'wikilink') {
-      const matrixId = node.attrs.matrixId as number
-      const rowId = node.attrs.rowId as number
+    if (node.type.name === 'inlineref') {
+      const matrixId = node.attrs.targetMatrixId as number
+      const rowId = node.attrs.targetRowId as number
       if (matrixId != null && rowId != null) {
         links.push({ matrixId, rowId })
       }
