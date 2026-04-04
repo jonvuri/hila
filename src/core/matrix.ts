@@ -459,30 +459,67 @@ export const insertRow = (
   })
 }
 
+const MAX_CASCADE_DEPTH = 100
+
 /**
  * Unified row delete: removes a data row and auto-cleans provisioned traits.
  *
  * If the matrix has rank+closure traits, children are reparented to the deleted
  * row's parent (or promoted to root) before the rank and closure entries are
  * removed. Join references involving the row are also cleaned up.
+ *
+ * Owned targets (joins with kind='own' where this row is the source) are
+ * cascade-deleted recursively before the row itself is removed.
  */
 export const deleteRow = (db: Database, matrixId: number, rowId: number): void => {
   withTransaction(db, () => {
-    if (hasTrait(db, matrixId, 'rank')) {
-      removeTreePosition(db, matrixId, rowId)
-    }
-
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
-      bind: [rowId],
-    })
-
-    db.exec(
-      `DELETE FROM joins
-       WHERE (source_matrix_id = ? AND source_row_id = ?)
-          OR (target_matrix_id = ? AND target_row_id = ?)`,
-      { bind: [matrixId, rowId, matrixId, rowId] },
-    )
+    deleteRowCascade(db, matrixId, rowId, 0)
   })
+}
+
+const deleteRowCascade = (
+  db: Database,
+  matrixId: number,
+  rowId: number,
+  depth: number,
+): void => {
+  if (depth >= MAX_CASCADE_DEPTH) {
+    throw new Error(`Cascade deletion depth exceeded ${MAX_CASCADE_DEPTH} — possible cycle`)
+  }
+
+  const ownedStmt = db.prepare(
+    `SELECT target_matrix_id, target_row_id FROM joins
+     WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'`,
+  )
+  ownedStmt.bind([matrixId, rowId])
+  const ownedTargets: { matrixId: number; rowId: number }[] = []
+  while (ownedStmt.step()) {
+    const row = ownedStmt.get({}) as {
+      target_matrix_id: number
+      target_row_id: number
+    }
+    ownedTargets.push({ matrixId: row.target_matrix_id, rowId: row.target_row_id })
+  }
+  ownedStmt.finalize()
+
+  for (const target of ownedTargets) {
+    deleteRowCascade(db, target.matrixId, target.rowId, depth + 1)
+  }
+
+  if (hasTrait(db, matrixId, 'rank')) {
+    removeTreePosition(db, matrixId, rowId)
+  }
+
+  db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
+    bind: [rowId],
+  })
+
+  db.exec(
+    `DELETE FROM joins
+     WHERE (source_matrix_id = ? AND source_row_id = ?)
+        OR (target_matrix_id = ? AND target_row_id = ?)`,
+    { bind: [matrixId, rowId, matrixId, rowId] },
+  )
 }
 
 export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
@@ -824,6 +861,29 @@ export const insertJoin = (
   )
 }
 
+/**
+ * Atomically create a new row in the target matrix and an `own`-kind join
+ * from the source row to it. Enforces single-ownership: a target row may
+ * have at most one `own` join pointing to it.
+ *
+ * @returns The new target row's id.
+ */
+export const createDependentRow = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  columnValues: Record<string, unknown> = {},
+): number => {
+  return withTransaction(db, () => {
+    const targetRowId = insertDataRow(db, targetMatrixId, columnValues)
+
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'own')
+
+    return targetRowId
+  })
+}
+
 /** Insert a ref-kind join (explicit alias for insertJoin with kind='ref'). */
 export const createRefJoin = (
   db: Database,
@@ -849,6 +909,72 @@ export const deleteJoin = (
        AND target_matrix_id = ? AND target_row_id = ?`,
     { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId] },
   )
+}
+
+/**
+ * Delete an owned target row, triggering its own cascades. Called when an
+ * `own`-kind join is removed without deleting the source row (e.g. a `#`-tag
+ * removed from rich text, or an own-kind cell cleared).
+ */
+export const deleteOwnedTarget = (
+  db: Database,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  deleteRow(db, targetMatrixId, targetRowId)
+}
+
+/**
+ * Find and remove the `own`-kind join pointing to a target row. Returns the
+ * join info so the calling plugin can clean up the source-side reference.
+ * Returns null if no own-kind join targets this row.
+ */
+export const deleteJoinByTarget = (
+  db: Database,
+  targetMatrixId: number,
+  targetRowId: number,
+): JoinRow | null => {
+  return withTransaction(db, () => {
+    const stmt = db.prepare(
+      `SELECT source_matrix_id, source_row_id, target_matrix_id, target_row_id, kind
+       FROM joins
+       WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'
+       LIMIT 1`,
+    )
+    stmt.bind([targetMatrixId, targetRowId])
+
+    if (!stmt.step()) {
+      stmt.finalize()
+      return null
+    }
+
+    const row = stmt.get({}) as {
+      source_matrix_id: number
+      source_row_id: number
+      target_matrix_id: number
+      target_row_id: number
+      kind: JoinKind
+    }
+    stmt.finalize()
+
+    const joinRow: JoinRow = {
+      source_matrix_id: row.source_matrix_id,
+      source_row_id: row.source_row_id,
+      target_matrix_id: row.target_matrix_id,
+      target_row_id: row.target_row_id,
+      kind: row.kind,
+    }
+
+    deleteJoin(
+      db,
+      joinRow.source_matrix_id,
+      joinRow.source_row_id,
+      joinRow.target_matrix_id,
+      joinRow.target_row_id,
+    )
+
+    return joinRow
+  })
 }
 
 /** Forward lookup: all targets for a source row. */

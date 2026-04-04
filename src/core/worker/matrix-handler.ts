@@ -22,6 +22,9 @@ import {
   deleteJoin as deleteJoinImpl,
   getTargets as getTargetsImpl,
   getSources as getSourcesImpl,
+  createDependentRow as createDependentRowImpl,
+  deleteOwnedTarget as deleteOwnedTargetImpl,
+  deleteJoinByTarget as deleteJoinByTargetImpl,
 } from '../matrix'
 import { reparentRow as reparentRowImpl, deleteSubtree as deleteSubtreeImpl } from '../tree'
 import {
@@ -488,6 +491,48 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getSourcesSuccess', id, result: sources })
       } catch (err: unknown) {
         postMessage({ type: 'getSourcesError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'createDependentRow': {
+      const { id, sourceMatrixId, sourceRowId, targetMatrixId, columnValues } = message
+      try {
+        const { db } = await sqliteWasm
+        const targetRowId = createDependentRowImpl(
+          db,
+          sourceMatrixId,
+          sourceRowId,
+          targetMatrixId,
+          columnValues,
+        )
+        postMessage({ type: 'createDependentRowSuccess', id, result: targetRowId })
+      } catch (err: unknown) {
+        postMessage({ type: 'createDependentRowError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteOwnedTarget': {
+      const { id, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        deleteOwnedTargetImpl(db, targetMatrixId, targetRowId)
+        postMessage({ type: 'deleteOwnedTargetSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteOwnedTargetError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteJoinByTarget': {
+      const { id, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        const joinRow = deleteJoinByTargetImpl(db, targetMatrixId, targetRowId)
+        postMessage({ type: 'deleteJoinByTargetSuccess', id, result: joinRow })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteJoinByTargetError', id, error: toError(err) })
       }
       break
     }

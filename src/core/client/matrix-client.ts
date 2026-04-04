@@ -1,5 +1,5 @@
 import type { FaceConfig, FaceTypeDefinition } from '../face-types'
-import type { ColumnDefinition, JoinKind } from '../matrix'
+import type { ColumnDefinition, JoinKind, JoinRow } from '../matrix'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -151,7 +151,13 @@ export const createRefJoin = (
   targetMatrixId: number,
   targetRowId: number,
 ): Promise<void> =>
-  workerCall('insertJoin', { sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, kind: 'ref' })
+  workerCall('insertJoin', {
+    sourceMatrixId,
+    sourceRowId,
+    targetMatrixId,
+    targetRowId,
+    kind: 'ref',
+  })
 
 export const deleteJoin = (
   sourceMatrixId: number,
@@ -172,3 +178,24 @@ export const getSources = (
   targetRowId: number,
 ): Promise<{ sourceMatrixId: number; sourceRowId: number; kind: JoinKind }[]> =>
   workerCall('getSources', { targetMatrixId, targetRowId })
+
+export const createDependentRow = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  columnValues?: Record<string, unknown>,
+): Promise<number> =>
+  workerCall('createDependentRow', {
+    sourceMatrixId,
+    sourceRowId,
+    targetMatrixId,
+    columnValues,
+  })
+
+export const deleteOwnedTarget = (targetMatrixId: number, targetRowId: number): Promise<void> =>
+  workerCall('deleteOwnedTarget', { targetMatrixId, targetRowId })
+
+export const deleteJoinByTarget = (
+  targetMatrixId: number,
+  targetRowId: number,
+): Promise<JoinRow | null> => workerCall('deleteJoinByTarget', { targetMatrixId, targetRowId })

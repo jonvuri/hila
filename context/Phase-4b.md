@@ -59,7 +59,7 @@ Add the `kind` column to the join table schema and migrate existing data. See [T
 
 Implement the core lifecycle rules for `own`-kind joins per [Traits - Lifecycle rules](./Traits.md#lifecycle-rules).
 
-- [ ] Implement `createDependentRow` in `src/core/matrix.ts`:
+- [x] Implement `createDependentRow` in `src/core/matrix.ts`:
   ```typescript
   export const createDependentRow = (
     db: Database, sourceMatrixId: number, sourceRowId: number,
@@ -72,13 +72,13 @@ Implement the core lifecycle rules for `own`-kind joins per [Traits - Lifecycle 
   3. Return the new row ID.
   Validate that no existing `own` join already points to the same target row (single ownership invariant).
 
-- [ ] Update `deleteRow` cascade logic. Currently `deleteRow` removes all joins where the row is source or target. Expand to:
+- [x] Update `deleteRow` cascade logic. Currently `deleteRow` removes all joins where the row is source or target. Expand to:
   1. Before deleting the row, find all `own`-kind joins where the row is the source: `SELECT target_matrix_id, target_row_id FROM joins WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'`.
   2. Recursively `deleteRow` each owned target (cascade).
   3. Then delete joins and the row itself as before.
   The cascade is recursive -- owned targets that themselves own further targets cascade too. Use a worklist or recursive function; guard against cycles (should not occur with tree-structured ownership, but defensively cap depth).
 
-- [ ] Implement `deleteOwnedTarget` for the case where an `own` join is removed without deleting the source row (e.g. when a `#`-tag is removed from rich text, or an `own`-kind cell is cleared):
+- [x] Implement `deleteOwnedTarget` for the case where an `own` join is removed without deleting the source row (e.g. when a `#`-tag is removed from rich text, or an `own`-kind cell is cleared):
   ```typescript
   export const deleteOwnedTarget = (
     db: Database, targetMatrixId: number, targetRowId: number
@@ -86,7 +86,7 @@ Implement the core lifecycle rules for `own`-kind joins per [Traits - Lifecycle 
   ```
   Deletes the target row (triggering its own cascades). Called by the join sync process when an `own`-kind join entry is removed.
 
-- [ ] Implement reverse deletion support: `deleteJoinAndCleanup` for when a dependent row is deleted from its identity face:
+- [x] Implement reverse deletion support: `deleteJoinAndCleanup` for when a dependent row is deleted from its identity face:
   ```typescript
   export const deleteJoinByTarget = (
     db: Database, targetMatrixId: number, targetRowId: number
@@ -94,10 +94,10 @@ Implement the core lifecycle rules for `own`-kind joins per [Traits - Lifecycle 
   ```
   Finds and removes the `own`-kind join pointing to this target. Returns the join info so the calling plugin can clean up the source-side reference (remove the inline node from PM text, or null a cell). The actual source-side cleanup is plugin responsibility -- the core just removes the join.
 
-- [ ] Add worker message types: `createDependentRow`, `deleteOwnedTarget`, `deleteJoinByTarget`. Wire into handler and client.
+- [x] Add worker message types: `createDependentRow`, `deleteOwnedTarget`, `deleteJoinByTarget`. Wire into handler and client.
 
-- [ ] Tests: `createDependentRow` creates both the row and the `own` join atomically. Deleting the source row cascade-deletes the owned target. Deleting a source row with multiple owned targets cascades all of them. Recursive cascade: A owns B, B owns C; deleting A deletes B and C. Removing an `own` join via `deleteJoin` then calling `deleteOwnedTarget` deletes the target row. `deleteJoinByTarget` returns the correct join info. The single-ownership invariant rejects a second `own` join to the same target.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: `createDependentRow` creates both the row and the `own` join atomically. Deleting the source row cascade-deletes the owned target. Deleting a source row with multiple owned targets cascades all of them. Recursive cascade: A owns B, B owns C; deleting A deletes B and C. Removing an `own` join via `deleteJoin` then calling `deleteOwnedTarget` deletes the target row. `deleteJoinByTarget` returns the correct join info. The single-ownership invariant rejects a second `own` join to the same target.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (468 tests)
 
 ## 3. Evolve ProseMirror node: `wikilink` → `inlineref`
 
