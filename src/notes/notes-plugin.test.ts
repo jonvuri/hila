@@ -12,6 +12,7 @@ import {
   deleteJoin,
   getTargets,
   getSources,
+  deleteOwnedTarget,
 } from '../core/matrix'
 import { createTreePosition, removeTreePosition } from '../core/tree'
 import { registerPlugin, getPlugin } from '../core/plugin'
@@ -20,6 +21,7 @@ import { getFaceConfigsForMatrix } from '../core/face-config'
 import { ensureTrait, getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 import { schema } from '../editor/schema'
+import { extractInlineRefs, updateCachedTitlesInPlace } from '../editor/inlineref-sync'
 
 import {
   noteListFaceTypeDefinition,
@@ -28,7 +30,6 @@ import {
   buildAllNotesQuery,
   buildSingleNoteQuery,
 } from './notes-plugin'
-import { extractWikilinks } from './wikilink-sync'
 
 const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
 
@@ -285,7 +286,7 @@ describe('Inlineref schema node', () => {
   })
 })
 
-describe('extractWikilinks', () => {
+describe('extractInlineRefs', () => {
   test('extracts inlineref links from a PM doc', () => {
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [
@@ -296,10 +297,10 @@ describe('extractWikilinks', () => {
       ]),
     ])
 
-    const links = extractWikilinks(doc)
-    expect(links).toEqual([
-      { matrixId: 1, rowId: 2 },
-      { matrixId: 1, rowId: 3 },
+    const refs = extractInlineRefs(doc)
+    expect(refs).toEqual([
+      { targetMatrixId: 1, targetRowId: 2, kind: 'ref' },
+      { targetMatrixId: 1, targetRowId: 3, kind: 'ref' },
     ])
   })
 
@@ -308,7 +309,7 @@ describe('extractWikilinks', () => {
       schema.node('paragraph', null, [schema.text('plain text')]),
     ])
 
-    expect(extractWikilinks(doc)).toEqual([])
+    expect(extractInlineRefs(doc)).toEqual([])
   })
 
   test('extracts inlineref links across multiple paragraphs', () => {
@@ -321,10 +322,10 @@ describe('extractWikilinks', () => {
       ]),
     ])
 
-    const links = extractWikilinks(doc)
-    expect(links).toHaveLength(2)
-    expect(links[0]).toEqual({ matrixId: 1, rowId: 10 })
-    expect(links[1]).toEqual({ matrixId: 1, rowId: 20 })
+    const refs = extractInlineRefs(doc)
+    expect(refs).toHaveLength(2)
+    expect(refs[0]).toEqual({ targetMatrixId: 1, targetRowId: 10, kind: 'ref' })
+    expect(refs[1]).toEqual({ targetMatrixId: 1, targetRowId: 20, kind: 'ref' })
   })
 
   test('skips inlineref nodes with null target IDs', () => {
@@ -335,12 +336,27 @@ describe('extractWikilinks', () => {
       ]),
     ])
 
-    const links = extractWikilinks(doc)
-    expect(links).toEqual([{ matrixId: 1, rowId: 5 }])
+    const refs = extractInlineRefs(doc)
+    expect(refs).toEqual([{ targetMatrixId: 1, targetRowId: 5, kind: 'ref' }])
+  })
+
+  test('extracts kind from inlineref nodes', () => {
+    const doc = schema.node('doc', null, [
+      schema.node('paragraph', null, [
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 2, kind: 'ref' }),
+        schema.nodes.inlineref!.create({ targetMatrixId: 1, targetRowId: 3, kind: 'own' }),
+      ]),
+    ])
+
+    const refs = extractInlineRefs(doc)
+    expect(refs).toEqual([
+      { targetMatrixId: 1, targetRowId: 2, kind: 'ref' },
+      { targetMatrixId: 1, targetRowId: 3, kind: 'own' },
+    ])
   })
 })
 
-describe('Wikilink join sync (direct DB)', () => {
+describe('Inlineref join sync (direct DB)', () => {
   let db: Database
 
   beforeEach(async () => {
@@ -463,5 +479,249 @@ describe('Wikilink join sync (direct DB)', () => {
     insertJoin(db, matrixId, srcId, matrixId, tgtId)
 
     expect(getTargets(db, matrixId, srcId)).toHaveLength(1)
+  })
+
+  test('inserting a join with kind=own creates an own-kind join entry', () => {
+    const matrixId = createMatrix(db, 'Notes', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    ensureTrait(db, 'rank', matrixId)
+
+    const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
+    createTreePosition(db, matrixId, srcId)
+
+    const tgtId = insertDataRow(db, matrixId, { title: 'Owned Target', body: '' })
+    createTreePosition(db, matrixId, tgtId)
+
+    insertJoin(db, matrixId, srcId, matrixId, tgtId, 'own')
+
+    const targets = getTargets(db, matrixId, srcId)
+    expect(targets).toEqual([{ targetMatrixId: matrixId, targetRowId: tgtId, kind: 'own' }])
+  })
+
+  test('mixed ref and own joins coexist and return correct kinds', () => {
+    const matrixId = createMatrix(db, 'Notes', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    ensureTrait(db, 'rank', matrixId)
+
+    const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
+    createTreePosition(db, matrixId, srcId)
+
+    const refTarget = insertDataRow(db, matrixId, { title: 'Ref Target', body: '' })
+    createTreePosition(db, matrixId, refTarget)
+
+    const ownTarget = insertDataRow(db, matrixId, { title: 'Own Target', body: '' })
+    createTreePosition(db, matrixId, ownTarget)
+
+    insertJoin(db, matrixId, srcId, matrixId, refTarget, 'ref')
+    insertJoin(db, matrixId, srcId, matrixId, ownTarget, 'own')
+
+    const targets = getTargets(db, matrixId, srcId)
+    expect(targets).toHaveLength(2)
+
+    const refEntry = targets.find((t) => t.targetRowId === refTarget)
+    const ownEntry = targets.find((t) => t.targetRowId === ownTarget)
+    expect(refEntry?.kind).toBe('ref')
+    expect(ownEntry?.kind).toBe('own')
+  })
+
+  test('removing an own-kind join and calling deleteOwnedTarget cascade-deletes the target row', () => {
+    const matrixId = createMatrix(db, 'Notes', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    ensureTrait(db, 'rank', matrixId)
+
+    const srcId = insertDataRow(db, matrixId, { title: 'Source', body: '' })
+    createTreePosition(db, matrixId, srcId)
+
+    const ownTarget = insertDataRow(db, matrixId, { title: 'Owned', body: '' })
+    createTreePosition(db, matrixId, ownTarget)
+
+    insertJoin(db, matrixId, srcId, matrixId, ownTarget, 'own')
+    expect(getTargets(db, matrixId, srcId)).toHaveLength(1)
+
+    deleteJoin(db, matrixId, srcId, matrixId, ownTarget)
+    deleteOwnedTarget(db, matrixId, ownTarget)
+
+    expect(getTargets(db, matrixId, srcId)).toHaveLength(0)
+
+    const stmt = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" WHERE id = ?`)
+    stmt.bind([ownTarget])
+    expect(stmt.step()).toBe(false)
+    stmt.finalize()
+  })
+
+  test('backlinks query includes kind column', () => {
+    const matrixId = createMatrix(db, 'Notes', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    ensureTrait(db, 'rank', matrixId)
+
+    const src1 = insertDataRow(db, matrixId, { title: 'Ref Source', body: '' })
+    createTreePosition(db, matrixId, src1)
+
+    const src2 = insertDataRow(db, matrixId, { title: 'Own Source', body: '' })
+    createTreePosition(db, matrixId, src2)
+
+    const target = insertDataRow(db, matrixId, { title: 'Target', body: '' })
+    createTreePosition(db, matrixId, target)
+
+    insertJoin(db, matrixId, src1, matrixId, target, 'ref')
+    insertJoin(db, matrixId, src2, matrixId, target, 'own')
+
+    const sql = `
+      SELECT j.source_row_id AS id, j.kind, d.title
+      FROM joins j
+      JOIN "mx_${matrixId}_data" d ON j.source_row_id = d.id
+      WHERE j.target_matrix_id = ${matrixId} AND j.target_row_id = ${target}
+        AND j.source_matrix_id = ${matrixId}
+      ORDER BY d.title
+    `
+    const stmt = db.prepare(sql)
+    const results: { id: number; kind: string; title: string }[] = []
+    while (stmt.step()) {
+      const row = stmt.get({}) as { id: number; kind: string; title: string }
+      results.push(row)
+    }
+    stmt.finalize()
+
+    expect(results).toHaveLength(2)
+    const ownBacklink = results.find((r) => r.id === src2)
+    const refBacklink = results.find((r) => r.id === src1)
+    expect(ownBacklink?.kind).toBe('own')
+    expect(refBacklink?.kind).toBe('ref')
+  })
+})
+
+describe('updateCachedTitlesInPlace', () => {
+  test('updates cachedTitle in doc JSON from title map', () => {
+    const docJson = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'inlineref',
+              attrs: {
+                targetMatrixId: 1,
+                targetRowId: 42,
+                kind: 'ref',
+                cachedTitle: 'old title',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const titleMap = new Map<string, string | null>([['1:42', 'new title']])
+    updateCachedTitlesInPlace(docJson, titleMap)
+
+    const attrs = (docJson.content[0] as { content: { attrs: { cachedTitle: string } }[] })
+      .content[0]!.attrs
+    expect(attrs.cachedTitle).toBe('new title')
+  })
+
+  test('sets cachedTitle to null for deleted targets', () => {
+    const docJson = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'inlineref',
+              attrs: {
+                targetMatrixId: 2,
+                targetRowId: 99,
+                kind: 'ref',
+                cachedTitle: 'still here',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const titleMap = new Map<string, string | null>([['2:99', null]])
+    updateCachedTitlesInPlace(docJson, titleMap)
+
+    const attrs = (
+      docJson.content[0] as { content: { attrs: { cachedTitle: string | null } }[] }
+    ).content[0]!.attrs
+    expect(attrs.cachedTitle).toBeNull()
+  })
+
+  test('skips inlineref nodes with null targets', () => {
+    const docJson = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'inlineref',
+              attrs: {
+                targetMatrixId: null,
+                targetRowId: null,
+                kind: 'ref',
+                cachedTitle: 'empty',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const titleMap = new Map<string, string | null>()
+    updateCachedTitlesInPlace(docJson, titleMap)
+
+    const attrs = (docJson.content[0] as { content: { attrs: { cachedTitle: string } }[] })
+      .content[0]!.attrs
+    expect(attrs.cachedTitle).toBe('empty')
+  })
+
+  test('updates multiple inlineref nodes across paragraphs', () => {
+    const docJson = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'inlineref',
+              attrs: { targetMatrixId: 1, targetRowId: 10, kind: 'ref', cachedTitle: null },
+            },
+          ],
+        },
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'inlineref',
+              attrs: { targetMatrixId: 1, targetRowId: 20, kind: 'own', cachedTitle: null },
+            },
+          ],
+        },
+      ],
+    }
+
+    const titleMap = new Map<string, string | null>([
+      ['1:10', 'First Note'],
+      ['1:20', 'Second Note'],
+    ])
+    updateCachedTitlesInPlace(docJson, titleMap)
+
+    type ContentNode = { content: { attrs: { cachedTitle: string | null } }[] }
+    const first = (docJson.content[0] as ContentNode).content[0]!.attrs
+    const second = (docJson.content[1] as ContentNode).content[0]!.attrs
+    expect(first.cachedTitle).toBe('First Note')
+    expect(second.cachedTitle).toBe('Second Note')
   })
 })

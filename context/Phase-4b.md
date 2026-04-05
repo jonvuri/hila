@@ -206,9 +206,9 @@ Evolve the autocomplete system to support `@` as a trigger alongside `[[`, and a
 
 Update the PM doc → join table sync to work with the new `inlineref` node and `kind` semantics. Update backlinks.
 
-- [ ] Rename `src/notes/wikilink-sync.ts` → `src/editor/inlineref-sync.ts` (or similar shared location).
+- [x] Rename `src/notes/wikilink-sync.ts` → `src/editor/inlineref-sync.ts` (or similar shared location).
 
-- [ ] Update `extractWikilinks` → `extractInlineRefs`:
+- [x] Update `extractWikilinks` → `extractInlineRefs`:
   ```typescript
   type InlineRef = {
     targetMatrixId: number
@@ -219,7 +219,7 @@ Update the PM doc → join table sync to work with the new `inlineref` node and 
   ```
   Walks the PM doc and collects all `inlineref` nodes where `targetMatrixId` and `targetRowId` are non-null (skip empty-state refs -- they have no join entry).
 
-- [ ] Update `syncWikilinks` → `syncInlineRefs`:
+- [x] Update `syncWikilinks` → `syncInlineRefs`:
   ```typescript
   export const syncInlineRefs = (
     doc: Node, sourceMatrixId: number, sourceRowId: number
@@ -232,9 +232,9 @@ Update the PM doc → join table sync to work with the new `inlineref` node and 
     - Removed refs: `deleteJoin`. If the removed entry had `kind = 'own'`, call `deleteOwnedTarget` to cascade-delete the target row.
   - Refreshes `cachedTitle` attrs in the PM doc from current target state (query each live target's title, update the node attrs). This step may require a PM transaction to update attrs in-place without triggering a full re-render.
 
-- [ ] Update the `cachedTitle` refresh logic: after syncing joins, walk the doc's `inlineref` nodes and update `cachedTitle` from the target's current title. This keeps the cache fresh for ghost/empty fallback. The refresh should be a pre-save step that produces the final doc JSON to persist (so the cached title is saved alongside the text).
+- [x] Update the `cachedTitle` refresh logic: after syncing joins, walk the doc's `inlineref` nodes and update `cachedTitle` from the target's current title. This keeps the cache fresh for ghost/empty fallback. The refresh should be a pre-save step that produces the final doc JSON to persist (so the cached title is saved alongside the text).
 
-- [ ] Update backlinks query in `NoteFace.tsx` to include `kind`:
+- [x] Update backlinks query in `NoteFace.tsx` to include `kind`:
   ```sql
   SELECT j.source_matrix_id, j.source_row_id, j.kind, d.title
   FROM joins j
@@ -244,10 +244,10 @@ Update the PM doc → join table sync to work with the new `inlineref` node and 
   ```
   Optionally render `ref` and `own` backlinks with different visual treatment (e.g. `own` backlinks indicate "this note is tagged from..." while `ref` backlinks indicate "this note is linked from...").
 
-- [ ] Update `NoteFace.tsx` save flow: replace `syncWikilinks` call with `syncInlineRefs`.
+- [x] Update `NoteFace.tsx` save flow: replace `syncWikilinks` call with `syncInlineRefs`.
 
-- [ ] Tests: save a doc with `inlineref` nodes, verify join entries created with correct `kind`. Remove an `inlineref` from text, save, verify join entry removed. Remove an `own`-kind `inlineref`, save, verify target row cascade-deleted. Verify `cachedTitle` is refreshed on save. Verify backlinks include `kind`.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: save a doc with `inlineref` nodes, verify join entries created with correct `kind`. Remove an `inlineref` from text, save, verify join entry removed. Remove an `own`-kind `inlineref`, save, verify target row cascade-deleted. Verify `cachedTitle` is refreshed on save. Verify backlinks include `kind`.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (479 tests)
 
 ## 6. Table cell reference type
 

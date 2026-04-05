@@ -19,9 +19,9 @@ import { createEditorState } from '../editor/createEditorState'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
+import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 
 import { InlineRefView } from './nodeviews/InlineRefView'
-import { syncWikilinks } from './wikilink-sync'
 import { buildSingleNoteQuery } from './notes-plugin'
 
 const SAVE_DEBOUNCE_MS = 300
@@ -40,7 +40,7 @@ type NoteFaceProps = {
 }
 
 const buildBacklinksQuery = (matrixId: number, rowId: number): string => `
-SELECT j.source_row_id AS id, d.title
+SELECT j.source_row_id AS id, j.kind, d.title
 FROM joins j
 JOIN "mx_${matrixId}_data" d ON j.source_row_id = d.id
 WHERE j.target_matrix_id = ${matrixId} AND j.target_row_id = ${rowId}
@@ -60,7 +60,7 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
   const backlinks = createMemo(() => {
     const data = backlinksResult()
     if (!data || data.length === 0) return []
-    return data as { id: number; title: string }[]
+    return data as { id: number; title: string; kind: string }[]
   })
 
   const [title, setTitle] = createSignal('')
@@ -79,11 +79,15 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
     clearTimeout(saveTimer)
     clearTimeout(titleSaveTimer)
     if (pendingDoc !== undefined) {
-      void updateRow(props.matrixId, props.noteId, {
-        body: JSON.stringify(pendingDoc.toJSON()),
-      })
-      void syncWikilinks(pendingDoc, props.matrixId, props.noteId)
+      const doc = pendingDoc
       pendingDoc = undefined
+      void (async () => {
+        const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
+        void updateRow(props.matrixId, props.noteId, {
+          body: JSON.stringify(docJson),
+        })
+        void syncInlineRefs(doc, props.matrixId, props.noteId)
+      })()
     }
   }
 
@@ -92,11 +96,15 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       if (pendingDoc !== undefined) {
-        void updateRow(props.matrixId, props.noteId, {
-          body: JSON.stringify(pendingDoc.toJSON()),
-        })
-        void syncWikilinks(pendingDoc, props.matrixId, props.noteId)
+        const d = pendingDoc
         pendingDoc = undefined
+        void (async () => {
+          const docJson = await refreshCachedTitles(d.toJSON() as Record<string, unknown>)
+          void updateRow(props.matrixId, props.noteId, {
+            body: JSON.stringify(docJson),
+          })
+          void syncInlineRefs(d, props.matrixId, props.noteId)
+        })()
       }
     }, SAVE_DEBOUNCE_MS)
   }
@@ -301,9 +309,13 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
               <For each={backlinks()}>
                 {(bl) => (
                   <button
-                    class="note-backlinks-item"
+                    class={
+                      'note-backlinks-item' +
+                      (bl.kind === 'own' ? ' note-backlinks-item-own' : '')
+                    }
                     onClick={() => props.onNavigateToNote?.(bl.id)}
                   >
+                    <span class="note-backlinks-kind">{bl.kind === 'own' ? '⊙' : '↗'}</span>
                     {bl.title || 'Untitled'}
                   </button>
                 )}
