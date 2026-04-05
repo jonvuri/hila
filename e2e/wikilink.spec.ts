@@ -65,7 +65,7 @@ test.describe('Wiki-links', () => {
     await page.keyboard.type('[[')
 
     // The autocomplete dropdown should appear
-    await expect(page.locator('.wikilink-autocomplete')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.inlineref-autocomplete')).toBeVisible({ timeout: 5000 })
   })
 
   test('type a note title in autocomplete, select it, verify wikilink node inserted', async ({
@@ -86,14 +86,14 @@ test.describe('Wiki-links', () => {
 
     // Type [[ to trigger autocomplete, then type the target note name
     await page.keyboard.type('[[')
-    await expect(page.locator('.wikilink-autocomplete')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.inlineref-autocomplete')).toBeVisible({ timeout: 5000 })
 
     await page.keyboard.type('Target')
     await page.waitForTimeout(500) // wait for query to update
 
     // The autocomplete should show "Target Note" as an option
     await expect(
-      page.locator('.wikilink-autocomplete-item', { hasText: 'Target Note' }),
+      page.locator('.inlineref-autocomplete-item', { hasText: 'Target Note' }),
     ).toBeVisible({ timeout: 5000 })
 
     // Press Enter to select the first option
@@ -104,7 +104,7 @@ test.describe('Wiki-links', () => {
     await expect(editor.locator('.inlineref')).toContainText('Target Note')
 
     // Autocomplete should be closed
-    await expect(page.locator('.wikilink-autocomplete')).not.toBeVisible()
+    await expect(page.locator('.inlineref-autocomplete')).not.toBeVisible()
   })
 
   test('click a wikilink to navigate to the target note', async ({ page }) => {
@@ -122,13 +122,13 @@ test.describe('Wiki-links', () => {
     await page.keyboard.press('Enter')
 
     await page.keyboard.type('[[')
-    await expect(page.locator('.wikilink-autocomplete')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.inlineref-autocomplete')).toBeVisible({ timeout: 5000 })
 
     await page.keyboard.type('Linked')
     await page.waitForTimeout(500)
 
     await expect(
-      page.locator('.wikilink-autocomplete-item', { hasText: 'Linked Note' }),
+      page.locator('.inlineref-autocomplete-item', { hasText: 'Linked Note' }),
     ).toBeVisible({ timeout: 5000 })
     await page.keyboard.press('Enter')
 
@@ -157,13 +157,13 @@ test.describe('Wiki-links', () => {
     await page.keyboard.press('Enter')
 
     await page.keyboard.type('[[')
-    await expect(page.locator('.wikilink-autocomplete')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.inlineref-autocomplete')).toBeVisible({ timeout: 5000 })
 
     await page.keyboard.type('Welcome')
     await page.waitForTimeout(500)
 
     await expect(
-      page.locator('.wikilink-autocomplete-item:not(.wikilink-autocomplete-create)', {
+      page.locator('.inlineref-autocomplete-item:not(.inlineref-autocomplete-create)', {
         hasText: 'Welcome',
       }),
     ).toBeVisible({ timeout: 5000 })

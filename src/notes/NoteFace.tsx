@@ -12,15 +12,15 @@ import { EditorView } from 'prosemirror-view'
 import type { Node } from 'prosemirror-model'
 import 'prosemirror-view/style/prosemirror.css'
 
-import { updateRow, getColumns } from '../core/client/matrix-client'
+import { updateRow, getColumns, insertRow, createRefJoin } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import { createEditorState } from '../editor/createEditorState'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
+import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 
 import { InlineRefView } from './nodeviews/InlineRefView'
-import { createWikilinkPlugin } from './wikilink-plugin'
 import { syncWikilinks } from './wikilink-sync'
 import { buildSingleNoteQuery } from './notes-plugin'
 
@@ -143,8 +143,8 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
       }
     }
 
-    const wikilinkPlugin = createWikilinkPlugin(props.matrixId)
-    const state = createEditorState(docJson, undefined, [wikilinkPlugin])
+    const inlinerefPlugin = createInlinerefPlugin(props.matrixId)
+    const state = createEditorState(docJson, undefined, [inlinerefPlugin])
     const view = new EditorView(el, {
       state,
       nodeViews: {
@@ -204,16 +204,51 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
     void updateRow(props.matrixId, props.noteId, { [colName]: value })
   }
 
-  const handleWikilinkNavigate = (e: Event) => {
+  const handleInlinerefNavigate = (e: Event) => {
     const detail = (e as CustomEvent<{ rowId: number }>).detail
     if (detail?.rowId != null && props.onNavigateToNote) {
       props.onNavigateToNote(detail.rowId)
     }
   }
 
+  const EMPTY_BODY_JSON = '{"type":"doc","content":[{"type":"paragraph"}]}'
+
+  const handleInlinerefCreate = async (e: Event) => {
+    const detail = (e as CustomEvent<{ cachedTitle: string; pos: number | undefined }>).detail
+    if (!detail?.cachedTitle) return
+
+    try {
+      const result = await insertRow(props.matrixId, {
+        values: { title: detail.cachedTitle, body: EMPTY_BODY_JSON },
+      })
+
+      await createRefJoin(props.matrixId, props.noteId, props.matrixId, result.rowId)
+
+      if (editorView && detail.pos != null) {
+        const node = editorView.state.doc.nodeAt(detail.pos)
+        if (node?.type.name === 'inlineref' && node.attrs.targetMatrixId == null) {
+          const tr = editorView.state.tr.setNodeMarkup(detail.pos, null, {
+            ...node.attrs,
+            targetMatrixId: props.matrixId,
+            targetRowId: result.rowId,
+          })
+          editorView.dispatch(tr)
+        }
+      }
+
+      props.onNavigateToNote?.(result.rowId)
+    } catch {
+      /* creation failed */
+    }
+  }
+
   const setFaceRef = (el: HTMLDivElement) => {
-    el.addEventListener('wikilink-navigate', handleWikilinkNavigate)
-    onCleanup(() => el.removeEventListener('wikilink-navigate', handleWikilinkNavigate))
+    el.addEventListener('inlineref-navigate', handleInlinerefNavigate)
+    el.addEventListener('inlineref-create', handleInlinerefCreate)
+    onCleanup(() => {
+      el.removeEventListener('inlineref-navigate', handleInlinerefNavigate)
+      el.removeEventListener('inlineref-create', handleInlinerefCreate)
+    })
   }
 
   return (

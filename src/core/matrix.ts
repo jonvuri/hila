@@ -187,7 +187,6 @@ export const initMatrixSchema = (db: Database) => {
   }
 }
 
-
 /**
  * Retrieve the persistent device ID from `_sync_state`, creating one on first
  * run via `crypto.randomUUID()`. The result is cached in-process so subsequent

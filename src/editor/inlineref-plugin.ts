@@ -2,24 +2,29 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 
 import { execQuery } from '../core/client/sql-client'
-import { insertRow } from '../core/client/matrix-client'
 import { schema } from '../editor/schema'
 
 type NoteOption = { id: number; title: string }
 
 type AutocompleteState = {
   active: boolean
-  /** Doc position right after the `[[` trigger (start of query text) */
+  /** Doc position right after the trigger (start of query text) */
   from: number
   query: string
+  trigger: '@' | '[[' | null
 }
 
-const wikilinkPluginKey = new PluginKey<AutocompleteState>('wikilink')
+const inlinerefPluginKey = new PluginKey<AutocompleteState>('inlineref')
 
 const getAutocompleteState = (view: EditorView): AutocompleteState =>
-  wikilinkPluginKey.getState(view.state) ?? { active: false, from: 0, query: '' }
+  inlinerefPluginKey.getState(view.state) ?? {
+    active: false,
+    from: 0,
+    query: '',
+    trigger: null,
+  }
 
-const DROPDOWN_CLASS = 'wikilink-autocomplete'
+const DROPDOWN_CLASS = 'inlineref-autocomplete'
 
 const createDropdownElement = (): HTMLDivElement => {
   const el = document.createElement('div')
@@ -52,8 +57,8 @@ const renderDropdown = (
     const opt = options[i]!
     const item = document.createElement('div')
     item.className =
-      'wikilink-autocomplete-item' +
-      (i === selectedIndex ? ' wikilink-autocomplete-selected' : '')
+      'inlineref-autocomplete-item' +
+      (i === selectedIndex ? ' inlineref-autocomplete-selected' : '')
     item.textContent = opt.title
     item.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -65,8 +70,8 @@ const renderDropdown = (
   if (query.trim().length > 0) {
     const createItem = document.createElement('div')
     createItem.className =
-      'wikilink-autocomplete-item wikilink-autocomplete-create' +
-      (selectedIndex === options.length ? ' wikilink-autocomplete-selected' : '')
+      'inlineref-autocomplete-item inlineref-autocomplete-create' +
+      (selectedIndex === options.length ? ' inlineref-autocomplete-selected' : '')
     createItem.textContent = `Create "${query}"`
     createItem.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -78,7 +83,7 @@ const renderDropdown = (
   dropdown.style.display = dropdown.children.length > 0 ? '' : 'none'
 }
 
-export const createWikilinkPlugin = (matrixId: number): Plugin => {
+export const createInlinerefPlugin = (matrixId: number): Plugin => {
   let dropdown: HTMLDivElement | null = null
   let options: NoteOption[] = []
   let selectedIndex = 0
@@ -104,15 +109,24 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
     }
   }
 
-  const insertWikilinkNode = (view: EditorView, matrixIdAttr: number, rowId: number) => {
+  const insertInlinerefNode = (
+    view: EditorView,
+    attrs: { targetMatrixId: number | null; targetRowId: number | null; cachedTitle?: string },
+  ) => {
     const state = getAutocompleteState(view)
     if (!state.active) return
     const inlinerefType = schema.nodes.inlineref!
-    const node = inlinerefType.create({ targetMatrixId: matrixIdAttr, targetRowId: rowId })
-    const deleteFrom = state.from - 2
+    const node = inlinerefType.create({
+      targetMatrixId: attrs.targetMatrixId,
+      targetRowId: attrs.targetRowId,
+      kind: 'ref',
+      cachedTitle: attrs.cachedTitle ?? null,
+    })
+    const triggerLength = state.trigger === '@' ? 1 : 2
+    const deleteFrom = state.from - triggerLength
     const deleteTo = state.from + state.query.length
     const tr = view.state.tr.replaceWith(deleteFrom, deleteTo, node)
-    tr.setMeta(wikilinkPluginKey, { active: false, from: 0, query: '' })
+    tr.setMeta(inlinerefPluginKey, { active: false, from: 0, query: '', trigger: null })
     view.dispatch(tr)
     view.focus()
   }
@@ -124,16 +138,16 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
     if (option === 'create') {
       const title = state.query.trim()
       if (!title) return
-      try {
-        const result = await insertRow(matrixId, {
-          values: { title, body: '{"type":"doc","content":[{"type":"paragraph"}]}' },
-        })
-        insertWikilinkNode(view, matrixId, result.rowId)
-      } catch {
-        return
-      }
+      insertInlinerefNode(view, {
+        targetMatrixId: null,
+        targetRowId: null,
+        cachedTitle: title,
+      })
     } else {
-      insertWikilinkNode(view, matrixId, option.id)
+      insertInlinerefNode(view, {
+        targetMatrixId: matrixId,
+        targetRowId: option.id,
+      })
     }
 
     if (dropdown) dropdown.style.display = 'none'
@@ -146,17 +160,22 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
     options = []
     selectedIndex = 0
     fetchVersion++
-    const tr = view.state.tr.setMeta(wikilinkPluginKey, { active: false, from: 0, query: '' })
+    const tr = view.state.tr.setMeta(inlinerefPluginKey, {
+      active: false,
+      from: 0,
+      query: '',
+      trigger: null,
+    })
     view.dispatch(tr)
   }
 
   return new Plugin<AutocompleteState>({
-    key: wikilinkPluginKey,
+    key: inlinerefPluginKey,
 
     state: {
-      init: () => ({ active: false, from: 0, query: '' }),
+      init: () => ({ active: false, from: 0, query: '', trigger: null }),
       apply(tr, value) {
-        const meta = tr.getMeta(wikilinkPluginKey) as AutocompleteState | undefined
+        const meta = tr.getMeta(inlinerefPluginKey) as AutocompleteState | undefined
         if (meta) return meta
         if (!value.active) return value
         const from = tr.mapping.map(value.from)
@@ -169,25 +188,30 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
         const state = getAutocompleteState(view)
 
         if (state.active) {
-          if (text === ']') {
+          // Handle ]] close only for [[ trigger
+          if (text === ']' && state.trigger === '[[') {
             const docText = view.state.doc.textBetween(Math.max(0, from - 1), from)
             if (docText === ']') {
-              // Delete the typed ] and close
               const tr = view.state.tr.delete(from - 1, from)
-              tr.setMeta(wikilinkPluginKey, { active: false, from: 0, query: '' })
+              tr.setMeta(inlinerefPluginKey, {
+                active: false,
+                from: 0,
+                query: '',
+                trigger: null,
+              })
               view.dispatch(tr)
               if (dropdown) dropdown.style.display = 'none'
               return true
             }
           }
 
-          // Insert text ourselves and update query in one transaction
           const newQuery = state.query + text
           const tr = view.state.tr.insertText(text, from)
-          tr.setMeta(wikilinkPluginKey, {
+          tr.setMeta(inlinerefPluginKey, {
             active: true,
             from: state.from,
             query: newQuery,
+            trigger: state.trigger,
           })
           view.dispatch(tr)
           void fetchNotes(view, newQuery)
@@ -198,17 +222,31 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
         if (text === '[') {
           const docText = view.state.doc.textBetween(Math.max(0, from - 1), from)
           if (docText === '[') {
-            // Insert the second [ ourselves and activate in one transaction
             const tr = view.state.tr.insertText('[', from)
-            tr.setMeta(wikilinkPluginKey, {
+            tr.setMeta(inlinerefPluginKey, {
               active: true,
               from: from + 1,
               query: '',
+              trigger: '[[',
             })
             view.dispatch(tr)
             void fetchNotes(view, '')
             return true
           }
+        }
+
+        // Detect @ trigger
+        if (text === '@') {
+          const tr = view.state.tr.insertText('@', from)
+          tr.setMeta(inlinerefPluginKey, {
+            active: true,
+            from: from + 1,
+            query: '',
+            trigger: '@',
+          })
+          view.dispatch(tr)
+          void fetchNotes(view, '')
+          return true
         }
 
         return false
@@ -265,10 +303,11 @@ export const createWikilinkPlugin = (matrixId: number): Plugin => {
             const deleteFrom = state.from + state.query.length - 1
             const deleteTo = state.from + state.query.length
             const tr = view.state.tr.delete(deleteFrom, deleteTo)
-            tr.setMeta(wikilinkPluginKey, {
+            tr.setMeta(inlinerefPluginKey, {
               active: true,
               from: state.from,
               query: newQuery,
+              trigger: state.trigger,
             })
             view.dispatch(tr)
             void fetchNotes(view, newQuery)

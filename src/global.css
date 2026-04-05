@@ -477,9 +477,9 @@ body,
   background: #f9fafb;
 }
 
-/* ---- Wikilink autocomplete dropdown ---- */
+/* ---- Inline reference autocomplete dropdown ---- */
 
-.wikilink-autocomplete {
+.inlineref-autocomplete {
   position: fixed;
   z-index: 1000;
   background: #fff;
@@ -492,7 +492,7 @@ body,
   max-width: 320px;
 }
 
-.wikilink-autocomplete-item {
+.inlineref-autocomplete-item {
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
@@ -502,13 +502,13 @@ body,
   white-space: nowrap;
 }
 
-.wikilink-autocomplete-item:hover,
-.wikilink-autocomplete-selected {
+.inlineref-autocomplete-item:hover,
+.inlineref-autocomplete-selected {
   background: #f0f4ff;
   color: #1d4ed8;
 }
 
-.wikilink-autocomplete-create {
+.inlineref-autocomplete-create {
   color: #6b7280;
   font-style: italic;
   border-top: 1px solid #f0f0f0;

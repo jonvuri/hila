@@ -45,8 +45,20 @@ export const InlineRefView: Component = () => {
   const handleClick = (e: MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    if (isGhost() || isEmpty()) return
-    const event = new CustomEvent('wikilink-navigate', {
+
+    if (isEmpty()) {
+      const pos = context().getPos()
+      const event = new CustomEvent('inlineref-create', {
+        detail: { cachedTitle: cachedTitle(), pos },
+        bubbles: true,
+      })
+      ;(e.currentTarget as HTMLElement).dispatchEvent(event)
+      return
+    }
+
+    if (isGhost()) return
+
+    const event = new CustomEvent('inlineref-navigate', {
       detail: { rowId: targetRowId() },
       bubbles: true,
     })

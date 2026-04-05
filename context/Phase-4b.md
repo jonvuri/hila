@@ -164,14 +164,14 @@ Rename and expand the ProseMirror inline node to support the generalized inline 
 
 Evolve the autocomplete system to support `@` as a trigger alongside `[[`, and add the ability to create empty-state references to nonexistent targets.
 
-- [ ] Rename `src/notes/wikilink-plugin.ts` → `src/editor/inlineref-plugin.ts` (or similar shared location). This plugin is no longer notes-specific -- it provides inline reference autocomplete for any ProseMirror editor.
+- [x] Rename `src/notes/wikilink-plugin.ts` → `src/editor/inlineref-plugin.ts` (or similar shared location). This plugin is no longer notes-specific -- it provides inline reference autocomplete for any ProseMirror editor.
 
-- [ ] Update the autocomplete trigger to detect both `@` and `[[`:
+- [x] Update the autocomplete trigger to detect both `@` and `[[`:
   - `@` starts autocomplete mode immediately (single character trigger).
   - `[[` works as before (two-character trigger).
   - Both open the same autocomplete dropdown. The trigger character(s) are tracked so the correct range is replaced on selection.
 
-- [ ] Update the autocomplete search to query across all matrixes (not just the notes matrix). The query should return results with matrix name + row title for disambiguation:
+- [x] Update the autocomplete search to query across all matrixes (not just the notes matrix). The query should return results with matrix name + row title for disambiguation:
   ```sql
   SELECT m.id AS matrixId, m.title AS matrixTitle, d.id AS rowId, d.{titleColumn} AS rowTitle
   FROM matrix m
@@ -180,7 +180,7 @@ Evolve the autocomplete system to support `@` as a trigger alongside `[[`, and a
   ```
   In practice, this may need to be a union query across known matrixes, or a pre-built search index. For Phase 4b, querying the notes matrix (the main consumer) is sufficient; cross-matrix search can be extended later.
 
-- [ ] Update the "Create new" option in autocomplete: instead of immediately creating a note and inserting a wikilink, insert an **empty-state** `inlineref` node:
+- [x] Update the "Create new" option in autocomplete: instead of immediately creating a note and inserting a wikilink, insert an **empty-state** `inlineref` node:
   ```
   { type: 'inlineref', attrs: {
     targetMatrixId: null,
@@ -191,16 +191,16 @@ Evolve the autocomplete system to support `@` as a trigger alongside `[[`, and a
   ```
   The node renders in empty state with the user's typed text as the cached title.
 
-- [ ] Implement "click to create" on empty-state references in `InlineRefView`:
+- [x] Implement "click to create" on empty-state references in `InlineRefView`:
   - Clicking an empty `inlineref` creates the target row (e.g. a new note with the cached title as its title).
   - Updates the `inlineref` node attrs with the new `targetMatrixId` and `targetRowId`.
   - Creates a `ref`-kind join entry.
   - Navigates to the newly created target.
 
-- [ ] Update the `PluginKey` name from `'wikilink'` to `'inlineref'`.
+- [x] Update the `PluginKey` name from `'wikilink'` to `'inlineref'`.
 
-- [ ] Tests: verify `@` triggers autocomplete. Verify `[[` still triggers autocomplete. Verify selecting an existing note inserts an `inlineref` with correct attrs. Verify typing a nonexistent name and selecting "Create new" inserts an empty-state node. Verify clicking an empty-state reference creates the target and transitions to live state.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: verify `@` triggers autocomplete. Verify `[[` still triggers autocomplete. Verify selecting an existing note inserts an `inlineref` with correct attrs. Verify typing a nonexistent name and selecting "Create new" inserts an empty-state node. Verify clicking an empty-state reference creates the target and transitions to live state.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (470 tests)
 
 ## 5. Join table sync and backlinks
 
