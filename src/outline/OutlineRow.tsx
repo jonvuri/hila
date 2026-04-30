@@ -14,6 +14,7 @@ import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { InlineRefView } from '../notes/nodeviews/InlineRefView'
+import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 
 const SAVE_DEBOUNCE_MS = 300
 
@@ -137,7 +138,14 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
     const extraPlugins =
       isPlain() ?
         []
-      : [createInlinerefPlugin({ matrixId: props.matrixId, rowIdAccessor: () => props.rowId })]
+      : [
+          createInlinerefPlugin({
+            matrixId: props.matrixId,
+            rowIdAccessor: () => props.rowId,
+            searchProvider: createTagSearchProvider(props.matrixId),
+            onTagSelect: handleTagSelection,
+          }),
+        ]
     const state = createEditorState(docJson, props.callbacks, extraPlugins)
 
     const nodeViews: Record<string, ReturnType<typeof nodeViewFactory>> = {

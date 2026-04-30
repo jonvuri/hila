@@ -20,6 +20,7 @@ import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
+import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 
 import { InlineRefView } from './nodeviews/InlineRefView'
 import { buildSingleNoteQuery } from './notes-plugin'
@@ -154,6 +155,8 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
     const inlinerefPlugin = createInlinerefPlugin({
       matrixId: props.matrixId,
       rowIdAccessor: () => props.noteId,
+      searchProvider: createTagSearchProvider(props.matrixId),
+      onTagSelect: handleTagSelection,
     })
     const state = createEditorState(docJson, undefined, [inlinerefPlugin])
     const view = new EditorView(el, {

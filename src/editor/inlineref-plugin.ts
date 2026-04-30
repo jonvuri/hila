@@ -12,6 +12,12 @@ export type InlinerefPluginConfig = {
   matrixId: number
   rowIdAccessor: () => number
   searchProvider?: (trigger: TriggerChar, query: string) => Promise<AutocompleteOption[]>
+  onTagSelect?: (
+    option: AutocompleteOption | 'create',
+    query: string,
+    sourceMatrixId: number,
+    sourceRowId: number,
+  ) => Promise<{ targetMatrixId: number; targetRowId: number; cachedTitle: string }>
 }
 
 type AutocompleteState = {
@@ -57,6 +63,7 @@ const renderDropdown = (
   options: AutocompleteOption[],
   selectedIndex: number,
   query: string,
+  trigger: TriggerChar | null,
   onSelect: (option: AutocompleteOption | 'create') => void,
 ) => {
   dropdown.innerHTML = ''
@@ -67,7 +74,7 @@ const renderDropdown = (
     item.className =
       'inlineref-autocomplete-item' +
       (i === selectedIndex ? ' inlineref-autocomplete-selected' : '')
-    item.textContent = opt.title
+    item.textContent = trigger === '#' ? `#${opt.title}` : opt.title
     item.addEventListener('mousedown', (e) => {
       e.preventDefault()
       onSelect(opt)
@@ -75,12 +82,17 @@ const renderDropdown = (
     dropdown.appendChild(item)
   }
 
-  if (query.trim().length > 0) {
+  const showCreate =
+    query.trim().length > 0 &&
+    (trigger !== '#' ||
+      !options.some((o) => o.title.toLowerCase() === query.trim().toLowerCase()))
+  if (showCreate) {
     const createItem = document.createElement('div')
     createItem.className =
       'inlineref-autocomplete-item inlineref-autocomplete-create' +
       (selectedIndex === options.length ? ' inlineref-autocomplete-selected' : '')
-    createItem.textContent = `Create "${query}"`
+    createItem.textContent =
+      trigger === '#' ? `Create '${query}' tag type` : `Create "${query}"`
     createItem.addEventListener('mousedown', (e) => {
       e.preventDefault()
       onSelect('create')
@@ -92,7 +104,7 @@ const renderDropdown = (
 }
 
 export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => {
-  const { matrixId, searchProvider } = config
+  const { matrixId, searchProvider, onTagSelect, rowIdAccessor } = config
   let dropdown: HTMLDivElement | null = null
   let options: AutocompleteOption[] = []
   let selectedIndex = 0
@@ -117,7 +129,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
       selectedIndex = 0
       if (dropdown) {
         const state = getAutocompleteState(view)
-        renderDropdown(dropdown, options, selectedIndex, state.query, (opt) =>
+        renderDropdown(dropdown, options, selectedIndex, state.query, state.trigger, (opt) =>
           handleSelect(view, opt),
         )
       }
@@ -152,6 +164,22 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
   const handleSelect = async (view: EditorView, option: AutocompleteOption | 'create') => {
     const state = getAutocompleteState(view)
     if (!state.active) return
+
+    if (state.trigger === '#' && onTagSelect) {
+      const query = state.query
+      if (dropdown) dropdown.style.display = 'none'
+      try {
+        const result = await onTagSelect(option, query, matrixId, rowIdAccessor())
+        insertInlinerefNode(view, {
+          targetMatrixId: result.targetMatrixId,
+          targetRowId: result.targetRowId,
+          cachedTitle: result.cachedTitle,
+        })
+      } catch {
+        closeAutocomplete(view)
+      }
+      return
+    }
 
     if (option === 'create') {
       const title = state.query.trim()
@@ -288,15 +316,24 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
         const state = getAutocompleteState(view)
         if (!state.active) return false
 
-        const totalItems = options.length + (state.query.trim().length > 0 ? 1 : 0)
+        const hasCreate =
+          state.query.trim().length > 0 &&
+          (state.trigger !== '#' ||
+            !options.some((o) => o.title.toLowerCase() === state.query.trim().toLowerCase()))
+        const totalItems = options.length + (hasCreate ? 1 : 0)
 
         switch (event.key) {
           case 'ArrowDown':
             event.preventDefault()
             selectedIndex = (selectedIndex + 1) % Math.max(totalItems, 1)
             if (dropdown) {
-              renderDropdown(dropdown, options, selectedIndex, state.query, (opt) =>
-                handleSelect(view, opt),
+              renderDropdown(
+                dropdown,
+                options,
+                selectedIndex,
+                state.query,
+                state.trigger,
+                (opt) => handleSelect(view, opt),
               )
             }
             return true
@@ -306,8 +343,13 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
             selectedIndex =
               (selectedIndex - 1 + Math.max(totalItems, 1)) % Math.max(totalItems, 1)
             if (dropdown) {
-              renderDropdown(dropdown, options, selectedIndex, state.query, (opt) =>
-                handleSelect(view, opt),
+              renderDropdown(
+                dropdown,
+                options,
+                selectedIndex,
+                state.query,
+                state.trigger,
+                (opt) => handleSelect(view, opt),
               )
             }
             return true
@@ -316,7 +358,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
             event.preventDefault()
             if (selectedIndex < options.length) {
               void handleSelect(view, options[selectedIndex]!)
-            } else if (state.query.trim().length > 0) {
+            } else if (hasCreate) {
               void handleSelect(view, 'create')
             }
             return true
@@ -373,7 +415,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
             return
           }
           positionDropdown(view, dropdown, state.from)
-          renderDropdown(dropdown, options, selectedIndex, state.query, (opt) =>
+          renderDropdown(dropdown, options, selectedIndex, state.query, state.trigger, (opt) =>
             handleSelect(view, opt),
           )
         },

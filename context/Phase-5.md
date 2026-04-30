@@ -159,7 +159,7 @@ Refactor the inline reference autocomplete plugin (`src/editor/inlineref-plugin.
 
 Build the tag-specific functionality on top of the pluggable autocomplete from 3a: tag type search for `#` trigger, owned aspect row creation via `createDependentRow`, and inline tag type creation for unmatched names.
 
-- [ ] Implement tag-mode autocomplete search. When `#` is the trigger:
+- [x] Implement tag-mode autocomplete search. When `#` is the trigger:
   - Primary results: search registered tag types by name prefix/substring from `tag_types`:
     ```sql
     SELECT tt.id, tt.name, tt.matrix_id, tt.color
@@ -171,7 +171,7 @@ Build the tag-specific functionality on top of the pluggable autocomplete from 3
   - Each result item shows the tag type name (e.g. "task") with its color badge.
   - A "Create tag type" option at the bottom of the results when the typed text doesn't match any existing tag type exactly. Selecting this calls `createTagType` with the typed name and default columns, then proceeds to create the aspect row.
 
-- [ ] Implement tag insertion. When a tag type is selected from `#` autocomplete:
+- [x] Implement tag insertion. When a tag type is selected from `#` autocomplete:
   1. Call `createDependentRow(sourceMatrixId, sourceRowId, tagType.matrixId, {})` via the worker to atomically create the aspect row and the `own`-kind join.
   2. Insert an `inlineref` node with `kind: 'own'` (currently `insertInlinerefNode` hardcodes `kind: 'ref'` — update to derive `kind` from trigger: `#` → `'own'`, `@`/`[[` → `'ref'`):
      ```
@@ -184,19 +184,19 @@ Build the tag-specific functionality on top of the pluggable autocomplete from 3
      ```
   3. The autocomplete replaces the `#` trigger and typed text with this node.
 
-- [ ] Handle inline tag type creation. When the user types `#project` and no tag type named "project" exists:
+- [x] Handle inline tag type creation. When the user types `#project` and no tag type named "project" exists:
   - The autocomplete shows a "Create 'project' tag type" option.
   - Selecting it calls `createTagType('project')` to create the tag type with default columns.
   - Then immediately calls `createDependentRow` to create the first instance as an aspect of the source row.
   - The `inlineref` node is inserted with the new tag type's matrix ID and the new row ID.
 
-- [ ] Verify tags work in both outline text and note body text:
+- [x] Verify tags work in both outline text and note body text:
   - The outline's `sourceMatrixId` and `sourceRowId` are correctly resolved (from `OutlineRow` props).
   - The note's `sourceMatrixId` and `sourceRowId` are correctly resolved (from `NoteFace` props).
   - `syncInlineRefs` on save (both outline and notes) correctly processes `own`-kind joins.
 
-- [ ] Tests: verify `#` triggers tag type search. Verify tag types appear in autocomplete results. Verify selecting a tag type creates an aspect row via `createDependentRow`. Verify the `inlineref` node is inserted with `kind: 'own'`. Verify `@`/`[[` triggers still insert `kind: 'ref'` (no regression). Verify "Create tag type" option appears for nonexistent names. Verify inline tag type creation creates the matrix and the first instance. Verify tags work in both outline text and note body text.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: verify `#` triggers tag type search. Verify tag types appear in autocomplete results. Verify selecting a tag type creates an aspect row via `createDependentRow`. Verify the `inlineref` node is inserted with `kind: 'own'`. Verify `@`/`[[` triggers still insert `kind: 'ref'` (no regression). Verify "Create tag type" option appears for nonexistent names. Verify inline tag type creation creates the matrix and the first instance. Verify tags work in both outline text and note body text.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 4. Tag badge rendering
 
