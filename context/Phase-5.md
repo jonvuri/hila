@@ -129,9 +129,9 @@ The outline currently does NOT support inline references. `OutlineRow.tsx` creat
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 - [ ] Run `pnpm test:e2e` — all existing outline tests still pass
 
-## 3. `#` trigger mode and autocomplete refactor
+## 3a. Autocomplete plugin refactor and `#` trigger detection
 
-Extend the inline reference autocomplete plugin (`src/editor/inlineref-plugin.ts`) with a `#` trigger that searches registered tag types and creates owned aspect rows. This requires refactoring the plugin's search and insertion logic, which is currently hardcoded for single-matrix note search.
+Refactor the inline reference autocomplete plugin (`src/editor/inlineref-plugin.ts`) from a hardcoded single-matrix search into a pluggable architecture, and add `#` as a recognized trigger character. This is a structural refactor — no new tag search or insertion logic yet.
 
 - [ ] Refactor `createInlinerefPlugin` to accept a pluggable search provider. Currently the plugin takes `matrixId: number` and hardcodes `SELECT id, title FROM "mx_${matrixId}_data"`. Refactor to accept a search configuration:
   ```typescript
@@ -143,12 +143,21 @@ Extend the inline reference autocomplete plugin (`src/editor/inlineref-plugin.ts
   ```
   - `rowIdAccessor`: returns the current source row ID (needed for `createDependentRow`). For notes, this is the note ID. For outline rows, this is the row ID.
   - `searchProvider`: optional custom search function. If not provided, falls back to the current single-matrix title search (backward compatible).
-  - The default search handles `@`/`[[` (existing behavior). The `#` trigger calls a tag-specific search.
+  - The default search handles `@`/`[[` (existing behavior). The `#` trigger calls a tag-specific search (implemented in 3b).
 
 - [ ] Add `#` as a third trigger alongside `@` and `[[` in `handleTextInput`:
   - `#` starts autocomplete mode immediately (single character trigger, like `@`).
   - The `AutocompleteState.trigger` type expands to `'@' | '[[' | '#' | null`.
   - The trigger character determines: which search provider to call, the `kind` for the inserted node, and the visual style of autocomplete items.
+
+- [ ] Update `OutlineRow.tsx` and `NoteFace.tsx` to pass the new `InlinerefPluginConfig` shape. No functional change — both continue to use the default search provider for `@`/`[[`. This ensures the structural refactor does not regress existing behavior.
+
+- [ ] Tests: verify `@`/`[[` still work identically after refactor (no regression). Verify `#` is recognized as a trigger and opens autocomplete (results may be empty/stubbed without the tag search provider from 3b). Verify the `searchProvider` callback is invoked with the correct trigger character.
+- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+
+## 3b. Tag search, insertion, and inline tag type creation
+
+Build the tag-specific functionality on top of the pluggable autocomplete from 3a: tag type search for `#` trigger, owned aspect row creation via `createDependentRow`, and inline tag type creation for unmatched names.
 
 - [ ] Implement tag-mode autocomplete search. When `#` is the trigger:
   - Primary results: search registered tag types by name prefix/substring from `tag_types`:
@@ -186,7 +195,7 @@ Extend the inline reference autocomplete plugin (`src/editor/inlineref-plugin.ts
   - The note's `sourceMatrixId` and `sourceRowId` are correctly resolved (from `NoteFace` props).
   - `syncInlineRefs` on save (both outline and notes) correctly processes `own`-kind joins.
 
-- [ ] Tests: verify `#` triggers autocomplete. Verify tag types appear in autocomplete results. Verify selecting a tag type creates an aspect row via `createDependentRow`. Verify the `inlineref` node is inserted with `kind: 'own'`. Verify `@`/`[[` triggers still insert `kind: 'ref'` (no regression). Verify "Create tag type" option appears for nonexistent names. Verify inline tag type creation creates the matrix and the first instance. Verify tags work in both outline text and note body text.
+- [ ] Tests: verify `#` triggers tag type search. Verify tag types appear in autocomplete results. Verify selecting a tag type creates an aspect row via `createDependentRow`. Verify the `inlineref` node is inserted with `kind: 'own'`. Verify `@`/`[[` triggers still insert `kind: 'ref'` (no regression). Verify "Create tag type" option appears for nonexistent names. Verify inline tag type creation creates the matrix and the first instance. Verify tags work in both outline text and note body text.
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 4. Tag badge rendering
@@ -337,9 +346,9 @@ Provide named queries that plugins and faces can use to navigate between source 
 - [ ] Tests: create a row with multiple tags, verify forward lookup returns all of them with correct tag type metadata. Create multiple rows with the same tag type, verify reverse lookup returns all tagged rows. Verify specific aspect lookup returns the correct aspect row data. Verify lookups return empty results when no tags exist.
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
-## 8. Tag browser face
+## 8a. Tag browser face: registration, tag type list, and app layout
 
-A face listing all tag types and their instances. Provides the entry point for tag management and the reverse lookup view.
+Register the tag browser face, build the tag type list view, and wire it into the app's top-level navigation. This establishes the scaffold; instance drill-down and cross-face navigation come in 8b.
 
 - [ ] Register the tag browser face type:
   ```typescript
@@ -352,17 +361,9 @@ A face listing all tag types and their instances. Provides the entry point for t
   })
   ```
 
-- [ ] Create `src/tags/TagBrowserFace.tsx`:
-  - **Tag type list** (left panel or primary view):
-    - Lists all registered tag types from `tag_types`, each showing: name (with color badge), instance count, and a link to the tag type's identity face.
-    - "New tag type" button at the top — opens a dialog/form to create a tag type with a name, optional column definitions, and optional color.
-    - Each tag type row has a context menu: rename, change color, open identity face, delete tag type.
-  - **Tag instances** (right panel or drill-down view):
-    - Selecting a tag type shows its instances, each with key column values from the tag matrix.
-    - Each instance shows the source row context: the source matrix name and a snippet of the source row's primary content column.
-    - Clicking a tag instance navigates to the source row (opens the source row's face context — outline or note).
-    - A link to "View all in table" opens the tag type's identity face (table face) for spreadsheet-style editing of all instances.
-  - **Reverse lookup**: selecting a tag instance highlights or navigates to the source row, showing the tagged row in context.
+- [ ] Create `src/tags/TagBrowserFace.tsx` with the **tag type list** (primary view):
+  - Lists all registered tag types from `tag_types`, each showing: name (with color badge), instance count, and a link to the tag type's identity face.
+  - "New tag type" button at the top — opens a dialog/form to create a tag type with a name, optional column definitions, and optional color.
 
 - [ ] Wire the tag browser into the app layout:
   - Add a "Tags" tab or view alongside the outline and notes views.
@@ -373,7 +374,24 @@ A face listing all tag types and their instances. Provides the entry point for t
   - The face binding is created by the tags plugin on init.
   - The face is not bound to a specific matrix (it's a cross-matrix view over `tag_types` and their instances).
 
-- [ ] Tests: verify the tag browser lists all registered tag types. Verify instance counts are correct. Verify clicking a tag type shows its instances. Verify clicking an instance navigates to the source row. Verify "New tag type" creates a tag type and it appears in the list. Verify "View all in table" opens the identity face.
+- [ ] Tests: verify the tag browser lists all registered tag types. Verify instance counts are correct. Verify "New tag type" creates a tag type and it appears in the list.
+- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+
+## 8b. Tag browser face: instance drill-down, navigation, and context menus
+
+Add the interactive layer to the tag browser: selecting a tag type shows its instances with source row context, clicking an instance navigates to the source row, and context menus provide tag type management actions.
+
+- [ ] **Tag instances** (right panel or drill-down view):
+  - Selecting a tag type shows its instances, each with key column values from the tag matrix.
+  - Each instance shows the source row context: the source matrix name and a snippet of the source row's primary content column.
+  - Clicking a tag instance navigates to the source row (opens the source row's face context — outline or note).
+  - A link to "View all in table" opens the tag type's identity face (table face) for spreadsheet-style editing of all instances.
+
+- [ ] **Context menus** on each tag type row: rename, change color, open identity face, delete tag type.
+
+- [ ] **Reverse lookup**: selecting a tag instance highlights or navigates to the source row, showing the tagged row in context.
+
+- [ ] Tests: verify clicking a tag type shows its instances. Verify clicking an instance navigates to the source row. Verify context menu actions (rename, change color, delete). Verify "View all in table" opens the identity face.
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 9. Solidify plugin API
@@ -414,9 +432,9 @@ With four real plugin consumers (outline, notes, inline references, tags), extra
 - [ ] Tests: verify the existing plugin registration tests still pass. Add tests for any new lifecycle contracts or shared utilities extracted during this task.
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
-## 10. Playwright E2E tests
+## 10a. Playwright E2E: tag insertion and tag type creation
 
-Extend the Playwright test suite to cover Phase 5 behaviors.
+E2E coverage for the `#` autocomplete flow and inline tag type creation. Depends on stages 3b and 4.
 
 - [ ] **Tag insertion tests:**
   - In an outline row, type `#`, verify autocomplete opens.
@@ -430,6 +448,13 @@ Extend the Playwright test suite to cover Phase 5 behaviors.
   - Verify the tag type is created (appears in tag browser).
   - Verify the tag badge is inserted with the new tag type's name.
 
+- [ ] Run `pnpm test:e2e` — all pass
+- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+
+## 10b. Playwright E2E: property panel and owned join lifecycle
+
+E2E coverage for the tag property panel and all three owned join lifecycle directions. Depends on stages 5 and 6.
+
 - [ ] **Tag property panel tests:**
   - Click a `#` tag badge in the outline, verify the property panel opens.
   - Edit a field in the property panel, verify the change persists.
@@ -441,6 +466,13 @@ Extend the Playwright test suite to cover Phase 5 behaviors.
   - Insert a `#task` tag on an outline row. Delete the tag badge from the text (Backspace). Save. Verify the aspect row no longer exists in the task matrix.
   - Insert `#task` and `#review` tags on an outline row. Delete the outline row. Verify both aspect rows are cascade-deleted.
   - Create a `#task` tag on an outline row. Open the task matrix's identity face. Delete the aspect row from the table face. Return to the outline. Verify the `#task` badge is removed from the outline row's text.
+
+- [ ] Run `pnpm test:e2e` — all pass
+- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+
+## 10c. Playwright E2E: tag browser and cross-plugin interaction
+
+E2E coverage for the tag browser's full interactive flow and cross-plugin data consistency. Depends on stage 8b.
 
 - [ ] **Tag browser tests:**
   - Open the tag browser. Verify it lists all registered tag types.
@@ -466,7 +498,10 @@ Extend the Playwright test suite to cover Phase 5 behaviors.
    │                              │
    ├──────────┬───────────────────┘
    │          ▼
-   │   3. # trigger mode + autocomplete refactor ◄── 1 + 2
+   │   3a. Autocomplete refactor + # trigger detection ◄── 1 + 2
+   │          │
+   │          ▼
+   │   3b. Tag search, insertion, inline creation ◄── 3a
    │          │
    │          ├─► 4. Tag badge rendering
    │          │      │
@@ -474,16 +509,20 @@ Extend the Playwright test suite to cover Phase 5 behaviors.
    │          │
    │          └─► 6. Owned join lifecycle end-to-end ◄── (reverse cleanup)
    │
-   └─► 7. Forward/reverse lookup queries ◄── (used by 5, 8)
+   └─► 7. Forward/reverse lookup queries ◄── (used by 5, 8a)
           │
-          └─► 8. Tag browser face ◄── (uses lookups, tag types)
+          └─► 8a. Tag browser: list + layout ◄── (uses lookups, tag types)
+                  │
+                  └─► 8b. Tag browser: drill-down + navigation
 
-9. Solidify plugin API ◄── 1–8 (extract after all features land)
+9. Solidify plugin API ◄── 1–8b (extract after all features land)
 
-10. Playwright E2E ◄── 2, 3, 4, 5, 6, 8
+10a. E2E: insertion + creation ◄── 3b, 4
+10b. E2E: property panel + lifecycle ◄── 5, 6
+10c. E2E: tag browser + cross-plugin ◄── 8b
 ```
 
-Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independent and can proceed in parallel. Task 3 (`#` trigger + autocomplete refactor) depends on both tasks 1 and 2. Tasks 4 (badge rendering) and 6 (lifecycle) branch from task 3 and can proceed in parallel. Task 5 (property panel) depends on task 4 (clicking the badge opens the panel). Task 7 (lookup queries) branches from task 1 and can proceed in parallel with tasks 2–6. Task 8 (tag browser) depends on tasks 1 and 7. Task 9 (plugin API solidification) is a horizontal pass after all features are built. Task 10 (E2E) is added incrementally as features land.
+Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independent and can proceed in parallel. Task 3a (autocomplete refactor) depends on both 1 and 2; task 3b (tag search/insertion) depends on 3a. Tasks 4 (badge rendering) and 6 (lifecycle) branch from 3b and can proceed in parallel. Task 5 (property panel) depends on task 4 (clicking the badge opens the panel). Task 7 (lookup queries) branches from task 1 and can proceed in parallel with 2–6. Task 8a (tag browser list) depends on tasks 1 and 7; task 8b (drill-down/navigation) depends on 8a. Task 9 (plugin API solidification) is a horizontal pass after all features are built. E2E tests are split into three groups that can each begin as their dependencies land: 10a after 3b+4, 10b after 5+6, 10c after 8b.
 
 ---
 
@@ -503,10 +542,10 @@ Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independen
 
 - **Reverse cleanup scope.** The `removeInlineRefFromDoc` utility handles the case where a tag is deleted from the identity face and the source row's inline text needs cleanup. It does NOT handle the case where a reference cell (table cell) references an owned target — that cleanup path (nulling the cell value) is a separate concern and may be deferred if table cell `own`-kind references are not actively used in Phase 5.
 
-- **Plugin API solidification is extractive, not speculative.** Task 8 documents and tightens what exists, rather than designing capabilities for hypothetical future plugins. The plugin API continues to evolve as new consumers are built.
+- **Plugin API solidification is extractive, not speculative.** Task 9 documents and tightens what exists, rather than designing capabilities for hypothetical future plugins. The plugin API continues to evolve as new consumers are built.
 
 ---
 
 ## Done criteria
 
-All ten task groups complete. The tag type registry tracks which matrixes are tag types. Inline references (including `#` tags) work in outline rows as well as notes. The `#` trigger in inline reference autocomplete searches tag types and creates owned aspect rows via `createDependentRow`. Tag badges render as colored pills with the tag type name, distinct from `@`-reference styling. The tag property panel opens on click, showing hydrated editable fields from the aspect row. Owned join lifecycle works end-to-end in both directions: remove tag from text → aspect row deleted; delete source row → all aspect rows cascade-deleted; delete aspect row from identity face → inline node removed from source text. Forward and reverse lookup queries enable navigation between source rows and their tags. The tag browser face lists all tag types with instance counts and provides reverse lookup navigation. The plugin API is documented and tightened based on patterns from four real consumers. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.
+All fifteen task groups complete (1, 2, 3a, 3b, 4, 5, 6, 7, 8a, 8b, 9, 10a, 10b, 10c). The tag type registry tracks which matrixes are tag types. Inline references (including `#` tags) work in outline rows as well as notes. The `#` trigger in inline reference autocomplete searches tag types and creates owned aspect rows via `createDependentRow`. Tag badges render as colored pills with the tag type name, distinct from `@`-reference styling. The tag property panel opens on click, showing hydrated editable fields from the aspect row. Owned join lifecycle works end-to-end in both directions: remove tag from text → aspect row deleted; delete source row → all aspect rows cascade-deleted; delete aspect row from identity face → inline node removed from source text. Forward and reverse lookup queries enable navigation between source rows and their tags. The tag browser face lists all tag types with instance counts and provides reverse lookup navigation. The plugin API is documented and tightened based on patterns from four real consumers. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.
