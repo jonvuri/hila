@@ -133,7 +133,7 @@ The outline currently does NOT support inline references. `OutlineRow.tsx` creat
 
 Refactor the inline reference autocomplete plugin (`src/editor/inlineref-plugin.ts`) from a hardcoded single-matrix search into a pluggable architecture, and add `#` as a recognized trigger character. This is a structural refactor — no new tag search or insertion logic yet.
 
-- [ ] Refactor `createInlinerefPlugin` to accept a pluggable search provider. Currently the plugin takes `matrixId: number` and hardcodes `SELECT id, title FROM "mx_${matrixId}_data"`. Refactor to accept a search configuration:
+- [x] Refactor `createInlinerefPlugin` to accept a pluggable search provider. Currently the plugin takes `matrixId: number` and hardcodes `SELECT id, title FROM "mx_${matrixId}_data"`. Refactor to accept a search configuration:
   ```typescript
   type InlinerefPluginConfig = {
     matrixId: number
@@ -145,15 +145,15 @@ Refactor the inline reference autocomplete plugin (`src/editor/inlineref-plugin.
   - `searchProvider`: optional custom search function. If not provided, falls back to the current single-matrix title search (backward compatible).
   - The default search handles `@`/`[[` (existing behavior). The `#` trigger calls a tag-specific search (implemented in 3b).
 
-- [ ] Add `#` as a third trigger alongside `@` and `[[` in `handleTextInput`:
+- [x] Add `#` as a third trigger alongside `@` and `[[` in `handleTextInput`:
   - `#` starts autocomplete mode immediately (single character trigger, like `@`).
   - The `AutocompleteState.trigger` type expands to `'@' | '[[' | '#' | null`.
   - The trigger character determines: which search provider to call, the `kind` for the inserted node, and the visual style of autocomplete items.
 
-- [ ] Update `OutlineRow.tsx` and `NoteFace.tsx` to pass the new `InlinerefPluginConfig` shape. No functional change — both continue to use the default search provider for `@`/`[[`. This ensures the structural refactor does not regress existing behavior.
+- [x] Update `OutlineRow.tsx` and `NoteFace.tsx` to pass the new `InlinerefPluginConfig` shape. No functional change — both continue to use the default search provider for `@`/`[[`. This ensures the structural refactor does not regress existing behavior.
 
-- [ ] Tests: verify `@`/`[[` still work identically after refactor (no regression). Verify `#` is recognized as a trigger and opens autocomplete (results may be empty/stubbed without the tag search provider from 3b). Verify the `searchProvider` callback is invoked with the correct trigger character.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: verify `@`/`[[` still work identically after refactor (no regression). Verify `#` is recognized as a trigger and opens autocomplete (results may be empty/stubbed without the tag search provider from 3b). Verify the `searchProvider` callback is invoked with the correct trigger character.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 3b. Tag search, insertion, and inline tag type creation
 

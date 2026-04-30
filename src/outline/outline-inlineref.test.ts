@@ -3,7 +3,13 @@ import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 import { Node } from 'prosemirror-model'
 
-import { initMatrixSchema, createMatrix, insertDataRow, insertJoin, getTargets } from '../core/matrix'
+import {
+  initMatrixSchema,
+  createMatrix,
+  insertDataRow,
+  insertJoin,
+  getTargets,
+} from '../core/matrix'
 import { createTreePosition } from '../core/tree'
 import { ensureTrait } from '../core/traits'
 import { schema } from '../editor/schema'

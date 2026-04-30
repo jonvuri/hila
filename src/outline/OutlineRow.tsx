@@ -134,7 +134,10 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
       }
     }
 
-    const extraPlugins = isPlain() ? [] : [createInlinerefPlugin(props.matrixId)]
+    const extraPlugins =
+      isPlain() ?
+        []
+      : [createInlinerefPlugin({ matrixId: props.matrixId, rowIdAccessor: () => props.rowId })]
     const state = createEditorState(docJson, props.callbacks, extraPlugins)
 
     const nodeViews: Record<string, ReturnType<typeof nodeViewFactory>> = {

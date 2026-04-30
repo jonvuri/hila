@@ -4,14 +4,22 @@ import type { EditorView } from 'prosemirror-view'
 import { execQuery } from '../core/client/sql-client'
 import { schema } from '../editor/schema'
 
-type NoteOption = { id: number; title: string }
+export type AutocompleteOption = { id: number; title: string }
+
+export type TriggerChar = '@' | '[[' | '#'
+
+export type InlinerefPluginConfig = {
+  matrixId: number
+  rowIdAccessor: () => number
+  searchProvider?: (trigger: TriggerChar, query: string) => Promise<AutocompleteOption[]>
+}
 
 type AutocompleteState = {
   active: boolean
   /** Doc position right after the trigger (start of query text) */
   from: number
   query: string
-  trigger: '@' | '[[' | null
+  trigger: TriggerChar | null
 }
 
 const inlinerefPluginKey = new PluginKey<AutocompleteState>('inlineref')
@@ -46,10 +54,10 @@ const positionDropdown = (view: EditorView, dropdown: HTMLDivElement, pos: numbe
 
 const renderDropdown = (
   dropdown: HTMLDivElement,
-  options: NoteOption[],
+  options: AutocompleteOption[],
   selectedIndex: number,
   query: string,
-  onSelect: (option: NoteOption | 'create') => void,
+  onSelect: (option: AutocompleteOption | 'create') => void,
 ) => {
   dropdown.innerHTML = ''
 
@@ -83,20 +91,29 @@ const renderDropdown = (
   dropdown.style.display = dropdown.children.length > 0 ? '' : 'none'
 }
 
-export const createInlinerefPlugin = (matrixId: number): Plugin => {
+export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => {
+  const { matrixId, searchProvider } = config
   let dropdown: HTMLDivElement | null = null
-  let options: NoteOption[] = []
+  let options: AutocompleteOption[] = []
   let selectedIndex = 0
   let fetchVersion = 0
 
-  const fetchNotes = async (view: EditorView, query: string) => {
-    const version = ++fetchVersion
+  const defaultSearch = async (query: string): Promise<AutocompleteOption[]> => {
     const escapedQuery = query.replace(/'/g, "''")
     const sql = `SELECT id, title FROM "mx_${matrixId}_data" WHERE title LIKE '%${escapedQuery}%' ORDER BY title LIMIT 20`
+    const result = await execQuery(sql)
+    return result.map((r) => ({ id: r.id as number, title: r.title as string }))
+  }
+
+  const fetchResults = async (view: EditorView, trigger: TriggerChar, query: string) => {
+    const version = ++fetchVersion
     try {
-      const result = await execQuery(sql)
+      const results =
+        searchProvider ? await searchProvider(trigger, query)
+        : trigger === '#' ? []
+        : await defaultSearch(query)
       if (version !== fetchVersion) return
-      options = result.map((r) => ({ id: r.id as number, title: r.title as string }))
+      options = results
       selectedIndex = 0
       if (dropdown) {
         const state = getAutocompleteState(view)
@@ -115,14 +132,15 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
   ) => {
     const state = getAutocompleteState(view)
     if (!state.active) return
+    const kind = state.trigger === '#' ? 'own' : 'ref'
     const inlinerefType = schema.nodes.inlineref!
     const node = inlinerefType.create({
       targetMatrixId: attrs.targetMatrixId,
       targetRowId: attrs.targetRowId,
-      kind: 'ref',
+      kind,
       cachedTitle: attrs.cachedTitle ?? null,
     })
-    const triggerLength = state.trigger === '@' ? 1 : 2
+    const triggerLength = state.trigger === '[[' ? 2 : 1
     const deleteFrom = state.from - triggerLength
     const deleteTo = state.from + state.query.length
     const tr = view.state.tr.replaceWith(deleteFrom, deleteTo, node)
@@ -131,7 +149,7 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
     view.focus()
   }
 
-  const handleSelect = async (view: EditorView, option: NoteOption | 'create') => {
+  const handleSelect = async (view: EditorView, option: AutocompleteOption | 'create') => {
     const state = getAutocompleteState(view)
     if (!state.active) return
 
@@ -214,7 +232,7 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
             trigger: state.trigger,
           })
           view.dispatch(tr)
-          void fetchNotes(view, newQuery)
+          void fetchResults(view, state.trigger!, newQuery)
           return true
         }
 
@@ -230,7 +248,7 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
               trigger: '[[',
             })
             view.dispatch(tr)
-            void fetchNotes(view, '')
+            void fetchResults(view, '[[', '')
             return true
           }
         }
@@ -245,7 +263,21 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
             trigger: '@',
           })
           view.dispatch(tr)
-          void fetchNotes(view, '')
+          void fetchResults(view, '@', '')
+          return true
+        }
+
+        // Detect # trigger
+        if (text === '#') {
+          const tr = view.state.tr.insertText('#', from)
+          tr.setMeta(inlinerefPluginKey, {
+            active: true,
+            from: from + 1,
+            query: '',
+            trigger: '#',
+          })
+          view.dispatch(tr)
+          void fetchResults(view, '#', '')
           return true
         }
 
@@ -310,7 +342,7 @@ export const createInlinerefPlugin = (matrixId: number): Plugin => {
               trigger: state.trigger,
             })
             view.dispatch(tr)
-            void fetchNotes(view, newQuery)
+            void fetchResults(view, state.trigger!, newQuery)
             return true
           }
 

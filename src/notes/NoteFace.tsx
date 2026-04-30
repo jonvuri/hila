@@ -151,7 +151,10 @@ const NoteEditor: Component<NoteFaceProps> = (props) => {
       }
     }
 
-    const inlinerefPlugin = createInlinerefPlugin(props.matrixId)
+    const inlinerefPlugin = createInlinerefPlugin({
+      matrixId: props.matrixId,
+      rowIdAccessor: () => props.noteId,
+    })
     const state = createEditorState(docJson, undefined, [inlinerefPlugin])
     const view = new EditorView(el, {
       state,
