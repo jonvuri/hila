@@ -202,24 +202,24 @@ Build the tag-specific functionality on top of the pluggable autocomplete from 3
 
 Update `InlineRefView` to render `own`-kind (`#`) references distinctly from `ref`-kind (`@`) references.
 
-- [ ] Extend `InlineRefView` (`src/editor/nodeviews/InlineRefView.tsx`) rendering for `kind: 'own'`:
+- [x] Extend `InlineRefView` (`src/editor/nodeviews/InlineRefView.tsx`) rendering for `kind: 'own'`:
   - **Live state**: render as a colored badge with the tag type name. The badge color is resolved from the `tag_types` registry (query by `targetMatrixId`). Display format: `#tagname` in the badge.
   - Optionally show key property chips alongside the badge — e.g. a task tag might show "⏰ Friday" from the aspect row's `due_date` column. This requires querying the aspect row's data and the tag type's column schema to determine which columns are "key" properties (see task 4 for the property panel; key properties are the first 1–2 non-label columns).
   - **Ghost state**: render the cached tag name with strikethrough and a muted color, indicating the aspect row was deleted.
   - **Empty state**: should not normally occur for `own`-kind references (they always create the target row immediately), but handle gracefully with the cached title.
 
-- [ ] Add CSS styles for tag badges in the editor stylesheet:
+- [x] Add CSS styles for tag badges in the editor stylesheet:
   - `.inlineref[data-kind="own"]`: colored background, rounded pill shape, smaller font.
   - Color derived from the tag type's `color` field, or a default palette based on the tag type name.
   - Hover state: slightly elevated, cursor pointer.
   - Distinguish from `ref`-kind references (which render as blue linked text).
 
-- [ ] Implement reactive tag type metadata resolution:
+- [x] Implement reactive tag type metadata resolution:
   - `InlineRefView` needs to resolve the tag type name and color from `targetMatrixId`. Create a lightweight reactive query or cache for tag type metadata keyed by matrix ID.
   - Consider a `useTagType(matrixId)` hook that returns `{ name, color, icon } | null`. Returns null if the matrix is not a registered tag type (in which case, fall back to the default `own`-kind rendering).
 
-- [ ] Tests: verify `own`-kind `inlineref` renders as a colored badge (not a blue link). Verify the badge shows the tag type name. Verify ghost state rendering for deleted aspect rows. Verify ref-kind references still render as blue linked text (no regression).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: verify `own`-kind `inlineref` renders as a colored badge (not a blue link). Verify the badge shows the tag type name. Verify ghost state rendering for deleted aspect rows. Verify ref-kind references still render as blue linked text (no regression).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 5. Tag property panel
 

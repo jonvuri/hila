@@ -18,7 +18,14 @@ import { schema } from '../editor/schema'
 import { extractInlineRefs } from '../editor/inlineref-sync'
 
 import { tagsPlugin } from './tags-plugin'
-import { ensureTagTypesTable, createTagType, getTagType, getAllTagTypes } from './tag-types'
+import {
+  ensureTagTypesTable,
+  createTagType,
+  getTagType,
+  getTagTypeByMatrixId,
+  getAllTagTypes,
+  updateTagType,
+} from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
 
@@ -247,6 +254,87 @@ describe('Tag search, insertion, and inline tag type creation', () => {
         targetRowId,
         kind: 'own',
       })
+    })
+  })
+
+  describe('Tag badge rendering', () => {
+    test('own-kind inlineref node carries data-kind="own" in toDOM', () => {
+      const tagType = createTagType(db, 'task')
+      const node = schema.nodes.inlineref!.create({
+        targetMatrixId: tagType.matrixId,
+        targetRowId: 42,
+        kind: 'own',
+        cachedTitle: 'task',
+      })
+
+      const domSpec = node.type.spec.toDOM!(node)
+      const attrs = (domSpec as [string, Record<string, string>, string])[1]
+      expect(attrs['data-kind']).toBe('own')
+    })
+
+    test('ref-kind inlineref node carries data-kind="ref" in toDOM', () => {
+      const node = schema.nodes.inlineref!.create({
+        targetMatrixId: 1,
+        targetRowId: 10,
+        kind: 'ref',
+        cachedTitle: 'note title',
+      })
+
+      const domSpec = node.type.spec.toDOM!(node)
+      const attrs = (domSpec as [string, Record<string, string>, string])[1]
+      expect(attrs['data-kind']).toBe('ref')
+    })
+
+    test('tag type metadata can be resolved by matrix ID', () => {
+      const tagType = createTagType(db, 'task')
+
+      const resolved = getTagTypeByMatrixId(db, tagType.matrixId)
+      expect(resolved).not.toBeNull()
+      expect(resolved!.name).toBe('task')
+      expect(resolved!.matrixId).toBe(tagType.matrixId)
+    })
+
+    test('tag type with explicit color is resolved', () => {
+      const tagType = createTagType(db, 'urgent')
+      updateTagType(db, tagType.id, { color: '#e53e3e' })
+
+      const resolved = getTagTypeByMatrixId(db, tagType.matrixId)
+      expect(resolved!.color).toBe('#e53e3e')
+    })
+
+    test('non-tag-type matrix ID returns null from getTagTypeByMatrixId', () => {
+      const plainMatrixId = createMatrix(db, 'Notes', [{ name: 'title', type: 'TEXT' }])
+
+      const resolved = getTagTypeByMatrixId(db, plainMatrixId)
+      expect(resolved).toBeNull()
+    })
+
+    test('own-kind node with deleted target produces ghost state attrs', () => {
+      const tagType = createTagType(db, 'task')
+      const node = schema.nodes.inlineref!.create({
+        targetMatrixId: tagType.matrixId,
+        targetRowId: 999999,
+        kind: 'own',
+        cachedTitle: 'task',
+      })
+
+      expect(node.attrs.kind).toBe('own')
+      expect(node.attrs.cachedTitle).toBe('task')
+      expect(node.attrs.targetRowId).toBe(999999)
+    })
+
+    test('ref-kind node attrs are unchanged (no regression)', () => {
+      const node = schema.nodes.inlineref!.create({
+        targetMatrixId: 1,
+        targetRowId: 10,
+        kind: 'ref',
+        cachedTitle: 'My Note',
+      })
+
+      expect(node.attrs.kind).toBe('ref')
+      expect(node.attrs.cachedTitle).toBe('My Note')
+      expect(node.attrs.targetMatrixId).toBe(1)
+      expect(node.attrs.targetRowId).toBe(10)
     })
   })
 })

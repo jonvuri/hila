@@ -445,13 +445,19 @@ body,
 }
 
 .inlineref-own {
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-size: 0.9em;
+  cursor: pointer;
   color: #7c3aed;
   background: #f5f3ff;
-  cursor: pointer;
+  transition:
+    box-shadow 0.12s,
+    background-color 0.12s;
 }
 
 .inlineref-own:hover {
-  background: #ede9fe;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
 .inlineref-ghost {
@@ -464,6 +470,12 @@ body,
 .inlineref-ghost:hover {
   background: #f3f4f6;
   text-decoration: line-through;
+}
+
+.inlineref-own.inlineref-ghost {
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-size: 0.9em;
 }
 
 .inlineref-empty {
