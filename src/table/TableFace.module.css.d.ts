@@ -44,6 +44,17 @@ const typePickerIcon: string;
 const thFormula: string;
 const cellFormula: string;
 const formulaIcon: string;
+const cellReference: string;
+const refBadge: string;
+const refGhost: string;
+const refEmpty: string;
+const refClearBtn: string;
+const refSearchDropdown: string;
+const refSearchInput: string;
+const refSearchResults: string;
+const refSearchItem: string;
+const refSearchItemSelected: string;
+const refSearchEmpty: string;
 const dragging: string;
 const dropTarget: string;
 
@@ -86,6 +97,17 @@ export {
 	thFormula,
 	cellFormula,
 	formulaIcon,
+	cellReference,
+	refBadge,
+	refGhost,
+	refEmpty,
+	refClearBtn,
+	refSearchDropdown,
+	refSearchInput,
+	refSearchResults,
+	refSearchItem,
+	refSearchItemSelected,
+	refSearchEmpty,
 	dragging,
 	dropTarget
 };
@@ -129,6 +151,17 @@ export default {
 	thFormula,
 	cellFormula,
 	formulaIcon,
+	cellReference,
+	refBadge,
+	refGhost,
+	refEmpty,
+	refClearBtn,
+	refSearchDropdown,
+	refSearchInput,
+	refSearchResults,
+	refSearchItem,
+	refSearchItemSelected,
+	refSearchEmpty,
 	dragging,
 	dropTarget
 };

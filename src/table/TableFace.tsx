@@ -7,6 +7,7 @@ import {
   Show,
   type Component,
 } from 'solid-js'
+import { Portal } from 'solid-js/web'
 
 import type { FaceComponentProps } from '../core/FaceRenderer'
 import {
@@ -20,10 +21,14 @@ import {
   updateColumnDisplayType,
   saveFaceConfig,
   reorderColumns,
+  insertJoin,
+  deleteJoin,
+  deleteOwnedTarget,
 } from '../core/client/matrix-client'
+import { execQuery } from '../core/client/sql-client'
 import { useQuery } from '../sql/useQuery'
 import type { SqlResult } from '../sql/types'
-import type { ColumnDefinition } from '../core/matrix'
+import type { ColumnDefinition, JoinKind } from '../core/matrix'
 
 import {
   buildTableQuery,
@@ -36,7 +41,7 @@ import styles from './TableFace.module.css'
 
 // -- Column type system -------------------------------------------------------
 
-export type ColumnDisplayType = 'text' | 'number' | 'date' | 'boolean' | 'select'
+export type ColumnDisplayType = 'text' | 'number' | 'date' | 'boolean' | 'select' | 'reference'
 
 const COLUMN_TYPES: {
   value: ColumnDisplayType
@@ -49,10 +54,54 @@ const COLUMN_TYPES: {
   { value: 'date', label: 'Date', icon: 'D', sqliteType: 'TEXT' },
   { value: 'boolean', label: 'Boolean', icon: '?', sqliteType: 'INTEGER' },
   { value: 'select', label: 'Select', icon: 'S', sqliteType: 'TEXT' },
+  { value: 'reference', label: 'Reference', icon: '→', sqliteType: 'TEXT' },
 ]
 
 export const getColumnTypeInfo = (displayType: string) =>
   COLUMN_TYPES.find((t) => t.value === displayType) ?? COLUMN_TYPES[0]!
+
+// -- Reference cell value helpers ---------------------------------------------
+
+export type ReferenceCellValue = {
+  targetMatrixId: number
+  targetRowId: number
+  kind: JoinKind
+}
+
+export type ReferenceColumnConfig = {
+  targetMatrixId: number
+  defaultKind: JoinKind
+}
+
+const parseRefCellValue = (value: unknown): ReferenceCellValue | null => {
+  if (value == null || value === '') return null
+  try {
+    const parsed = JSON.parse(String(value)) as ReferenceCellValue
+    if (
+      typeof parsed.targetMatrixId === 'number' &&
+      typeof parsed.targetRowId === 'number' &&
+      (parsed.kind === 'ref' || parsed.kind === 'own')
+    ) {
+      return parsed
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+const parseRefColumnConfig = (options: string | null): ReferenceColumnConfig | null => {
+  if (!options) return null
+  try {
+    const parsed = JSON.parse(options) as ReferenceColumnConfig
+    if (typeof parsed.targetMatrixId === 'number') {
+      return { targetMatrixId: parsed.targetMatrixId, defaultKind: parsed.defaultKind ?? 'ref' }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
 
 const canCoerce = (value: unknown, targetType: ColumnDisplayType): boolean => {
   if (value === null || value === undefined || value === '') return true
@@ -141,6 +190,11 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   const [formulaName, setFormulaName] = createSignal('')
   const [formulaExpr, setFormulaExpr] = createSignal('')
   const [formulaError, setFormulaError] = createSignal<string | null>(null)
+  const [showRefColumnDialog, setShowRefColumnDialog] = createSignal(false)
+
+  const matricesQuery = () =>
+    showRefColumnDialog() ? 'SELECT id, title FROM matrix ORDER BY title' : ''
+  const { result: matricesResult } = useQuery(matricesQuery)
 
   // -- Column drag reorder state -------
   const [dragCol, setDragCol] = createSignal<string | null>(null)
@@ -191,6 +245,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     const rowData = rows()[row]
     if (!colDef || !rowData) return
     if (colDef.formula !== null) return
+    if (colDef.displayType === 'reference') return
 
     const rawValue = rowData[colDef.name]
     setEditValue(rawValue === null || rawValue === undefined ? '' : String(rawValue))
@@ -268,6 +323,10 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   // -- Column operations -------
   const handleAddColumn = async (displayType: ColumnDisplayType) => {
     setShowTypePicker(false)
+    if (displayType === 'reference') {
+      setShowRefColumnDialog(true)
+      return
+    }
     const colInfo = COLUMN_TYPES.find((t) => t.value === displayType)!
     const existingNames = new Set(columns().map((c) => c.name))
     let name = 'New Column'
@@ -276,6 +335,47 @@ const TableFace: Component<FaceComponentProps> = (props) => {
       name = `New Column ${i++}`
     }
     await addColumn(matrixId(), name, colInfo.sqliteType, displayType)
+  }
+
+  const handleAddRefColumn = async (targetMatrixId: number) => {
+    setShowRefColumnDialog(false)
+    const existingNames = new Set(columns().map((c) => c.name))
+    let name = 'Reference'
+    let i = 1
+    while (existingNames.has(name)) {
+      name = `Reference ${i++}`
+    }
+    const options = JSON.stringify({ targetMatrixId, defaultKind: 'ref' })
+    await addColumn(matrixId(), name, 'TEXT', 'reference', options)
+  }
+
+  const handleSetReference = async (
+    rowId: number,
+    colDef: ColumnDefinition,
+    oldValue: unknown,
+    newRef: ReferenceCellValue | null,
+  ) => {
+    const oldRef = parseRefCellValue(oldValue)
+
+    if (oldRef) {
+      await deleteJoin(matrixId(), rowId, oldRef.targetMatrixId, oldRef.targetRowId)
+      if (oldRef.kind === 'own') {
+        await deleteOwnedTarget(oldRef.targetMatrixId, oldRef.targetRowId)
+      }
+    }
+
+    if (newRef) {
+      await insertJoin(
+        matrixId(),
+        rowId,
+        newRef.targetMatrixId,
+        newRef.targetRowId,
+        newRef.kind,
+      )
+      await updateRow(matrixId(), rowId, { [colDef.name]: JSON.stringify(newRef) })
+    } else {
+      await updateRow(matrixId(), rowId, { [colDef.name]: null })
+    }
   }
 
   const handleAddFormulaColumn = async () => {
@@ -423,7 +523,12 @@ const TableFace: Component<FaceComponentProps> = (props) => {
         // Start editing if a printable character is typed
         if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
           const colDef = columns()[sel.col]
-          if (colDef && colDef.displayType !== 'boolean' && colDef.formula === null) {
+          if (
+            colDef &&
+            colDef.displayType !== 'boolean' &&
+            colDef.displayType !== 'reference' &&
+            colDef.formula === null
+          ) {
             setEditValue(e.key)
             setEditingCell({ row: sel.row, col: sel.col })
             e.preventDefault()
@@ -466,6 +571,15 @@ const TableFace: Component<FaceComponentProps> = (props) => {
         setShowFormulaDialog(false)
         setFormulaError(null)
       }
+      setTimeout(() => document.addEventListener('click', handleClick))
+      onCleanup(() => document.removeEventListener('click', handleClick))
+    }
+  })
+
+  // Close reference column dialog on outside click
+  createEffect(() => {
+    if (showRefColumnDialog()) {
+      const handleClick = () => setShowRefColumnDialog(false)
       setTimeout(() => document.addEventListener('click', handleClick))
       onCleanup(() => document.removeEventListener('click', handleClick))
     }
@@ -624,6 +738,13 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                       }}
                     />
                   </Show>
+                  <Show when={showRefColumnDialog()}>
+                    <ReferenceColumnDialog
+                      matrices={(matricesResult() ?? []) as { id: number; title: string }[]}
+                      onAdd={(targetMatrixId) => void handleAddRefColumn(targetMatrixId)}
+                      onClose={() => setShowRefColumnDialog(false)}
+                    />
+                  </Show>
                 </div>
               </th>
             </tr>
@@ -643,42 +764,67 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                       return (
                         <td class={styles.td}>
                           <Show
-                            when={editing() && !isFormula}
+                            when={col.displayType !== 'reference'}
                             fallback={
-                              <CellDisplay
+                              <ReferenceCellDisplay
                                 value={value()}
-                                displayType={col.displayType}
                                 options={col.options}
                                 selected={selected()}
-                                isFormula={isFormula}
+                                matrixId={matrixId()}
+                                rowId={row['id'] as number}
+                                colDef={col}
                                 onClick={() =>
                                   setSelectedCell({ row: rowIdx(), col: colIdx() })
                                 }
-                                onDblClick={() => {
-                                  if (isFormula) return
-                                  if (col.displayType === 'boolean') {
-                                    void handleBooleanToggle(rowIdx(), colIdx())
-                                  } else {
-                                    startEditing(rowIdx(), colIdx())
-                                  }
-                                }}
-                                onBooleanToggle={() =>
-                                  void handleBooleanToggle(rowIdx(), colIdx())
+                                onSetReference={(ref) =>
+                                  void handleSetReference(
+                                    row['id'] as number,
+                                    col,
+                                    value(),
+                                    ref,
+                                  )
                                 }
                               />
                             }
                           >
-                            <CellEditor
-                              value={editValue()}
-                              displayType={col.displayType}
-                              options={col.options}
-                              onInput={(v) => setEditValue(v)}
-                              onCommit={() => void commitEdit()}
-                              onCancel={cancelEdit}
-                              onTab={(shift) => {
-                                void handleTabFromCell(rowIdx(), colIdx(), shift)
-                              }}
-                            />
+                            <Show
+                              when={editing() && !isFormula}
+                              fallback={
+                                <CellDisplay
+                                  value={value()}
+                                  displayType={col.displayType}
+                                  options={col.options}
+                                  selected={selected()}
+                                  isFormula={isFormula}
+                                  onClick={() =>
+                                    setSelectedCell({ row: rowIdx(), col: colIdx() })
+                                  }
+                                  onDblClick={() => {
+                                    if (isFormula) return
+                                    if (col.displayType === 'boolean') {
+                                      void handleBooleanToggle(rowIdx(), colIdx())
+                                    } else {
+                                      startEditing(rowIdx(), colIdx())
+                                    }
+                                  }}
+                                  onBooleanToggle={() =>
+                                    void handleBooleanToggle(rowIdx(), colIdx())
+                                  }
+                                />
+                              }
+                            >
+                              <CellEditor
+                                value={editValue()}
+                                displayType={col.displayType}
+                                options={col.options}
+                                onInput={(v) => setEditValue(v)}
+                                onCommit={() => void commitEdit()}
+                                onCancel={cancelEdit}
+                                onTab={(shift) => {
+                                  void handleTabFromCell(rowIdx(), colIdx(), shift)
+                                }}
+                              />
+                            </Show>
                           </Show>
                         </td>
                       )
@@ -956,6 +1102,288 @@ const FilterPopover: Component<{
         style={{ background: '#2563eb', color: '#fff' }}
         onClick={() => {
           if (column()) props.onAdd({ column: column(), operator: operator(), value: value() })
+        }}
+      >
+        Add
+      </button>
+      <button style={{ background: '#f0f0f0', color: '#333' }} onClick={() => props.onClose()}>
+        Cancel
+      </button>
+    </div>
+  )
+}
+
+// -- Reference cell components ------------------------------------------------
+
+const ReferenceCellDisplay: Component<{
+  value: unknown
+  options: string | null
+  selected: boolean
+  matrixId: number
+  rowId: number
+  colDef: ColumnDefinition
+  onClick: () => void
+  onSetReference: (ref: ReferenceCellValue | null) => void
+}> = (props) => {
+  const ref = createMemo(() => parseRefCellValue(props.value))
+  const config = createMemo(() => parseRefColumnConfig(props.options))
+
+  const titleQuery = createMemo(() => {
+    const r = ref()
+    if (!r) return ''
+    return `SELECT title FROM "mx_${r.targetMatrixId}_data" WHERE id = ${r.targetRowId}`
+  })
+  const { result: titleResult } = useQuery(() => titleQuery())
+
+  const resolvedTitle = createMemo(() => {
+    const data = titleResult()
+    if (!data || data.length === 0) return null
+    return (data[0] as { title: string }).title
+  })
+
+  const isGhost = createMemo(
+    () => ref() !== null && titleResult() !== null && titleResult()!.length === 0,
+  )
+
+  const displayTitle = createMemo(() => {
+    if (!ref()) return null
+    if (isGhost()) return '(deleted)'
+    return resolvedTitle() || 'Untitled'
+  })
+
+  const [showSearch, setShowSearch] = createSignal(false)
+  const [dropdownPos, setDropdownPos] = createSignal<{ top: number; left: number } | null>(null)
+  let cellRef: HTMLDivElement | undefined
+
+  const openSearch = () => {
+    if (cellRef) {
+      const rect = cellRef.getBoundingClientRect()
+      setDropdownPos({ top: rect.bottom + 2, left: rect.left })
+    }
+    setShowSearch(true)
+  }
+
+  const handleClear = (e: MouseEvent) => {
+    e.stopPropagation()
+    props.onSetReference(null)
+  }
+
+  return (
+    <div
+      class={styles.cell}
+      classList={{
+        [styles.cellSelected!]: props.selected,
+        [styles.cellReference!]: true,
+      }}
+      ref={cellRef}
+      onClick={() => props.onClick()}
+      onDblClick={openSearch}
+    >
+      <Show
+        when={ref()}
+        fallback={
+          <span class={styles.refEmpty} onClick={openSearch}>
+            Empty
+          </span>
+        }
+      >
+        <span class={styles.refBadge} classList={{ [styles.refGhost!]: isGhost() }}>
+          {displayTitle()}
+        </span>
+        <button class={styles.refClearBtn} onClick={handleClear} aria-label="Clear reference">
+          ×
+        </button>
+      </Show>
+      <Show when={showSearch() && dropdownPos()}>
+        <Portal>
+          <ReferenceSearchDropdown
+            targetMatrixId={config()?.targetMatrixId ?? null}
+            defaultKind={config()?.defaultKind ?? 'ref'}
+            position={dropdownPos()!}
+            onSelect={(selected) => {
+              setShowSearch(false)
+              props.onSetReference(selected)
+            }}
+            onClose={() => setShowSearch(false)}
+          />
+        </Portal>
+      </Show>
+    </div>
+  )
+}
+
+const ReferenceSearchDropdown: Component<{
+  targetMatrixId: number | null
+  defaultKind: JoinKind
+  position: { top: number; left: number }
+  onSelect: (ref: ReferenceCellValue) => void
+  onClose: () => void
+}> = (props) => {
+  const [query, setQuery] = createSignal('')
+  const [results, setResults] = createSignal<{ id: number; title: string; matrixId: number }[]>(
+    [],
+  )
+  const [selectedIndex, setSelectedIndex] = createSignal(0)
+  let fetchVersion = 0
+
+  const fetchResults = async (q: string) => {
+    const version = ++fetchVersion
+    const escapedQuery = q.replace(/'/g, "''")
+    const targetMid = props.targetMatrixId
+    let sql: string
+
+    if (targetMid != null) {
+      sql = `SELECT id, title FROM "mx_${targetMid}_data" WHERE title LIKE '%${escapedQuery}%' ORDER BY title LIMIT 20`
+    } else {
+      sql = `SELECT m.id AS matrixId, m.title AS matrixTitle FROM matrix m ORDER BY m.title`
+    }
+
+    try {
+      const result = await execQuery(sql)
+      if (version !== fetchVersion) return
+      if (targetMid != null) {
+        setResults(
+          result.map((r) => ({
+            id: r.id as number,
+            title: (r.title as string) || 'Untitled',
+            matrixId: targetMid,
+          })),
+        )
+      } else {
+        setResults(
+          result.map((r) => ({
+            id: r.id as number,
+            title: `${r.matrixTitle as string} #${r.id as number}`,
+            matrixId: r.matrixId as number,
+          })),
+        )
+      }
+      setSelectedIndex(0)
+    } catch {
+      setResults([])
+    }
+  }
+
+  createEffect(() => {
+    void fetchResults(query())
+  })
+
+  createEffect(() => {
+    const handleClickOutside = () => props.onClose()
+    setTimeout(() => document.addEventListener('mousedown', handleClickOutside))
+    onCleanup(() => document.removeEventListener('mousedown', handleClickOutside))
+  })
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    const items = results()
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setSelectedIndex((i) => (i + 1) % Math.max(items.length, 1))
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setSelectedIndex((i) => (i - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1))
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (items[selectedIndex()]) {
+          const item = items[selectedIndex()]!
+          props.onSelect({
+            targetMatrixId: item.matrixId,
+            targetRowId: item.id,
+            kind: props.defaultKind,
+          })
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        props.onClose()
+        break
+    }
+  }
+
+  return (
+    <div
+      class={styles.refSearchDropdown}
+      style={{
+        position: 'fixed',
+        top: `${props.position.top}px`,
+        left: `${props.position.left}px`,
+      }}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <input
+        class={styles.refSearchInput}
+        type="text"
+        value={query()}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+        onKeyDown={handleKeyDown}
+        placeholder="Search rows…"
+        ref={(el) => setTimeout(() => el.focus())}
+      />
+      <div class={styles.refSearchResults}>
+        <For each={results()}>
+          {(item, i) => (
+            <div
+              class={styles.refSearchItem}
+              classList={{ [styles.refSearchItemSelected!]: i() === selectedIndex() }}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                props.onSelect({
+                  targetMatrixId: item.matrixId,
+                  targetRowId: item.id,
+                  kind: props.defaultKind,
+                })
+              }}
+            >
+              {item.title}
+            </div>
+          )}
+        </For>
+        <Show when={results().length === 0}>
+          <div class={styles.refSearchEmpty}>No results</div>
+        </Show>
+      </div>
+    </div>
+  )
+}
+
+const ReferenceColumnDialog: Component<{
+  matrices: { id: number; title: string }[]
+  onAdd: (targetMatrixId: number) => void
+  onClose: () => void
+}> = (props) => {
+  const [selectedMatrix, setSelectedMatrix] = createSignal<number | null>(null)
+
+  createEffect(() => {
+    if (selectedMatrix() === null && props.matrices.length > 0) {
+      setSelectedMatrix(props.matrices[0]!.id)
+    }
+  })
+
+  return (
+    <div class={styles.filterPopover} onClick={(e) => e.stopPropagation()}>
+      <div style={{ 'font-size': '12px', color: '#555' }}>Target matrix:</div>
+      <select
+        value={selectedMatrix() ?? ''}
+        onChange={(e) => setSelectedMatrix(Number(e.currentTarget.value))}
+        ref={(el) => setTimeout(() => el.focus())}
+      >
+        <For each={props.matrices}>
+          {(m) => (
+            <option value={m.id}>
+              {m.title} (#{m.id})
+            </option>
+          )}
+        </For>
+      </select>
+      <button
+        style={{ background: '#2563eb', color: '#fff' }}
+        disabled={selectedMatrix() == null}
+        onClick={() => {
+          if (selectedMatrix() != null) props.onAdd(selectedMatrix()!)
         }}
       >
         Add

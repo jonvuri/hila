@@ -253,31 +253,31 @@ Update the PM doc → join table sync to work with the new `inlineref` node and 
 
 Add `reference` as a column display type in the table face. This is the table-cell analog of inline references -- a cell that holds a foreign-key-style link to a row in another matrix.
 
-- [ ] Add `'reference'` to `ColumnDisplayType` in `src/table/TableFace.tsx`:
+- [x] Add `'reference'` to `ColumnDisplayType` in `src/table/TableFace.tsx`:
   ```typescript
   type ColumnDisplayType = 'text' | 'number' | 'date' | 'boolean' | 'select' | 'reference'
   ```
   Add it to `COLUMN_TYPES` with label "Reference", appropriate icon, and `sqliteType: 'TEXT'` (stores JSON `{ targetMatrixId, targetRowId, kind }`).
 
-- [ ] Create a reference cell renderer:
+- [x] Create a reference cell renderer:
   - Display: shows the target row's title (resolved via reactive query), or "Empty" if null, with reference iconography matching inline refs.
   - Edit: clicking the cell opens a search/autocomplete dropdown (same UX pattern as `@` autocomplete). Selecting a row sets the cell value.
   - The cell value is stored as JSON in the TEXT column: `{ "targetMatrixId": N, "targetRowId": M, "kind": "ref" }`.
 
-- [ ] On cell edit (reference set or changed):
+- [x] On cell edit (reference set or changed):
   - If the old value had a join entry, remove it. If it was `own`-kind, cascade-delete the old target.
   - If the new value is non-null, create a join entry with the appropriate kind.
 
-- [ ] On cell clear:
+- [x] On cell clear:
   - Remove the join entry. If `own`-kind, cascade-delete the target.
   - Set the cell value to null.
 
-- [ ] Reference cell column configuration: when adding a reference column, allow specifying:
+- [x] Reference cell column configuration: when adding a reference column, allow specifying:
   - Target matrix (which matrix the reference points to).
   - Default kind (`ref` or `own`). For Phase 4b, default to `ref`. `own`-kind cells are the Phase 5 "cascade-delete foreign key" used by tags.
 
-- [ ] Tests: add a reference column. Set a cell to reference a row in another matrix, verify join entry created. Clear the cell, verify join entry removed. Verify the cell renders the target row's title. Change the reference to a different target, verify old join removed and new join created.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: add a reference column. Set a cell to reference a row in another matrix, verify join entry created. Clear the cell, verify join entry removed. Verify the cell renders the target row's title. Change the reference to a different target, verify old join removed and new join created.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (486 tests)
 
 ## 7. Playwright E2E tests
 

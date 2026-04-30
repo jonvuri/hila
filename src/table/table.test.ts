@@ -8,12 +8,21 @@ import {
   getColumns,
   addColumn,
   insertDataRow,
+  updateRow,
+  insertJoin,
+  deleteJoin,
+  getTargets,
+  deleteOwnedTarget,
 } from '../core/matrix'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { applyFaceToMatrix, getFaceConfig } from '../core/face-config'
 
 import { buildTableQuery, type SortConfig, type FilterConfig } from './table-query'
-import { getColumnTypeInfo } from './TableFace'
+import {
+  getColumnTypeInfo,
+  type ReferenceCellValue,
+  type ReferenceColumnConfig,
+} from './TableFace'
 import { tableFaceTypeDefinition } from './table-plugin'
 
 afterEach(() => {
@@ -220,5 +229,253 @@ describe('Table face schema', () => {
     const loaded = getFaceConfig(db, config.id)
     expect(loaded).not.toBeNull()
     expect(loaded!.faceTypeId).toBe('hila.table')
+  })
+})
+
+// -- Reference column type tests ----------------------------------------------
+
+describe('getColumnTypeInfo reference', () => {
+  test('returns correct info for reference type', () => {
+    const info = getColumnTypeInfo('reference')
+    expect(info.value).toBe('reference')
+    expect(info.label).toBe('Reference')
+    expect(info.icon).toBe('→')
+    expect(info.sqliteType).toBe('TEXT')
+  })
+})
+
+describe('Reference column schema', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('addColumn creates a reference column with options', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [{ name: 'title', type: 'TEXT' }])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const options = JSON.stringify({
+      targetMatrixId,
+      defaultKind: 'ref',
+    } satisfies ReferenceColumnConfig)
+
+    addColumn(db, sourceMatrixId, {
+      name: 'link',
+      type: 'TEXT',
+      displayType: 'reference',
+      options,
+    })
+
+    const cols = getColumns(db, sourceMatrixId)
+    const refCol = cols.find((c) => c.name === 'link')
+    expect(refCol).toBeDefined()
+    expect(refCol!.displayType).toBe('reference')
+    expect(refCol!.options).toBe(options)
+
+    const parsed = JSON.parse(refCol!.options!) as ReferenceColumnConfig
+    expect(parsed.targetMatrixId).toBe(targetMatrixId)
+    expect(parsed.defaultKind).toBe('ref')
+  })
+
+  test('setting a reference cell creates a join entry', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'link', type: 'TEXT' },
+    ])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, sourceMatrixId, { title: 'Source Row' })
+    const targetRowId = insertDataRow(db, targetMatrixId, { title: 'Target Row' })
+
+    const refValue: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId,
+      kind: 'ref',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue) },
+    })
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'ref')
+
+    const targets = getTargets(db, sourceMatrixId, sourceRowId)
+    expect(targets).toHaveLength(1)
+    expect(targets[0]!.targetMatrixId).toBe(targetMatrixId)
+    expect(targets[0]!.targetRowId).toBe(targetRowId)
+    expect(targets[0]!.kind).toBe('ref')
+
+    const stmt = db.prepare(`SELECT link FROM "mx_${sourceMatrixId}_data" WHERE id = ?`)
+    stmt.bind([sourceRowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { link: string }
+    const stored = JSON.parse(row.link) as ReferenceCellValue
+    expect(stored.targetMatrixId).toBe(targetMatrixId)
+    expect(stored.targetRowId).toBe(targetRowId)
+    expect(stored.kind).toBe('ref')
+    stmt.finalize()
+  })
+
+  test('clearing a reference cell removes the join entry', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'link', type: 'TEXT' },
+    ])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, sourceMatrixId, { title: 'Source Row' })
+    const targetRowId = insertDataRow(db, targetMatrixId, { title: 'Target Row' })
+
+    const refValue: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId,
+      kind: 'ref',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue) },
+    })
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'ref')
+
+    expect(getTargets(db, sourceMatrixId, sourceRowId)).toHaveLength(1)
+
+    deleteJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: null },
+    })
+
+    expect(getTargets(db, sourceMatrixId, sourceRowId)).toHaveLength(0)
+
+    const stmt = db.prepare(`SELECT link FROM "mx_${sourceMatrixId}_data" WHERE id = ?`)
+    stmt.bind([sourceRowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { link: string | null }
+    expect(row.link).toBeNull()
+    stmt.finalize()
+  })
+
+  test('the cell renders the target row title (title is resolvable)', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'link', type: 'TEXT' },
+    ])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const targetRowId = insertDataRow(db, targetMatrixId, { title: 'My Target' })
+    const sourceRowId = insertDataRow(db, sourceMatrixId, { title: 'Source Row' })
+
+    const refValue: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId,
+      kind: 'ref',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue) },
+    })
+
+    const stmt = db.prepare(`SELECT title FROM "mx_${targetMatrixId}_data" WHERE id = ?`)
+    stmt.bind([targetRowId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { title: string }
+    expect(row.title).toBe('My Target')
+    stmt.finalize()
+  })
+
+  test('changing a reference removes old join and creates new join', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'link', type: 'TEXT' },
+    ])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, sourceMatrixId, { title: 'Source Row' })
+    const target1Id = insertDataRow(db, targetMatrixId, { title: 'Target 1' })
+    const target2Id = insertDataRow(db, targetMatrixId, { title: 'Target 2' })
+
+    const refValue1: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId: target1Id,
+      kind: 'ref',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue1) },
+    })
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, target1Id, 'ref')
+
+    let targets = getTargets(db, sourceMatrixId, sourceRowId)
+    expect(targets).toHaveLength(1)
+    expect(targets[0]!.targetRowId).toBe(target1Id)
+
+    deleteJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, target1Id)
+    const refValue2: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId: target2Id,
+      kind: 'ref',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue2) },
+    })
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, target2Id, 'ref')
+
+    targets = getTargets(db, sourceMatrixId, sourceRowId)
+    expect(targets).toHaveLength(1)
+    expect(targets[0]!.targetRowId).toBe(target2Id)
+  })
+
+  test('clearing an own-kind reference cascades deletion to target', () => {
+    const sourceMatrixId = createMatrix(db, 'Source', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'link', type: 'TEXT' },
+    ])
+    const targetMatrixId = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, sourceMatrixId, { title: 'Source Row' })
+    const targetRowId = insertDataRow(db, targetMatrixId, { title: 'Owned Target' })
+
+    const refValue: ReferenceCellValue = {
+      targetMatrixId,
+      targetRowId,
+      kind: 'own',
+    }
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: JSON.stringify(refValue) },
+    })
+    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'own')
+
+    deleteJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId)
+    deleteOwnedTarget(db, targetMatrixId, targetRowId)
+    updateRow(db, {
+      matrixId: sourceMatrixId,
+      rowId: sourceRowId,
+      values: { link: null },
+    })
+
+    expect(getTargets(db, sourceMatrixId, sourceRowId)).toHaveLength(0)
+
+    const stmt = db.prepare(
+      `SELECT COUNT(*) as cnt FROM "mx_${targetMatrixId}_data" WHERE id = ?`,
+    )
+    stmt.bind([targetRowId])
+    stmt.step()
+    const row = stmt.get({}) as { cnt: number }
+    expect(row.cnt).toBe(0)
+    stmt.finalize()
   })
 })
