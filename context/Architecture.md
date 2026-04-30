@@ -185,6 +185,104 @@ TypeScript handles things that are not relational:
 
 The guiding principle: **prefer SQL** whenever it is nearly as simple as the TypeScript alternative and the benefits (atomicity, prepared statements, fewer round trips) apply well. SQL is a strong default, not a strict requirement. If an operation would be significantly simpler or more maintainable in TypeScript outside the SQL engine, do it in TypeScript -- the goal is clarity and fitness, not purity. TypeScript is the orchestrator; SQL is the preferred operator.
 
+## Operations
+
+All data mutations in the system are expressed as **ops** (operations) -- typed, named functions with defined parameters and results. Ops are the single abstraction through which all write paths flow: the UI, plugins, MCP agents, batch compositions, and test fixtures all invoke the same op definitions.
+
+### Op registry
+
+The op registry is a single TypeScript type (`MatrixOperationMap`) that maps op names to their parameter and result types. Every op has exactly one entry in this map, and all consumers derive their interfaces from it:
+
+- The **worker message protocol** generates request/response message types from the registry.
+- The **client layer** generates typed async wrapper functions from the registry.
+- The **batch executor** validates and dispatches ops from the registry.
+- The **MCP tool layer** generates tool schemas from the registry.
+
+Adding a new op means adding one entry to the registry. The worker handler, client functions, batch support, and MCP tool exposure follow mechanically.
+
+### Op categories
+
+Ops fall into natural categories based on what they touch:
+
+| Category | Examples | Invariants enforced |
+|---|---|---|
+| **Data** | `insertRow`, `updateRow`, `deleteRow`, `seedRow` | Random ID generation, rank/closure auto-handling, cascade deletion of owned targets, formula column rejection |
+| **Structure** | `reparentRow`, `deleteSubtree` | Rank key computation, closure table consistency, cycle prevention |
+| **Schema** | `addColumn`, `removeColumn`, `renameColumn`, `addFormulaColumn` | Column registry sync, trigger reinstallation, data table DDL |
+| **Joins** | `insertJoin`, `deleteJoin`, `createDependentRow`, `deleteOwnedTarget` | Single-ownership enforcement, cascade deletion, join kind semantics |
+| **Plugin/face** | `registerPlugin`, `ensureTrait`, `applyFaceToMatrix`, `saveFaceConfig` | Plugin identity, trait idempotency, face-triggered trait provisioning |
+| **Query** | `getColumns`, `getTargets`, `getSources`, `getFaceConfigs` | Read-only, no invariants to enforce |
+
+### Batch ops
+
+A **batch** is an ordered sequence of ops executed in a single SQLite transaction. If any op fails, the entire batch rolls back. Batches add two capabilities beyond sequential individual ops:
+
+**Atomicity.** Multiple ops that should succeed or fail together -- creating a row and its joins, or setting up a plugin's matrixes and traits -- execute as one transaction. No partial state is observable.
+
+**Forward references.** An op can name its result with a `ref` string. Later ops in the same batch can reference that result using a `$ref` placeholder anywhere an ID is expected. The batch executor resolves references from a growing result map as it processes each op.
+
+```json
+{
+  "ops": [
+    {"op": "insertRow", "ref": "note", "params": {"matrixId": 5, "values": {"title": "Summary"}}},
+    {"op": "insertJoin", "params": {
+      "sourceMatrixId": 5, "sourceRowId": "$note.rowId",
+      "targetMatrixId": 5, "targetRowId": 789, "kind": "ref"
+    }}
+  ]
+}
+```
+
+The batch executor is a thin loop: open a transaction, dispatch each op to the same handler functions used by individual op execution, resolve `$ref` placeholders from prior results, and commit or roll back.
+
+**Consumers of batch ops:**
+
+- **MCP agents.** An agent composes multiple ops into a single atomic request. Forward references let it create rows and reference them in subsequent ops without making sequential round-trips.
+- **Plugin registration.** The declarative portion of a `PluginDefinition` (matrixes, traits, face bindings) compiles to a batch. The existing `registerPlugin` function becomes syntactic sugar over a batch, with lifecycle hooks (`init`/`destroy`) running after the batch commits. This migration unifies plugin setup with the general-purpose batch executor.
+- **Templates.** A parameterized batch stored as data: "New project from template" creates a note, a task matrix, and cross-references in one atomic operation. User-defined and plugin-provided templates use the same format.
+- **Test fixtures.** Test setup code that seeds multiple matrixes with sample data and relationships uses batches for atomicity and clarity.
+
+### What batch ops do not replace
+
+Batch ops are for composition at API boundaries. They do not replace:
+
+- **Named SQL mutations.** The internal hot path (rank key computation, closure maintenance, prepared statements) stays as SQL-first operations inside the core. Ops call these internally.
+- **Undo/redo.** The granularity mismatch (ProseMirror text edits vs. structural operations) requires its own abstraction.
+- **Sync changesets.** Row-level snapshots with LWW conflict resolution are a different abstraction level than operation-level batches.
+
+## External interfaces
+
+The system exposes two external interfaces for programmatic access: a **read-only SQL sandbox** for queries, and a **typed op interface** for writes. Together they give external clients (MCP agents, CLI tools, future integrations) full access to the system's capabilities without bypassing invariants.
+
+### Read: SQL sandbox
+
+External clients can execute arbitrary `SELECT` queries against matrix data tables. The same authorizer-based sandbox used for face query expressions applies: read-only, scoped to `mx_{id}_data` tables, no access to system tables, resource-limited. This gives agents and tools the full power of SQL for search, analysis, and data retrieval.
+
+### Write: typed ops
+
+All writes go through the op interface (individual ops or batches). No raw SQL writes are exposed externally. This ensures that every mutation flows through the core's invariant enforcement: cascade deletion, rank/closure consistency, change tracking triggers, and schema validation.
+
+Direct SQLite write access is not exposed to external clients because it would bypass application-level invariants that SQL constraints alone cannot enforce -- cascade deletion of owned join targets, closure table maintenance, rank key computation, and column schema consistency. See [Execution model](#execution-model) for the boundary between SQL-enforceable and application-enforced invariants.
+
+### Markdown content format
+
+Rich text columns (ProseMirror JSON) are translated to and from Markdown at external interfaces. ProseMirror JSON remains the internal storage format for performance (no parsing step on editor load) and fidelity. The Markdown projection is produced on read and parsed on write.
+
+The Markdown format includes custom syntax for inline references:
+
+- **`@[Display Title](hexId)`** for `ref`-kind references (wiki-links).
+- **`#[Tag Name](hexId)`** for `own`-kind references (tags).
+
+Where `hexId` is the hex encoding of the target row's integer ID. The display text is the cached title; the hex ID is the stable identity.
+
+On write, the system parses Markdown back to ProseMirror JSON and runs the standard inline ref sync process (`syncInlineRefs`) to update the join table. If a write would remove an `own`-kind reference (triggering cascade deletion), the op returns a validation error by default, requiring the caller to use an explicit deletion op instead. This prevents accidental data loss from Markdown editing.
+
+### MCP server
+
+The primary external interface. An MCP server exposes the op registry as MCP tools, with tool schemas generated from the op type definitions. The MCP server also exposes the SQL read sandbox as a query tool and provides Markdown-formatted content for rich text columns.
+
+See [Plan - Phase 11](#phase-11----mcp-server-and-agent-interface) for the implementation plan.
+
 ## Core concepts
 
 ### Matrix

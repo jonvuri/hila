@@ -52,6 +52,8 @@ These principles cost nothing in complexity today but keep the architecture clea
 
 A plugin should read like a recipe: "I need these matrixes, these traits, these named queries, and these face bindings." Favor declaring _what_ over prescribing _how_. Declarative definitions are easier to reason about, test, and represent as data.
 
+The declarative portion of a plugin definition compiles to a **batch op** -- the same atomic, forward-reference-supporting batch format used by MCP agents, templates, and test fixtures. See [Architecture - Batch ops](./Architecture.md#batch-ops). The `PluginDefinition` type is ergonomic sugar; internally `registerPlugin` builds a batch from the definition's matrixes, traits, and face bindings, executes it as a single transaction, then runs the `init` lifecycle hook if provided.
+
 Some plugins will also need runtime behavior that can't be expressed declaratively (e.g. an effects plugin that runs a scheduler to fire reminders at specific times). This is what lifecycle hooks (`init` / `destroy`) are for. The declarative recipe describes the plugin's data and faces; lifecycle hooks handle imperative startup and teardown.
 
 ### Express operations as named SQL
@@ -68,7 +70,7 @@ Faces are generally expected to map SQL operations and result sets to simple, ta
 
 ### Register plugins as data, not just code
 
-A plugin should register itself with an identity (ID, name, metadata) in the plugin system, not just be an anonymous module the app imports. Plugin identity should be a data concept, even if today the registration happens in compiled code.
+A plugin should register itself with an identity (ID, name, metadata) in the plugin system, not just be an anonymous module the app imports. Plugin identity should be a data concept, even if today the registration happens in compiled code. The batch op format reinforces this: a plugin's declarative setup is a data structure (a batch of ops), not imperative code. This makes plugin definitions inspectable, testable, and reproducible.
 
 ## Face slot model
 

@@ -39,6 +39,7 @@ These threads run across multiple use cases and should be built as shared infras
 7. **Scheduling & time** -- time-based triggers and state machines (task reminders, SRS intervals, journal prompts).
 8. **Custom faces** -- non-outline views with unique interaction (note editor, flashcard review, journal quick-entry, notification tray).
 9. **Notifications** -- proactive alerts that surface across the app (task due dates, journal prompts, SRS review reminders).
+10. **Op interface + MCP** -- the typed op registry, batch executor, Markdown I/O, and MCP server that make the system accessible to AI agents and external tools. See [Architecture - Operations](./Architecture.md#operations).
 
 ---
 
@@ -439,6 +440,56 @@ Builds on Phase 3's sync-readiness infrastructure to add live sync. Content-addr
 
 ---
 
+### Phase 11 -- Op system, batch ops, and MCP server
+
+Formalize the op interface, build the batch executor, and expose the system to external agents via MCP. See [Architecture - Operations](./Architecture.md#operations) and [Architecture - External interfaces](./Architecture.md#external-interfaces) for the design.
+
+This phase can proceed any time after Phase 4b. The op registry (`MatrixOperationMap`) already exists; this phase formalizes it, adds the batch executor, builds the Markdown I/O layer, and ships the MCP server. Earlier phases benefit from agent access (agents can help create content, manage tasks, build outlines), so earlier is better.
+
+**Work:**
+
+- **Formalize the op registry.**
+
+  - The existing `MatrixOperationMap` in `matrix-types.ts` is already the op registry. Formalize it as the single source of truth: document each op's purpose, params, result, and which invariants it enforces. Ensure all mutation paths (including any ad-hoc `execMutation` calls) flow through registered ops.
+  - Extract the dispatch logic from `matrix-handler.ts` into a standalone `dispatchOp(db, op, params)` function that both the single-message handler and the batch executor can call.
+
+- **Batch executor.**
+
+  - New worker message type: `executeBatch` with `{ ops: BatchOp[] }` params and `{ results: Record<string, unknown> }` result.
+  - `BatchOp` type: `{ op: OpName, ref?: string, params: Params }` where params can contain `$ref` placeholders.
+  - Executor: open a transaction, iterate ops, resolve `$ref` placeholders from a growing result map, call `dispatchOp` for each, commit or roll back.
+  - Forward reference resolution: `$refName` resolves to the full result of the named op. `$refName.fieldName` resolves to a specific field (e.g. `$note.rowId`). Type validation at runtime: reject if a resolved value is used where a different type is expected.
+
+- **Migrate plugin registration to batch ops.**
+
+  - Compile the declarative portion of `PluginDefinition` (matrixes, traits, face bindings) into a batch. The `registerPlugin` function becomes: build batch from definition, execute batch, run `init` hook if provided.
+  - The `PluginDefinition` type is retained as ergonomic sugar. Internally it produces a batch.
+
+- **Markdown I/O layer.**
+
+  - `pmJsonToMarkdown(doc)`: serialize ProseMirror JSON to Markdown with custom inline ref syntax (`@[Title](hexId)`, `#[Tag](hexId)`). Handles paragraphs, headings, bold/italic/code marks, links, hard breaks, and `inlineref` nodes.
+  - `markdownToPmJson(text)`: parse Markdown with custom inline ref syntax back to ProseMirror JSON. Uses a Markdown parser (e.g. `markdown-it` with a custom plugin for inline refs).
+  - Round-trip tests: `pmJsonToMarkdown(markdownToPmJson(md))` should produce identical Markdown for the supported subset. Test with each node/mark type, edge cases (nested marks, adjacent refs, empty paragraphs), and inline ref states.
+
+- **MCP server.**
+
+  - An MCP server (likely using the MCP TypeScript SDK) that runs alongside the app (or as a standalone process with access to the OPFS database).
+  - **Read tools**: `query` (SQL sandbox over data tables), `get_row` (returns a row with rich text as Markdown), `get_columns` (matrix schema), `search` (text search across matrixes), `list_matrixes`.
+  - **Write tools**: one tool per op category (or one tool per op, depending on ergonomics). Rich text params accept Markdown; the server translates to PM JSON before dispatching the op. Ops that would cascade-delete owned targets return a validation error unless `force: true` is passed.
+  - **Batch tool**: `execute_batch` accepts an array of ops with forward references. Returns named results.
+  - Tool schemas generated or derived from `MatrixOperationMap` type definitions.
+
+- **Cascade safety on writes.**
+
+  - When a Markdown write would remove an `own`-kind inline reference (detected by diffing the parsed PM doc against the current join table), the op returns an error describing the cascade that would occur. The caller must either restore the reference or use an explicit `deleteOwnedTarget` op.
+  - This prevents accidental data loss when an agent reformats Markdown and drops a `#[tag](id)` syntax.
+
+**Testing:** Vitest for: batch executor (atomicity -- partial batch rolls back, forward refs resolve correctly, type validation on refs, nested batches rejected), Markdown round-trips (each node type, each mark, inline refs, edge cases), op dispatch (every registered op callable via `dispatchOp`), cascade safety (Markdown write that removes own-ref returns error). Playwright for: MCP server integration (if testable -- mock MCP client sends ops, verifies state changes in the app).
+
+**Proves:** The op interface is the single write path for all consumers. Batch ops provide atomicity and forward references. Plugin registration migrates cleanly to batches. The Markdown I/O layer round-trips faithfully for the current PM schema. The MCP server exposes the full system to agents. Cascade safety prevents accidental data loss from Markdown editing.
+
+---
+
 ## Cross-cutting concerns
 
 These are not phase-gated -- they should be addressed incrementally as they become relevant.
@@ -519,10 +570,11 @@ Phase 4 (Plugins, Faces,    Phase 7 (Scheduling
 Phase 4b (Inline Refs,        │
   Owned Joins)                │
   │                           │
-  ▼                           │
-Phase 5 (Tags)                │
-  │                           │
-  ▼                           │
+  ├─────────────────────┐     │
+  ▼                     ▼     │
+Phase 5 (Tags)    Phase 11    │
+  │               (Ops, Batch,│
+  ▼               MCP server) │
 Phase 6 (Tasks +              │
   Movie Reviews)              │
   │                           │
@@ -537,7 +589,7 @@ Phase 10 (Live sync, files, Dropbox) ◄── Phase 3
    independent of Phases 4-9)
 ```
 
-Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it.
+Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it. Phase 11 (op system, batch ops, MCP server) can proceed any time after Phase 4b -- it formalizes the op registry that already exists, adds the batch executor and Markdown I/O layer, and ships the MCP server. Earlier is better: agent access benefits all subsequent phases.
 
 ---
 
