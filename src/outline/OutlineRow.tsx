@@ -2,6 +2,7 @@ import { createEffect, on, onCleanup } from 'solid-js'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
 import { EditorView } from 'prosemirror-view'
 import { Selection, TextSelection } from 'prosemirror-state'
+import type { Node } from 'prosemirror-model'
 import 'prosemirror-view/style/prosemirror.css'
 
 import { updateRow } from '../core/client/matrix-client'
@@ -10,6 +11,9 @@ import { createEditorState } from '../editor/createEditorState'
 import type { OutlineCallbacks } from '../editor/keymap'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
+import { createInlinerefPlugin } from '../editor/inlineref-plugin'
+import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
+import { InlineRefView } from '../notes/nodeviews/InlineRefView'
 
 const SAVE_DEBOUNCE_MS = 300
 
@@ -57,23 +61,34 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
   let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let pendingDoc: unknown | undefined
+  let pendingDoc: Node | undefined
 
   const colName = () => props.contentColumn ?? 'content'
   const isPlain = () => props.contentIsPlainText ?? false
 
-  const serializeForSave = (docJson: unknown): Record<string, unknown> => {
-    const value = isPlain() ? unwrapPlainText(docJson) : JSON.stringify(docJson)
-    return { [colName()]: value }
+  const saveWithInlineRefs = async (doc: Node) => {
+    const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
+    void updateRow(props.matrixId, props.rowId, { [colName()]: JSON.stringify(docJson) })
+    void syncInlineRefs(doc, props.matrixId, props.rowId)
   }
 
-  const debouncedSave = (docJson: unknown) => {
-    pendingDoc = docJson
+  const savePlain = (docJson: unknown) => {
+    const value = unwrapPlainText(docJson)
+    void updateRow(props.matrixId, props.rowId, { [colName()]: value })
+  }
+
+  const debouncedSave = (doc: Node) => {
+    pendingDoc = doc
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       if (pendingDoc !== undefined) {
-        void updateRow(props.matrixId, props.rowId, serializeForSave(pendingDoc))
+        const d = pendingDoc
         pendingDoc = undefined
+        if (isPlain()) {
+          savePlain(d.toJSON())
+        } else {
+          void saveWithInlineRefs(d)
+        }
       }
     }, SAVE_DEBOUNCE_MS)
   }
@@ -81,8 +96,13 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
   const flushSave = () => {
     clearTimeout(saveTimer)
     if (pendingDoc !== undefined) {
-      void updateRow(props.matrixId, props.rowId, serializeForSave(pendingDoc))
+      const d = pendingDoc
       pendingDoc = undefined
+      if (isPlain()) {
+        savePlain(d.toJSON())
+      } else {
+        void saveWithInlineRefs(d)
+      }
     }
   }
 
@@ -113,7 +133,26 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
         docJson = JSON.parse(props.content) as unknown
       }
     }
-    const state = createEditorState(docJson, props.callbacks)
+
+    const extraPlugins = isPlain() ? [] : [createInlinerefPlugin(props.matrixId)]
+    const state = createEditorState(docJson, props.callbacks, extraPlugins)
+
+    const nodeViews: Record<string, ReturnType<typeof nodeViewFactory>> = {
+      paragraph: nodeViewFactory({
+        component: ParagraphView,
+        as: 'div',
+        contentAs: 'p',
+      }),
+      heading: nodeViewFactory({
+        component: HeadingView,
+      }),
+    }
+    if (!isPlain()) {
+      nodeViews.inlineref = nodeViewFactory({
+        component: InlineRefView,
+        as: 'span',
+      })
+    }
 
     const view = new EditorView(el, {
       state,
@@ -123,21 +162,12 @@ const OutlineRowEditorInner = (props: OutlineRowContentProps) => {
           return false
         },
       },
-      nodeViews: {
-        paragraph: nodeViewFactory({
-          component: ParagraphView,
-          as: 'div',
-          contentAs: 'p',
-        }),
-        heading: nodeViewFactory({
-          component: HeadingView,
-        }),
-      },
+      nodeViews,
       dispatchTransaction(tr) {
         const newState = view.state.apply(tr)
         view.updateState(newState)
         if (tr.docChanged) {
-          debouncedSave(newState.doc.toJSON())
+          debouncedSave(newState.doc)
         }
       },
     })

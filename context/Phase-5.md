@@ -117,17 +117,17 @@ A plugin-managed table that records which matrixes are tag types. The registry i
 
 The outline currently does NOT support inline references. `OutlineRow.tsx` creates `EditorView` with only `paragraph` and `heading` node views, does not mount `createInlinerefPlugin`, and does not call `syncInlineRefs` on save. Before `#` tags can appear in outline text, inline references must work there.
 
-- [ ] Add `InlineRefView` to `OutlineRow.tsx` node views. The shared `inlineref` schema node already exists, but outline editors don't register a node view for it. Add `inlineref` to the `nodeViews` map in the `EditorView` constructor, using the same `InlineRefView` component from `src/notes/nodeviews/InlineRefView.tsx` (or its shared location in `src/editor/nodeviews/`).
+- [x] Add `InlineRefView` to `OutlineRow.tsx` node views. The shared `inlineref` schema node already exists, but outline editors don't register a node view for it. Add `inlineref` to the `nodeViews` map in the `EditorView` constructor, using the same `InlineRefView` component from `src/notes/nodeviews/InlineRefView.tsx` (or its shared location in `src/editor/nodeviews/`).
 
-- [ ] Mount `createInlinerefPlugin` in outline editors. Currently the plugin takes a `matrixId` and searches only that matrix. For the outline, pass the outline's matrix ID so `@` references can link to other outline rows (or notes, once cross-matrix search is supported). This also enables the `#` trigger once task 3 adds it.
+- [x] Mount `createInlinerefPlugin` in outline editors. Currently the plugin takes a `matrixId` and searches only that matrix. For the outline, pass the outline's matrix ID so `@` references can link to other outline rows (or notes, once cross-matrix search is supported). This also enables the `#` trigger once task 3 adds it.
 
-- [ ] Add `syncInlineRefs` to outline save. `OutlineRow.tsx` saves via `debouncedSave` → `updateRow`. After saving, call `syncInlineRefs(doc, matrixId, rowId)` to materialize inline references to the join table, the same way `NoteFace.tsx` does. Also add `refreshCachedTitles` before persisting the doc JSON.
+- [x] Add `syncInlineRefs` to outline save. `OutlineRow.tsx` saves via `debouncedSave` → `updateRow`. After saving, call `syncInlineRefs(doc, matrixId, rowId)` to materialize inline references to the join table, the same way `NoteFace.tsx` does. Also add `refreshCachedTitles` before persisting the doc JSON.
 
-- [ ] Handle the `contentIsPlainText` case. When `OutlineRow` is used with `contentIsPlainText={true}` (e.g. the notes-as-outline view), inline references should be disabled — plain text mode wraps/unwraps to a simple text string, so PM inline nodes would be lost. Guard the inlineref plugin mounting and sync behind `!isPlain()`.
+- [x] Handle the `contentIsPlainText` case. When `OutlineRow` is used with `contentIsPlainText={true}` (e.g. the notes-as-outline view), inline references should be disabled — plain text mode wraps/unwraps to a simple text string, so PM inline nodes would be lost. Guard the inlineref plugin mounting and sync behind `!isPlain()`.
 
-- [ ] Tests: verify that `@` references work in outline rows (insert via autocomplete, verify node rendered). Verify that `syncInlineRefs` creates join entries from outline row content. Verify that the `contentIsPlainText` mode does not break (no inlineref plugin, no sync). Verify existing outline tests still pass (no behavioral regression from adding the plugin).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-- [ ] Run `pnpm test:e2e` — all existing outline tests still pass
+- [x] Tests: verify that `@` references work in outline rows (insert via autocomplete, verify node rendered). Verify that `syncInlineRefs` creates join entries from outline row content. Verify that the `contentIsPlainText` mode does not break (no inlineref plugin, no sync). Verify existing outline tests still pass (no behavioral regression from adding the plugin).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Run `pnpm test:e2e` — all existing outline tests still pass
 
 ## 3a. Autocomplete plugin refactor and `#` trigger detection
 
