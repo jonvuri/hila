@@ -15,6 +15,7 @@ import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
 import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
+import { tagsPlugin } from './tags/tags-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
@@ -69,6 +70,8 @@ const App: Component = () => {
     const notesCtx = await registerPlugin(notesPlugin)
     const notesId = notesCtx.matrixIds['notes']!
     setNotesMatrixId(notesId)
+
+    await registerPlugin(tagsPlugin)
   }
 
   onMount(() => {

@@ -1,3 +1,5 @@
+import type { TagType } from '../tags/tag-types'
+
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
@@ -180,6 +182,30 @@ export type MatrixOperationMap = {
   deleteJoinByTarget: {
     params: { targetMatrixId: number; targetRowId: number }
     result: JoinRow | null
+  }
+  ensureTagTypesTable: {
+    params: Record<string, never>
+    result: void
+  }
+  createTagType: {
+    params: { name: string; columns?: { name: string; type: string }[] }
+    result: TagType
+  }
+  getTagType: {
+    params: { name: string }
+    result: TagType | null
+  }
+  getAllTagTypes: {
+    params: Record<string, never>
+    result: TagType[]
+  }
+  updateTagType: {
+    params: { tagTypeId: number; name?: string; color?: string | null; icon?: string | null }
+    result: void
+  }
+  deleteTagType: {
+    params: { tagTypeId: number }
+    result: void
   }
 }
 

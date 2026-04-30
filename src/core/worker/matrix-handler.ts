@@ -26,6 +26,14 @@ import {
   deleteOwnedTarget as deleteOwnedTargetImpl,
   deleteJoinByTarget as deleteJoinByTargetImpl,
 } from '../matrix'
+import {
+  ensureTagTypesTable as ensureTagTypesTableImpl,
+  createTagType as createTagTypeImpl,
+  getTagType as getTagTypeImpl,
+  getAllTagTypes as getAllTagTypesImpl,
+  updateTagType as updateTagTypeImpl,
+  deleteTagType as deleteTagTypeImpl,
+} from '../../tags/tag-types'
 import { reparentRow as reparentRowImpl, deleteSubtree as deleteSubtreeImpl } from '../tree'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
@@ -533,6 +541,78 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'deleteJoinByTargetSuccess', id, result: joinRow })
       } catch (err: unknown) {
         postMessage({ type: 'deleteJoinByTargetError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'ensureTagTypesTable': {
+      const { id } = message
+      try {
+        const { db } = await sqliteWasm
+        ensureTagTypesTableImpl(db)
+        postMessage({ type: 'ensureTagTypesTableSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'ensureTagTypesTableError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'createTagType': {
+      const { id, name, columns } = message
+      try {
+        const { db } = await sqliteWasm
+        const tagType = createTagTypeImpl(db, name, columns)
+        postMessage({ type: 'createTagTypeSuccess', id, result: tagType })
+      } catch (err: unknown) {
+        postMessage({ type: 'createTagTypeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getTagType': {
+      const { id, name } = message
+      try {
+        const { db } = await sqliteWasm
+        const tagType = getTagTypeImpl(db, name)
+        postMessage({ type: 'getTagTypeSuccess', id, result: tagType })
+      } catch (err: unknown) {
+        postMessage({ type: 'getTagTypeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getAllTagTypes': {
+      const { id } = message
+      try {
+        const { db } = await sqliteWasm
+        const tagTypes = getAllTagTypesImpl(db)
+        postMessage({ type: 'getAllTagTypesSuccess', id, result: tagTypes })
+      } catch (err: unknown) {
+        postMessage({ type: 'getAllTagTypesError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'updateTagType': {
+      const { id, tagTypeId, name, color, icon } = message
+      try {
+        const { db } = await sqliteWasm
+        updateTagTypeImpl(db, tagTypeId, { name, color, icon })
+        postMessage({ type: 'updateTagTypeSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'updateTagTypeError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteTagType': {
+      const { id, tagTypeId } = message
+      try {
+        const { db } = await sqliteWasm
+        deleteTagTypeImpl(db, tagTypeId)
+        postMessage({ type: 'deleteTagTypeSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteTagTypeError', id, error: toError(err) })
       }
       break
     }

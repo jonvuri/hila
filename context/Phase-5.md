@@ -35,7 +35,7 @@ After this phase, the system has:
 
 A plugin-managed table that records which matrixes are tag types. The registry is the data backing `#` autocomplete and the tag browser. Each entry maps a tag type name to a matrix.
 
-- [ ] Create the tags plugin definition in `src/tags/tags-plugin.ts`:
+- [x] Create the tags plugin definition in `src/tags/tags-plugin.ts`:
   ```typescript
   const tagsPlugin: PluginDefinition = {
     id: 'hila.tags',
@@ -51,7 +51,7 @@ A plugin-managed table that records which matrixes are tag types. The registry i
   ```
   The tags plugin itself does not create any data matrixes at registration time — tag type matrixes are created dynamically when the user defines new tag types. The plugin's `init` hook ensures the `tag_types` registry table exists.
 
-- [ ] Create the `tag_types` table in the tags plugin's `init` hook:
+- [x] Create the `tag_types` table in the tags plugin's `init` hook:
   ```sql
   CREATE TABLE IF NOT EXISTS tag_types (
     id INTEGER PRIMARY KEY,
@@ -68,7 +68,7 @@ A plugin-managed table that records which matrixes are tag types. The registry i
   - `icon`: optional icon identifier for the badge.
   - Install change-tracking triggers on this table (Phase 3 sync infrastructure).
 
-- [ ] Implement tag type CRUD operations in `src/tags/tag-types.ts`:
+- [x] Implement tag type CRUD operations in `src/tags/tag-types.ts`:
   ```typescript
   type TagType = {
     id: number
@@ -99,19 +99,19 @@ A plugin-managed table that records which matrixes are tag types. The registry i
   ```
   `deleteTagType` removes the `tag_types` row but does NOT delete the matrix (matrixes are core entities that persist independently, per the plugin model). The matrix becomes an unregistered matrix, still accessible through its identity face. A confirmation flow may offer to also delete the matrix and cascade-delete all owned aspect rows.
 
-- [ ] Add worker message types for tag type operations in `matrix-types.ts`:
+- [x] Add worker message types for tag type operations in `matrix-types.ts`:
   - `createTagType` — params: `{ name: string; columns?: { name: string; type: string }[] }`, result: `TagType`.
   - `getTagType` — params: `{ name: string }`, result: `TagType | null`.
   - `getAllTagTypes` — params: `{}`, result: `TagType[]`.
   - `updateTagType` — params: `{ id: number; name?: string; color?: string; icon?: string }`, result: `void`.
   - `deleteTagType` — params: `{ id: number }`, result: `void`.
 
-- [ ] Add worker handlers and client functions. Wire into `matrix-handler.ts` and `matrix-client.ts` (or a new `tag-client.ts`).
+- [x] Add worker handlers and client functions. Wire into `matrix-handler.ts` and `matrix-client.ts` (or a new `tag-client.ts`).
 
-- [ ] Register the tags plugin on startup in `App.tsx`, alongside outline and notes plugins.
+- [x] Register the tags plugin on startup in `App.tsx`, alongside outline and notes plugins.
 
-- [ ] Tests: create a tag type, verify `tag_types` row and matrix created. Create with custom columns, verify matrix schema matches. Create with duplicate name (case-insensitive), verify rejection. Get tag type by name. Get all tag types. Update tag type color/name. Delete tag type, verify `tag_types` row removed but matrix persists. Verify `source_plugin_id` is set to `'hila.tags'` on the created matrix.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: create a tag type, verify `tag_types` row and matrix created. Create with custom columns, verify matrix schema matches. Create with duplicate name (case-insensitive), verify rejection. Get tag type by name. Get all tag types. Update tag type color/name. Delete tag type, verify `tag_types` row removed but matrix persists. Verify `source_plugin_id` is set to `'hila.tags'` on the created matrix.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 2. Wire inline references into outline rows
 

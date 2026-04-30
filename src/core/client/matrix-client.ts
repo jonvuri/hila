@@ -7,6 +7,7 @@ import type {
 } from '../matrix-types'
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from '../traits'
+import type { TagType } from '../../tags/tag-types'
 
 import { postMessage } from './worker-client'
 import { pendingRequests } from './matrix-client-promises'
@@ -199,3 +200,23 @@ export const deleteJoinByTarget = (
   targetMatrixId: number,
   targetRowId: number,
 ): Promise<JoinRow | null> => workerCall('deleteJoinByTarget', { targetMatrixId, targetRowId })
+
+export const ensureTagTypesTable = (): Promise<void> => workerCall('ensureTagTypesTable', {})
+
+export const createTagType = (
+  name: string,
+  columns?: { name: string; type: string }[],
+): Promise<TagType> => workerCall('createTagType', { name, columns })
+
+export const getTagType = (name: string): Promise<TagType | null> =>
+  workerCall('getTagType', { name })
+
+export const getAllTagTypes = (): Promise<TagType[]> => workerCall('getAllTagTypes', {})
+
+export const updateTagType = (
+  tagTypeId: number,
+  updates: { name?: string; color?: string | null; icon?: string | null },
+): Promise<void> => workerCall('updateTagType', { tagTypeId, ...updates })
+
+export const deleteTagType = (tagTypeId: number): Promise<void> =>
+  workerCall('deleteTagType', { tagTypeId })
