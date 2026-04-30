@@ -230,6 +230,8 @@ Retrofit the Phase 4 wiki-link implementation with the generalized inline refere
 
 ### Phase 5 -- Tags plugin (aspects via owned joins)
 
+> Detailed task list: [Phase-5.md](Phase-5.md)
+
 The tags plugin, proving cross-plugin composition through SQL and the join table's `own`-kind lifecycle semantics. Tags build on the inline references plugin from Phase 4.
 
 **Work:**
