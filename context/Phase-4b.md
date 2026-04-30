@@ -283,7 +283,7 @@ Add `reference` as a column display type in the table face. This is the table-ce
 
 Extend the E2E suite to cover the new Phase 4b behaviors.
 
-- [ ] **Inline reference tests (evolve existing `wikilink.spec.ts`):**
+- [x] **Inline reference tests (evolve existing `wikilink.spec.ts`):**
   - Rename test file to `inlineref.spec.ts`.
   - Verify `@` triggers autocomplete in a note body.
   - Verify `[[` still triggers autocomplete.
@@ -291,24 +291,24 @@ Extend the E2E suite to cover the new Phase 4b behaviors.
   - Click the reference, verify navigation to the target note.
   - Verify the backlinks panel on the target note shows the source note.
 
-- [ ] **Empty and ghost reference tests:**
+- [x] **Empty and ghost reference tests:**
   - Type a nonexistent note title in `@` autocomplete, select "Create new", verify an empty-state reference is inserted.
   - Click the empty-state reference, verify the target note is created and the reference transitions to live state.
   - Create a reference to an existing note, then delete the target note. Verify the reference shows ghost state (cached title + deletion indicator).
 
-- [ ] **Reference cell tests:**
+- [x] **Reference cell tests:**
   - Add a reference column to a matrix via the table face.
   - Click a reference cell, verify autocomplete opens.
   - Select a target row, verify the cell shows the target's title.
   - Clear the cell, verify it returns to empty.
 
-- [ ] **Cascade deletion tests:**
+- [x] **Cascade deletion tests:**
   - Create a note with an `own`-kind inline reference (can be done programmatically or via a test helper that inserts the PM JSON directly, since `#` trigger is Phase 5).
   - Delete the source row, verify the owned target row is also deleted.
   - Verify the target no longer appears in the target matrix's identity face.
 
-- [ ] Run `pnpm test:e2e` -- all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass
+- [x] Run `pnpm test:e2e` -- all pass (100 tests)
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all Vitest tests still pass (486 tests)
 
 ---
 
