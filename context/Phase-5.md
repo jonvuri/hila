@@ -225,7 +225,7 @@ Update `InlineRefView` to render `own`-kind (`#`) references distinctly from `re
 
 A popover or sidebar that opens when clicking a `#` tag, showing the aspect row's columns as editable fields. The fields are hydrated from the tag matrix and editable in place.
 
-- [ ] Create `src/tags/TagPropertyPanel.tsx`:
+- [x] Create `src/tags/TagPropertyPanel.tsx`:
   - A Solid component that receives: `matrixId` (the tag type's matrix), `rowId` (the aspect row), and optionally `onClose` callback.
   - Queries the aspect row's data: `SELECT * FROM mx_{matrixId}_data WHERE id = :rowId`.
   - Queries the matrix's column schema via `getColumns(matrixId)`.
@@ -240,24 +240,24 @@ A popover or sidebar that opens when clicking a `#` tag, showing the aspect row'
   - Skips the `id` column and any formula columns (read-only, rendered with visual distinction).
   - Each field saves on blur or Enter via `updateRow(matrixId, rowId, { [columnName]: value })`.
 
-- [ ] Wire tag click to open the property panel:
+- [x] Wire tag click to open the property panel:
   - In `InlineRefView`, when `kind === 'own'` and the user clicks the tag badge, open the `TagPropertyPanel` as a popover anchored to the badge.
   - Use a shared popover/floating UI mechanism (if one exists from the design system) or a simple absolute-positioned panel.
   - Clicking outside the panel or pressing Escape closes it.
   - The panel should not interfere with ProseMirror's focus management — opening the panel should not cause the editor to lose its selection state.
 
-- [ ] Implement live reactivity:
+- [x] Implement live reactivity:
   - The property panel's data query is reactive (via `useQuery`). If the aspect row's data changes from another surface (e.g. editing the same row in the identity face's table view), the panel updates.
   - Edits in the panel write to the tag matrix via `updateRow`. The standard reactive query invalidation propagates changes to all faces showing the same data.
 
-- [ ] Update tag badge rendering (from task 3) to show key property values:
+- [x] Update tag badge rendering (from task 3) to show key property values:
   - After the property panel is functional, add optional key property chips to the badge rendering.
   - Key properties: the first 1–2 columns after the primary label column, if they have values. E.g. a task badge might show `#task ⏰ Mar 15 🔴 high`.
   - The chips are read-only in the badge — clicking the badge opens the full property panel for editing.
   - This is a rendering enhancement, not a functional change. Defer if it adds too much complexity.
 
-- [ ] Tests: open the property panel for a tag, verify columns are displayed. Edit a text field, verify persistence. Edit a select field, verify persistence. Verify reactive updates (edit in table face, verify panel reflects change). Verify panel closes on Escape and outside click. Verify ProseMirror focus is restored on panel close.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: open the property panel for a tag, verify columns are displayed. Edit a text field, verify persistence. Edit a select field, verify persistence. Verify reactive updates (edit in table face, verify panel reflects change). Verify panel closes on Escape and outside click. Verify ProseMirror focus is restored on panel close.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 6. Owned join lifecycle: end-to-end validation
 

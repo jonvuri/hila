@@ -17,6 +17,7 @@ import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin
 import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
 import { tagsPlugin } from './tags/tags-plugin'
 import { registerTableFaceType } from './table/table-plugin'
+import TagPropertyPanel from './tags/TagPropertyPanel'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
@@ -40,6 +41,14 @@ const App: Component = () => {
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
+  } | null>(null)
+
+  const [tagPanel, setTagPanel] = createSignal<{
+    matrixId: number
+    rowId: number
+    tagTypeName: string
+    tagTypeColor: string | null
+    anchorRect: DOMRect
   } | null>(null)
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
@@ -74,6 +83,37 @@ const App: Component = () => {
     await registerPlugin(tagsPlugin)
   }
 
+  const handleTagPanelEvent = (e: Event) => {
+    const detail = (e as CustomEvent).detail as {
+      matrixId: number
+      rowId: number
+      tagTypeName: string
+      tagTypeColor: string | null
+      anchorRect: {
+        top: number
+        left: number
+        bottom: number
+        right: number
+        width: number
+        height: number
+      }
+    }
+    if (detail?.matrixId != null && detail?.rowId != null) {
+      setTagPanel({
+        matrixId: detail.matrixId,
+        rowId: detail.rowId,
+        tagTypeName: detail.tagTypeName,
+        tagTypeColor: detail.tagTypeColor,
+        anchorRect: new DOMRect(
+          detail.anchorRect.left,
+          detail.anchorRect.top,
+          detail.anchorRect.width,
+          detail.anchorRect.height,
+        ),
+      })
+    }
+  }
+
   onMount(() => {
     shortcuts.install()
 
@@ -84,11 +124,14 @@ const App: Component = () => {
       },
     })
 
+    document.addEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
+
     void awaitWorkerReady().then(initPlugins)
 
     onCleanup(() => {
       unregisterToggle()
       shortcuts.uninstall()
+      document.removeEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
     })
   })
 
@@ -290,6 +333,19 @@ const App: Component = () => {
             </div>
           </Suspense>
         </div>
+      </Show>
+
+      <Show when={tagPanel()}>
+        {(panel) => (
+          <TagPropertyPanel
+            matrixId={panel().matrixId}
+            rowId={panel().rowId}
+            tagTypeName={panel().tagTypeName}
+            tagTypeColor={panel().tagTypeColor}
+            anchorRect={panel().anchorRect}
+            onClose={() => setTagPanel(null)}
+          />
+        )}
       </Show>
     </div>
   )
