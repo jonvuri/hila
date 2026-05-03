@@ -381,18 +381,18 @@ Register the tag browser face, build the tag type list view, and wire it into th
 
 Add the interactive layer to the tag browser: selecting a tag type shows its instances with source row context, clicking an instance navigates to the source row, and context menus provide tag type management actions.
 
-- [ ] **Tag instances** (right panel or drill-down view):
+- [x] **Tag instances** (right panel or drill-down view):
   - Selecting a tag type shows its instances, each with key column values from the tag matrix.
   - Each instance shows the source row context: the source matrix name and a snippet of the source row's primary content column.
   - Clicking a tag instance navigates to the source row (opens the source row's face context — outline or note).
   - A link to "View all in table" opens the tag type's identity face (table face) for spreadsheet-style editing of all instances.
 
-- [ ] **Context menus** on each tag type row: rename, change color, open identity face, delete tag type.
+- [x] **Context menus** on each tag type row: rename, change color, open identity face, delete tag type.
 
-- [ ] **Reverse lookup**: selecting a tag instance highlights or navigates to the source row, showing the tagged row in context.
+- [x] **Reverse lookup**: selecting a tag instance highlights or navigates to the source row, showing the tagged row in context.
 
-- [ ] Tests: verify clicking a tag type shows its instances. Verify clicking an instance navigates to the source row. Verify context menu actions (rename, change color, delete). Verify "View all in table" opens the identity face.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: verify clicking a tag type shows its instances. Verify clicking an instance navigates to the source row. Verify context menu actions (rename, change color, delete). Verify "View all in table" opens the identity face.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 9. Solidify plugin API
 

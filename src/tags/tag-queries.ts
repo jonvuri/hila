@@ -50,6 +50,33 @@ WHERE j.target_matrix_id = ${tagMatrixId}
 `
 
 /**
+ * Tag instances with source context: all own-kind join instances for a tag
+ * type, with the source matrix name. Returns one row per instance across
+ * all source matrixes (no dynamic table name needed).
+ */
+export const buildTagInstancesQuery = (tagMatrixId: number): string => `
+SELECT j.source_matrix_id, j.source_row_id, j.target_row_id,
+       m.title AS source_matrix_name
+FROM joins j
+JOIN matrix m ON m.id = j.source_matrix_id
+WHERE j.target_matrix_id = ${tagMatrixId}
+  AND j.kind = 'own'
+ORDER BY m.title, j.source_row_id
+`
+
+/**
+ * Source row content snippet: fetches a single source row's first text
+ * column content. Used by the tag browser to display a preview alongside
+ * each instance.
+ */
+export const buildSourceRowSnippetQuery = (
+  sourceMatrixId: number,
+  sourceRowId: number,
+): string => `
+SELECT * FROM "mx_${sourceMatrixId}_data" WHERE id = ${sourceRowId}
+`
+
+/**
  * Specific aspect lookup: the aspect row for a (source row, tag type) pair.
  * Returns all columns from the tag matrix's data table for the matching
  * aspect row.

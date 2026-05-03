@@ -258,7 +258,28 @@ const App: Component = () => {
                           </Show>
                         }
                       >
-                        <TagBrowserFace />
+                        <TagBrowserFace
+                          outlineMatrixId={outlineMatrixId() ?? undefined}
+                          notesMatrixId={notesMatrixId() ?? undefined}
+                          onNavigateToOutlineRow={() => {
+                            setActiveView('outline')
+                          }}
+                          onNavigateToNote={(_matrixId, noteId) => {
+                            setActiveView('notes')
+                            setSelectedNoteId(noteId)
+                          }}
+                          onOpenTableFace={(targetMatrixId) => {
+                            void getFaceConfigs(targetMatrixId).then((configs) => {
+                              const tableConfig = configs.find(
+                                (c) => c.faceTypeId === 'hila.table',
+                              )
+                              if (tableConfig) {
+                                setTableFaceConfig(tableConfig)
+                                setActiveView('table')
+                              }
+                            })
+                          }}
+                        />
                       </Show>
                     }
                   >
