@@ -306,7 +306,7 @@ Phase 4b built the core owned join lifecycle (`createDependentRow`, cascade dele
 
 Provide named queries that plugins and faces can use to navigate between source rows and their tag aspects. These are the data foundation for the tag property panel, tag browser, and any face that shows tagged rows.
 
-- [ ] Implement forward lookup (row → its tags):
+- [x] Implement forward lookup (row → its tags):
   ```sql
   -- All tag aspects for a specific source row
   SELECT j.target_matrix_id, j.target_row_id, tt.name AS tag_type_name, tt.color
@@ -318,7 +318,7 @@ Provide named queries that plugins and faces can use to navigate between source 
   ```
   This returns all tag aspects attached to a row, with their tag type metadata. Used by the tag badge rendering (to show key properties) and any future "tags for this row" display.
 
-- [ ] Implement reverse lookup (tag type → all tagged rows):
+- [x] Implement reverse lookup (tag type → all tagged rows):
   ```sql
   -- All source rows that have a specific tag type
   SELECT j.source_matrix_id, j.source_row_id, d.*
@@ -329,7 +329,7 @@ Provide named queries that plugins and faces can use to navigate between source 
   ```
   This returns all rows that have been tagged with a specific tag type. Used by the tag browser's reverse lookup view.
 
-- [ ] Implement specific aspect lookup (source row + tag type → aspect row data):
+- [x] Implement specific aspect lookup (source row + tag type → aspect row data):
   ```sql
   -- The aspect row for a specific (source row, tag type) pair
   SELECT t.*
@@ -341,10 +341,10 @@ Provide named queries that plugins and faces can use to navigate between source 
   ```
   Used by the tag property panel to load a specific aspect row's data.
 
-- [ ] Expose these as worker query operations (or as parameterized queries available to the tag browser face and property panel). The queries involve joins across `joins`, `tag_types`, and dynamic `mx_{id}_data` tables, so they may need to be built dynamically or use the query expression sandbox.
+- [x] Expose these as worker query operations (or as parameterized queries available to the tag browser face and property panel). The queries involve joins across `joins`, `tag_types`, and dynamic `mx_{id}_data` tables, so they may need to be built dynamically or use the query expression sandbox.
 
-- [ ] Tests: create a row with multiple tags, verify forward lookup returns all of them with correct tag type metadata. Create multiple rows with the same tag type, verify reverse lookup returns all tagged rows. Verify specific aspect lookup returns the correct aspect row data. Verify lookups return empty results when no tags exist.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: create a row with multiple tags, verify forward lookup returns all of them with correct tag type metadata. Create multiple rows with the same tag type, verify reverse lookup returns all tagged rows. Verify specific aspect lookup returns the correct aspect row data. Verify lookups return empty results when no tags exist.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 8a. Tag browser face: registration, tag type list, and app layout
 

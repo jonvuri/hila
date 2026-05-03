@@ -7,7 +7,11 @@ export const tagsPlugin: PluginDefinition = {
   version: '1.0.0',
   matrixes: [],
   traits: [],
-  namedQueries: {},
+  namedQueries: {
+    tagsForRow: 'buildTagsForRowQuery(sourceMatrixId, sourceRowId)',
+    taggedRows: 'buildTaggedRowsQuery(tagMatrixId, sourceMatrixId)',
+    aspectForRow: 'buildAspectForRowQuery(sourceMatrixId, sourceRowId, tagMatrixId)',
+  },
   namedMutations: {},
   faceBindings: [],
   init: async () => {
