@@ -350,7 +350,7 @@ Provide named queries that plugins and faces can use to navigate between source 
 
 Register the tag browser face, build the tag type list view, and wire it into the app's top-level navigation. This establishes the scaffold; instance drill-down and cross-face navigation come in 8b.
 
-- [ ] Register the tag browser face type:
+- [x] Register the tag browser face type:
   ```typescript
   registerFaceType({
     id: 'hila.tag-browser',
@@ -361,21 +361,21 @@ Register the tag browser face, build the tag type list view, and wire it into th
   })
   ```
 
-- [ ] Create `src/tags/TagBrowserFace.tsx` with the **tag type list** (primary view):
+- [x] Create `src/tags/TagBrowserFace.tsx` with the **tag type list** (primary view):
   - Lists all registered tag types from `tag_types`, each showing: name (with color badge), instance count, and a link to the tag type's identity face.
   - "New tag type" button at the top — opens a dialog/form to create a tag type with a name, optional column definitions, and optional color.
 
-- [ ] Wire the tag browser into the app layout:
+- [x] Wire the tag browser into the app layout:
   - Add a "Tags" tab or view alongside the outline and notes views.
   - The tag browser renders in a sidebar panel or as a standalone view.
   - Quick access from the global navigation.
 
-- [ ] Create the tag browser's face config:
+- [x] Create the tag browser's face config:
   - The face binding is created by the tags plugin on init.
   - The face is not bound to a specific matrix (it's a cross-matrix view over `tag_types` and their instances).
 
-- [ ] Tests: verify the tag browser lists all registered tag types. Verify instance counts are correct. Verify "New tag type" creates a tag type and it appears in the list.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: verify the tag browser lists all registered tag types. Verify instance counts are correct. Verify "New tag type" creates a tag type and it appears in the list.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 8b. Tag browser face: instance drill-down, navigation, and context menus
 

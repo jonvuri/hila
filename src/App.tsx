@@ -15,7 +15,7 @@ import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
 import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
-import { tagsPlugin } from './tags/tags-plugin'
+import { tagsPlugin, registerTagBrowserFaceType } from './tags/tags-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
@@ -26,8 +26,9 @@ const TableFace = lazy(() => import('./table/TableFace'))
 const NoteListFace = lazy(() => import('./notes/NoteListFace'))
 const NoteFace = lazy(() => import('./notes/NoteFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
+const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
 
-type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline'
+type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline' | 'tags'
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
@@ -80,6 +81,7 @@ const App: Component = () => {
     const notesId = notesCtx.matrixIds['notes']!
     setNotesMatrixId(notesId)
 
+    await registerTagBrowserFaceType()
     await registerPlugin(tagsPlugin)
   }
 
@@ -171,6 +173,14 @@ const App: Component = () => {
             >
               Notes
             </button>
+            <button
+              class="view-tab"
+              data-active={activeView() === 'tags'}
+              data-testid="tags-tab"
+              onClick={() => setActiveView('tags')}
+            >
+              Tags
+            </button>
             <Show when={notesMatrixId()}>
               <button
                 class="view-tab"
@@ -233,15 +243,22 @@ const App: Component = () => {
                     when={activeView() === 'notes' && notesMatrixId()}
                     fallback={
                       <Show
-                        when={activeView() === 'table' && tableFaceConfig()}
-                        fallback={<OutlineFace matrixId={matrixId()} />}
+                        when={activeView() === 'tags'}
+                        fallback={
+                          <Show
+                            when={activeView() === 'table' && tableFaceConfig()}
+                            fallback={<OutlineFace matrixId={matrixId()} />}
+                          >
+                            {(config) => (
+                              <TableFace
+                                config={config()}
+                                bindings={{ bindings: [], overflowColumns: [] }}
+                              />
+                            )}
+                          </Show>
+                        }
                       >
-                        {(config) => (
-                          <TableFace
-                            config={config()}
-                            bindings={{ bindings: [], overflowColumns: [] }}
-                          />
-                        )}
+                        <TagBrowserFace />
                       </Show>
                     }
                   >

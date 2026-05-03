@@ -4,12 +4,12 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { initMatrixSchema, getColumns } from '../core/matrix'
 import { registerPlugin, getPlugin } from '../core/plugin'
-import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
+import { registerFaceType, getFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
 import { getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
-import { tagsPlugin } from './tags-plugin'
+import { tagsPlugin, tagBrowserFaceTypeDefinition } from './tags-plugin'
 import {
   ensureTagTypesTable,
   createTagType,
@@ -25,6 +25,31 @@ const testTagsPlugin = { ...tagsPlugin, init: undefined }
 
 afterEach(() => {
   clearFaceTypeRegistry()
+})
+
+describe('Tag browser face type definition', () => {
+  test('has the correct id', () => {
+    expect(tagBrowserFaceTypeDefinition.id).toBe('hila.tag-browser')
+  })
+
+  test('has no slots (cross-matrix view)', () => {
+    expect(tagBrowserFaceTypeDefinition.slots).toEqual([])
+  })
+
+  test('has no trait requirements', () => {
+    expect(tagBrowserFaceTypeDefinition.traitRequirements).toEqual([])
+  })
+
+  test('has overflow behavior none', () => {
+    expect(tagBrowserFaceTypeDefinition.overflowBehavior).toBe('none')
+  })
+
+  test('can be registered in the face registry', () => {
+    registerFaceType(tagBrowserFaceTypeDefinition)
+    const retrieved = getFaceType('hila.tag-browser')
+    expect(retrieved).toBeDefined()
+    expect(retrieved!.name).toBe('Tag Browser')
+  })
 })
 
 describe('Tags plugin', () => {

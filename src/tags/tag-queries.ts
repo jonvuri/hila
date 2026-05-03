@@ -8,6 +8,18 @@
  */
 
 /**
+ * Tag browser list: all registered tag types with their instance counts.
+ * Instance count is the number of own-kind joins targeting each tag type's matrix.
+ */
+export const buildTagTypesWithCountsQuery = (): string => `
+SELECT tt.id, tt.name, tt.matrix_id, tt.color, tt.icon,
+       (SELECT COUNT(*) FROM joins j
+        WHERE j.target_matrix_id = tt.matrix_id AND j.kind = 'own') AS instance_count
+FROM tag_types tt
+ORDER BY tt.name
+`
+
+/**
  * Forward lookup: all tag aspects attached to a specific source row,
  * with tag type metadata (name, color) from the `tag_types` registry.
  */
