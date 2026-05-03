@@ -459,6 +459,104 @@ export const insertRow = (
   })
 }
 
+// -- Inline ref reverse cleanup -----------------------------------------------
+
+type FilterResult = { doc: unknown; changed: boolean }
+
+/**
+ * Recursively walk a PM JSON doc, removing `inlineref` nodes whose attrs
+ * match the given target. Returns a new doc tree and a `changed` flag.
+ */
+const filterInlineRefNode = (
+  node: unknown,
+  targetMatrixId: number,
+  targetRowId: number,
+): FilterResult => {
+  if (node == null || typeof node !== 'object') return { doc: node, changed: false }
+  if (Array.isArray(node)) {
+    let changed = false
+    const out: unknown[] = []
+    for (const child of node) {
+      const r = filterInlineRefNode(child, targetMatrixId, targetRowId)
+      if (r.changed) changed = true
+      if (r.doc !== undefined) out.push(r.doc)
+    }
+    return { doc: out, changed }
+  }
+
+  const obj = node as Record<string, unknown>
+
+  if (
+    obj.type === 'inlineref' &&
+    obj.attrs &&
+    typeof obj.attrs === 'object' &&
+    (obj.attrs as Record<string, unknown>).targetMatrixId === targetMatrixId &&
+    (obj.attrs as Record<string, unknown>).targetRowId === targetRowId
+  ) {
+    return { doc: undefined, changed: true }
+  }
+
+  let changed = false
+  const result: Record<string, unknown> = {}
+  for (const [key, val] of Object.entries(obj)) {
+    if (key === 'content' && Array.isArray(val)) {
+      const filtered = filterInlineRefNode(val, targetMatrixId, targetRowId)
+      result[key] = filtered.doc
+      if (filtered.changed) changed = true
+    } else {
+      result[key] = val
+    }
+  }
+  return { doc: result, changed }
+}
+
+/**
+ * Remove an `inlineref` node from a source row's PM JSON content.
+ *
+ * Loads the source row, parses the content/body column as PM JSON, filters
+ * out the matching `inlineref` node, and saves the modified doc. If the
+ * source row has no rich text column or the content is not PM JSON, this is
+ * a no-op.
+ */
+export const removeInlineRefFromDoc = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  const columns = getColumns(db, sourceMatrixId)
+  const contentCol = columns.find((c) => c.name === 'content' || c.name === 'body')
+  if (!contentCol) return
+
+  const colName = contentCol.name
+  const stmt = db.prepare(
+    `SELECT ${quoteIdent(colName)} FROM "mx_${sourceMatrixId}_data" WHERE id = ?`,
+  )
+  stmt.bind([sourceRowId])
+  if (!stmt.step()) {
+    stmt.finalize()
+    return
+  }
+  const raw = (stmt.get({}) as Record<string, unknown>)[colName]
+  stmt.finalize()
+  if (typeof raw !== 'string') return
+
+  let doc: unknown
+  try {
+    doc = JSON.parse(raw)
+  } catch {
+    return
+  }
+
+  const modified = filterInlineRefNode(doc, targetMatrixId, targetRowId)
+  if (!modified.changed) return
+
+  db.exec(`UPDATE "mx_${sourceMatrixId}_data" SET ${quoteIdent(colName)} = ? WHERE id = ?`, {
+    bind: [JSON.stringify(modified.doc), sourceRowId],
+  })
+}
+
 const MAX_CASCADE_DEPTH = 100
 
 /**
@@ -504,6 +602,27 @@ const deleteRowCascade = (
 
   for (const target of ownedTargets) {
     deleteRowCascade(db, target.matrixId, target.rowId, depth + 1)
+  }
+
+  // Reverse cleanup: if this row is an own-kind target, remove the inlineref
+  // node from each source row's rich text content.
+  const sourceStmt = db.prepare(
+    `SELECT source_matrix_id, source_row_id FROM joins
+     WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,
+  )
+  sourceStmt.bind([matrixId, rowId])
+  const ownSources: { sourceMatrixId: number; sourceRowId: number }[] = []
+  while (sourceStmt.step()) {
+    const src = sourceStmt.get({}) as {
+      source_matrix_id: number
+      source_row_id: number
+    }
+    ownSources.push({ sourceMatrixId: src.source_matrix_id, sourceRowId: src.source_row_id })
+  }
+  sourceStmt.finalize()
+
+  for (const src of ownSources) {
+    removeInlineRefFromDoc(db, src.sourceMatrixId, src.sourceRowId, matrixId, rowId)
   }
 
   if (hasTrait(db, matrixId, 'rank')) {
@@ -964,6 +1083,14 @@ export const deleteJoinByTarget = (
       target_row_id: row.target_row_id,
       kind: row.kind,
     }
+
+    removeInlineRefFromDoc(
+      db,
+      joinRow.source_matrix_id,
+      joinRow.source_row_id,
+      joinRow.target_matrix_id,
+      joinRow.target_row_id,
+    )
 
     deleteJoin(
       db,

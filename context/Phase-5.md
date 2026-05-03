@@ -263,19 +263,19 @@ A popover or sidebar that opens when clicking a `#` tag, showing the aspect row'
 
 Phase 4b built the core owned join lifecycle (`createDependentRow`, cascade deletion on source row delete, cascade deletion on `own` join removal). Phase 5 exercises these paths end-to-end through the tag UX and fills in the remaining gap: reverse cleanup when an aspect row is deleted from its identity face.
 
-- [ ] **Forward lifecycle: remove tag from text → aspect row deleted.** This path already works via `syncInlineRefs` (Phase 4b, task 5). Validate it end-to-end with tags:
+- [x] **Forward lifecycle: remove tag from text → aspect row deleted.** This path already works via `syncInlineRefs` (Phase 4b, task 5). Validate it end-to-end with tags:
   - User types `#task` on an outline row → aspect row created in task matrix.
   - User deletes the `#task` badge from the text (Backspace over the inline node or select + delete).
   - On doc save, `syncInlineRefs` detects the removed `own`-kind reference, calls `deleteOwnedTarget`, cascade-deletes the aspect row.
   - Verify the aspect row no longer exists in the task matrix.
 
-- [ ] **Forward lifecycle: delete source row → aspect rows deleted.** Also already works via `deleteRow` cascade (Phase 4b, task 2). Validate end-to-end:
+- [x] **Forward lifecycle: delete source row → aspect rows deleted.** Also already works via `deleteRow` cascade (Phase 4b, task 2). Validate end-to-end:
   - An outline row has two tags (`#task` and `#movie-review`).
   - Delete the outline row.
   - Both aspect rows are cascade-deleted.
   - Verify neither aspect row exists in their respective tag matrixes.
 
-- [ ] **Reverse lifecycle: delete aspect row from identity face → inline node removed.** This is the gap identified in Phase 4b (deferred as "non-trivial" in Phase 4b scope boundaries). Implement it now:
+- [x] **Reverse lifecycle: delete aspect row from identity face → inline node removed.** This is the gap identified in Phase 4b (deferred as "non-trivial" in Phase 4b scope boundaries). Implement it now:
   - The core `deleteJoinByTarget` already returns the `own`-kind join info when a target row is deleted.
   - When a tag aspect row is deleted from its tag matrix's identity face (table face), the tags plugin needs to:
     1. Call `deleteJoinByTarget(targetMatrixId, targetRowId)` to get the source row info.
@@ -297,10 +297,10 @@ Phase 4b built the core owned join lifecycle (`createDependentRow`, cascade dele
   ```
   Loads the source row, parses the content column as PM JSON, filters out the matching `inlineref` node, saves the modified doc. If the source row's content column is not PM JSON (not rich text), this is a no-op.
 
-- [ ] Add worker message type for `removeInlineRefFromDoc` if needed (or integrate into existing `deleteRow` / `deleteJoinByTarget` paths).
+- [x] Add worker message type for `removeInlineRefFromDoc` if needed (or integrate into existing `deleteRow` / `deleteJoinByTarget` paths).
 
-- [ ] Tests: delete an aspect row from the tag matrix's identity face, verify the inline `#` node is removed from the source row's content. Verify the source row's remaining content is preserved (only the specific tag node is removed, not other text or references). Verify that deleting an aspect row that has no inline ref source (e.g. created via table cell, not inline text) is a no-op for source cleanup. Recursive cascade: source row owns aspect A, aspect A owns aspect B (nested tags); delete source, verify A and B both deleted.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: delete an aspect row from the tag matrix's identity face, verify the inline `#` node is removed from the source row's content. Verify the source row's remaining content is preserved (only the specific tag node is removed, not other text or references). Verify that deleting an aspect row that has no inline ref source (e.g. created via table cell, not inline text) is a no-op for source cleanup. Recursive cascade: source row owns aspect A, aspect A owns aspect B (nested tags); delete source, verify A and B both deleted.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 7. Forward and reverse lookup queries
 

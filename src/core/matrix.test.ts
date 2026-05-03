@@ -18,6 +18,7 @@ import {
   createDependentRow,
   deleteOwnedTarget,
   deleteJoinByTarget,
+  removeInlineRefFromDoc,
   getColumns,
   addColumn,
   addFormulaColumn,
@@ -2233,6 +2234,307 @@ describe('Join table', () => {
     s.bind([targetRowId])
     expect(s.step()).toBe(true)
     s.finalize()
+  })
+})
+
+describe('Owned join lifecycle: end-to-end with PM content', () => {
+  let db: Database
+
+  const makePmDoc = (...inlineContent: unknown[]) =>
+    JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: inlineContent }],
+    })
+
+  const makeTextNode = (text: string) => ({ type: 'text', text })
+
+  const makeInlineRef = (
+    targetMatrixId: number,
+    targetRowId: number,
+    kind: 'ref' | 'own' = 'own',
+    cachedTitle = 'tag',
+  ) => ({
+    type: 'inlineref',
+    attrs: { targetMatrixId, targetRowId, kind, cachedTitle },
+  })
+
+  const rowExists = (matrixId: number, rowId: number): boolean => {
+    const s = db.prepare(`SELECT 1 FROM "mx_${matrixId}_data" WHERE id = ?`)
+    s.bind([rowId])
+    const exists = s.step()
+    s.finalize()
+    return exists
+  }
+
+  const getContent = (matrixId: number, rowId: number): string | null => {
+    const s = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
+    s.bind([rowId])
+    if (!s.step()) {
+      s.finalize()
+      return null
+    }
+    const row = s.get({}) as { content: string }
+    s.finalize()
+    return row.content
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  // -- Forward lifecycle -------------------------------------------------------
+
+  test('forward: delete source row cascade-deletes owned aspect rows', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagA = createMatrix(db, 'TagA', [{ name: 'label', type: 'TEXT' }])
+    const tagB = createMatrix(db, 'TagB', [{ name: 'label', type: 'TEXT' }])
+
+    const aspectA = createDependentRow(db, source, 1, tagA)
+    const aspectB = createDependentRow(db, source, 1, tagB)
+
+    const doc = makePmDoc(
+      makeTextNode('Hello '),
+      makeInlineRef(tagA, aspectA),
+      makeTextNode(' world '),
+      makeInlineRef(tagB, aspectB),
+    )
+    insertDataRow(db, source, { content: doc })
+
+    deleteRow(db, source, 1)
+
+    expect(rowExists(tagA, aspectA)).toBe(false)
+    expect(rowExists(tagB, aspectB)).toBe(false)
+  })
+
+  test('forward: delete source row with two tags cascade-deletes both aspect rows', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, source, { content: '{}' })
+    const asp1 = createDependentRow(db, source, sourceRowId, tagMx)
+    const asp2 = createDependentRow(db, source, sourceRowId, tagMx)
+
+    expect(rowExists(tagMx, asp1)).toBe(true)
+    expect(rowExists(tagMx, asp2)).toBe(true)
+
+    deleteRow(db, source, sourceRowId)
+
+    expect(rowExists(tagMx, asp1)).toBe(false)
+    expect(rowExists(tagMx, asp2)).toBe(false)
+    expect(getTargets(db, source, sourceRowId)).toEqual([])
+  })
+
+  // -- Reverse lifecycle -------------------------------------------------------
+
+  test('reverse: delete aspect row removes inlineref node from source content', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, source, { content: '{}' })
+    const aspectRowId = createDependentRow(db, source, sourceRowId, tagMx)
+
+    const doc = makePmDoc(makeTextNode('Buy groceries '), makeInlineRef(tagMx, aspectRowId))
+    updateRow(db, { matrixId: source, rowId: sourceRowId, values: { content: doc } })
+
+    deleteRow(db, tagMx, aspectRowId)
+
+    const updatedContent = getContent(source, sourceRowId)
+    expect(updatedContent).not.toBeNull()
+    const parsed = JSON.parse(updatedContent!)
+    expect(parsed.type).toBe('doc')
+
+    const paragraph = parsed.content[0]
+    expect(paragraph.type).toBe('paragraph')
+    const inlinerefNodes = (paragraph.content ?? []).filter(
+      (n: { type: string }) => n.type === 'inlineref',
+    )
+    expect(inlinerefNodes).toHaveLength(0)
+
+    const textNodes = (paragraph.content ?? []).filter(
+      (n: { type: string }) => n.type === 'text',
+    )
+    expect(textNodes).toHaveLength(1)
+    expect(textNodes[0].text).toBe('Buy groceries ')
+  })
+
+  test('reverse: remaining content is preserved when inlineref is removed', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, source, { content: '{}' })
+    const aspectRowId = createDependentRow(db, source, sourceRowId, tagMx)
+
+    const doc = makePmDoc(
+      makeTextNode('Start '),
+      makeInlineRef(tagMx, aspectRowId),
+      makeTextNode(' end'),
+    )
+    updateRow(db, { matrixId: source, rowId: sourceRowId, values: { content: doc } })
+
+    deleteRow(db, tagMx, aspectRowId)
+
+    const parsed = JSON.parse(getContent(source, sourceRowId)!)
+    const paragraph = parsed.content[0]
+    const texts = (paragraph.content ?? []).map((n: { text?: string }) => n.text)
+    expect(texts).toEqual(['Start ', ' end'])
+  })
+
+  test('reverse: only the matching inlineref is removed; others are preserved', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagA = createMatrix(db, 'TagA', [{ name: 'label', type: 'TEXT' }])
+    const tagB = createMatrix(db, 'TagB', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, source, { content: '{}' })
+    const aspectA = createDependentRow(db, source, sourceRowId, tagA)
+    const aspectB = createDependentRow(db, source, sourceRowId, tagB)
+
+    const doc = makePmDoc(
+      makeTextNode('Hello '),
+      makeInlineRef(tagA, aspectA, 'own', 'tagA'),
+      makeTextNode(' middle '),
+      makeInlineRef(tagB, aspectB, 'own', 'tagB'),
+      makeTextNode(' end'),
+    )
+    updateRow(db, { matrixId: source, rowId: sourceRowId, values: { content: doc } })
+
+    deleteRow(db, tagA, aspectA)
+
+    const parsed = JSON.parse(getContent(source, sourceRowId)!)
+    const paragraph = parsed.content[0]
+
+    const inlinerefs = (paragraph.content ?? []).filter(
+      (n: { type: string }) => n.type === 'inlineref',
+    )
+    expect(inlinerefs).toHaveLength(1)
+    expect(inlinerefs[0].attrs.targetMatrixId).toBe(tagB)
+    expect(inlinerefs[0].attrs.targetRowId).toBe(aspectB)
+
+    expect(rowExists(tagB, aspectB)).toBe(true)
+  })
+
+  test('reverse: no-op when source has no rich text column', () => {
+    const source = createMatrix(db, 'Data', [{ name: 'title', type: 'TEXT' }])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, source, { title: 'Hello' })
+    const aspectRowId = createDependentRow(db, source, sourceRowId, tagMx)
+
+    deleteRow(db, tagMx, aspectRowId)
+
+    const s = db.prepare(`SELECT title FROM "mx_${source}_data" WHERE id = ?`)
+    s.bind([sourceRowId])
+    expect(s.step()).toBe(true)
+    const row = s.get({}) as { title: string }
+    s.finalize()
+    expect(row.title).toBe('Hello')
+  })
+
+  test('reverse: no-op when source content has no matching inlineref', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const doc = makePmDoc(makeTextNode('Just text, no tags'))
+    const sourceRowId = insertDataRow(db, source, { content: doc })
+    const aspectRowId = createDependentRow(db, source, sourceRowId, tagMx)
+
+    const originalContent = getContent(source, sourceRowId)
+    deleteRow(db, tagMx, aspectRowId)
+
+    expect(getContent(source, sourceRowId)).toBe(originalContent)
+  })
+
+  test('reverse: works with body column (notes)', () => {
+    const source = createMatrix(db, 'Notes', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    const tagMx = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT' }])
+
+    const bodyDoc = JSON.stringify({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Note body ' },
+            {
+              type: 'inlineref',
+              attrs: {
+                targetMatrixId: tagMx,
+                targetRowId: 999,
+                kind: 'own',
+                cachedTitle: 'task',
+              },
+            },
+          ],
+        },
+      ],
+    })
+    const sourceRowId = insertDataRow(db, source, { title: 'My Note', body: bodyDoc })
+    insertJoin(db, source, sourceRowId, tagMx, 999, 'own')
+    insertDataRow(db, tagMx, { label: 'task instance' })
+
+    // Use removeInlineRefFromDoc directly since the row ID (999) may not match
+    // the actual inserted row — test the function in isolation
+    removeInlineRefFromDoc(db, source, sourceRowId, tagMx, 999)
+
+    const s = db.prepare(`SELECT body FROM "mx_${source}_data" WHERE id = ?`)
+    s.bind([sourceRowId])
+    expect(s.step()).toBe(true)
+    const row = s.get({}) as { body: string }
+    s.finalize()
+
+    const parsed = JSON.parse(row.body)
+    const paragraph = parsed.content[0]
+    const inlinerefs = (paragraph.content ?? []).filter(
+      (n: { type: string }) => n.type === 'inlineref',
+    )
+    expect(inlinerefs).toHaveLength(0)
+  })
+
+  // -- Recursive cascade -------------------------------------------------------
+
+  test('recursive cascade: source owns A, A owns B; delete source deletes A and B', () => {
+    const mSource = createMatrix(db, 'Source', [{ name: 'content', type: 'TEXT' }])
+    const mA = createMatrix(db, 'A', [{ name: 'content', type: 'TEXT' }])
+    const mB = createMatrix(db, 'B', [{ name: 'label', type: 'TEXT' }])
+
+    const sourceRowId = insertDataRow(db, mSource, { content: '{}' })
+    const rowA = createDependentRow(db, mSource, sourceRowId, mA)
+
+    const rowB = createDependentRow(db, mA, rowA, mB)
+
+    // A has an inlineref to B in its content
+    const docA = makePmDoc(makeTextNode('A content '), makeInlineRef(mB, rowB))
+    updateRow(db, { matrixId: mA, rowId: rowA, values: { content: docA } })
+
+    deleteRow(db, mSource, sourceRowId)
+
+    expect(rowExists(mA, rowA)).toBe(false)
+    expect(rowExists(mB, rowB)).toBe(false)
+  })
+
+  // -- removeInlineRefFromDoc unit tests ---------------------------------------
+
+  test('removeInlineRefFromDoc is a no-op for non-JSON content', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const sourceRowId = insertDataRow(db, source, { content: 'plain text, not JSON' })
+
+    removeInlineRefFromDoc(db, source, sourceRowId, 999, 888)
+
+    expect(getContent(source, sourceRowId)).toBe('plain text, not JSON')
+  })
+
+  test('removeInlineRefFromDoc is a no-op when source row does not exist', () => {
+    const source = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+
+    // Should not throw
+    removeInlineRefFromDoc(db, source, 999999, 1, 1)
   })
 })
 
