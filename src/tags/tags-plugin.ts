@@ -23,6 +23,7 @@ export const tagsPlugin: PluginDefinition = {
   id: 'hila.tags',
   name: 'Tags',
   version: '1.0.0',
+  faceTypes: [tagBrowserFaceTypeDefinition],
   matrixes: [],
   traits: [],
   namedQueries: {

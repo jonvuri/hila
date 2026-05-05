@@ -13,9 +13,10 @@ import { registerFaceComponent } from './core/FaceRenderer'
 import { applyFaceToMatrix, getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
-import { outlinePlugin, registerOutlineFaceType } from './outline/outline-plugin'
-import { notesPlugin, registerNoteFaceTypes } from './notes/notes-plugin'
-import { tagsPlugin, registerTagBrowserFaceType } from './tags/tags-plugin'
+import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
+import { outlinePlugin } from './outline/outline-plugin'
+import { notesPlugin } from './notes/notes-plugin'
+import { tagsPlugin } from './tags/tags-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
@@ -63,11 +64,16 @@ const App: Component = () => {
     setTableFaceConfig(null)
     setSelectedNoteId(null)
 
+    // Table face type is core infrastructure — register it first so all
+    // plugins can create identity faces for their matrixes.
     await registerTableFaceType()
     const TableFaceComponent = (await import('./table/TableFace')).default
     registerFaceComponent('hila.table', TableFaceComponent)
 
-    await registerOutlineFaceType()
+    // Plugins declare their own face types via faceTypes in PluginDefinition;
+    // registerPlugin handles registration both locally and in the worker.
+    await registerPlugin(inlineReferencesPlugin)
+
     const outlineCtx = await registerPlugin(outlinePlugin)
     const matrixId = outlineCtx.matrixIds['root']!
     setOutlineMatrixId(matrixId)
@@ -76,12 +82,10 @@ const App: Component = () => {
     const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
     if (tableConfig) setTableFaceConfig(tableConfig)
 
-    await registerNoteFaceTypes()
     const notesCtx = await registerPlugin(notesPlugin)
     const notesId = notesCtx.matrixIds['notes']!
     setNotesMatrixId(notesId)
 
-    await registerTagBrowserFaceType()
     await registerPlugin(tagsPlugin)
   }
 

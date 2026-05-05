@@ -60,6 +60,7 @@ export const notesPlugin: PluginDefinition = {
   id: 'hila.notes',
   name: 'Notes',
   version: '1.0.0',
+  faceTypes: [noteListFaceTypeDefinition, noteFaceTypeDefinition],
   matrixes: [
     {
       key: 'notes',

@@ -21,8 +21,8 @@ import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
+import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 
-import { InlineRefView } from './nodeviews/InlineRefView'
 import { buildSingleNoteQuery } from './notes-plugin'
 
 const SAVE_DEBOUNCE_MS = 300

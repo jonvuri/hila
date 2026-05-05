@@ -14,6 +14,7 @@ import {
   updateTagType as updateTagTypeClient,
   deleteTagType as deleteTagTypeClient,
 } from '../core/client/matrix-client'
+import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import { tagColorFromName, tagBadgeBackground } from './tag-color'
 import { buildTagTypesWithCountsQuery, buildTagInstancesQuery } from './tag-queries'
@@ -42,29 +43,11 @@ type TagBrowserFaceProps = {
   onOpenTableFace?: (matrixId: number) => void
 }
 
-const extractTextFromContent = (contentJson: unknown): string => {
-  if (typeof contentJson !== 'string') return String(contentJson ?? '')
-  try {
-    const doc = JSON.parse(contentJson) as {
-      content?: { content?: { text?: string }[] }[]
-    }
-    if (!doc.content) return contentJson || ''
-    return (
-      doc.content
-        .flatMap((block) => block.content ?? [])
-        .map((node) => node.text ?? '')
-        .join('') || ''
-    )
-  } catch {
-    return contentJson
-  }
-}
-
 const getSnippet = (row: Record<string, unknown>): string => {
   const skip = new Set(['id', 'source_matrix_id', 'source_row_id'])
   for (const [key, value] of Object.entries(row)) {
     if (skip.has(key) || value == null || value === '') continue
-    const text = extractTextFromContent(value)
+    const text = extractTextFromPmDoc(value)
     if (text) return text.length > 80 ? text.slice(0, 80) + '...' : text
   }
   return ''

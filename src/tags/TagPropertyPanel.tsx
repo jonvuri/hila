@@ -8,9 +8,10 @@ import {
   onCleanup,
 } from 'solid-js'
 
-import { useQuery } from '../sql/useQuery'
+import { useRowData } from '../sql/useRowData'
 import { updateRow, getColumns } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
+import { FieldEditor } from '../shared/FieldEditor'
 
 import { tagColorFromName, tagBadgeBackground } from './tag-color'
 
@@ -25,121 +26,13 @@ type TagPropertyPanelProps = {
 
 const SKIPPED_COLUMNS = new Set(['id'])
 
-const parseSelectOptions = (optionsJson: string | null): string[] => {
-  if (!optionsJson) return []
-  try {
-    const parsed = JSON.parse(optionsJson) as string[]
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-const FieldEditor: Component<{
-  column: ColumnDefinition
-  value: string
-  onSave: (value: string) => void
-}> = (props) => {
-  const [localValue, setLocalValue] = createSignal('')
-
-  createEffect(() => {
-    setLocalValue(props.value)
-  })
-
-  const commitValue = () => {
-    const v = localValue()
-    if (v !== props.value) {
-      props.onSave(v)
-    }
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      e.stopPropagation()
-      commitValue()
-      ;(e.target as HTMLElement).blur()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      setLocalValue(props.value)
-      ;(e.target as HTMLElement).blur()
-    } else {
-      e.stopPropagation()
-    }
-  }
-
-  const displayType = () => props.column.displayType
-
-  return (
-    <div class="tag-panel-field">
-      <label class="tag-panel-field-label">{props.column.name}</label>
-      <Show
-        when={displayType() !== 'select' || !props.column.options}
-        fallback={
-          <select
-            class="tag-panel-field-select"
-            value={localValue()}
-            onChange={(e) => {
-              setLocalValue(e.currentTarget.value)
-              props.onSave(e.currentTarget.value)
-            }}
-            onKeyDown={handleKeyDown}
-          >
-            <option value="">—</option>
-            <For each={parseSelectOptions(props.column.options)}>
-              {(opt) => <option value={opt}>{opt}</option>}
-            </For>
-          </select>
-        }
-      >
-        <Show
-          when={displayType() !== 'boolean'}
-          fallback={
-            <input
-              class="tag-panel-field-checkbox"
-              type="checkbox"
-              checked={localValue() === '1' || localValue() === 'true'}
-              onChange={(e) => {
-                const v = e.currentTarget.checked ? '1' : '0'
-                setLocalValue(v)
-                props.onSave(v)
-              }}
-              onKeyDown={handleKeyDown}
-            />
-          }
-        >
-          <input
-            class="tag-panel-field-input"
-            type={
-              displayType() === 'number' ? 'number'
-              : displayType() === 'date' ?
-                'date'
-              : 'text'
-            }
-            value={localValue()}
-            onInput={(e) => setLocalValue(e.currentTarget.value)}
-            onBlur={() => commitValue()}
-            onKeyDown={handleKeyDown}
-          />
-        </Show>
-      </Show>
-    </div>
-  )
-}
-
 const TagPropertyPanel: Component<TagPropertyPanelProps> = (props) => {
   const [columns, setColumns] = createSignal<ColumnDefinition[]>([])
 
-  const rowQuery = createMemo(
-    () => `SELECT * FROM "mx_${props.matrixId}_data" WHERE id = ${props.rowId}`,
+  const rowData = useRowData(
+    () => props.matrixId,
+    () => props.rowId,
   )
-  const { result: rowResult } = useQuery(() => rowQuery())
-
-  const rowData = createMemo(() => {
-    const data = rowResult()
-    if (!data || data.length === 0) return null
-    return data[0] as Record<string, unknown>
-  })
 
   createEffect(() => {
     void getColumns(props.matrixId).then((cols) => setColumns(cols))

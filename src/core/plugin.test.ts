@@ -4,7 +4,9 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { initMatrixSchema, createMatrix } from './matrix'
 import { registerPlugin, unregisterPlugin, getPlugin, getAllPlugins } from './plugin'
+import { getFaceType, clearFaceTypeRegistry } from './face-registry'
 import type { PluginDefinition } from './plugin-types'
+import type { FaceTypeDefinition } from './face-types'
 
 const makeDefinition = (overrides: Partial<PluginDefinition> = {}): PluginDefinition => ({
   id: 'test-plugin',
@@ -262,5 +264,68 @@ describe('Plugin system', () => {
     stmt.step()
     expect((stmt.get({}) as { source_plugin_id: string }).source_plugin_id).toBe('plugin-b')
     stmt.finalize()
+  })
+
+  // -- faceTypes registration --------------------------------------------------
+
+  test('registering a plugin with faceTypes registers them in the face registry', async () => {
+    clearFaceTypeRegistry()
+
+    const testFace: FaceTypeDefinition = {
+      id: 'test.custom-face',
+      name: 'Custom Face',
+      slots: [{ name: 'content', preferredType: 'richtext', required: true }],
+      traitRequirements: [],
+      overflowBehavior: 'none',
+    }
+
+    const def = makeDefinition({
+      faceTypes: [testFace],
+    })
+
+    await registerPlugin(db, def)
+
+    const registered = getFaceType('test.custom-face')
+    expect(registered).toBeDefined()
+    expect(registered!.name).toBe('Custom Face')
+    expect(registered!.slots).toHaveLength(1)
+  })
+
+  test('faceTypes registration is idempotent across re-registration', async () => {
+    clearFaceTypeRegistry()
+
+    const testFace: FaceTypeDefinition = {
+      id: 'test.idempotent-face',
+      name: 'Idempotent Face',
+      slots: [],
+      traitRequirements: [],
+      overflowBehavior: 'none',
+    }
+
+    const def = makeDefinition({
+      id: 'idempotent-plugin',
+      faceTypes: [testFace],
+    })
+
+    await registerPlugin(db, def)
+    await registerPlugin(db, def)
+
+    const registered = getFaceType('test.idempotent-face')
+    expect(registered).toBeDefined()
+    expect(registered!.name).toBe('Idempotent Face')
+  })
+
+  test('plugin without faceTypes works as before', async () => {
+    const def = makeDefinition({
+      id: 'no-faces',
+      name: 'No Faces Plugin',
+    })
+
+    const ctx = await registerPlugin(db, def)
+
+    const row = getPlugin(db, 'no-faces')
+    expect(row).not.toBeNull()
+    expect(row!.name).toBe('No Faces Plugin')
+    expect(Object.keys(ctx.matrixIds)).toHaveLength(0)
   })
 })

@@ -2,7 +2,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
 import { applyFaceToMatrix } from './face-config'
-import { getFaceType } from './face-registry'
+import { getFaceType, registerFaceType as registerFaceTypeLocal } from './face-registry'
 import { createMatrix } from './matrix'
 import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
@@ -24,6 +24,16 @@ export const registerPlugin = async (
   const matrixIds: Record<string, number> = {}
 
   withTransaction(db, () => {
+    // Register face types before creating matrixes (face types are needed
+    // when creating identity faces for new matrixes).
+    if (definition.faceTypes) {
+      for (const ft of definition.faceTypes) {
+        if (!getFaceType(ft.id)) {
+          registerFaceTypeLocal(ft)
+        }
+      }
+    }
+
     // Check if plugin already exists (for idempotency)
     const existingStmt = db.prepare('SELECT metadata FROM plugins WHERE id = ?')
     existingStmt.bind([definition.id])

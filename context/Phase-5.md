@@ -394,42 +394,59 @@ Add the interactive layer to the tag browser: selecting a tag type shows its ins
 - [x] Tests: verify clicking a tag type shows its instances. Verify clicking an instance navigates to the source row. Verify context menu actions (rename, change color, delete). Verify "View all in table" opens the identity face.
 - [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
-## 9. Solidify plugin API
+## 9a. Solidify plugin API
 
 With four real plugin consumers (outline, notes, inline references, tags), extract and formalize the plugin registration, lifecycle, and cross-plugin patterns. This is not a rewrite — it's a review and extraction pass that tightens the existing informal patterns into documented, tested contracts.
 
-- [ ] **Audit plugin registration patterns.** Review how outline, notes, inline references, and tags register themselves. Identify:
-  - Common patterns that should be formalized (e.g. all plugins check for existing matrixes before creating new ones).
-  - Divergences that should be unified (e.g. inline references uses a different initialization pattern than outline/notes).
-  - Missing capabilities needed by tags that weren't needed by earlier plugins (e.g. dynamic matrix creation after plugin init, the `tag_types` system table pattern).
+- [x] **Add `faceTypes` to `PluginDefinition`.** Currently each plugin exports a separate `registerXyzFaceType()` function that must be called manually in `App.tsx` before `registerPlugin()`. Add an optional `faceTypes?: FaceTypeDefinition[]` field to `PluginDefinition`. Update `registerPlugin` to register face types (both locally and in the worker) before creating matrixes and face bindings. Update each plugin's definition to include its face types and remove the manual `registerXyzFaceType()` calls from `App.tsx` (except for the table face type, which is core infrastructure registered first).
 
-- [ ] **Formalize the `PluginContext` type.** Currently `PluginContext` contains `matrixIds: Record<string, number>`. Extend it based on what plugins actually need:
-  ```typescript
-  type PluginContext = {
-    matrixIds: Record<string, number>
-    db: Database  // or a scoped database handle
-    registerEventHandler?: (event: string, handler: Function) => void
-  }
-  ```
-  The exact shape should be driven by the four consumers' actual needs, not speculative design.
+- [x] **Register inline references as a plugin.** Create a minimal `PluginDefinition` for inline references (no matrixes, no traits, no face bindings — it is shared editor infrastructure, not a data plugin). Register it in `App.tsx` for identity and discoverability. Move `InlineRefView` from `src/notes/nodeviews/InlineRefView.tsx` to `src/editor/nodeviews/InlineRefView.tsx` since it is shared infrastructure consumed by both outline and notes. Update imports in `OutlineRow.tsx` and `NoteFace.tsx`.
 
-- [ ] **Document the plugin lifecycle contract.** Based on the four real consumers, document:
+- [x] **Formalize the table face type as core infrastructure.** Document that the table face type is always registered first during app init, before any plugins. It is a core dependency, not a plugin. Add a comment in `App.tsx` and document in `Plugins.md`.
+
+- [x] **Document `PluginContext` as-is (no expansion needed).** After reviewing all four consumers: no plugin needs direct `db` access in `init` (they all use the async client layer); no plugin uses event handlers (cross-plugin interaction is through SQL over shared tables); `matrixIds: Record<string, number>` is sufficient. Add doc comments to the `PluginContext` type explaining the minimal shape. Future extensions (e.g. `schedule()` for Phase 7) will be added when motivated by real consumers.
+
+- [x] **Document the plugin lifecycle contract** in `Plugins.md`, based on the four real consumers:
   - What happens during `registerPlugin` (table creation, trait provisioning, face config creation).
   - What `init` can assume (matrixes exist, traits provisioned, face configs stored).
   - What `destroy` should clean up (subscriptions, timers, in-memory state — NOT matrixes or traits).
+  - Dynamic resources: plugins can create additional matrixes at runtime via the op layer (e.g. `createTagType`). These are not declared in `PluginDefinition`.
   - How plugins interact cross-plugin (through SQL queries over shared matrixes and the join table, NOT through direct API calls).
 
-- [ ] **Formalize the cross-plugin interaction pattern.** The tags plugin demonstrates the first real cross-plugin interaction: inline references plugin handles the `#` trigger and calls `createDependentRow`; the tags plugin manages tag types and the tag browser. Document how this works and the contract between them:
-  - Inline references plugin: provides the autocomplete trigger and PM node rendering, calls tag type queries to populate autocomplete, calls `createDependentRow` for tag insertion.
-  - Tags plugin: manages the `tag_types` registry, provides the tag browser face, provides the tag property panel, handles reverse cleanup.
-  - The interaction is through data (the `tag_types` table and the `joins` table), not through plugin-to-plugin API calls.
+- [x] **Document the cross-plugin interaction pattern** in `Plugins.md`. The tags + inline references interaction is the canonical example:
+  - Inline references (shared editor infrastructure): provides the `#` autocomplete trigger, PM node rendering, and calls `createDependentRow` for tag insertion.
+  - Tags plugin: manages the tag type registry, provides the tag browser face and tag property panel.
+  - The interaction is through shared data (tag type registry, `joins` table, tag matrix data tables), not through plugin-to-plugin API calls.
 
-- [ ] **Extract shared utilities.** If multiple plugins implement the same pattern (e.g. "query a matrix's columns and render editable fields"), extract it into a shared utility. Candidates:
-  - Column field rendering (used by tag property panel and table face cell editors).
-  - Reactive row data hooks (used by inline ref view, tag property panel, backlinks panel).
-  - PM doc manipulation utilities (used by inline ref sync and reverse cleanup).
+- [x] **Extract shared utilities.** Three concrete extraction candidates:
+  - Column field rendering (`FieldEditor`): extract from `TagPropertyPanel.tsx` to `src/shared/FieldEditor.tsx`.
+  - Reactive row data hook (`useRowData`): extract from the pattern in `InlineRefView`/`TagPropertyPanel` to `src/sql/useRowData.ts`.
+  - PM doc text extraction (`extractTextFromPmJson`): extract from `TagBrowserFace`/`OutlineRow` to `src/editor/pm-text.ts`.
 
-- [ ] Tests: verify the existing plugin registration tests still pass. Add tests for any new lifecycle contracts or shared utilities extracted during this task.
+- [x] Tests: verify existing plugin registration tests still pass. Add tests for `faceTypes` registration, extracted shared utilities.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+
+## 9b. Migrate tag type registry to matrix
+
+Convert the `tag_types` system table into a matrix declared in the tags plugin's `PluginDefinition`. The tag type registry is user-managed data (users create, rename, color, browse, and delete tag types), so it belongs in a matrix — not a hand-created system table. This brings the tags plugin into full consistency with the architecture: all user-managed data lives in matrixes. As a matrix, the registry gets automatic sync change tracking, participates in the standard query namespace, and can be viewed through any face type.
+
+- [ ] **Add `registry` matrix to tags plugin definition.** Declare a matrix with columns: `name` (TEXT), `matrix_id` (INTEGER), `color` (TEXT), `icon` (TEXT). The tags plugin now has one declared matrix (the registry) plus dynamically created per-tag-type matrixes.
+
+- [ ] **Remove `ensureTagTypesTable`.** Delete the DDL `CREATE TABLE IF NOT EXISTS tag_types ...`, the manual `installChangeTrackingTriggers` call, and the `ensureTagTypesTable` worker op. Remove from `matrix-types.ts`, `matrix-client.ts`, `matrix-handler.ts`, and the tags plugin's `init` hook.
+
+- [ ] **Rewrite tag type CRUD operations.** Update `createTagType`, `getTagType`, `getTagTypeById`, `getTagTypeByMatrixId`, `getAllTagTypes`, `updateTagType`, `deleteTagType` in `src/tags/tag-types.ts` to operate on `mx_N_data` (the registry matrix) instead of the `tag_types` system table. The registry matrix ID must be passed through or discovered from plugin metadata.
+
+- [ ] **Add application-level name uniqueness checking.** The `UNIQUE COLLATE NOCASE` constraint on `name` was enforced at the SQLite level in the system table. In the matrix, enforce uniqueness in the application layer: check for existing names before inserting.
+
+- [ ] **Make the registry matrix ID discoverable.** The tag type registry matrix ID (from `ctx.matrixIds['registry']`) must be available to all consumers: `tag-search-provider.ts`, `InlineRefView.tsx`, `TagBrowserFace.tsx`, `TagPropertyPanel.tsx`. Options: pass as a prop from `App.tsx`, or look up from the `plugins` table metadata at runtime.
+
+- [ ] **Update all queries** that reference `tag_types` table:
+  - `src/tags/tag-queries.ts`: `buildTagTypesWithCountsQuery`, `buildTagsForRowQuery` — change `FROM tag_types tt` to `FROM "mx_N_data" tt`.
+  - `src/notes/nodeviews/InlineRefView.tsx`: tag type metadata query — change `FROM tag_types` to the registry matrix.
+  - `src/tags/TagBrowserFace.tsx`: tag type list query.
+
+- [ ] **Update all tests.** `tags-plugin.test.ts`, `tag-queries.test.ts`, `tag-search.test.ts`, `tag-property-panel.test.ts` — update to work with the registry matrix instead of the `tag_types` system table.
+
 - [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 10a. Playwright E2E: tag insertion and tag type creation
@@ -515,14 +532,15 @@ E2E coverage for the tag browser's full interactive flow and cross-plugin data c
                   │
                   └─► 8b. Tag browser: drill-down + navigation
 
-9. Solidify plugin API ◄── 1–8b (extract after all features land)
+9a. Solidify plugin API ◄── 1–8b (extract after all features land)
+9b. Migrate tag type registry to matrix ◄── 9a
 
 10a. E2E: insertion + creation ◄── 3b, 4
 10b. E2E: property panel + lifecycle ◄── 5, 6
-10c. E2E: tag browser + cross-plugin ◄── 8b
+10c. E2E: tag browser + cross-plugin ◄── 8b, 9b
 ```
 
-Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independent and can proceed in parallel. Task 3a (autocomplete refactor) depends on both 1 and 2; task 3b (tag search/insertion) depends on 3a. Tasks 4 (badge rendering) and 6 (lifecycle) branch from 3b and can proceed in parallel. Task 5 (property panel) depends on task 4 (clicking the badge opens the panel). Task 7 (lookup queries) branches from task 1 and can proceed in parallel with 2–6. Task 8a (tag browser list) depends on tasks 1 and 7; task 8b (drill-down/navigation) depends on 8a. Task 9 (plugin API solidification) is a horizontal pass after all features are built. E2E tests are split into three groups that can each begin as their dependencies land: 10a after 3b+4, 10b after 5+6, 10c after 8b.
+Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independent and can proceed in parallel. Task 3a (autocomplete refactor) depends on both 1 and 2; task 3b (tag search/insertion) depends on 3a. Tasks 4 (badge rendering) and 6 (lifecycle) branch from 3b and can proceed in parallel. Task 5 (property panel) depends on task 4 (clicking the badge opens the panel). Task 7 (lookup queries) branches from task 1 and can proceed in parallel with 2–6. Task 8a (tag browser list) depends on tasks 1 and 7; task 8b (drill-down/navigation) depends on 8a. Task 9a (plugin API solidification) is a horizontal pass after all features are built. Task 9b (tag type registry migration to matrix) depends on 9a and is a separate session. E2E tests are split into three groups that can each begin as their dependencies land: 10a after 3b+4, 10b after 5+6, 10c after 8b+9b (tag browser queries change in 9b).
 
 ---
 
@@ -542,10 +560,10 @@ Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independen
 
 - **Reverse cleanup scope.** The `removeInlineRefFromDoc` utility handles the case where a tag is deleted from the identity face and the source row's inline text needs cleanup. It does NOT handle the case where a reference cell (table cell) references an owned target — that cleanup path (nulling the cell value) is a separate concern and may be deferred if table cell `own`-kind references are not actively used in Phase 5.
 
-- **Plugin API solidification is extractive, not speculative.** Task 9 documents and tightens what exists, rather than designing capabilities for hypothetical future plugins. The plugin API continues to evolve as new consumers are built.
+- **Plugin API solidification is extractive, not speculative.** Task 9a documents and tightens what exists, rather than designing capabilities for hypothetical future plugins. Task 9b (tag type registry → matrix migration) is a concrete consistency fix driven by the architecture principle that all user-managed data lives in matrixes. The plugin API continues to evolve as new consumers are built.
 
 ---
 
 ## Done criteria
 
-All fifteen task groups complete (1, 2, 3a, 3b, 4, 5, 6, 7, 8a, 8b, 9, 10a, 10b, 10c). The tag type registry tracks which matrixes are tag types. Inline references (including `#` tags) work in outline rows as well as notes. The `#` trigger in inline reference autocomplete searches tag types and creates owned aspect rows via `createDependentRow`. Tag badges render as colored pills with the tag type name, distinct from `@`-reference styling. The tag property panel opens on click, showing hydrated editable fields from the aspect row. Owned join lifecycle works end-to-end in both directions: remove tag from text → aspect row deleted; delete source row → all aspect rows cascade-deleted; delete aspect row from identity face → inline node removed from source text. Forward and reverse lookup queries enable navigation between source rows and their tags. The tag browser face lists all tag types with instance counts and provides reverse lookup navigation. The plugin API is documented and tightened based on patterns from four real consumers. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.
+All sixteen task groups complete (1, 2, 3a, 3b, 4, 5, 6, 7, 8a, 8b, 9a, 9b, 10a, 10b, 10c). The tag type registry tracks which matrixes are tag types — stored as a matrix (not a system table) for consistency with the architecture. Inline references (including `#` tags) work in outline rows as well as notes. The `#` trigger in inline reference autocomplete searches tag types and creates owned aspect rows via `createDependentRow`. Tag badges render as colored pills with the tag type name, distinct from `@`-reference styling. The tag property panel opens on click, showing hydrated editable fields from the aspect row. Owned join lifecycle works end-to-end in both directions: remove tag from text → aspect row deleted; delete source row → all aspect rows cascade-deleted; delete aspect row from identity face → inline node removed from source text. Forward and reverse lookup queries enable navigation between source rows and their tags. The tag browser face lists all tag types with instance counts and provides reverse lookup navigation. The plugin API is documented and tightened based on patterns from four real consumers: `faceTypes` field in `PluginDefinition`, inline references registered as a plugin, shared utilities extracted, lifecycle and cross-plugin contracts documented. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.

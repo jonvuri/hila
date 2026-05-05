@@ -139,6 +139,7 @@ export const outlinePlugin: PluginDefinition = {
   id: 'hila.outline',
   name: 'Outline',
   version: '1.0.0',
+  faceTypes: [outlineFaceTypeDefinition],
   matrixes: [
     {
       key: 'root',

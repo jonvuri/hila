@@ -13,7 +13,8 @@ import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
-import { InlineRefView } from '../notes/nodeviews/InlineRefView'
+import { extractTextFromPmDoc } from '../editor/pm-text'
+import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 
 const SAVE_DEBOUNCE_MS = 300
@@ -29,16 +30,7 @@ const wrapPlainText = (text: string): string =>
     ],
   })
 
-const unwrapPlainText = (docJson: unknown): string => {
-  const doc = docJson as { content?: { content?: { text?: string }[] }[] }
-  if (!doc.content) return ''
-  return (
-    doc.content
-      .flatMap((block) => block.content ?? [])
-      .map((node) => node.text ?? '')
-      .join('') ?? ''
-  )
-}
+const unwrapPlainText = (docJson: unknown): string => extractTextFromPmDoc(docJson)
 
 export type OutlineRowHandle = {
   focus: (pos?: number | 'start' | 'end') => void

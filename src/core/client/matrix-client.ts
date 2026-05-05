@@ -8,6 +8,10 @@ import type {
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
 import type { TraitHandle, TraitRow, TraitType } from '../traits'
 import type { TagType } from '../../tags/tag-types'
+import {
+  registerFaceType as registerFaceTypeLocal,
+  getFaceType as getFaceTypeLocal,
+} from '../face-registry'
 
 import { postMessage } from './worker-client'
 import { pendingRequests } from './matrix-client-promises'
@@ -59,6 +63,17 @@ export const deleteSubtree = (matrixId: number, key: Uint8Array) =>
 
 export const registerPlugin = async (definition: PluginDefinition): Promise<PluginContext> => {
   const { init, destroy: _destroy, ...registration } = definition
+
+  // Register face types on the main thread before sending to the worker.
+  // The worker-side registerPlugin also registers them in its own registry.
+  if (definition.faceTypes) {
+    for (const ft of definition.faceTypes) {
+      if (!getFaceTypeLocal(ft.id)) {
+        registerFaceTypeLocal(ft)
+      }
+    }
+  }
+
   const ctx = await workerCall('registerPlugin', { definition: registration })
   if (init) {
     await init(ctx)

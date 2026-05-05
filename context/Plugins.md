@@ -44,6 +44,53 @@ The plugin system should emerge from real features, not be designed in advance:
 
 Don't over-formalize the plugin registration, lifecycle, or inter-plugin communication APIs until the actual needs are understood from building real features.
 
+## Plugin lifecycle contract
+
+Based on the four real consumers (outline, notes, inline references, tags), the plugin lifecycle has three phases:
+
+### Registration (`registerPlugin`)
+
+A single atomic transaction that:
+
+1. **Registers face types** declared in `faceTypes` (both in the local face registry and the worker's). Face types must be registered before matrixes so that identity faces can be created.
+2. **Upserts the `plugins` row** (ID, name, version, enabled). Idempotent: re-registering the same plugin ID updates metadata but does not recreate existing matrixes.
+3. **Creates declared matrixes** (from `matrixes`), skipping any that already exist from a prior registration. Sets `source_plugin_id` on each. Creates a table face (identity face) for each new matrix.
+4. **Provisions declared traits** (from `traits`). Idempotent via `ensureTrait`.
+5. **Creates face bindings** (from `faceBindings`).
+6. **Stores the `matrixKey → matrixId` mapping** in the plugin's metadata column for recovery on re-registration.
+
+### Init
+
+The `init` hook runs on the main thread after the registration transaction commits. It receives a `PluginContext` with `matrixIds: Record<string, number>`.
+
+**What `init` can assume:** declared matrixes exist and have IDs in `ctx.matrixIds`; traits are provisioned; face configs are stored.
+
+**Typical uses:** seed initial data (outline/notes seed welcome rows), create system tables (tags ensures the `tag_types` table). The `init` hook interacts with the database through the async client layer (`matrix-client.ts`), not through direct database access.
+
+### Destroy
+
+The optional `destroy` hook cleans up subscriptions, timers, and in-memory state. Matrixes and traits are **not** cleaned up — they persist independently per the architecture. Unregistering a plugin removes its `plugins` row and sets `source_plugin_id` to NULL on its matrixes (via the FK ON DELETE SET NULL).
+
+### Dynamic resources
+
+Plugins can create additional matrixes at runtime via the op layer, outside of their `PluginDefinition`. The tags plugin does this: `createTagType` creates a new matrix dynamically. These matrixes are not declared in `PluginDefinition` and are not part of the idempotent registration flow. They are tracked through plugin-specific data (e.g. the `tag_types` registry).
+
+### Core infrastructure: the table face type
+
+The table face type (`hila.table`) is core infrastructure, not a plugin. It is registered first during app init, before any plugins. All plugins can depend on it being available — `registerPlugin` creates table-face identity faces for new matrixes. The table face type should never be declared in a plugin's `faceTypes`.
+
+## Cross-plugin interaction
+
+Plugins interact through shared data, not through direct API calls. The tags + inline references interaction is the canonical example:
+
+- **Inline references** (shared editor infrastructure, plugin ID `hila.inlineref`) provides the `#` autocomplete trigger, PM node rendering (`InlineRefView`), and join table sync (`syncInlineRefs`). It is registered as a plugin for identity but creates no matrixes — the ProseMirror plugin, node views, and sync logic are wired directly by consuming faces (outline rows, note editor).
+
+- **Tags** (plugin ID `hila.tags`) manages the tag type registry, provides the tag browser face and tag property panel.
+
+- **The interaction surface is data:** the `tag_types` table (read by the inline ref search provider to populate `#` autocomplete), the `joins` table (read/written by inline ref sync and tag lifecycle operations), and `mx_N_data` tables (tag matrixes read by the property panel and tag browser). The `tag-search-provider.ts` calls `getAllTagTypes()` and `createDependentRow()` via the client layer (worker ops), not via a tags plugin API.
+
+This pattern — coordination through shared data rather than plugin-to-plugin function calls — keeps plugins loosely coupled and composable through SQL.
+
 ## Design discipline
 
 These principles cost nothing in complexity today but keep the architecture clean and open to future evolution.
