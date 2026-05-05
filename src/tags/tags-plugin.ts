@@ -1,10 +1,11 @@
 import type { FaceTypeDefinition } from '../core/face-types'
 import type { PluginDefinition } from '../core/plugin-types'
 import { registerFaceType as registerFaceTypeLocal } from '../core/face-registry'
-import {
-  ensureTagTypesTable,
-  registerFaceType as registerFaceTypeWorker,
-} from '../core/client/matrix-client'
+import { registerFaceType as registerFaceTypeWorker } from '../core/client/matrix-client'
+
+let _registryMatrixId: number | null = null
+
+export const getRegistryMatrixId = (): number | null => _registryMatrixId
 
 export const tagBrowserFaceTypeDefinition: FaceTypeDefinition = {
   id: 'hila.tag-browser',
@@ -24,7 +25,18 @@ export const tagsPlugin: PluginDefinition = {
   name: 'Tags',
   version: '1.0.0',
   faceTypes: [tagBrowserFaceTypeDefinition],
-  matrixes: [],
+  matrixes: [
+    {
+      key: 'registry',
+      title: 'Tag Types',
+      columns: [
+        { name: 'name', type: 'TEXT' },
+        { name: 'matrix_id', type: 'INTEGER' },
+        { name: 'color', type: 'TEXT' },
+        { name: 'icon', type: 'TEXT' },
+      ],
+    },
+  ],
   traits: [],
   namedQueries: {
     tagsForRow: 'buildTagsForRowQuery(sourceMatrixId, sourceRowId)',
@@ -33,7 +45,7 @@ export const tagsPlugin: PluginDefinition = {
   },
   namedMutations: {},
   faceBindings: [],
-  init: async () => {
-    await ensureTagTypesTable()
+  init: async (ctx) => {
+    _registryMatrixId = ctx.matrixIds['registry']!
   },
 }

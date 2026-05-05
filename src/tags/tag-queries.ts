@@ -11,22 +11,26 @@
  * Tag browser list: all registered tag types with their instance counts.
  * Instance count is the number of own-kind joins targeting each tag type's matrix.
  */
-export const buildTagTypesWithCountsQuery = (): string => `
+export const buildTagTypesWithCountsQuery = (registryMatrixId: number): string => `
 SELECT tt.id, tt.name, tt.matrix_id, tt.color, tt.icon,
        (SELECT COUNT(*) FROM joins j
         WHERE j.target_matrix_id = tt.matrix_id AND j.kind = 'own') AS instance_count
-FROM tag_types tt
+FROM "mx_${registryMatrixId}_data" tt
 ORDER BY tt.name
 `
 
 /**
  * Forward lookup: all tag aspects attached to a specific source row,
- * with tag type metadata (name, color) from the `tag_types` registry.
+ * with tag type metadata (name, color) from the registry matrix.
  */
-export const buildTagsForRowQuery = (sourceMatrixId: number, sourceRowId: number): string => `
+export const buildTagsForRowQuery = (
+  registryMatrixId: number,
+  sourceMatrixId: number,
+  sourceRowId: number,
+): string => `
 SELECT j.target_matrix_id, j.target_row_id, tt.name AS tag_type_name, tt.color
 FROM joins j
-JOIN tag_types tt ON tt.matrix_id = j.target_matrix_id
+JOIN "mx_${registryMatrixId}_data" tt ON tt.matrix_id = j.target_matrix_id
 WHERE j.source_matrix_id = ${sourceMatrixId}
   AND j.source_row_id = ${sourceRowId}
   AND j.kind = 'own'

@@ -17,7 +17,7 @@ import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import { tagsPlugin } from './tags-plugin'
-import { ensureTagTypesTable, createTagType, getTagTypeByMatrixId } from './tag-types'
+import { createTagType, getTagTypeByMatrixId } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
 
@@ -30,7 +30,6 @@ describe('Tag property panel data layer', () => {
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
     await registerPlugin(db, testTagsPlugin)
-    ensureTagTypesTable(db)
   })
 
   afterEach(() => {

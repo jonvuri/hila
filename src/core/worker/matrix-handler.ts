@@ -27,7 +27,6 @@ import {
   deleteJoinByTarget as deleteJoinByTargetImpl,
 } from '../matrix'
 import {
-  ensureTagTypesTable as ensureTagTypesTableImpl,
   createTagType as createTagTypeImpl,
   getTagType as getTagTypeImpl,
   getAllTagTypes as getAllTagTypesImpl,
@@ -541,18 +540,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'deleteJoinByTargetSuccess', id, result: joinRow })
       } catch (err: unknown) {
         postMessage({ type: 'deleteJoinByTargetError', id, error: toError(err) })
-      }
-      break
-    }
-
-    case 'ensureTagTypesTable': {
-      const { id } = message
-      try {
-        const { db } = await sqliteWasm
-        ensureTagTypesTableImpl(db)
-        postMessage({ type: 'ensureTagTypesTableSuccess', id, result: undefined })
-      } catch (err: unknown) {
-        postMessage({ type: 'ensureTagTypesTableError', id, error: toError(err) })
       }
       break
     }

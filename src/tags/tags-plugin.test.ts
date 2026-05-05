@@ -11,7 +11,6 @@ import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import { tagsPlugin, tagBrowserFaceTypeDefinition } from './tags-plugin'
 import {
-  ensureTagTypesTable,
   createTagType,
   getTagType,
   getTagTypeById,
@@ -74,9 +73,10 @@ describe('Tags plugin', () => {
     expect(plugin!.version).toBe('1.0.0')
   })
 
-  test('registering the tags plugin does not create any matrixes', async () => {
+  test('registering the tags plugin creates the registry matrix', async () => {
     const ctx = await registerPlugin(db, testTagsPlugin)
-    expect(Object.keys(ctx.matrixIds)).toHaveLength(0)
+    expect(Object.keys(ctx.matrixIds)).toHaveLength(1)
+    expect(ctx.matrixIds['registry']).toBeTypeOf('number')
   })
 
   test('re-registering the tags plugin is idempotent', async () => {
@@ -99,7 +99,6 @@ describe('Tag type registry', () => {
     registerFaceType(tableFaceTypeDefinition)
 
     await registerPlugin(db, testTagsPlugin)
-    ensureTagTypesTable(db)
   })
 
   test('createTagType creates a tag type with a matrix', () => {
@@ -266,7 +265,7 @@ describe('Tag type registry', () => {
     expect(unchanged!.name).toBe('task')
   })
 
-  test('deleteTagType removes the tag_types row', () => {
+  test('deleteTagType removes the registry row', () => {
     const created = createTagType(db, 'task')
     deleteTagType(db, created.id)
 

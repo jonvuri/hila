@@ -65,7 +65,7 @@ The `init` hook runs on the main thread after the registration transaction commi
 
 **What `init` can assume:** declared matrixes exist and have IDs in `ctx.matrixIds`; traits are provisioned; face configs are stored.
 
-**Typical uses:** seed initial data (outline/notes seed welcome rows), create system tables (tags ensures the `tag_types` table). The `init` hook interacts with the database through the async client layer (`matrix-client.ts`), not through direct database access.
+**Typical uses:** seed initial data (outline/notes seed welcome rows), store declared matrix IDs for client-side access (tags caches `ctx.matrixIds['registry']`). The `init` hook interacts with the database through the async client layer (`matrix-client.ts`), not through direct database access.
 
 ### Destroy
 
@@ -73,7 +73,7 @@ The optional `destroy` hook cleans up subscriptions, timers, and in-memory state
 
 ### Dynamic resources
 
-Plugins can create additional matrixes at runtime via the op layer, outside of their `PluginDefinition`. The tags plugin does this: `createTagType` creates a new matrix dynamically. These matrixes are not declared in `PluginDefinition` and are not part of the idempotent registration flow. They are tracked through plugin-specific data (e.g. the `tag_types` registry).
+Plugins can create additional matrixes at runtime via the op layer, outside of their `PluginDefinition`. The tags plugin does this: `createTagType` creates a new matrix dynamically. These matrixes are not declared in `PluginDefinition` and are not part of the idempotent registration flow. They are tracked through the tags plugin's registry matrix (a declared matrix with columns `name`, `matrix_id`, `color`, `icon`).
 
 ### Core infrastructure: the table face type
 
@@ -87,7 +87,7 @@ Plugins interact through shared data, not through direct API calls. The tags + i
 
 - **Tags** (plugin ID `hila.tags`) manages the tag type registry, provides the tag browser face and tag property panel.
 
-- **The interaction surface is data:** the `tag_types` table (read by the inline ref search provider to populate `#` autocomplete), the `joins` table (read/written by inline ref sync and tag lifecycle operations), and `mx_N_data` tables (tag matrixes read by the property panel and tag browser). The `tag-search-provider.ts` calls `getAllTagTypes()` and `createDependentRow()` via the client layer (worker ops), not via a tags plugin API.
+- **The interaction surface is data:** the tag type registry matrix (read by the inline ref search provider to populate `#` autocomplete), the `joins` table (read/written by inline ref sync and tag lifecycle operations), and `mx_N_data` tables (tag matrixes read by the property panel and tag browser). The `tag-search-provider.ts` calls `getAllTagTypes()` and `createDependentRow()` via the client layer (worker ops), not via a tags plugin API.
 
 This pattern — coordination through shared data rather than plugin-to-plugin function calls — keeps plugins loosely coupled and composable through SQL.
 
@@ -358,7 +358,7 @@ On ProseMirror doc save, the plugin diffs inline reference nodes against the joi
 
 The tags plugin manages tag type creation and the tag-specific UX built on top of the inline references plugin's `#` mode.
 
-**Tag types are matrixes.** Each tag type (e.g. `#task`, `#movie-review`) is a regular matrix with a user-defined schema (columns for due date, priority, rating, etc.). The tags plugin maintains a lightweight registry of which matrixes are tag types, used to populate the `#` autocomplete. Creating a new tag type creates a new matrix; the matrix's identity face provides the aggregate "all instances" view (like a spreadsheet of all tasks).
+**Tag types are matrixes.** Each tag type (e.g. `#task`, `#movie-review`) is a regular matrix with a user-defined schema (columns for due date, priority, rating, etc.). The tags plugin declares a **registry matrix** (`key: 'registry'`, columns: `name`, `matrix_id`, `color`, `icon`) that tracks which matrixes are tag types, used to populate the `#` autocomplete. Creating a new tag type creates a new matrix and inserts a row into the registry; the tag type matrix's identity face provides the aggregate "all instances" view (like a spreadsheet of all tasks).
 
 **Aspect rows.** When a user types `#task` on an outline row, the inline references plugin calls `createDependentRow` to create a new row in the task matrix with an `own`-kind join. The task row is an aspect of the outline row -- it stores the task-specific fields (due date, priority, status) for that row. The outline row IS a task; the aspect row is where the task data lives.
 
@@ -367,8 +367,8 @@ The tags plugin manages tag type creation and the tag-specific UX built on top o
 **Named queries:**
 
 ```sql
--- All tag types (plugin-managed registry)
-SELECT * FROM tag_types;
+-- All tag types (from the registry matrix, where N is the registry matrix ID)
+SELECT * FROM "mx_N_data";
 
 -- Aspect row for a specific source row and tag type
 SELECT t.*

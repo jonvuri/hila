@@ -216,8 +216,6 @@ export const deleteJoinByTarget = (
   targetRowId: number,
 ): Promise<JoinRow | null> => workerCall('deleteJoinByTarget', { targetMatrixId, targetRowId })
 
-export const ensureTagTypesTable = (): Promise<void> => workerCall('ensureTagTypesTable', {})
-
 export const createTagType = (
   name: string,
   columns?: { name: string; type: string }[],

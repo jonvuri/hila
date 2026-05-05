@@ -430,24 +430,24 @@ With four real plugin consumers (outline, notes, inline references, tags), extra
 
 Convert the `tag_types` system table into a matrix declared in the tags plugin's `PluginDefinition`. The tag type registry is user-managed data (users create, rename, color, browse, and delete tag types), so it belongs in a matrix — not a hand-created system table. This brings the tags plugin into full consistency with the architecture: all user-managed data lives in matrixes. As a matrix, the registry gets automatic sync change tracking, participates in the standard query namespace, and can be viewed through any face type.
 
-- [ ] **Add `registry` matrix to tags plugin definition.** Declare a matrix with columns: `name` (TEXT), `matrix_id` (INTEGER), `color` (TEXT), `icon` (TEXT). The tags plugin now has one declared matrix (the registry) plus dynamically created per-tag-type matrixes.
+- [x] **Add `registry` matrix to tags plugin definition.** Declare a matrix with columns: `name` (TEXT), `matrix_id` (INTEGER), `color` (TEXT), `icon` (TEXT). The tags plugin now has one declared matrix (the registry) plus dynamically created per-tag-type matrixes.
 
-- [ ] **Remove `ensureTagTypesTable`.** Delete the DDL `CREATE TABLE IF NOT EXISTS tag_types ...`, the manual `installChangeTrackingTriggers` call, and the `ensureTagTypesTable` worker op. Remove from `matrix-types.ts`, `matrix-client.ts`, `matrix-handler.ts`, and the tags plugin's `init` hook.
+- [x] **Remove `ensureTagTypesTable`.** Delete the DDL `CREATE TABLE IF NOT EXISTS tag_types ...`, the manual `installChangeTrackingTriggers` call, and the `ensureTagTypesTable` worker op. Remove from `matrix-types.ts`, `matrix-client.ts`, `matrix-handler.ts`, and the tags plugin's `init` hook.
 
-- [ ] **Rewrite tag type CRUD operations.** Update `createTagType`, `getTagType`, `getTagTypeById`, `getTagTypeByMatrixId`, `getAllTagTypes`, `updateTagType`, `deleteTagType` in `src/tags/tag-types.ts` to operate on `mx_N_data` (the registry matrix) instead of the `tag_types` system table. The registry matrix ID must be passed through or discovered from plugin metadata.
+- [x] **Rewrite tag type CRUD operations.** Update `createTagType`, `getTagType`, `getTagTypeById`, `getTagTypeByMatrixId`, `getAllTagTypes`, `updateTagType`, `deleteTagType` in `src/tags/tag-types.ts` to operate on `mx_N_data` (the registry matrix) instead of the `tag_types` system table. The registry matrix ID is discovered from plugin metadata on the worker side and cached in a module-level variable on the main thread.
 
-- [ ] **Add application-level name uniqueness checking.** The `UNIQUE COLLATE NOCASE` constraint on `name` was enforced at the SQLite level in the system table. In the matrix, enforce uniqueness in the application layer: check for existing names before inserting.
+- [x] **Add application-level name uniqueness checking.** The `UNIQUE COLLATE NOCASE` constraint on `name` was enforced at the SQLite level in the system table. In the matrix, enforce uniqueness in the application layer: check for existing names (case-insensitive via `LOWER()`) before inserting in `createTagType` and before renaming in `updateTagType`.
 
-- [ ] **Make the registry matrix ID discoverable.** The tag type registry matrix ID (from `ctx.matrixIds['registry']`) must be available to all consumers: `tag-search-provider.ts`, `InlineRefView.tsx`, `TagBrowserFace.tsx`, `TagPropertyPanel.tsx`. Options: pass as a prop from `App.tsx`, or look up from the `plugins` table metadata at runtime.
+- [x] **Make the registry matrix ID discoverable.** Two discovery paths: (1) main thread — `getRegistryMatrixId()` exported from `tags-plugin.ts`, set in the `init` hook from `ctx.matrixIds['registry']`; (2) worker thread — `getRegistryMatrixIdFromDb(db)` in `tag-types.ts` queries the `plugins` table metadata.
 
-- [ ] **Update all queries** that reference `tag_types` table:
-  - `src/tags/tag-queries.ts`: `buildTagTypesWithCountsQuery`, `buildTagsForRowQuery` — change `FROM tag_types tt` to `FROM "mx_N_data" tt`.
-  - `src/notes/nodeviews/InlineRefView.tsx`: tag type metadata query — change `FROM tag_types` to the registry matrix.
-  - `src/tags/TagBrowserFace.tsx`: tag type list query.
+- [x] **Update all queries** that reference `tag_types` table:
+  - `src/tags/tag-queries.ts`: `buildTagTypesWithCountsQuery`, `buildTagsForRowQuery` — accept `registryMatrixId` parameter, use `FROM "mx_N_data" tt`.
+  - `src/editor/nodeviews/InlineRefView.tsx`: tag type metadata query — uses `getRegistryMatrixId()` to build the dynamic table name.
+  - `src/tags/TagBrowserFace.tsx`: tag type list query — passes `getRegistryMatrixId()` to query builder.
 
-- [ ] **Update all tests.** `tags-plugin.test.ts`, `tag-queries.test.ts`, `tag-search.test.ts`, `tag-property-panel.test.ts` — update to work with the registry matrix instead of the `tag_types` system table.
+- [x] **Update all tests.** `tags-plugin.test.ts`, `tag-queries.test.ts`, `tag-search.test.ts`, `tag-property-panel.test.ts` — removed `ensureTagTypesTable` calls, updated assertions for registry matrix.
 
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 10a. Playwright E2E: tag insertion and tag type creation
 

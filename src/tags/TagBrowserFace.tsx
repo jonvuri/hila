@@ -18,6 +18,7 @@ import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import { tagColorFromName, tagBadgeBackground } from './tag-color'
 import { buildTagTypesWithCountsQuery, buildTagInstancesQuery } from './tag-queries'
+import { getRegistryMatrixId } from './tags-plugin'
 
 type TagTypeRow = {
   id: number
@@ -71,7 +72,10 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
     null,
   )
 
-  const { result } = useQuery(() => buildTagTypesWithCountsQuery())
+  const { result } = useQuery(() => {
+    const regId = getRegistryMatrixId()
+    return regId != null ? buildTagTypesWithCountsQuery(regId) : ''
+  })
 
   const tagTypes = (): TagTypeRow[] => {
     const r = result()

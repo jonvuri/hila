@@ -5,6 +5,7 @@ import { useQuery } from '../../sql/useQuery'
 import { getColumns } from '../../core/client/matrix-client'
 import type { ColumnDefinition } from '../../core/matrix'
 import { tagColorFromName, tagBadgeBackground } from '../../tags/tag-color'
+import { getRegistryMatrixId } from '../../tags/tags-plugin'
 
 const MAX_KEY_PROPS = 2
 const LABEL_COLUMNS = new Set(['id', 'label', 'title', 'name'])
@@ -39,8 +40,9 @@ export const InlineRefView: Component = () => {
   // Resolve tag type metadata for own-kind refs
   const tagTypeQueryStr = createMemo(() => {
     const mid = targetMatrixId()
-    if (!isOwn() || mid == null) return ''
-    return `SELECT name, color FROM tag_types WHERE matrix_id = ${mid}`
+    const regId = getRegistryMatrixId()
+    if (!isOwn() || mid == null || regId == null) return ''
+    return `SELECT name, color FROM "mx_${regId}_data" WHERE matrix_id = ${mid}`
   })
   const { result: tagTypeResult } = useQuery(() => tagTypeQueryStr())
 

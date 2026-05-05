@@ -16,7 +16,7 @@ import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import { tagsPlugin } from './tags-plugin'
-import { ensureTagTypesTable, createTagType, updateTagType } from './tag-types'
+import { createTagType, updateTagType } from './tag-types'
 import {
   buildTagsForRowQuery,
   buildTaggedRowsQuery,
@@ -41,14 +41,15 @@ const execAll = (db: Database, sql: string): Record<string, unknown>[] => {
 describe('Tag lookup queries', () => {
   let db: Database
   let outlineMatrixId: number
+  let registryMatrixId: number
 
   beforeEach(async () => {
     const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
-    await registerPlugin(db, testTagsPlugin)
-    ensureTagTypesTable(db)
+    const ctx = await registerPlugin(db, testTagsPlugin)
+    registryMatrixId = ctx.matrixIds['registry']!
 
     outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
     ensureTrait(db, 'rank', outlineMatrixId)
@@ -75,7 +76,7 @@ describe('Tag lookup queries', () => {
       createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
       createDependentRow(db, outlineMatrixId, sourceRowId, reviewTag.matrixId)
 
-      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(registryMatrixId, outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(2)
@@ -91,7 +92,7 @@ describe('Tag lookup queries', () => {
     test('returns empty when row has no tags', () => {
       const sourceRowId = createSourceRow()
 
-      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(registryMatrixId, outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(0)
@@ -107,7 +108,7 @@ describe('Tag lookup queries', () => {
       const otherRowId = insertDataRow(db, otherMatrixId, { title: 'ref target' })
       insertJoin(db, outlineMatrixId, sourceRowId, otherMatrixId, otherRowId, 'ref')
 
-      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(registryMatrixId, outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)
@@ -119,7 +120,7 @@ describe('Tag lookup queries', () => {
       const sourceRowId = createSourceRow()
       const targetRowId = createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
 
-      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(registryMatrixId, outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)
@@ -267,7 +268,7 @@ describe('Tag lookup queries', () => {
       createDependentRow(db, outlineMatrixId, row2, taskTag.matrixId)
       createDependentRow(db, outlineMatrixId, row1, reviewTag.matrixId)
 
-      const sql = buildTagTypesWithCountsQuery()
+      const sql = buildTagTypesWithCountsQuery(registryMatrixId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(2)
@@ -279,7 +280,7 @@ describe('Tag lookup queries', () => {
     test('returns zero instance count for tag types with no instances', () => {
       createTagType(db, 'empty-tag')
 
-      const sql = buildTagTypesWithCountsQuery()
+      const sql = buildTagTypesWithCountsQuery(registryMatrixId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)
@@ -288,7 +289,7 @@ describe('Tag lookup queries', () => {
     })
 
     test('returns empty array when no tag types exist', () => {
-      const sql = buildTagTypesWithCountsQuery()
+      const sql = buildTagTypesWithCountsQuery(registryMatrixId)
       const results = execAll(db, sql)
       expect(results).toHaveLength(0)
     })
@@ -298,7 +299,7 @@ describe('Tag lookup queries', () => {
       createTagType(db, 'alpha')
       createTagType(db, 'middle')
 
-      const sql = buildTagTypesWithCountsQuery()
+      const sql = buildTagTypesWithCountsQuery(registryMatrixId)
       const results = execAll(db, sql)
       const names = results.map((r) => r.name)
       expect(names).toEqual(['alpha', 'middle', 'zebra'])
@@ -308,7 +309,7 @@ describe('Tag lookup queries', () => {
       const tag = createTagType(db, 'task')
       updateTagType(db, tag.id, { color: '#ff0000' })
 
-      const sql = buildTagTypesWithCountsQuery()
+      const sql = buildTagTypesWithCountsQuery(registryMatrixId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)
@@ -320,13 +321,13 @@ describe('Tag lookup queries', () => {
       const tag = createTagType(db, 'task')
       const row1 = createSourceRow()
 
-      const sqlBefore = buildTagTypesWithCountsQuery()
+      const sqlBefore = buildTagTypesWithCountsQuery(registryMatrixId)
       const before = execAll(db, sqlBefore)
       expect(before[0]!.instance_count).toBe(0)
 
       createDependentRow(db, outlineMatrixId, row1, tag.matrixId)
 
-      const sqlAfter = buildTagTypesWithCountsQuery()
+      const sqlAfter = buildTagTypesWithCountsQuery(registryMatrixId)
       const after = execAll(db, sqlAfter)
       expect(after[0]!.instance_count).toBe(1)
     })

@@ -183,10 +183,6 @@ export type MatrixOperationMap = {
     params: { targetMatrixId: number; targetRowId: number }
     result: JoinRow | null
   }
-  ensureTagTypesTable: {
-    params: Record<string, never>
-    result: void
-  }
   createTagType: {
     params: { name: string; columns?: { name: string; type: string }[] }
     result: TagType

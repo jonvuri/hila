@@ -19,7 +19,6 @@ import { extractInlineRefs } from '../editor/inlineref-sync'
 
 import { tagsPlugin } from './tags-plugin'
 import {
-  ensureTagTypesTable,
   createTagType,
   getTagType,
   getTagTypeByMatrixId,
@@ -38,7 +37,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
     await registerPlugin(db, testTagsPlugin)
-    ensureTagTypesTable(db)
   })
 
   afterEach(() => {
