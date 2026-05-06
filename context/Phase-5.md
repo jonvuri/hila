@@ -436,7 +436,7 @@ Convert the `tag_types` system table into a matrix declared in the tags plugin's
 
 - [x] **Rewrite tag type CRUD operations.** Update `createTagType`, `getTagType`, `getTagTypeById`, `getTagTypeByMatrixId`, `getAllTagTypes`, `updateTagType`, `deleteTagType` in `src/tags/tag-types.ts` to operate on `mx_N_data` (the registry matrix) instead of the `tag_types` system table. The registry matrix ID is discovered from plugin metadata on the worker side and cached in a module-level variable on the main thread.
 
-- [x] **Add application-level name uniqueness checking.** The `UNIQUE COLLATE NOCASE` constraint on `name` was enforced at the SQLite level in the system table. In the matrix, enforce uniqueness in the application layer: check for existing names (case-insensitive via `LOWER()`) before inserting in `createTagType` and before renaming in `updateTagType`.
+- [x] **Add application-level name uniqueness checking.** The `UNIQUE COLLATE NOCASE` constraint on `name` was enforced at the SQLite level in the system table. In the matrix, enforce uniqueness in the application layer: check for existing names (case-insensitive via `LOWER()`) before inserting in `createTagType` and before renaming in `updateTagType`. This is a temporary workaround — the [column identity and schema integrity](./Plan.md#column-identity-and-schema-integrity) work will restore engine-level constraint enforcement via column constraints declared in the plugin definition.
 
 - [x] **Make the registry matrix ID discoverable.** Two discovery paths: (1) main thread — `getRegistryMatrixId()` exported from `tags-plugin.ts`, set in the `init` hook from `ctx.matrixIds['registry']`; (2) worker thread — `getRegistryMatrixIdFromDb(db)` in `tag-types.ts` queries the `plugins` table metadata.
 

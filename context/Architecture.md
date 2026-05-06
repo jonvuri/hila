@@ -104,6 +104,16 @@ Traits are not plugins and have no independent agency. They are purpose-specific
 
 **The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references with lifecycle semantics. Each join entry carries a `kind` -- either `ref` (independent reference) or `own` (lifecycle-bound ownership). Owned joins enable cascade deletion: when a source row is deleted or the join is severed, the owned target row is automatically cleaned up. This is the core primitive that supports tags (as owned aspect rows), file attachments, and other lifecycle-bound cross-matrix patterns. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits.md#join).
 
+### Data boundary: matrixes vs system tables
+
+Matrixes are the substrate for **user-meaningful data** -- data whose meaning is intrinsic to the values themselves and that a human or agent could reasonably inspect, query, and modify through the standard matrix interface (identity face, SQL sandbox, ops). Plugin-managed data that users interact with (tag type registries, note content, configuration data with user-visible fields) belongs in matrixes, where it gets sync tracking, query sandbox access, identity faces, and the full programmability of the ops layer.
+
+**System tables** are the substrate for **algorithmic structures** whose correctness depends on invariants that only the core can maintain. Rank keys are opaque Lexorank blobs encoding tree position; closure tables are derived facts about hierarchy; join table entries carry cascade-deletion lifecycle semantics. These structures are meaningful only in the context of the algorithms that create and maintain them. They cannot be safely edited through a spreadsheet view, and exposing them as matrixes would invite modifications that corrupt structural invariants.
+
+The boundary test: **could a human or LLM agent look at this data in a table and understand it, edit it safely, and make useful queries against it?** If yes, it belongs in a matrix. If the data is an internal index whose semantics require understanding the underlying algorithm, it belongs in a system table.
+
+Full programmability does not require everything to be a matrix. System tables are accessible through the typed op interface (reads via query ops, writes via structural ops like `reparentRow`, `insertJoin`). The ops enforce the invariants that system table data requires. The distinction is about the nature of the data, not about access control.
+
 ### Plugins
 
 Plugins compose core matrixes, traits, and the join table to provide user-facing functionality. Each plugin can create matrixes, request traits for them, and register faces. See [Plugins](./Plugins.md) for the plugin model and concrete examples.
@@ -288,15 +298,27 @@ See [Plan - Phase 11](#phase-11----mcp-server-and-agent-interface) for the imple
 ### Matrix
 
 - **Matrixes** are the elemental data container of the app. A matrix is a typed SQLite data table with a schema (columns and types).
-- A matrix's data table is a normal, user-expandable SQLite rowid table. Columns use default settings (no extra constraints), but can otherwise contain any kind of data.
+- A matrix's data table is a normal, user-expandable SQLite rowid table. Columns can carry constraints (NOT NULL, UNIQUE, CHECK, foreign keys) declared at creation time, providing engine-level validation of data invariants. Plugins declare constraints on their columns to enforce schema contracts; user-added columns are unconstrained by default.
 - Each matrix has exactly one **identity face** that is lifecycle-bound to it. Creating a matrix creates its identity face; deleting the identity face deletes the matrix. The identity face is the matrix's representation in the outline and the full-authority surface for managing its contents.
-- Matrixes can be created by users, by plugins, or programmatically. The matrix registry may include metadata (such as a `source` or `plugin_id`) to track provenance.
+- Matrixes can be created by users, by plugins, or programmatically. The matrix registry includes metadata (`source_plugin_id`) to track provenance.
 
 ### Row
 
 - **Rows** are the addressable units within a matrix -- they correspond directly to rows in the matrix's SQLite data table.
 - Each row has a globally unique integer ID (random large integer, not sequential auto-increment) to support sync across devices without collisions. A row is globally identified by its `(matrix_id, row_id)` pair.
 - Rows carry typed column values as defined by the matrix's schema, including both literal columns (user-editable data) and formula columns (SQL expressions evaluated per-row).
+
+### Column identity
+
+Columns have a **stable integer ID** in the `matrix_columns` registry, independent of their human-readable name. Column names are mutable labels -- renaming a column does not change its identity. This parallels row identity: rows have stable IDs and mutable content; columns have stable IDs and mutable names.
+
+Stable column IDs enable **durable cross-references to columns** that survive renames. Any system feature that stores a reference to a column -- face slot bindings, sort/filter configurations, formula expressions -- references the column by its stable ID, not by name. The name is resolved from the ID at display and query time. This is the same pattern as inline references, where the ProseMirror document stores a `targetRowId` and resolves the display title reactively.
+
+**Column constraints.** Column definitions can carry SQLite constraints (`NOT NULL`, `UNIQUE`, `CHECK`, foreign keys) declared at creation time and stored in `matrix_columns`. When `createMatrix` builds the data table DDL, it compiles these constraints into the column definitions. Constraints provide engine-level validation regardless of write path -- ops, batch ops, MCP writes, and any future write mechanism all hit the same SQLite constraints.
+
+**Plugin schema contracts.** Columns declared by a plugin are marked in `matrix_columns` with a `managed_by` field recording the plugin ID. Schema mutation ops (`removeColumn`, `renameColumn`) refuse to modify plugin-managed columns unless the caller passes `force`. This protects plugin invariants without preventing power users or agents from overriding when they know what they're doing.
+
+**FK-backed column references.** Structured references to columns -- face slot bindings, sort configurations, filter configurations -- are stored in normalized tables with foreign keys to `matrix_columns` (by stable column ID). The FK carries `ON UPDATE CASCADE` for renames and appropriate `ON DELETE` behavior (e.g. `SET NULL` for slot bindings, `CASCADE` for sort configs, `RESTRICT` for formula dependencies). This means `renameColumn` only updates `matrix_columns.name` -- all downstream references are cascaded automatically by the SQLite FK engine. No application code enumerates consumers, and new features that reference columns automatically participate by creating their own FK-backed table. The convention is structural: **if you reference a column, FK to `matrix_columns`.**
 
 ### Query expression
 
@@ -305,7 +327,7 @@ SQLite is the user-facing computation engine. A **query expression** is a sandbo
 Query expressions appear at three granularities:
 
 - **Face query** -- the data source for a face. The identity face's query is implicitly `SELECT * FROM matrix_N`. Other faces have explicit queries that may filter, join, aggregate, or compute over one or more matrixes.
-- **Formula column** -- a matrix column whose value is a SQL expression evaluated per-row, with access to the current row's values. Formula columns appear alongside literal columns in query results but are not directly editable.
+- **Formula column** -- a matrix column whose value is a SQL expression evaluated per-row, with access to the current row's values. Formula columns appear alongside literal columns in query results but are not directly editable. Formulas reference other columns by stable column ID using `{{columnId}}` syntax rather than raw column names. At evaluation time, the system compiles `{{id}}` references to current column names before executing the SQL. In the formula editor, column references display as styled tokens showing the current column name (analogous to how inline refs display the current row title). A `formula_column_deps` table tracks which columns each formula depends on, with FK constraints that prevent removing a column used by a formula.
 - **Inline expression** -- a SQL expression embedded in text content that evaluates to a scalar value rendered inline.
 
 #### Sandboxing

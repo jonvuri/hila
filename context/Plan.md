@@ -275,6 +275,63 @@ The tags plugin, proving cross-plugin composition through SQL and the join table
 
 ---
 
+### Phase 5b -- Column identity and schema integrity
+
+Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 6 introduces predefined tag type columns. See [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale.
+
+**Work:**
+
+- **Stable column IDs.**
+
+  - Add an integer `id` primary key to `matrix_columns` (random ID, same pattern as row IDs and matrix IDs). The current PK `(matrix_id, name)` becomes a unique constraint.
+  - Add `id` to the `ColumnDefinition` type returned by `getColumns`.
+  - All existing code that uses column names for runtime SQL and display continues unchanged. The ID is used only for persisted cross-references.
+
+- **Column constraints.**
+
+  - Add a `constraints` field to `matrix_columns` (TEXT, nullable).
+  - Extend `MatrixSpec` column declarations in `PluginDefinition` with an optional `constraints` string.
+  - Update `createMatrix` to compile constraints into the data table DDL: `"name" TEXT NOT NULL UNIQUE COLLATE NOCASE` rather than bare `"name" TEXT`.
+  - Update the tags plugin's registry matrix definition to declare `name TEXT NOT NULL UNIQUE COLLATE NOCASE` and `matrix_id INTEGER NOT NULL`, restoring engine-level enforcement.
+  - Remove the application-level uniqueness check in `createTagType` (the constraint handles it; catch the SQLite error and surface a user-friendly message).
+
+- **Plugin column ownership.**
+
+  - Add a `managed_by` TEXT column to `matrix_columns` (nullable, references `plugins.id`).
+  - Set `managed_by` when `registerPlugin` creates columns from a plugin's `MatrixSpec`.
+  - `removeColumn` and `renameColumn` check `managed_by`: if non-null and the caller hasn't passed `force`, reject with an error identifying the owning plugin.
+
+- **Normalize face config column references.**
+
+  - Create `face_slot_bindings` table: `(face_config_id, slot_name, column_id)` with FK to `matrix_columns.id` using `ON DELETE SET NULL`.
+  - Create `face_sort_config` table: `(face_config_id, column_id, direction)` with FK using `ON DELETE CASCADE`.
+  - Create `face_filter_configs` table: `(face_config_id, column_id, operator, value)` with FK using `ON DELETE CASCADE`.
+  - Migrate existing face config JSON blobs (`slot_bindings`, `settings.sort`, `settings.filters`) to these tables. Keep `face_configs.query` and `face_configs.settings` for non-column-referencing settings.
+  - Update `applyFaceToMatrix`, `saveFaceConfig`, `getFaceConfig`, and `getFaceConfigsForMatrix` to read/write the normalized tables.
+  - Update the table face to persist sort/filter through the normalized tables instead of JSON settings.
+  - Update slot binding resolution (`resolveSlotBindings`) to work with column IDs, resolving to current names for SQL.
+
+- **Formula column references.**
+
+  - Define the `{{columnId}}` reference syntax for formula expressions.
+  - Create `formula_column_deps` table: `(formula_col_id, dep_col_id)` with FK to `matrix_columns.id` using `ON DELETE RESTRICT` on `dep_col_id`.
+  - Update `addFormulaColumn` to: parse `{{id}}` references from the formula, populate `formula_column_deps`, and validate by compiling to SQL and running a probe query.
+  - Implement `compileFormula(formula, columns)`: replace `{{id}}` with quoted column names.
+  - Update `buildTableQuery` and any formula evaluation paths to compile formulas before SQL execution.
+  - Update the formula dialog in the table face to be a token-aware input: typing a column name or selecting from autocomplete inserts a `{{id}}` reference displayed as a styled token. Raw text between tokens passes through as SQL operators and literals.
+
+- **Face query references (optional).**
+
+  - Extend the query sandbox compilation to resolve `{{columnId}}` references in face queries before evaluation.
+  - Face queries continue to accept raw column names for simplicity. The `{{id}}` syntax is available for users who want rename-safe queries.
+  - The face query editor can offer autocomplete that inserts references.
+
+**Testing:** Vitest for: stable column ID generation and persistence, column constraint enforcement (NOT NULL rejects null, UNIQUE rejects duplicates, CHECK rejects invalid values), plugin column ownership (reject rename/remove without force, allow with force), FK cascade behavior (rename column → slot bindings updated, remove column → sort/filter configs removed, remove column used by formula → rejected), formula compilation (`{{id}}` → column name resolution, round-trip through save/load), formula_column_deps population and RESTRICT behavior. Playwright for: formula dialog with token-aware input and autocomplete, column rename with active sort/filter (verify they survive), attempt to remove a formula-dependent column (verify error message).
+
+**Proves:** Columns have stable identity that survives renames. Plugin schema contracts are enforced at the engine level. Schema mutations automatically propagate through FK cascades without hand-maintained consumer lists. Formula column references are durable across renames. The system is safe for MCP agents and external tools to mutate schemas with clear feedback on constraint violations and dependency impacts.
+
+---
+
 ### Phase 6 -- Tasks and movie reviews (tag aspects in practice)
 
 Concrete use of the tag system for two different real-world patterns. Each tag type is a matrix whose rows are created as owned aspects of source rows via `#`-tagging.
@@ -540,6 +597,32 @@ Options:
 
 Recommendation: Defer a general solution. Start with ProseMirror's built-in undo for text edits (Phase 2). Address structural undo when the need is acute (likely Phase 4-5). Note that the sync changelog (Phase 3) provides per-row version history that could inform an undo mechanism.
 
+### Column identity and schema integrity
+
+Columns currently have no stable identity independent of their name -- renaming a column silently breaks face slot bindings, sort/filter configurations, formula expressions, and plugin expectations. This cross-cutting concern introduces stable column identity and FK-backed dependency tracking so that schema mutations are safe, automatic, and extensible. See [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale.
+
+**Stable column IDs.** Add an integer `id` primary key to `matrix_columns`. The current PK `(matrix_id, name)` becomes a unique constraint. All internal references to columns shift from name-based to ID-based. Column names become mutable labels, exactly as row titles are mutable labels on stable row IDs.
+
+**Column constraints.** Add a `constraints` field to `matrix_columns` and to `MatrixSpec` column declarations in `PluginDefinition`. When `createMatrix` builds the data table DDL, compile constraints into the column definition (e.g. `"name" TEXT NOT NULL UNIQUE COLLATE NOCASE`). This restores engine-level enforcement that was lost when the tag type registry migrated from a system table to a matrix (Phase 5 stage 9b), and generalizes it to all plugin matrixes.
+
+**Plugin column ownership.** Add a `managed_by` field to `matrix_columns` recording the plugin ID for plugin-declared columns. `removeColumn` and `renameColumn` refuse to modify plugin-managed columns unless `force` is passed. User-added columns have `managed_by = NULL`.
+
+**Normalize column references with FKs.** Extract structured column references from JSON blobs into normalized tables with FK to `matrix_columns.id`:
+
+- `face_slot_bindings` (face_config_id, slot_name, column_id) -- FK with `ON UPDATE CASCADE`, `ON DELETE SET NULL`.
+- `face_sort_config` (face_config_id, column_id, direction) -- FK with `ON UPDATE CASCADE`, `ON DELETE CASCADE`.
+- `face_filter_configs` (face_config_id, column_id, operator, value) -- FK with `ON UPDATE CASCADE`, `ON DELETE CASCADE`.
+
+With these tables, `renameColumn` only updates `matrix_columns.name` -- all downstream references cascade automatically through the SQLite FK engine. New features that reference columns create their own FK-backed tables and automatically participate in column mutation cascades with no changes to `renameColumn` or `removeColumn`.
+
+**Formula column references.** Replace raw column names in formula expressions with `{{columnId}}` reference syntax. At evaluation time, `{{id}}` references are compiled to current column names before SQL execution. The formula editor renders column references as styled tokens (similar to inline ref badges) with autocomplete for column names. A `formula_column_deps` table tracks formula → column dependencies via FK with `ON DELETE RESTRICT`, preventing removal of columns that formulas depend on.
+
+**Face query references.** Face queries can optionally use the `{{columnId}}` reference syntax for rename-safe user-authored SQL. The query sandbox compiles references before evaluation. Raw column names remain valid for simplicity; the UI encourages references via autocomplete.
+
+**Migration scope.** This work touches `matrix_columns` schema, `createMatrix`, `renameColumn`, `removeColumn`, `addFormulaColumn`, face config storage, slot binding resolution, table face sort/filter persistence, and the formula dialog. It does not affect the runtime read/write hot paths (`updateRow`, `SELECT *` result access, `insertRow`) -- these continue to use column names as SQL identifiers. The column ID is a persistence and dependency-tracking concern, not a runtime data-access concern.
+
+This work is implemented in [Phase 5b](#phase-5b----column-identity-and-schema-integrity).
+
 ### Search
 
 Full-text search across all matrix content. SQLite FTS5 is the natural choice:
@@ -577,6 +660,10 @@ Phase 4b (Inline Refs,        │
 Phase 5 (Tags)    Phase 11    │
   │               (Ops, Batch,│
   ▼               MCP server) │
+Phase 5b (Column             │
+  Identity + Schema)          │
+  │                           │
+  ▼                           │
 Phase 6 (Tasks +              │
   Movie Reviews)              │
   │                           │
@@ -591,7 +678,7 @@ Phase 10 (Live sync, files, Dropbox) ◄── Phase 3
    independent of Phases 4-9)
 ```
 
-Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it. Phase 11 (op system, batch ops, MCP server) can proceed any time after Phase 4b -- it formalizes the op registry that already exists, adds the batch executor and Markdown I/O layer, and ships the MCP server. Earlier is better: agent access benefits all subsequent phases.
+Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 5b (column identity and schema integrity) follows Phase 5 -- it introduces stable column IDs, column constraints, FK-backed column references, and formula column references. It addresses gaps exposed by Phase 5's tag registry migration and should land before Phase 6, whose predefined tag type columns (status, due_date, priority) are the first heavy users of plugin schema contracts. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5b. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it. Phase 11 (op system, batch ops, MCP server) can proceed any time after Phase 4b -- it formalizes the op registry that already exists, adds the batch executor and Markdown I/O layer, and ships the MCP server. Earlier is better: agent access benefits all subsequent phases.
 
 ---
 
@@ -632,6 +719,18 @@ The initial build covers elemental components (buttons, inputs, tabs, badges, co
 The existing `src/global.css` application styles have not been migrated to the token system yet. This migration will happen incrementally as face components are rebuilt.
 
 ---
+
+## Resolved design decisions
+
+Decisions that emerged from design exploration and are now settled.
+
+1. **Column identity model.** Columns have stable integer IDs independent of their names, paralleling the row identity model. Column names are mutable labels. All durable cross-references to columns (slot bindings, sort/filter configs, formula expressions) use stable column IDs, not names. Column references in formulas and face queries use `{{columnId}}` syntax compiled to current names at evaluation time. See [Architecture - Column identity](./Architecture.md#column-identity) and [Column identity and schema integrity](#column-identity-and-schema-integrity) above.
+
+2. **Column dependency tracking via FK cascades.** Rather than a hand-maintained scan function or subscriber registry, column references are stored in normalized tables with foreign keys to `matrix_columns`. SQLite's `ON UPDATE CASCADE` and `ON DELETE` handling propagates schema mutations automatically. New features that reference columns create their own FK-backed tables and participate without any changes to `renameColumn` / `removeColumn`. The convention is structural, not procedural.
+
+3. **Data boundary: matrixes vs system tables.** User-meaningful data belongs in matrixes; algorithmic structures belong in system tables. The test: could a human or agent inspect, query, and safely modify this data through a spreadsheet view? Tag type registries, note content, and plugin configuration → matrixes. Rank keys, closure tables, join table → system tables. Full programmability is achieved through the typed op interface, not by requiring everything to be a matrix. See [Architecture - Data boundary](./Architecture.md#data-boundary-matrixes-vs-system-tables).
+
+4. **Plugin schema contracts.** Plugins declare column constraints (NOT NULL, UNIQUE, CHECK, FK) in their matrix column definitions. These compile to SQLite DDL constraints on the data table, providing engine-level invariant enforcement regardless of write path. Plugin-declared columns are marked with `managed_by` in `matrix_columns` to prevent accidental schema mutations.
 
 ## Open design questions
 
