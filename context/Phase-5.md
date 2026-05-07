@@ -472,20 +472,20 @@ E2E coverage for the `#` autocomplete flow and inline tag type creation. Depends
 
 E2E coverage for the tag property panel and all three owned join lifecycle directions. Depends on stages 5 and 6.
 
-- [ ] **Tag property panel tests:**
+- [x] **Tag property panel tests:**
   - Click a `#` tag badge in the outline, verify the property panel opens.
   - Edit a field in the property panel, verify the change persists.
   - Close the panel (Escape), verify ProseMirror focus returns to the editor.
   - Open the tag's identity face (table view), verify the same data is shown.
   - Edit the aspect row in the table face, return to the outline, verify the tag badge reflects changes (if key properties are shown).
 
-- [ ] **Tag lifecycle tests:**
+- [x] **Tag lifecycle tests:**
   - Insert a `#task` tag on an outline row. Delete the tag badge from the text (Backspace). Save. Verify the aspect row no longer exists in the task matrix.
   - Insert `#task` and `#review` tags on an outline row. Delete the outline row. Verify both aspect rows are cascade-deleted.
   - Create a `#task` tag on an outline row. Open the task matrix's identity face. Delete the aspect row from the table face. Return to the outline. Verify the `#task` badge is removed from the outline row's text.
 
-- [ ] Run `pnpm test:e2e` — all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+- [x] Run `pnpm test:e2e` — all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
 
 ## 10c. Playwright E2E: tag browser and cross-plugin interaction
 

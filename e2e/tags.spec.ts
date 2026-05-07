@@ -313,3 +313,378 @@ test.describe('Tag type creation via autocomplete', () => {
     expect(tagTypeExists).toBe(true)
   })
 })
+
+// =============================================================================
+// 3. Tag property panel tests
+// =============================================================================
+
+test.describe('Tag property panel', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForOutline(page)
+  })
+
+  test('clicking a tag badge opens the property panel', async ({ page }) => {
+    const { matrixId } = await createTagTypeViaAPI(page, 'task')
+
+    await page.evaluate(
+      async ({ matrixId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.addColumn(matrixId, 'status', 'TEXT', 'text')
+      },
+      { matrixId },
+    )
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+
+    const tagBadge = newEditor.locator('.inlineref-own')
+    await tagBadge.click()
+
+    const panel = page.locator('.tag-property-panel')
+    await expect(panel).toBeVisible({ timeout: 5000 })
+    await expect(panel.locator('.tag-panel-badge')).toContainText('#task')
+  })
+
+  test('editing a field in the property panel persists the change', async ({ page }) => {
+    const { matrixId } = await createTagTypeViaAPI(page, 'task')
+
+    await page.evaluate(
+      async ({ matrixId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.addColumn(matrixId, 'status', 'TEXT', 'text')
+      },
+      { matrixId },
+    )
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+
+    const tagBadge = newEditor.locator('.inlineref-own')
+    await tagBadge.click()
+
+    const panel = page.locator('.tag-property-panel')
+    await expect(panel).toBeVisible({ timeout: 5000 })
+
+    const labelField = panel.locator('.tag-panel-field').filter({ hasText: 'label' }).locator('.tag-panel-field-input')
+    await expect(labelField).toBeVisible({ timeout: 3000 })
+    await labelField.fill('my-task')
+    await labelField.blur()
+
+    await page.waitForTimeout(500)
+
+    const result = await runSQL(
+      page,
+      `SELECT label FROM "mx_${matrixId}_data" LIMIT 1`,
+    )
+    expect(result).toContain('my-task')
+  })
+
+  test('pressing Escape closes the panel and returns focus to the editor', async ({ page }) => {
+    await createTagTypeViaAPI(page, 'task')
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+
+    const tagBadge = newEditor.locator('.inlineref-own')
+    await tagBadge.click()
+
+    const panel = page.locator('.tag-property-panel')
+    await expect(panel).toBeVisible({ timeout: 5000 })
+    // Allow the deferred event listeners (setTimeout 0) to attach
+    await page.waitForTimeout(100)
+
+    await page.keyboard.press('Escape')
+    await expect(panel).not.toBeVisible({ timeout: 3000 })
+
+    await newEditor.click()
+    await expect(async () => {
+      const focused = await page.evaluate(() => {
+        const el = document.activeElement
+        return el?.closest('.ProseMirror') !== null
+      })
+      expect(focused).toBe(true)
+    }).toPass({ timeout: 3000 })
+  })
+
+  test('tag data is consistent between property panel and identity face (table view)', async ({
+    page,
+  }) => {
+    const { matrixId } = await createTagTypeViaAPI(page, 'task')
+
+    await page.evaluate(
+      async ({ matrixId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.addColumn(matrixId, 'priority', 'TEXT', 'text')
+      },
+      { matrixId },
+    )
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+
+    const tagBadge = newEditor.locator('.inlineref-own')
+    await tagBadge.click()
+
+    const panel = page.locator('.tag-property-panel')
+    await expect(panel).toBeVisible({ timeout: 5000 })
+
+    const fieldInput = panel.locator('.tag-panel-field-input').first()
+    await expect(fieldInput).toBeVisible({ timeout: 3000 })
+    await fieldInput.fill('high')
+    await fieldInput.blur()
+    await page.waitForTimeout(500)
+
+    await page.keyboard.press('Escape')
+    await expect(panel).not.toBeVisible({ timeout: 3000 })
+
+    await switchToTags(page)
+    const tagTypeRow = page.locator('.tag-type-row', { hasText: '#task' })
+    await expect(tagTypeRow).toBeVisible({ timeout: 5000 })
+    await tagTypeRow.click()
+
+    await page.getByTestId('view-all-in-table').click()
+
+    await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
+
+    await expect(async () => {
+      const cellTexts = await page.locator('table tbody td').allTextContents()
+      expect(cellTexts.some((t) => t.includes('high'))).toBe(true)
+    }).toPass({ timeout: 5000 })
+  })
+
+  test('editing the aspect row in the table face is reflected in the tag badge key props', async ({
+    page,
+  }) => {
+    const { matrixId } = await createTagTypeViaAPI(page, 'task')
+
+    await page.evaluate(
+      async ({ matrixId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.addColumn(matrixId, 'priority', 'TEXT', 'text')
+      },
+      { matrixId },
+    )
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await page.waitForTimeout(500)
+
+    await switchToTags(page)
+    const tagTypeRow = page.locator('.tag-type-row', { hasText: '#task' })
+    await expect(tagTypeRow).toBeVisible({ timeout: 5000 })
+    await tagTypeRow.click()
+    await page.getByTestId('view-all-in-table').click()
+    await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
+
+    const priorityCol = page.locator('th', { hasText: 'priority' })
+    await expect(priorityCol).toBeVisible({ timeout: 5000 })
+    const colIndex = await priorityCol.evaluate((el) => {
+      const ths = Array.from(el.closest('tr')!.querySelectorAll('th'))
+      return ths.indexOf(el)
+    })
+
+    const cell = page.locator('table tbody tr').first().locator('td').nth(colIndex)
+    await cell.dblclick()
+    const input = page.locator('table tbody td input')
+    await expect(input).toBeVisible({ timeout: 3000 })
+    await input.fill('urgent')
+    await page.keyboard.press('Enter')
+    await page.waitForTimeout(500)
+
+    await page.locator('.view-tab', { hasText: /^Outline$/ }).click()
+    await waitForOutline(page)
+
+    await expect(async () => {
+      const badge = page.locator('.inlineref-own').first()
+      const badgeText = await badge.textContent()
+      expect(badgeText).toContain('urgent')
+    }).toPass({ timeout: 5000 })
+  })
+})
+
+// =============================================================================
+// 4. Tag lifecycle tests
+// =============================================================================
+
+test.describe('Tag lifecycle', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForOutline(page)
+  })
+
+  test('deleting a tag badge from text removes the aspect row', async ({ page }) => {
+    const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'task')
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    // Wait for the debounced save + syncInlineRefs to materialize the join
+    await page.waitForTimeout(1000)
+
+    const beforeCount = await page.evaluate(async (mid: number) => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${mid}_data"`)
+      return (rows[0] as { cnt: number }).cnt
+    }, tagMatrixId)
+    expect(beforeCount).toBe(1)
+
+    // Select all content in the editor and delete it (removing the tag badge)
+    await newEditor.click()
+    await page.keyboard.press('Meta+a')
+    await page.keyboard.press('Backspace')
+
+    // Wait for debounced save (300ms) + syncInlineRefs cascade deletion
+    await expect(async () => {
+      const afterCount = await page.evaluate(async (mid: number) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const rows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${mid}_data"`)
+        return (rows[0] as { cnt: number }).cnt
+      }, tagMatrixId)
+      expect(afterCount).toBe(0)
+    }).toPass({ timeout: 10000 })
+  })
+
+  test('deleting an outline row cascade-deletes both tag aspect rows', async ({ page }) => {
+    const { matrixId: taskMatrixId } = await createTagTypeViaAPI(page, 'task')
+    const { matrixId: reviewMatrixId } = await createTagTypeViaAPI(page, 'review')
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own').first()).toBeVisible({ timeout: 5000 })
+    await page.waitForTimeout(300)
+
+    await page.keyboard.press('End')
+    await page.keyboard.type(' ')
+    await typeHashTag(page, 'review')
+    await expect(async () => {
+      const count = await newEditor.locator('.inlineref-own').count()
+      expect(count).toBe(2)
+    }).toPass({ timeout: 5000 })
+    // Wait for the debounced save to persist the document and materialize joins
+    await page.waitForTimeout(1500)
+
+    const beforeCounts = await page.evaluate(
+      async ({ taskMid, reviewMid }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const taskRows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${taskMid}_data"`)
+        const reviewRows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${reviewMid}_data"`)
+        return {
+          task: (taskRows[0] as { cnt: number }).cnt,
+          review: (reviewRows[0] as { cnt: number }).cnt,
+        }
+      },
+      { taskMid: taskMatrixId, reviewMid: reviewMatrixId },
+    )
+    expect(beforeCounts.task).toBe(1)
+    expect(beforeCounts.review).toBe(1)
+
+    // Find the outline row that has the tags (the one with own-kind join entries)
+    const rowInfo = await page.evaluate(
+      async ({ taskMid }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const joins = await sql.execQuery(
+          `SELECT source_matrix_id, source_row_id FROM joins WHERE target_matrix_id = ${taskMid} AND kind = 'own' LIMIT 1`,
+        )
+        if (joins.length === 0) return null
+        const j = joins[0] as { source_matrix_id: number; source_row_id: number }
+        return { matrixId: j.source_matrix_id, rowId: j.source_row_id }
+      },
+      { taskMid: taskMatrixId },
+    )
+    expect(rowInfo).not.toBeNull()
+
+    await page.evaluate(
+      async ({ matrixId, rowId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.deleteRow(matrixId, rowId)
+      },
+      rowInfo!,
+    )
+
+    await page.waitForTimeout(1000)
+
+    await expect(async () => {
+      const afterCounts = await page.evaluate(
+        async ({ taskMid, reviewMid }) => {
+          // @ts-expect-error -- resolved by Vite dev server at runtime
+          const sql = await import('/src/core/client/sql-client.ts')
+          const taskRows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${taskMid}_data"`)
+          const reviewRows = await sql.execQuery(
+            `SELECT COUNT(*) AS cnt FROM "mx_${reviewMid}_data"`,
+          )
+          return {
+            task: (taskRows[0] as { cnt: number }).cnt,
+            review: (reviewRows[0] as { cnt: number }).cnt,
+          }
+        },
+        { taskMid: taskMatrixId, reviewMid: reviewMatrixId },
+      )
+      expect(afterCounts.task).toBe(0)
+      expect(afterCounts.review).toBe(0)
+    }).toPass({ timeout: 10000 })
+  })
+
+  test('deleting an aspect row from the table face removes the tag badge from outline text', async ({
+    page,
+  }) => {
+    const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'task')
+
+    const newEditor = await createNewOutlineRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    // Wait for debounced save to persist the document
+    await page.waitForTimeout(1000)
+
+    // Find the aspect row ID from the tag matrix
+    const aspectRowId = await page.evaluate(async (mid: number) => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery(`SELECT id FROM "mx_${mid}_data" LIMIT 1`)
+      return (rows[0] as { id: number }).id
+    }, tagMatrixId)
+
+    // Delete the aspect row via deleteRow (simulates deletion from the identity face)
+    await page.evaluate(
+      async ({ matrixId, rowId }) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const client = await import('/src/core/client/matrix-client.ts')
+        await client.deleteRow(matrixId, rowId)
+      },
+      { matrixId: tagMatrixId, rowId: aspectRowId },
+    )
+
+    await page.waitForTimeout(1000)
+
+    // Verify the aspect row was deleted from the database
+    await expect(async () => {
+      const cnt = await page.evaluate(async (mid: number) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const rows = await sql.execQuery(`SELECT COUNT(*) AS cnt FROM "mx_${mid}_data"`)
+        return (rows[0] as { cnt: number }).cnt
+      }, tagMatrixId)
+      expect(cnt).toBe(0)
+    }).toPass({ timeout: 5000 })
+
+    // The reverse lifecycle should remove the inline tag node from the source text
+    await expect(async () => {
+      const tagBadges = await page.locator('.inlineref-own:not(.inlineref-ghost)').count()
+      expect(tagBadges).toBe(0)
+    }).toPass({ timeout: 10000 })
+  })
+})

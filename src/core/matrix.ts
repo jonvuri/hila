@@ -995,7 +995,9 @@ export const createDependentRow = (
   columnValues: Record<string, unknown> = {},
 ): number => {
   return withTransaction(db, () => {
-    const targetRowId = insertDataRow(db, targetMatrixId, columnValues)
+    const { rowId: targetRowId } = insertRow(db, targetMatrixId, {
+      values: columnValues,
+    })
 
     insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'own')
 
