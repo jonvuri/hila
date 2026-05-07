@@ -277,6 +277,8 @@ The tags plugin, proving cross-plugin composition through SQL and the join table
 
 ### Phase 5b -- Column identity and schema integrity
 
+> Detailed task list: [Phase-5b.md](Phase-5b.md)
+
 Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 6 introduces predefined tag type columns. See [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale.
 
 **Work:**
