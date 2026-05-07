@@ -453,20 +453,20 @@ Convert the `tag_types` system table into a matrix declared in the tags plugin's
 
 E2E coverage for the `#` autocomplete flow and inline tag type creation. Depends on stages 3b and 4.
 
-- [ ] **Tag insertion tests:**
+- [x] **Tag insertion tests:**
   - In an outline row, type `#`, verify autocomplete opens.
   - Type a tag type name that exists, select it, verify a colored tag badge is inserted.
   - Verify the aspect row is created in the tag matrix (check via admin browser or SQL runner).
   - In a note body, type `#`, verify autocomplete opens and tag insertion works identically.
 
-- [ ] **Tag type creation tests:**
+- [x] **Tag type creation tests:**
   - Type `#newtype` where "newtype" is not an existing tag type.
   - Select "Create 'newtype' tag type" from autocomplete.
   - Verify the tag type is created (appears in tag browser).
   - Verify the tag badge is inserted with the new tag type's name.
 
-- [ ] Run `pnpm test:e2e` — all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+- [x] Run `pnpm test:e2e` — all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
 
 ## 10b. Playwright E2E: property panel and owned join lifecycle
 
