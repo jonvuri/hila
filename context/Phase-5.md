@@ -491,20 +491,20 @@ E2E coverage for the tag property panel and all three owned join lifecycle direc
 
 E2E coverage for the tag browser's full interactive flow and cross-plugin data consistency. Depends on stage 8b.
 
-- [ ] **Tag browser tests:**
+- [x] **Tag browser tests:**
   - Open the tag browser. Verify it lists all registered tag types.
   - Create tags on several rows. Verify instance counts update.
   - Select a tag type, verify its instances are listed with source row context.
   - Click a tag instance, verify navigation to the source row.
   - Create a new tag type from the tag browser UI. Verify it appears in the list.
 
-- [ ] **Cross-plugin interaction tests:**
+- [x] **Cross-plugin interaction tests:**
   - Create a note with `#task` in its body text. Verify the task aspect row is created.
   - Open the tag browser, select the task tag type, verify the note appears as a tagged row.
   - Edit the task's properties from the note's inline tag panel. Open the tag browser, verify the updated properties are shown.
 
-- [ ] Run `pnpm test:e2e` — all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+- [x] Run `pnpm test:e2e` — all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
 
 ---
 

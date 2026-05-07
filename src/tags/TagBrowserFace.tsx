@@ -201,9 +201,14 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
 
   createEffect(() => {
     if (ctxMenu()) {
-      const handleClick = () => setCtxMenu(null)
-      document.addEventListener('click', handleClick)
-      onCleanup(() => document.removeEventListener('click', handleClick))
+      const handleClickOutside = (e: MouseEvent) => {
+        const el = document.querySelector('.tag-type-context-menu')
+        if (!el || !el.contains(e.target as Node)) {
+          setCtxMenu(null)
+        }
+      }
+      document.addEventListener('mousedown', handleClickOutside)
+      onCleanup(() => document.removeEventListener('mousedown', handleClickOutside))
     }
   })
 
@@ -507,8 +512,9 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
             <button
               class="tag-type-context-item"
               onClick={() => {
+                const tt = menu().tagType
                 setCtxMenu(null)
-                setRenaming({ id: menu().tagType.id, value: menu().tagType.name })
+                setRenaming({ id: tt.id, value: tt.name })
               }}
               data-testid="ctx-rename"
             >
@@ -517,10 +523,11 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
             <button
               class="tag-type-context-item"
               onClick={() => {
+                const tt = menu().tagType
                 setCtxMenu(null)
                 setColorPicking({
-                  id: menu().tagType.id,
-                  value: menu().tagType.color ?? '#7c3aed',
+                  id: tt.id,
+                  value: tt.color ?? '#7c3aed',
                 })
               }}
               data-testid="ctx-change-color"
@@ -530,8 +537,9 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
             <button
               class="tag-type-context-item"
               onClick={() => {
+                const mid = menu().tagType.matrix_id
                 setCtxMenu(null)
-                props.onOpenTableFace?.(menu().tagType.matrix_id)
+                props.onOpenTableFace?.(mid)
               }}
               data-testid="ctx-open-table"
             >
@@ -541,8 +549,9 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
             <button
               class="tag-type-context-item tag-type-context-danger"
               onClick={() => {
+                const id = menu().tagType.id
                 setCtxMenu(null)
-                void handleDeleteTagType(menu().tagType.id)
+                void handleDeleteTagType(id)
               }}
               data-testid="ctx-delete"
             >
