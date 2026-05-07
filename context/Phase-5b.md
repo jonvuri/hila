@@ -90,9 +90,9 @@ Add engine-level constraint enforcement for column definitions and protect plugi
 
 ### Column constraints
 
-- [ ] **Add `constraints` column to `matrix_columns`.** TEXT, nullable. Stores the raw constraint clause as a string (e.g. `'NOT NULL UNIQUE COLLATE NOCASE'`). Migration: `ALTER TABLE matrix_columns ADD COLUMN constraints TEXT`.
+- [x] **Add `constraints` column to `matrix_columns`.** TEXT, nullable. Stores the raw constraint clause as a string (e.g. `'NOT NULL UNIQUE COLLATE NOCASE'`). Migration: `ALTER TABLE matrix_columns ADD COLUMN constraints TEXT`.
 
-- [ ] **Extend `MatrixSpec` column declarations.** Add optional `constraints` field:
+- [x] **Extend `MatrixSpec` column declarations.** Add optional `constraints` field:
   ```typescript
   type MatrixSpec = {
     key: string
@@ -101,9 +101,9 @@ Add engine-level constraint enforcement for column definitions and protect plugi
   }
   ```
 
-- [ ] **Update `ColumnDefinition` type** to include `constraints: string | null`.
+- [x] **Update `ColumnDefinition` type** to include `constraints: string | null`.
 
-- [ ] **Update `createMatrix`** to compile constraints into the data table DDL. When a column has constraints, the DDL becomes `"colname" TYPE CONSTRAINTS` instead of bare `"colname" TYPE`:
+- [x] **Update `createMatrix`** to compile constraints into the data table DDL. When a column has constraints, the DDL becomes `"colname" TYPE CONSTRAINTS` instead of bare `"colname" TYPE`:
   ```typescript
   const columnDefs = columns
     .map((col) => {
@@ -118,11 +118,11 @@ Add engine-level constraint enforcement for column definitions and protect plugi
   VALUES (?, ?, ?, ?, ?, ?, ?)
   ```
 
-- [ ] **Update `addColumn`** to accept an optional `constraints` parameter and compile it into the `ALTER TABLE ADD COLUMN` DDL.
+- [x] **Update `addColumn`** to accept an optional `constraints` parameter and compile it into the `ALTER TABLE ADD COLUMN` DDL.
 
-- [ ] **Update `getColumns`** to return the `constraints` field.
+- [x] **Update `getColumns`** to return the `constraints` field.
 
-- [ ] **Update the tags plugin's registry matrix definition** to declare constraints:
+- [x] **Update the tags plugin's registry matrix definition** to declare constraints:
   ```typescript
   columns: [
     { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
@@ -132,7 +132,7 @@ Add engine-level constraint enforcement for column definitions and protect plugi
   ]
   ```
 
-- [ ] **Remove the application-level uniqueness check in `createTagType`.** The `SELECT 1 FROM ... WHERE LOWER(name) = LOWER(?)` guard is replaced by the UNIQUE COLLATE NOCASE constraint. Catch the SQLite constraint violation error and surface a user-friendly message:
+- [x] **Remove the application-level uniqueness check in `createTagType`.** The `SELECT 1 FROM ... WHERE LOWER(name) = LOWER(?)` guard is replaced by the UNIQUE COLLATE NOCASE constraint. Catch the SQLite constraint violation error and surface a user-friendly message:
   ```typescript
   try {
     insertRow(db, registryMatrixId, { values: { name, matrix_id: matrixId } })
@@ -144,20 +144,20 @@ Add engine-level constraint enforcement for column definitions and protect plugi
   }
   ```
 
-- [ ] **Handle constraint errors in `insertRow` and `updateRow`.** When a constraint violation occurs (NOT NULL, UNIQUE, CHECK), the SQLite error should propagate as a typed error that the UI can distinguish from other errors. Define a `ConstraintViolationError` class or error code convention.
+- [x] **Handle constraint errors in `insertRow` and `updateRow`.** When a constraint violation occurs (NOT NULL, UNIQUE, CHECK), the SQLite error should propagate as a typed error that the UI can distinguish from other errors. Define a `ConstraintViolationError` class or error code convention.
 
 ### Plugin column ownership
 
-- [ ] **Add `managed_by` column to `matrix_columns`.** TEXT, nullable, references `plugins.id`. Migration: `ALTER TABLE matrix_columns ADD COLUMN managed_by TEXT REFERENCES plugins(id) ON DELETE SET NULL`.
+- [x] **Add `managed_by` column to `matrix_columns`.** TEXT, nullable, references `plugins.id`. Migration: `ALTER TABLE matrix_columns ADD COLUMN managed_by TEXT REFERENCES plugins(id) ON DELETE SET NULL`.
 
-- [ ] **Update `ColumnDefinition` type** to include `managedBy: string | null`.
+- [x] **Update `ColumnDefinition` type** to include `managedBy: string | null`.
 
-- [ ] **Update `registerPlugin`** to set `managed_by` when creating columns from a plugin's `MatrixSpec`. When `createMatrix` is called inside `registerPlugin`, the resulting columns should have `managed_by = definition.id`. Two approaches:
+- [x] **Update `registerPlugin`** to set `managed_by` when creating columns from a plugin's `MatrixSpec`. When `createMatrix` is called inside `registerPlugin`, the resulting columns should have `managed_by = definition.id`. Two approaches:
   - **Option A**: Pass `managedBy` through `createMatrix`. Add an optional `managedBy` param to `createMatrix` and propagate it to each `INSERT INTO matrix_columns`.
   - **Option B**: After `createMatrix` returns, batch-update the columns: `UPDATE matrix_columns SET managed_by = ? WHERE matrix_id = ? AND managed_by IS NULL`.
   - Prefer Option A for atomicity and clarity.
 
-- [ ] **Update `removeColumn`** to check `managed_by`. If the column has a non-null `managed_by` and the caller hasn't passed `force: true`, reject with an error:
+- [x] **Update `removeColumn`** to check `managed_by`. If the column has a non-null `managed_by` and the caller hasn't passed `force: true`, reject with an error:
   ```typescript
   if (col.managedBy && !options?.force) {
     throw new Error(
@@ -167,14 +167,14 @@ Add engine-level constraint enforcement for column definitions and protect plugi
   ```
   Update the worker message type to accept an optional `force` parameter.
 
-- [ ] **Update `renameColumn`** with the same `managed_by` guard and `force` option.
+- [x] **Update `renameColumn`** with the same `managed_by` guard and `force` option.
 
-- [ ] **Update `getColumns`** to return `managed_by`.
+- [x] **Update `getColumns`** to return `managed_by`.
 
-- [ ] **Update client functions** (`removeColumn`, `renameColumn`) to accept an optional `force` parameter.
+- [x] **Update client functions** (`removeColumn`, `renameColumn`) to accept an optional `force` parameter.
 
-- [ ] Tests: create a matrix with constraints, verify DDL includes constraints (probe with INSERT that violates NOT NULL — expect error, INSERT that violates UNIQUE — expect error). Plugin column ownership: register a plugin with matrixes, verify `managed_by` is set on plugin columns. Attempt to `removeColumn` on a managed column without force — expect rejection. With `force: true` — succeeds. Attempt to `renameColumn` on a managed column without force — expect rejection. With `force: true` — succeeds. User-added columns have `managed_by = NULL` and can be removed/renamed freely. Tag type creation with duplicate name (case-insensitive) — rejected by constraint, user-friendly error message returned.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: create a matrix with constraints, verify DDL includes constraints (probe with INSERT that violates NOT NULL — expect error, INSERT that violates UNIQUE — expect error). Plugin column ownership: register a plugin with matrixes, verify `managed_by` is set on plugin columns. Attempt to `removeColumn` on a managed column without force — expect rejection. With `force: true` — succeeds. Attempt to `renameColumn` on a managed column without force — expect rejection. With `force: true` — succeeds. User-added columns have `managed_by = NULL` and can be removed/renamed freely. Tag type creation with duplicate name (case-insensitive) — rejected by constraint, user-friendly error message returned.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 3. Normalize face config column references
 

@@ -186,6 +186,22 @@ export const initMatrixSchema = (db: Database) => {
   } catch {
     // Column already exists (new database or previously migrated)
   }
+
+  // Migration: add constraints column to matrix_columns
+  try {
+    db.exec('ALTER TABLE matrix_columns ADD COLUMN constraints TEXT')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+
+  // Migration: add managed_by column to matrix_columns
+  try {
+    db.exec(
+      'ALTER TABLE matrix_columns ADD COLUMN managed_by TEXT REFERENCES plugins(id) ON DELETE SET NULL',
+    )
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
 }
 
 /**
@@ -231,6 +247,26 @@ export type ColumnDefinition = {
   order: number
   options: string | null
   formula: string | null
+  constraints: string | null
+  managedBy: string | null
+}
+
+/**
+ * Typed error for SQLite constraint violations (NOT NULL, UNIQUE, CHECK).
+ * The UI can distinguish this from generic errors to show user-friendly messages.
+ */
+export class ConstraintViolationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ConstraintViolationError'
+  }
+}
+
+const wrapConstraintError = (err: unknown): never => {
+  if (err instanceof Error && /constraint/i.test(err.message)) {
+    throw new ConstraintViolationError(err.message)
+  }
+  throw err
 }
 
 const sqliteTypeToDisplayType = (sqliteType: string): string => {
@@ -248,7 +284,10 @@ const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 export const createMatrix = (
   db: Database,
   title: string,
-  columns: { name: string; type: string }[] = [{ name: 'title', type: 'TEXT' }],
+  columns: { name: string; type: string; constraints?: string }[] = [
+    { name: 'title', type: 'TEXT' },
+  ],
+  options?: { managedBy?: string },
 ): number => {
   return withTransaction(db, () => {
     const insertStmt = db.prepare(
@@ -265,7 +304,7 @@ export const createMatrix = (
 
     // Store column definitions in the normalized table
     const colStmt = db.prepare(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order") VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", constraints, managed_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
     )
     for (let i = 0; i < columns.length; i++) {
       colStmt.bind([
@@ -274,6 +313,8 @@ export const createMatrix = (
         columns[i]!.type,
         sqliteTypeToDisplayType(columns[i]!.type),
         i,
+        columns[i]!.constraints ?? null,
+        options?.managedBy ?? null,
       ])
       colStmt.step()
       colStmt.reset()
@@ -281,7 +322,10 @@ export const createMatrix = (
     colStmt.finalize()
 
     const columnDefs = columns
-      .map((col) => `${quoteIdent(col.name)} ${col.type}`)
+      .map((col) => {
+        const def = `${quoteIdent(col.name)} ${col.type}`
+        return col.constraints ? `${def} ${col.constraints}` : def
+      })
       .join(',\n        ')
 
     db.exec(`
@@ -358,31 +402,35 @@ export const insertDataRow = (
 ): number => {
   const entries = Object.entries(values || {})
 
-  if (entries.length > 0) {
-    const columns = ['id', ...entries.map(([name]) => quoteIdent(name))].join(', ')
-    const placeholders = [SQL_RANDOM_ID, ...entries.map(() => '?')].join(', ')
-    const stmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (${columns}) VALUES (${placeholders}) RETURNING id`,
-    )
-    stmt.bind(entries.map(([, value]) => value as SqlValue))
-    if (!stmt.step()) {
+  try {
+    if (entries.length > 0) {
+      const columns = ['id', ...entries.map(([name]) => quoteIdent(name))].join(', ')
+      const placeholders = [SQL_RANDOM_ID, ...entries.map(() => '?')].join(', ')
+      const stmt = db.prepare(
+        `INSERT INTO "mx_${matrixId}_data" (${columns}) VALUES (${placeholders}) RETURNING id`,
+      )
+      stmt.bind(entries.map(([, value]) => value as SqlValue))
+      if (!stmt.step()) {
+        stmt.finalize()
+        throw new Error('Failed to insert data row')
+      }
+      const rowId = (stmt.get({}) as { id: number }).id
       stmt.finalize()
-      throw new Error('Failed to insert data row')
-    }
-    const rowId = (stmt.get({}) as { id: number }).id
-    stmt.finalize()
-    return rowId
-  } else {
-    const stmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (id) VALUES (${SQL_RANDOM_ID}) RETURNING id`,
-    )
-    if (!stmt.step()) {
+      return rowId
+    } else {
+      const stmt = db.prepare(
+        `INSERT INTO "mx_${matrixId}_data" (id) VALUES (${SQL_RANDOM_ID}) RETURNING id`,
+      )
+      if (!stmt.step()) {
+        stmt.finalize()
+        throw new Error('Failed to insert data row')
+      }
+      const rowId = (stmt.get({}) as { id: number }).id
       stmt.finalize()
-      throw new Error('Failed to insert data row')
+      return rowId
     }
-    const rowId = (stmt.get({}) as { id: number }).id
-    stmt.finalize()
-    return rowId
+  } catch (err) {
+    return wrapConstraintError(err)
   }
 }
 
@@ -418,9 +466,13 @@ export const updateRow = (
   const setClauses = entries.map(([name]) => `${quoteIdent(name)} = ?`).join(', ')
   const bindValues = [...entries.map(([, value]) => value as SqlValue), rowId]
 
-  db.exec(`UPDATE "mx_${matrixId}_data" SET ${setClauses} WHERE id = ?`, {
-    bind: bindValues,
-  })
+  try {
+    db.exec(`UPDATE "mx_${matrixId}_data" SET ${setClauses} WHERE id = ?`, {
+      bind: bindValues,
+    })
+  } catch (err) {
+    wrapConstraintError(err)
+  }
 }
 
 /**
@@ -745,7 +797,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   existsStmt.finalize()
 
   const stmt = db.prepare(
-    'SELECT id, name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    'SELECT id, name, type, display_type AS displayType, "order", options, formula, constraints, managed_by AS managedBy FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
   )
   stmt.bind([matrixId])
 
@@ -761,7 +813,13 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
 export const addColumn = (
   db: Database,
   matrixId: number,
-  column: { name: string; type: string; displayType?: string; options?: string },
+  column: {
+    name: string
+    type: string
+    displayType?: string
+    options?: string
+    constraints?: string
+  },
 ): number => {
   return withTransaction(db, () => {
     const current = getColumns(db, matrixId)
@@ -770,6 +828,9 @@ export const addColumn = (
       throw new Error(`Column "${column.name}" already exists in matrix ${matrixId}`)
     }
 
+    // SQLite's ALTER TABLE ADD COLUMN doesn't support UNIQUE or NOT NULL
+    // (without a default). Constraints are stored in matrix_columns but only
+    // fully enforced at CREATE TABLE time (createMatrix).
     db.exec(
       `ALTER TABLE "mx_${matrixId}_data" ADD COLUMN ${quoteIdent(column.name)} ${column.type}`,
     )
@@ -777,7 +838,7 @@ export const addColumn = (
     const displayType = column.displayType ?? sqliteTypeToDisplayType(column.type)
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
     const stmt = db.prepare(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options, constraints) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
     )
     stmt.bind([
       matrixId,
@@ -786,6 +847,7 @@ export const addColumn = (
       displayType,
       nextOrder,
       column.options ?? null,
+      column.constraints ?? null,
     ])
     if (!stmt.step()) {
       stmt.finalize()
@@ -802,13 +864,24 @@ export const addColumn = (
 }
 
 /** Remove a column from a matrix's data table and registry. */
-export const removeColumn = (db: Database, matrixId: number, columnName: string): void => {
+export const removeColumn = (
+  db: Database,
+  matrixId: number,
+  columnName: string,
+  options?: { force?: boolean },
+): void => {
   withTransaction(db, () => {
     const current = getColumns(db, matrixId)
     const col = current.find((c) => c.name === columnName)
 
     if (!col) {
       throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
+    }
+
+    if (col.managedBy && !options?.force) {
+      throw new Error(
+        `Column "${columnName}" is managed by plugin "${col.managedBy}" and cannot be removed. Pass force: true to override.`,
+      )
     }
 
     const isFormula = col.formula !== null
@@ -839,15 +912,23 @@ export const renameColumn = (
   matrixId: number,
   oldName: string,
   newName: string,
+  options?: { force?: boolean },
 ): void => {
   withTransaction(db, () => {
     const current = getColumns(db, matrixId)
+    const col = current.find((c) => c.name === oldName)
 
-    if (!current.some((c) => c.name === oldName)) {
+    if (!col) {
       throw new Error(`Column "${oldName}" not found in matrix ${matrixId}`)
     }
     if (current.some((c) => c.name === newName)) {
       throw new Error(`Column "${newName}" already exists in matrix ${matrixId}`)
+    }
+
+    if (col.managedBy && !options?.force) {
+      throw new Error(
+        `Column "${oldName}" is managed by plugin "${col.managedBy}" and cannot be renamed. Pass force: true to override.`,
+      )
     }
 
     // Drop triggers before RENAME — existing triggers reference the old

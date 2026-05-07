@@ -104,6 +104,7 @@ export type MatrixOperationMap = {
       columnType: string
       displayType?: string
       options?: string
+      constraints?: string
     }
     result: number
   }
@@ -116,11 +117,11 @@ export type MatrixOperationMap = {
     result: number
   }
   removeColumn: {
-    params: { matrixId: number; columnName: string }
+    params: { matrixId: number; columnName: string; force?: boolean }
     result: void
   }
   renameColumn: {
-    params: { matrixId: number; oldName: string; newName: string }
+    params: { matrixId: number; oldName: string; newName: string; force?: boolean }
     result: void
   }
   getColumns: {

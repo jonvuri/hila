@@ -7,6 +7,7 @@ import {
   createMatrix,
   addSampleRowsToMatrix,
   insertDataRow,
+  insertRow,
   deleteRow,
   updateRow,
   ensureRootMatrix,
@@ -27,6 +28,7 @@ import {
   reorderColumns,
   getOrCreateDeviceId,
   resetDeviceIdCache,
+  ConstraintViolationError,
 } from './matrix'
 import {
   createTreePosition,
@@ -3946,5 +3948,224 @@ describe('Device identity', () => {
     const first = getOrCreateDeviceId(db)
     const second = getOrCreateDeviceId(db)
     expect(second).toBe(first)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Column constraints
+// ---------------------------------------------------------------------------
+describe('Column constraints', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    resetDeviceIdCache()
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('createMatrix with NOT NULL constraint rejects null inserts', () => {
+    const id = createMatrix(db, 'Constrained', [
+      { name: 'title', type: 'TEXT', constraints: 'NOT NULL' },
+    ])
+    expect(() => insertDataRow(db, id, { title: null })).toThrow(ConstraintViolationError)
+  })
+
+  test('createMatrix with UNIQUE constraint rejects duplicate inserts', () => {
+    const id = createMatrix(db, 'Unique', [
+      { name: 'code', type: 'TEXT', constraints: 'UNIQUE' },
+    ])
+    insertDataRow(db, id, { code: 'AAA' })
+    expect(() => insertDataRow(db, id, { code: 'AAA' })).toThrow(ConstraintViolationError)
+  })
+
+  test('createMatrix stores constraints in matrix_columns', () => {
+    const id = createMatrix(db, 'WithConstraints', [
+      { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
+      { name: 'value', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, id)
+    expect(cols[0]!.constraints).toBe('NOT NULL UNIQUE COLLATE NOCASE')
+    expect(cols[1]!.constraints).toBeNull()
+  })
+
+  test('addColumn stores constraints in matrix_columns metadata', () => {
+    // SQLite ALTER TABLE ADD COLUMN doesn't support UNIQUE/NOT NULL, so
+    // addColumn only stores the constraint in matrix_columns for reference.
+    const id = createMatrix(db, 'Base', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'code', type: 'TEXT', constraints: 'UNIQUE' })
+
+    const cols = getColumns(db, id)
+    const codeCol = cols.find((c) => c.name === 'code')!
+    expect(codeCol.constraints).toBe('UNIQUE')
+  })
+
+  test('updateRow throws ConstraintViolationError on UNIQUE violation', () => {
+    const id = createMatrix(db, 'U', [{ name: 'code', type: 'TEXT', constraints: 'UNIQUE' }])
+    const r1 = insertDataRow(db, id, { code: 'A' })
+    insertDataRow(db, id, { code: 'B' })
+    expect(() => updateRow(db, { matrixId: id, rowId: r1, values: { code: 'B' } })).toThrow(
+      ConstraintViolationError,
+    )
+  })
+
+  test('COLLATE NOCASE UNIQUE rejects case-variant duplicates', () => {
+    const id = createMatrix(db, 'CaseInsensitive', [
+      { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
+    ])
+    insertDataRow(db, id, { name: 'Alpha' })
+    expect(() => insertDataRow(db, id, { name: 'alpha' })).toThrow(ConstraintViolationError)
+    expect(() => insertDataRow(db, id, { name: 'ALPHA' })).toThrow(ConstraintViolationError)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Plugin column ownership (managed_by)
+// ---------------------------------------------------------------------------
+describe('Plugin column ownership', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    resetDeviceIdCache()
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('createMatrix with managedBy sets managed_by on all columns', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(db, 'Managed', [{ name: 'title', type: 'TEXT' }], {
+      managedBy: 'test.plugin',
+    })
+    const cols = getColumns(db, id)
+    expect(cols[0]!.managedBy).toBe('test.plugin')
+  })
+
+  test('createMatrix without managedBy leaves managed_by null', () => {
+    const id = createMatrix(db, 'Unmanaged', [{ name: 'title', type: 'TEXT' }])
+    const cols = getColumns(db, id)
+    expect(cols[0]!.managedBy).toBeNull()
+  })
+
+  test('removeColumn rejects managed column without force', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(
+      db,
+      'Managed',
+      [
+        { name: 'a', type: 'TEXT' },
+        { name: 'b', type: 'TEXT' },
+      ],
+      { managedBy: 'test.plugin' },
+    )
+    expect(() => removeColumn(db, id, 'a')).toThrow('managed by plugin')
+  })
+
+  test('removeColumn succeeds on managed column with force: true', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(
+      db,
+      'Managed',
+      [
+        { name: 'a', type: 'TEXT' },
+        { name: 'b', type: 'TEXT' },
+      ],
+      { managedBy: 'test.plugin' },
+    )
+    removeColumn(db, id, 'a', { force: true })
+    const cols = getColumns(db, id)
+    expect(cols.map((c) => c.name)).toEqual(['b'])
+  })
+
+  test('renameColumn rejects managed column without force', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(db, 'Managed', [{ name: 'title', type: 'TEXT' }], {
+      managedBy: 'test.plugin',
+    })
+    expect(() => renameColumn(db, id, 'title', 'label')).toThrow('managed by plugin')
+  })
+
+  test('renameColumn succeeds on managed column with force: true', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(db, 'Managed', [{ name: 'title', type: 'TEXT' }], {
+      managedBy: 'test.plugin',
+    })
+    renameColumn(db, id, 'title', 'label', { force: true })
+    const cols = getColumns(db, id)
+    expect(cols[0]!.name).toBe('label')
+  })
+
+  test('user-added columns have null managed_by and can be removed freely', () => {
+    db.exec("INSERT INTO plugins (id, name, version) VALUES ('test.plugin', 'Test', '1.0.0')")
+    const id = createMatrix(db, 'Managed', [{ name: 'title', type: 'TEXT' }], {
+      managedBy: 'test.plugin',
+    })
+    addColumn(db, id, { name: 'user_col', type: 'TEXT' })
+
+    const cols = getColumns(db, id)
+    const userCol = cols.find((c) => c.name === 'user_col')!
+    expect(userCol.managedBy).toBeNull()
+
+    removeColumn(db, id, 'user_col')
+    expect(getColumns(db, id).map((c) => c.name)).toEqual(['title'])
+  })
+
+  test('user-added columns can be renamed freely', () => {
+    const id = createMatrix(db, 'Base', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'user_col', type: 'TEXT' })
+    renameColumn(db, id, 'user_col', 'renamed_col')
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'renamed_col')).toBeDefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tag type constraint integration
+// ---------------------------------------------------------------------------
+describe('Tag type constraint integration', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    resetDeviceIdCache()
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('tag registry matrix with NOCASE UNIQUE rejects case-insensitive duplicate names', () => {
+    const registryId = createMatrix(db, 'Tag Types', [
+      { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
+      { name: 'matrix_id', type: 'INTEGER', constraints: 'NOT NULL' },
+      { name: 'color', type: 'TEXT' },
+      { name: 'icon', type: 'TEXT' },
+    ])
+
+    insertRow(db, registryId, { values: { name: 'Priority', matrix_id: 100 } })
+    expect(() =>
+      insertRow(db, registryId, { values: { name: 'priority', matrix_id: 200 } }),
+    ).toThrow(ConstraintViolationError)
+    expect(() =>
+      insertRow(db, registryId, { values: { name: 'PRIORITY', matrix_id: 300 } }),
+    ).toThrow(ConstraintViolationError)
+  })
+
+  test('tag registry matrix rejects null name', () => {
+    const registryId = createMatrix(db, 'Tag Types', [
+      { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
+      { name: 'matrix_id', type: 'INTEGER', constraints: 'NOT NULL' },
+    ])
+
+    expect(() => insertRow(db, registryId, { values: { name: null, matrix_id: 100 } })).toThrow(
+      ConstraintViolationError,
+    )
   })
 })

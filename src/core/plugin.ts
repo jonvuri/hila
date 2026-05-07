@@ -72,7 +72,9 @@ export const registerPlugin = async (
         checkStmt.finalize()
       }
 
-      const matrixId = createMatrix(db, spec.title, spec.columns)
+      const matrixId = createMatrix(db, spec.title, spec.columns, {
+        managedBy: definition.id,
+      })
       db.exec('UPDATE matrix SET source_plugin_id = ? WHERE id = ?', {
         bind: [definition.id, matrixId],
       })

@@ -116,8 +116,9 @@ export const addColumn = (
   columnType: string,
   displayType?: string,
   options?: string,
+  constraints?: string,
 ): Promise<number> =>
-  workerCall('addColumn', { matrixId, name, columnType, displayType, options })
+  workerCall('addColumn', { matrixId, name, columnType, displayType, options, constraints })
 
 export const addFormulaColumn = (
   matrixId: number,
@@ -125,14 +126,18 @@ export const addFormulaColumn = (
   formula: string,
 ): Promise<number> => workerCall('addFormulaColumn', { matrixId, name, formula })
 
-export const removeColumn = (matrixId: number, columnName: string): Promise<void> =>
-  workerCall('removeColumn', { matrixId, columnName })
+export const removeColumn = (
+  matrixId: number,
+  columnName: string,
+  force?: boolean,
+): Promise<void> => workerCall('removeColumn', { matrixId, columnName, force })
 
 export const renameColumn = (
   matrixId: number,
   oldName: string,
   newName: string,
-): Promise<void> => workerCall('renameColumn', { matrixId, oldName, newName })
+  force?: boolean,
+): Promise<void> => workerCall('renameColumn', { matrixId, oldName, newName, force })
 
 export const getColumns = (matrixId: number): Promise<ColumnDefinition[]> =>
   workerCall('getColumns', { matrixId })

@@ -30,8 +30,8 @@ export const tagsPlugin: PluginDefinition = {
       key: 'registry',
       title: 'Tag Types',
       columns: [
-        { name: 'name', type: 'TEXT' },
-        { name: 'matrix_id', type: 'INTEGER' },
+        { name: 'name', type: 'TEXT', constraints: 'NOT NULL UNIQUE COLLATE NOCASE' },
+        { name: 'matrix_id', type: 'INTEGER', constraints: 'NOT NULL' },
         { name: 'color', type: 'TEXT' },
         { name: 'icon', type: 'TEXT' },
       ],

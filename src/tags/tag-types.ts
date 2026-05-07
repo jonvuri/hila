@@ -1,6 +1,12 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { createMatrix, insertRow, updateRow, deleteRow } from '../core/matrix'
+import {
+  createMatrix,
+  insertRow,
+  updateRow,
+  deleteRow,
+  ConstraintViolationError,
+} from '../core/matrix'
 import { applyFaceToMatrix } from '../core/face-config'
 import { getFaceType } from '../core/face-registry'
 import { ensureTrait } from '../core/traits'
@@ -36,14 +42,6 @@ export const createTagType = (
   return withTransaction(db, () => {
     const registryMatrixId = getRegistryMatrixIdFromDb(db)
 
-    const checkStmt = db.prepare(
-      `SELECT 1 FROM "mx_${registryMatrixId}_data" WHERE LOWER(name) = LOWER(?)`,
-    )
-    checkStmt.bind([name])
-    const exists = checkStmt.step()
-    checkStmt.finalize()
-    if (exists) throw new Error(`Tag type "${name}" already exists`)
-
     const matrixColumns = columns ?? [{ name: 'label', type: 'TEXT' }]
     const matrixId = createMatrix(db, name, matrixColumns)
 
@@ -53,9 +51,17 @@ export const createTagType = (
 
     ensureTrait(db, 'rank', matrixId)
 
-    const { rowId } = insertRow(db, registryMatrixId, {
-      values: { name, matrix_id: matrixId },
-    })
+    let rowId: number
+    try {
+      ;({ rowId } = insertRow(db, registryMatrixId, {
+        values: { name, matrix_id: matrixId },
+      }))
+    } catch (err) {
+      if (err instanceof ConstraintViolationError) {
+        throw new Error(`Tag type "${name}" already exists`)
+      }
+      throw err
+    }
 
     if (getFaceType(TABLE_FACE_TYPE_ID)) {
       applyFaceToMatrix(db, TABLE_FACE_TYPE_ID, matrixId, 'hila.tags')
@@ -160,25 +166,21 @@ export const updateTagType = (
 ): void => {
   const values: Record<string, unknown> = {}
 
-  if (updates.name !== undefined) {
-    const registryMatrixId = getRegistryMatrixIdFromDb(db)
-    const checkStmt = db.prepare(
-      `SELECT 1 FROM "mx_${registryMatrixId}_data" WHERE LOWER(name) = LOWER(?) AND id != ?`,
-    )
-    checkStmt.bind([updates.name, id])
-    const conflict = checkStmt.step()
-    checkStmt.finalize()
-    if (conflict) throw new Error(`Tag type "${updates.name}" already exists`)
-
-    values.name = updates.name
-  }
+  if (updates.name !== undefined) values.name = updates.name
   if (updates.color !== undefined) values.color = updates.color
   if (updates.icon !== undefined) values.icon = updates.icon
 
   if (Object.keys(values).length === 0) return
 
   const registryMatrixId = getRegistryMatrixIdFromDb(db)
-  updateRow(db, { matrixId: registryMatrixId, rowId: id, values })
+  try {
+    updateRow(db, { matrixId: registryMatrixId, rowId: id, values })
+  } catch (err) {
+    if (err instanceof ConstraintViolationError && updates.name !== undefined) {
+      throw new Error(`Tag type "${updates.name}" already exists`)
+    }
+    throw err
+  }
 }
 
 export const deleteTagType = (db: Database, id: number): void => {

@@ -348,7 +348,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'addColumn': {
-      const { id, matrixId, name, columnType, displayType, options } = message
+      const { id, matrixId, name, columnType, displayType, options, constraints } = message
       try {
         const { db } = await sqliteWasm
         const colId = addColumnImpl(db, matrixId, {
@@ -356,6 +356,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           type: columnType,
           displayType,
           options,
+          constraints,
         })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
@@ -381,10 +382,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'removeColumn': {
-      const { id, matrixId, columnName } = message
+      const { id, matrixId, columnName, force } = message
       try {
         const { db } = await sqliteWasm
-        removeColumnImpl(db, matrixId, columnName)
+        removeColumnImpl(db, matrixId, columnName, { force })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
         postMessage({ type: 'removeColumnSuccess', id, result: undefined })
@@ -395,10 +396,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'renameColumn': {
-      const { id, matrixId, oldName, newName } = message
+      const { id, matrixId, oldName, newName, force } = message
       try {
         const { db } = await sqliteWasm
-        renameColumnImpl(db, matrixId, oldName, newName)
+        renameColumnImpl(db, matrixId, oldName, newName, { force })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
         postMessage({ type: 'renameColumnSuccess', id, result: undefined })

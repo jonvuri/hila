@@ -3,7 +3,7 @@ import type { FaceTypeDefinition } from './face-types'
 export type MatrixSpec = {
   key: string // local reference within the plugin
   title: string
-  columns: { name: string; type: string }[]
+  columns: { name: string; type: string; constraints?: string }[]
 }
 
 export type TraitRequest = {
