@@ -42,9 +42,9 @@ The system has three layers: SQLite storage and sync, core (matrix registry + pl
 
 ### Running tests
 
-- Full suite: `pnpm test:e2e` (uses the project's playwright config; ~2 minutes, 68 tests).
+- Full suite: `pnpm test:e2e` (~4 minutes, 110 tests).
 - Single test by name: `pnpm test:e2e --grep "test name substring"`.
-- Running via `npx playwright test` directly will fail in sandbox mode because the browser binary path differs; always use `pnpm test:e2e`.
+- **Always run with `required_permissions: ["all"]`** to use the system-installed Playwright browsers. The sandbox does not persist browser binaries across sessions, so running inside the sandbox would require a ~250MB re-download every time.
 
 ### Writing robust tests
 
