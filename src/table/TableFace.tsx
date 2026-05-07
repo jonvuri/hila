@@ -153,7 +153,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   // -- Reactive queries -------
   const columnsQuery = () =>
-    `SELECT name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
+    `SELECT id, name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
   const { result: columnsResult } = useQuery(columnsQuery)
 
   const columns = createMemo<ColumnDefinition[]>(() => {

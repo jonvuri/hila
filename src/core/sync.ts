@@ -91,6 +91,7 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'source_plugin_id', type: 'TEXT' },
   ],
   matrix_columns: [
+    { name: 'id', type: 'INTEGER' },
     { name: 'matrix_id', type: 'INTEGER' },
     { name: 'name', type: 'TEXT' },
     { name: 'type', type: 'TEXT' },

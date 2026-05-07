@@ -58,6 +58,7 @@ export const initMatrixSchema = (db: Database) => {
     -- Column definitions (normalized, one row per column)
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix_columns (
+      id           INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
       matrix_id    INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
       name         TEXT    NOT NULL,
       type         TEXT    NOT NULL,
@@ -65,7 +66,7 @@ export const initMatrixSchema = (db: Database) => {
       "order"      INTEGER NOT NULL,
       options      TEXT,
       formula      TEXT,
-      PRIMARY KEY (matrix_id, name)
+      UNIQUE (matrix_id, name)
     ) STRICT;
 
     -- ------------------------------------------------------------
@@ -223,6 +224,7 @@ export const resetDeviceIdCache = (): void => {
 
 // Stored column definition (includes display order)
 export type ColumnDefinition = {
+  id: number
   name: string
   type: string
   displayType: string
@@ -743,7 +745,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   existsStmt.finalize()
 
   const stmt = db.prepare(
-    'SELECT name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    'SELECT id, name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
   )
   stmt.bind([matrixId])
 
@@ -755,13 +757,13 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   return cols
 }
 
-/** Add a column to a matrix's data table and registry. */
+/** Add a column to a matrix's data table and registry. Returns the new column's stable ID. */
 export const addColumn = (
   db: Database,
   matrixId: number,
   column: { name: string; type: string; displayType?: string; options?: string },
-): void => {
-  withTransaction(db, () => {
+): number => {
+  return withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
     if (current.some((c) => c.name === column.name)) {
@@ -774,22 +776,28 @@ export const addColumn = (
 
     const displayType = column.displayType ?? sqliteTypeToDisplayType(column.type)
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
-    db.exec(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options) VALUES (?, ?, ?, ?, ?, ?)',
-      {
-        bind: [
-          matrixId,
-          column.name,
-          column.type,
-          displayType,
-          nextOrder,
-          column.options ?? null,
-        ],
-      },
+    const stmt = db.prepare(
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
     )
+    stmt.bind([
+      matrixId,
+      column.name,
+      column.type,
+      displayType,
+      nextOrder,
+      column.options ?? null,
+    ])
+    if (!stmt.step()) {
+      stmt.finalize()
+      throw new Error('Failed to insert column definition')
+    }
+    const colId = (stmt.get({}) as { id: number }).id
+    stmt.finalize()
 
     const deviceId = getOrCreateDeviceId(db)
     reinstallDataTableTriggers(db, matrixId, deviceId, [...current, column])
+
+    return colId
   })
 }
 
@@ -892,14 +900,14 @@ export const updateColumnOptions = (
   })
 }
 
-/** Add a formula (computed) column. No physical column is created. */
+/** Add a formula (computed) column. No physical column is created. Returns the new column's stable ID. */
 export const addFormulaColumn = (
   db: Database,
   matrixId: number,
   name: string,
   formula: string,
-): void => {
-  withTransaction(db, () => {
+): number => {
+  return withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
     if (current.some((c) => c.name === name)) {
@@ -918,12 +926,18 @@ export const addFormulaColumn = (
     }
 
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
-    db.exec(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", formula) VALUES (?, ?, ?, ?, ?, ?)',
-      {
-        bind: [matrixId, name, 'TEXT', 'text', nextOrder, formula],
-      },
+    const stmt = db.prepare(
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", formula) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
     )
+    stmt.bind([matrixId, name, 'TEXT', 'text', nextOrder, formula])
+    if (!stmt.step()) {
+      stmt.finalize()
+      throw new Error('Failed to insert formula column definition')
+    }
+    const colId = (stmt.get({}) as { id: number }).id
+    stmt.finalize()
+
+    return colId
   })
 }
 

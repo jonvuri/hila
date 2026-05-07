@@ -24,6 +24,7 @@ import {
   addFormulaColumn,
   removeColumn,
   renameColumn,
+  reorderColumns,
   getOrCreateDeviceId,
   resetDeviceIdCache,
 } from './matrix'
@@ -2558,15 +2559,16 @@ describe('Column schema management', () => {
     const cols = getColumns(db, id)
 
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
+    expect(cols[0]!.id).toBeGreaterThan(0)
   })
 
   test('createMatrix with custom columns stores them correctly', () => {
@@ -2578,31 +2580,36 @@ describe('Column schema management', () => {
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'name',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
-      {
+      }),
+      expect.objectContaining({
         name: 'score',
         type: 'INTEGER',
         displayType: 'number',
         order: 1,
         options: null,
         formula: null,
-      },
-      {
+      }),
+      expect.objectContaining({
         name: 'active',
         type: 'INTEGER',
         displayType: 'number',
         order: 2,
         options: null,
         formula: null,
-      },
+      }),
     ])
+    for (const col of cols) {
+      expect(col.id).toBeGreaterThan(0)
+    }
+    const ids = new Set(cols.map((c) => c.id))
+    expect(ids.size).toBe(3)
   })
 
   test('createMatrix data table schema matches registry', () => {
@@ -2630,15 +2637,16 @@ describe('Column schema management', () => {
     ensureRootMatrix(db)
     const cols = getColumns(db, 1)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'content',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
+    expect(cols[0]!.id).toBeGreaterThan(0)
   })
 
   test('getColumns throws for non-existent matrix', () => {
@@ -2672,26 +2680,28 @@ describe('Column schema management', () => {
   test('addColumn adds column to data table and registry', () => {
     const id = createMatrix(db, 'M')
 
-    addColumn(db, id, { name: 'notes', type: 'TEXT' })
+    const colId = addColumn(db, id, { name: 'notes', type: 'TEXT' })
+    expect(colId).toBeGreaterThan(0)
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
-      {
+      }),
+      expect.objectContaining({
+        id: colId,
         name: 'notes',
         type: 'TEXT',
         displayType: 'text',
         order: 1,
         options: null,
         formula: null,
-      },
+      }),
     ])
 
     // Verify actual table schema
@@ -2781,19 +2791,21 @@ describe('Column schema management', () => {
 
   test('renameColumn renames column in data table and registry', () => {
     const id = createMatrix(db, 'M')
+    const originalId = getColumns(db, id)[0]!.id
 
     renameColumn(db, id, 'title', 'name')
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
+        id: originalId,
         name: 'name',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
 
     // Verify actual table schema
@@ -2854,20 +2866,22 @@ describe('Column schema management', () => {
 
   test('add then remove column round-trips cleanly', () => {
     const id = createMatrix(db, 'M')
+    const originalId = getColumns(db, id)[0]!.id
 
     addColumn(db, id, { name: 'temp', type: 'INTEGER' })
     expect(getColumns(db, id)).toHaveLength(2)
 
     removeColumn(db, id, 'temp')
     expect(getColumns(db, id)).toEqual([
-      {
+      expect.objectContaining({
+        id: originalId,
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
   })
 
@@ -2911,6 +2925,120 @@ describe('Column schema management', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Column stable IDs (Phase 5b stage 1)
+// ---------------------------------------------------------------------------
+describe('Column stable IDs', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('createMatrix assigns unique non-zero IDs to each column', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'a', type: 'TEXT' },
+      { name: 'b', type: 'INTEGER' },
+      { name: 'c', type: 'TEXT' },
+    ])
+    const cols = getColumns(db, id)
+    expect(cols).toHaveLength(3)
+    for (const col of cols) {
+      expect(col.id).toBeGreaterThan(0)
+    }
+    const ids = new Set(cols.map((c) => c.id))
+    expect(ids.size).toBe(3)
+  })
+
+  test('column ID is preserved across renameColumn', () => {
+    const id = createMatrix(db, 'M')
+    const before = getColumns(db, id)
+    const originalId = before[0]!.id
+
+    renameColumn(db, id, 'title', 'label')
+
+    const after = getColumns(db, id)
+    expect(after[0]!.id).toBe(originalId)
+    expect(after[0]!.name).toBe('label')
+  })
+
+  test('column ID returned by getColumns matches what was assigned', () => {
+    const id = createMatrix(db, 'M')
+    const cols = getColumns(db, id)
+    expect(cols[0]!.id).toEqual(expect.any(Number))
+    expect(cols[0]!.id).toBeGreaterThan(0)
+  })
+
+  test('addColumn assigns a new unique ID', () => {
+    const id = createMatrix(db, 'M')
+    const before = getColumns(db, id)
+    const existingIds = new Set(before.map((c) => c.id))
+
+    const newColId = addColumn(db, id, { name: 'extra', type: 'TEXT' })
+    expect(newColId).toBeGreaterThan(0)
+    expect(existingIds.has(newColId)).toBe(false)
+
+    const after = getColumns(db, id)
+    const extraCol = after.find((c) => c.name === 'extra')
+    expect(extraCol!.id).toBe(newColId)
+  })
+
+  test('addFormulaColumn assigns a new unique ID', () => {
+    const id = createMatrix(db, 'M')
+    const before = getColumns(db, id)
+    const existingIds = new Set(before.map((c) => c.id))
+
+    const newColId = addFormulaColumn(db, id, 'computed', 'length(title)')
+    expect(newColId).toBeGreaterThan(0)
+    expect(existingIds.has(newColId)).toBe(false)
+
+    const after = getColumns(db, id)
+    const computedCol = after.find((c) => c.name === 'computed')
+    expect(computedCol!.id).toBe(newColId)
+  })
+
+  test('no regression: existing column operations work with stable IDs', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'first', type: 'TEXT' },
+      { name: 'second', type: 'INTEGER' },
+    ])
+
+    // Add
+    const thirdId = addColumn(db, id, { name: 'third', type: 'TEXT' })
+    expect(getColumns(db, id)).toHaveLength(3)
+
+    // Remove
+    removeColumn(db, id, 'second')
+    const afterRemove = getColumns(db, id)
+    expect(afterRemove).toHaveLength(2)
+    expect(afterRemove.map((c) => c.name)).toEqual(['first', 'third'])
+
+    // Rename preserves ID
+    const firstId = afterRemove[0]!.id
+    renameColumn(db, id, 'first', 'primary')
+    const afterRename = getColumns(db, id)
+    expect(afterRename[0]!.id).toBe(firstId)
+    expect(afterRename[0]!.name).toBe('primary')
+
+    // The added column still has its original ID
+    expect(afterRename[1]!.id).toBe(thirdId)
+
+    // Reorder doesn't affect IDs
+    reorderColumns(db, id, ['third', 'primary'])
+    const afterReorder = getColumns(db, id)
+    expect(afterReorder[0]!.name).toBe('third')
+    expect(afterReorder[0]!.id).toBe(thirdId)
+    expect(afterReorder[1]!.name).toBe('primary')
+    expect(afterReorder[1]!.id).toBe(firstId)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Formula columns
 // ---------------------------------------------------------------------------
 describe('Formula columns', () => {
@@ -2929,26 +3057,28 @@ describe('Formula columns', () => {
   test('addFormulaColumn registers a formula column in getColumns', () => {
     const id = createMatrix(db, 'M')
 
-    addFormulaColumn(db, id, 'title_len', 'length(title)')
+    const formulaColId = addFormulaColumn(db, id, 'title_len', 'length(title)')
+    expect(formulaColId).toBeGreaterThan(0)
 
     const cols = getColumns(db, id)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
-      {
+      }),
+      expect.objectContaining({
+        id: formulaColId,
         name: 'title_len',
         type: 'TEXT',
         displayType: 'text',
         order: 1,
         options: null,
         formula: 'length(title)',
-      },
+      }),
     ])
   })
 

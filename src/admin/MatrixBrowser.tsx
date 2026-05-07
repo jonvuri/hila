@@ -15,6 +15,7 @@ type PluginOption = {
 }
 
 type ColumnDef = {
+  id: number
   name: string
   type: string
   display_type: string
@@ -83,7 +84,7 @@ const MatrixDetail: Component<{
   )
   const { result: colResult } = useQuery(
     () =>
-      `SELECT name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ${props.matrix.id} ORDER BY "order"`,
+      `SELECT id, name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ${props.matrix.id} ORDER BY "order"`,
   )
   const { result: traitResult } = useQuery(
     () =>

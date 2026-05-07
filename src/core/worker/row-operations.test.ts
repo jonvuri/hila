@@ -264,38 +264,41 @@ describe('column management through worker', () => {
   it('getColumns returns initial columns', async () => {
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
+    expect(cols[0]!.id).toBeGreaterThan(0)
   }, 5000)
 
   it('addColumn adds to both registry and data table', async () => {
-    await addColumn(matrixId, 'notes', 'TEXT')
+    const colId = await addColumn(matrixId, 'notes', 'TEXT')
+    expect(colId).toBeGreaterThan(0)
 
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
-      {
+      }),
+      expect.objectContaining({
+        id: colId,
         name: 'notes',
         type: 'TEXT',
         displayType: 'text',
         order: 1,
         options: null,
         formula: null,
-      },
+      }),
     ])
   }, 5000)
 
@@ -304,32 +307,36 @@ describe('column management through worker', () => {
 
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
         name: 'title',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
   }, 5000)
 
   it('renameColumn renames and preserves data', async () => {
     await insertRow(matrixId, { values: { title: 'keep-me' } })
 
+    const colsBefore = await getColumns(matrixId)
+    const originalId = colsBefore[0]!.id
+
     await renameColumn(matrixId, 'title', 'label')
 
     const cols = await getColumns(matrixId)
     expect(cols).toEqual([
-      {
+      expect.objectContaining({
+        id: originalId,
         name: 'label',
         type: 'TEXT',
         displayType: 'text',
         order: 0,
         options: null,
         formula: null,
-      },
+      }),
     ])
 
     const sql = `SELECT label FROM "mx_${matrixId}_data" WHERE label = 'keep-me'`

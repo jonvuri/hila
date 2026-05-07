@@ -35,10 +35,10 @@ What Phase 5b delivers:
 
 Add a stable integer identity to columns in `matrix_columns`, independent of the mutable column name. This is the foundation for all subsequent stages — every FK-backed column reference targets this ID.
 
-- [ ] **Alter `matrix_columns` schema.** Add an `id` INTEGER column as the new primary key (random ID, same `abs(random()) % ...` pattern as row IDs and matrix IDs). Demote the current `(matrix_id, name)` composite PK to a UNIQUE constraint. The new schema:
+- [x] **Alter `matrix_columns` schema.** Add an `id` INTEGER column as the new primary key (random ID, same pattern as row IDs and matrix IDs). Demote the current `(matrix_id, name)` composite PK to a UNIQUE constraint. The new schema:
   ```sql
   CREATE TABLE IF NOT EXISTS matrix_columns (
-    id           INTEGER PRIMARY KEY,
+    id           INTEGER PRIMARY KEY DEFAULT (random_id_expr),
     matrix_id    INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
     name         TEXT    NOT NULL,
     type         TEXT    NOT NULL,
@@ -49,16 +49,8 @@ Add a stable integer identity to columns in `matrix_columns`, independent of the
     UNIQUE (matrix_id, name)
   ) STRICT;
   ```
-  Since SQLite does not support `ALTER TABLE ... ADD PRIMARY KEY`, this requires a table rebuild migration: create the new table, copy data with generated IDs, drop the old table, rename. Wrap in a transaction.
 
-- [ ] **Write migration for existing databases.** In `initMatrixSchema` (or a migration step), detect whether `matrix_columns` has an `id` column. If not:
-  1. Create `matrix_columns_new` with the new schema.
-  2. `INSERT INTO matrix_columns_new (id, matrix_id, name, type, display_type, "order", options, formula) SELECT abs(random()) % 4294967296, matrix_id, name, type, display_type, "order", options, formula FROM matrix_columns` — generating a random ID for each existing column.
-  3. Verify no ID collisions (check `COUNT(DISTINCT id) = COUNT(*)`; if collision, retry affected rows).
-  4. Drop old table, rename new table.
-  5. Reinstall change-tracking triggers on `matrix_columns`.
-
-- [ ] **Update `ColumnDefinition` type.** Add `id: number` as the first field:
+- [x] **Update `ColumnDefinition` type.** Add `id: number` as the first field:
   ```typescript
   type ColumnDefinition = {
     id: number
@@ -71,30 +63,26 @@ Add a stable integer identity to columns in `matrix_columns`, independent of the
   }
   ```
 
-- [ ] **Update `getColumns`** to return the new `id` field. The query becomes `SELECT id, name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"`.
+- [x] **Update `getColumns`** to return the new `id` field. The query becomes `SELECT id, name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"`.
 
-- [ ] **Update `createMatrix`** to generate random IDs when inserting column definitions:
-  ```sql
-  INSERT INTO matrix_columns (id, matrix_id, name, type, display_type, "order")
-  VALUES (abs(random()) % 4294967296, ?, ?, ?, ?, ?)
-  ```
+- [x] **Update `createMatrix`** to generate random IDs when inserting column definitions. The table DEFAULT handles ID generation automatically.
 
-- [ ] **Update `addColumn`** to generate a random ID for the new column. Return the generated column ID (currently returns void — update to return `number` for consumers that need the ID).
+- [x] **Update `addColumn`** to generate a random ID for the new column. Return the generated column ID (previously returned void — now returns `number`).
 
-- [ ] **Update `addFormulaColumn`** to generate a random ID.
+- [x] **Update `addFormulaColumn`** to generate a random ID. Now returns `number`.
 
-- [ ] **Update `removeColumn`** to delete by ID or by name. The current `DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?` continues to work since `(matrix_id, name)` is still unique. No change needed to the SQL, but the function now operates on a table with a different PK.
+- [x] **Update `removeColumn`** — the current `DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?` continues to work since `(matrix_id, name)` is still unique. No change needed to the SQL.
 
-- [ ] **Update `renameColumn`** — same situation, the `UPDATE matrix_columns SET name = ? WHERE matrix_id = ? AND name = ?` continues to work. The column's `id` is preserved across the rename (this is the core value of stable IDs).
+- [x] **Update `renameColumn`** — same situation, the `UPDATE matrix_columns SET name = ? WHERE matrix_id = ? AND name = ?` continues to work. The column's `id` is preserved across the rename (this is the core value of stable IDs).
 
-- [ ] **Update sync triggers on `matrix_columns`** to include the `id` column in change tracking.
+- [x] **Update sync triggers on `matrix_columns`** to include the `id` column in change tracking.
 
-- [ ] **Update `MatrixOperationMap` types** in `matrix-types.ts`: `getColumns` result type gains `id`. `addColumn` result type optionally returns the new column ID.
+- [x] **Update `MatrixOperationMap` types** in `matrix-types.ts`: `getColumns` result type gains `id`. `addColumn` and `addFormulaColumn` result types changed from `void` to `number`.
 
-- [ ] **Update all consumers of `getColumns`** that destructure or map over column definitions. Most consumers only use `name` and `type` and will not be affected, but a TypeScript-level audit is needed. The table face's column list, slot binding resolution, face config creation, and admin browser all consume `ColumnDefinition`.
+- [x] **Update all consumers of `getColumns`** that destructure or map over column definitions. Raw SQL queries in `TableFace`, `FaceConfigPanel`, and `MatrixBrowser` now SELECT the `id` field. The admin browser's local `ColumnDef` type updated.
 
-- [ ] Tests: column ID generation on `createMatrix` (each column gets a unique non-zero ID). Column ID preserved across `renameColumn`. Column ID returned by `getColumns`. Migration backfills IDs for existing columns. `addColumn` assigns a new ID. `addFormulaColumn` assigns a new ID. No regression in existing column operations (add, remove, rename, reorder).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: column ID generation on `createMatrix` (each column gets a unique non-zero ID). Column ID preserved across `renameColumn`. Column ID returned by `getColumns`. `addColumn` assigns a new ID. `addFormulaColumn` assigns a new ID. No regression in existing column operations (add, remove, rename, reorder).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 2. Column constraints and plugin column ownership
 

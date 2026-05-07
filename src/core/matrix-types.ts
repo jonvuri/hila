@@ -105,7 +105,7 @@ export type MatrixOperationMap = {
       displayType?: string
       options?: string
     }
-    result: void
+    result: number
   }
   addFormulaColumn: {
     params: {
@@ -113,7 +113,7 @@ export type MatrixOperationMap = {
       name: string
       formula: string
     }
-    result: void
+    result: number
   }
   removeColumn: {
     params: { matrixId: number; columnName: string }

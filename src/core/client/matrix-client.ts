@@ -116,14 +116,14 @@ export const addColumn = (
   columnType: string,
   displayType?: string,
   options?: string,
-): Promise<void> =>
+): Promise<number> =>
   workerCall('addColumn', { matrixId, name, columnType, displayType, options })
 
 export const addFormulaColumn = (
   matrixId: number,
   name: string,
   formula: string,
-): Promise<void> => workerCall('addFormulaColumn', { matrixId, name, formula })
+): Promise<number> => workerCall('addFormulaColumn', { matrixId, name, formula })
 
 export const removeColumn = (matrixId: number, columnName: string): Promise<void> =>
   workerCall('removeColumn', { matrixId, columnName })

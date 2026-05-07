@@ -351,10 +351,15 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       const { id, matrixId, name, columnType, displayType, options } = message
       try {
         const { db } = await sqliteWasm
-        addColumnImpl(db, matrixId, { name, type: columnType, displayType, options })
+        const colId = addColumnImpl(db, matrixId, {
+          name,
+          type: columnType,
+          displayType,
+          options,
+        })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
-        postMessage({ type: 'addColumnSuccess', id, result: undefined })
+        postMessage({ type: 'addColumnSuccess', id, result: colId })
       } catch (err: unknown) {
         postMessage({ type: 'addColumnError', id, error: toError(err) })
       }
@@ -365,10 +370,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       const { id, matrixId, name, formula } = message
       try {
         const { db } = await sqliteWasm
-        addFormulaColumnImpl(db, matrixId, name, formula)
+        const colId = addFormulaColumnImpl(db, matrixId, name, formula)
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
-        postMessage({ type: 'addFormulaColumnSuccess', id, result: undefined })
+        postMessage({ type: 'addFormulaColumnSuccess', id, result: colId })
       } catch (err: unknown) {
         postMessage({ type: 'addFormulaColumnError', id, error: toError(err) })
       }

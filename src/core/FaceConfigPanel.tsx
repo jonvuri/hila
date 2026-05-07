@@ -25,7 +25,7 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
 
   const { result: columnsResult } = useQuery(
     () =>
-      `SELECT name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ${props.matrixId} ORDER BY "order"`,
+      `SELECT id, name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ${props.matrixId} ORDER BY "order"`,
   )
 
   const columns = createMemo((): ColumnDefinition[] => {
