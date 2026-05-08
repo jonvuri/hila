@@ -6,6 +6,7 @@ import { Node } from 'prosemirror-model'
 import {
   initMatrixSchema,
   createMatrix,
+  getColumns,
   insertDataRow,
   updateRow,
   insertJoin,
@@ -87,10 +88,14 @@ describe('Notes plugin', () => {
     const ctx = await registerPlugin(db, testNotesPlugin)
     const matrixId = ctx.matrixIds['notes']!
 
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+    const bodyColId = cols.find((c) => c.name === 'body')!.id
+
     const configs = getFaceConfigsForMatrix(db, matrixId)
     const noteConfig = configs.find((c) => c.faceTypeId === 'hila.note')!
 
-    expect(noteConfig.slotBindings).toEqual({ title: 'title', body: 'body' })
+    expect(noteConfig.slotBindings).toEqual({ title: titleColId, body: bodyColId })
   })
 
   test('re-registering the notes plugin is idempotent', async () => {

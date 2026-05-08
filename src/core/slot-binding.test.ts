@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { beforeEach, describe, expect, test } from 'vitest'
 
 import type { FaceTypeDefinition } from './face-types'
 import { resolveSlotBindings } from './slot-binding'
@@ -12,22 +12,27 @@ const makeFaceType = (overrides: Partial<FaceTypeDefinition> = {}): FaceTypeDefi
   ...overrides,
 })
 
+let nextId = 1
+const col = (name: string, type: string) => ({ id: nextId++, name, type })
+
 describe('resolveSlotBindings', () => {
+  beforeEach(() => {
+    nextId = 1
+  })
+
   // -- Explicit binding ---------------------------------------------------------
 
   test('explicit binding wins over all other strategies', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'title', preferredType: 'text', required: true }],
     })
-    const columns = [
-      { name: 'title', type: 'TEXT' },
-      { name: 'description', type: 'TEXT' },
-    ]
+    const columns = [col('title', 'TEXT'), col('description', 'TEXT')]
 
-    const result = resolveSlotBindings(faceType, columns, { title: 'description' })
+    const result = resolveSlotBindings(faceType, columns, { title: columns[1]!.id })
 
     expect(result.bindings).toHaveLength(1)
     expect(result.bindings[0]!.columnName).toBe('description')
+    expect(result.bindings[0]!.columnId).toBe(columns[1]!.id)
     expect(result.bindings[0]!.resolution).toBe('explicit')
   })
 
@@ -35,9 +40,9 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'title', preferredType: 'text', required: true }],
     })
-    const columns = [{ name: 'title', type: 'TEXT' }]
+    const columns = [col('title', 'TEXT')]
 
-    const result = resolveSlotBindings(faceType, columns, { title: 'nonexistent' })
+    const result = resolveSlotBindings(faceType, columns, { title: 999 })
 
     expect(result.bindings).toHaveLength(1)
     expect(result.bindings[0]!.columnName).toBe('title')
@@ -50,10 +55,7 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'Title', preferredType: 'text', required: true }],
     })
-    const columns = [
-      { name: 'title', type: 'TEXT' },
-      { name: 'body', type: 'TEXT' },
-    ]
+    const columns = [col('title', 'TEXT'), col('body', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -68,11 +70,7 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'content', preferredType: 'number', required: true }],
     })
-    const columns = [
-      { name: 'label', type: 'TEXT' },
-      { name: 'amount', type: 'INTEGER' },
-      { name: 'price', type: 'REAL' },
-    ]
+    const columns = [col('label', 'TEXT'), col('amount', 'INTEGER'), col('price', 'REAL')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -85,10 +83,7 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'editor', preferredType: 'richtext', required: true }],
     })
-    const columns = [
-      { name: 'count', type: 'INTEGER' },
-      { name: 'body', type: 'TEXT' },
-    ]
+    const columns = [col('count', 'INTEGER'), col('body', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -103,7 +98,7 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'data', preferredType: 'boolean', required: true }],
     })
-    const columns = [{ name: 'notes', type: 'TEXT' }]
+    const columns = [col('notes', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -118,11 +113,7 @@ describe('resolveSlotBindings', () => {
     const faceType = makeFaceType({
       slots: [{ name: 'title', preferredType: 'text', required: true }],
     })
-    const columns = [
-      { name: 'title', type: 'TEXT' },
-      { name: 'body', type: 'TEXT' },
-      { name: 'count', type: 'INTEGER' },
-    ]
+    const columns = [col('title', 'TEXT'), col('body', 'TEXT'), col('count', 'INTEGER')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -135,10 +126,7 @@ describe('resolveSlotBindings', () => {
 
   test('all columns overflow when face has no slots', () => {
     const faceType = makeFaceType({ slots: [] })
-    const columns = [
-      { name: 'a', type: 'TEXT' },
-      { name: 'b', type: 'INTEGER' },
-    ]
+    const columns = [col('a', 'TEXT'), col('b', 'INTEGER')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -155,11 +143,7 @@ describe('resolveSlotBindings', () => {
         { name: 'body', preferredType: 'richtext', required: true },
       ],
     })
-    const columns = [
-      { name: 'title', type: 'TEXT' },
-      { name: 'body', type: 'TEXT' },
-      { name: 'extra', type: 'TEXT' },
-    ]
+    const columns = [col('title', 'TEXT'), col('body', 'TEXT'), col('extra', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -178,10 +162,7 @@ describe('resolveSlotBindings', () => {
         { name: 'back', preferredType: 'text', required: true },
       ],
     })
-    const columns = [
-      { name: 'question', type: 'TEXT' },
-      { name: 'answer', type: 'TEXT' },
-    ]
+    const columns = [col('question', 'TEXT'), col('answer', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 
@@ -202,7 +183,7 @@ describe('resolveSlotBindings', () => {
         { name: 'b', preferredType: 'text', required: true },
       ],
     })
-    const columns = [{ name: 'only', type: 'TEXT' }]
+    const columns = [col('only', 'TEXT')]
 
     const result = resolveSlotBindings(faceType, columns)
 

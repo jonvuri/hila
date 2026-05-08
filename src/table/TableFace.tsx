@@ -138,18 +138,17 @@ type CellAddress = { row: number; col: number }
 const TableFace: Component<FaceComponentProps> = (props) => {
   const matrixId = () => props.config.matrixId
 
-  // -- Settings from face config -------
-  const settingsSort = (): SortConfig | null => {
-    const s = props.config.settings as { sort?: SortConfig }
-    return s.sort ?? null
-  }
-  const settingsFilters = (): FilterConfig[] => {
-    const s = props.config.settings as { filters?: FilterConfig[] }
-    return s.filters ?? []
-  }
+  // -- Settings from face config (ID-based) -------
+  const initialSort = (): SortConfig | null => props.config.sort ?? null
+  const initialFilters = (): FilterConfig[] =>
+    (props.config.filters ?? []).map((f) => ({
+      columnId: f.columnId,
+      operator: f.operator as FilterOperator,
+      value: f.value,
+    }))
 
-  const [sort, setSort] = createSignal<SortConfig | null>(settingsSort())
-  const [filters, setFilters] = createSignal<FilterConfig[]>(settingsFilters())
+  const [sort, setSort] = createSignal<SortConfig | null>(initialSort())
+  const [filters, setFilters] = createSignal<FilterConfig[]>(initialFilters())
 
   // -- Reactive queries -------
   const columnsQuery = () =>
@@ -164,9 +163,9 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   const dataQuery = () => {
     const cols = columns()
-    const colNames = new Set(cols.map((c) => c.name))
-    const validSort = sort() && colNames.has(sort()!.column) ? sort() : null
-    const validFilters = filters().filter((f) => colNames.has(f.column))
+    const colIds = new Set(cols.map((c) => c.id))
+    const validSort = sort() && colIds.has(sort()!.columnId) ? sort() : null
+    const validFilters = filters().filter((f) => colIds.has(f.columnId))
     return buildTableQuery(matrixId(), validSort, validFilters, cols)
   }
   const { result: dataResult } = useQuery(dataQuery)
@@ -204,23 +203,20 @@ const TableFace: Component<FaceComponentProps> = (props) => {
   const persistSettings = async (newSort: SortConfig | null, newFilters: FilterConfig[]) => {
     const updated = {
       ...props.config,
-      settings: {
-        ...props.config.settings,
-        sort: newSort ?? undefined,
-        filters: newFilters.length > 0 ? newFilters : undefined,
-      },
+      sort: newSort,
+      filters: newFilters,
     }
     await saveFaceConfig(updated)
   }
 
   // -- Sort/filter actions -------
-  const toggleSort = async (columnName: string) => {
+  const toggleSort = async (col: ColumnDefinition) => {
     const current = sort()
     let next: SortConfig | null
-    if (current?.column === columnName) {
-      next = current.direction === 'ASC' ? { column: columnName, direction: 'DESC' } : null
+    if (current?.columnId === col.id) {
+      next = current.direction === 'ASC' ? { columnId: col.id, direction: 'DESC' } : null
     } else {
-      next = { column: columnName, direction: 'ASC' }
+      next = { columnId: col.id, direction: 'ASC' }
     }
     setSort(next)
     await persistSettings(next, filters())
@@ -396,10 +392,11 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   const handleRemoveColumn = async (columnName: string) => {
     setContextMenu(null)
-    if (sort()?.column === columnName) {
+    const col = columns().find((c) => c.name === columnName)
+    if (col && sort()?.columnId === col.id) {
       setSort(null)
     }
-    const updatedFilters = filters().filter((f) => f.column !== columnName)
+    const updatedFilters = col ? filters().filter((f) => f.columnId !== col.id) : filters()
     setFilters(updatedFilters)
 
     await removeColumn(matrixId(), columnName)
@@ -413,15 +410,6 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     if (!newName || newName === oldName) return
 
     await renameColumn(matrixId(), oldName, newName)
-
-    if (sort()?.column === oldName) {
-      setSort({ ...sort()!, column: newName })
-    }
-    const updatedFilters = filters().map((f) =>
-      f.column === oldName ? { ...f, column: newName } : f,
-    )
-    setFilters(updatedFilters)
-    await persistSettings(sort(), updatedFilters)
   }
 
   const handleChangeType = async (columnName: string, newType: ColumnDisplayType) => {
@@ -601,14 +589,17 @@ const TableFace: Component<FaceComponentProps> = (props) => {
       {/* Toolbar / filter bar */}
       <div class={styles.toolbar}>
         <For each={filters()}>
-          {(f, i) => (
-            <span class={styles.filterTag}>
-              {f.column} {f.operator} {f.value}
-              <button onClick={() => void removeFilter(i())} aria-label="Remove filter">
-                ×
-              </button>
-            </span>
-          )}
+          {(f, i) => {
+            const colName = () => columns().find((c) => c.id === f.columnId)?.name ?? '?'
+            return (
+              <span class={styles.filterTag}>
+                {colName()} {f.operator} {f.value}
+                <button onClick={() => void removeFilter(i())} aria-label="Remove filter">
+                  ×
+                </button>
+              </span>
+            )
+          }}
         </For>
         <div style={{ position: 'relative' }}>
           <button class={styles.addFilterBtn} onClick={() => setAddingFilter(!addingFilter())}>
@@ -617,7 +608,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
           <Show when={addingFilter()}>
             <FilterPopover
               columns={columns()}
-              defaultColumn={columns()[0]?.name ?? ''}
+              defaultColumnId={columns()[0]?.id ?? null}
               onAdd={(f) => void addFilter(f)}
               onClose={() => setAddingFilter(false)}
             />
@@ -667,7 +658,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                     >
                       <div
                         class={styles.thContent}
-                        onClick={() => void toggleSort(col.name)}
+                        onClick={() => void toggleSort(col)}
                         onDblClick={() => startRenameColumn(col)}
                       >
                         <span>{col.name}</span>
@@ -679,7 +670,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                         <span class={styles.typeLabel}>
                           {col.formula !== null ? 'formula' : col.displayType}
                         </span>
-                        <Show when={sort()?.column === col.name}>
+                        <Show when={sort()?.columnId === col.id}>
                           <span class={styles.sortIndicator}>
                             {sort()?.direction === 'ASC' ? '▲' : '▼'}
                           </span>
@@ -1064,18 +1055,21 @@ const FormulaDialog: Component<{
 
 const FilterPopover: Component<{
   columns: ColumnDefinition[]
-  defaultColumn: string
+  defaultColumnId: number | null
   onAdd: (f: FilterConfig) => void
   onClose: () => void
 }> = (props) => {
-  const [column, setColumn] = createSignal(props.defaultColumn)
+  const [columnId, setColumnId] = createSignal<number | null>(props.defaultColumnId)
   const [operator, setOperator] = createSignal<FilterOperator>('=')
   const [value, setValue] = createSignal('')
 
   return (
     <div class={styles.filterPopover} onClick={(e) => e.stopPropagation()}>
-      <select value={column()} onChange={(e) => setColumn(e.currentTarget.value)}>
-        <For each={props.columns}>{(c) => <option value={c.name}>{c.name}</option>}</For>
+      <select
+        value={columnId() ?? ''}
+        onChange={(e) => setColumnId(Number(e.currentTarget.value))}
+      >
+        <For each={props.columns}>{(c) => <option value={c.id}>{c.name}</option>}</For>
       </select>
       <select
         value={operator()}
@@ -1090,8 +1084,8 @@ const FilterPopover: Component<{
         value={value()}
         onInput={(e) => setValue(e.currentTarget.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && column()) {
-            props.onAdd({ column: column(), operator: operator(), value: value() })
+          if (e.key === 'Enter' && columnId() != null) {
+            props.onAdd({ columnId: columnId()!, operator: operator(), value: value() })
           }
           if (e.key === 'Escape') props.onClose()
         }}
@@ -1101,7 +1095,8 @@ const FilterPopover: Component<{
       <button
         style={{ background: '#2563eb', color: '#fff' }}
         onClick={() => {
-          if (column()) props.onAdd({ column: column(), operator: operator(), value: value() })
+          if (columnId() != null)
+            props.onAdd({ columnId: columnId()!, operator: operator(), value: value() })
         }}
       >
         Add

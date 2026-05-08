@@ -202,6 +202,33 @@ export const initMatrixSchema = (db: Database) => {
   } catch {
     // Column already exists (new database or previously migrated)
   }
+
+  // -- Normalized face config tables ------------------------------------------
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS face_slot_bindings (
+      face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
+      slot_name      TEXT    NOT NULL,
+      column_id      INTEGER REFERENCES matrix_columns(id) ON DELETE SET NULL,
+      PRIMARY KEY (face_config_id, slot_name)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS face_sort_config (
+      face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
+      column_id      INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
+      direction      TEXT    NOT NULL CHECK (direction IN ('ASC', 'DESC')),
+      PRIMARY KEY (face_config_id)
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS face_filter_configs (
+      id             INTEGER PRIMARY KEY,
+      face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
+      column_id      INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
+      operator       TEXT    NOT NULL,
+      value          TEXT    NOT NULL
+    ) STRICT;
+  `)
+
 }
 
 /**

@@ -1,14 +1,14 @@
 import type { ColumnDefinition } from '../core/matrix'
 
 export type SortConfig = {
-  column: string
+  columnId: number
   direction: 'ASC' | 'DESC'
 }
 
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE'
 
 export type FilterConfig = {
-  column: string
+  columnId: number
   operator: FilterOperator
   value: string
 }
@@ -17,13 +17,18 @@ const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 
 const escapeString = (value: string): string => `'${value.replace(/'/g, "''")}'`
 
+/**
+ * Build a SQL query for the table face. Resolves column IDs to names via
+ * the provided columns array.
+ */
 export const buildTableQuery = (
   matrixId: number,
   sort: SortConfig | null,
   filters: FilterConfig[],
-  columns?: ColumnDefinition[],
+  columns: ColumnDefinition[],
 ): string => {
-  const formulaCols = columns?.filter((c) => c.formula !== null) ?? []
+  const nameById = new Map(columns.map((c) => [c.id, c.name]))
+  const formulaCols = columns.filter((c) => c.formula !== null)
 
   let selectClause: string
   if (formulaCols.length > 0) {
@@ -36,19 +41,28 @@ export const buildTableQuery = (
   let query = selectClause
 
   if (filters.length > 0) {
-    const clauses = filters.map((f) => {
-      const col = quoteIdent(f.column)
-      const val = escapeString(f.value)
-      if (f.operator === 'LIKE' || f.operator === 'NOT LIKE') {
-        return `${col} ${f.operator} '%' || ${val} || '%'`
-      }
-      return `${col} ${f.operator} ${val}`
-    })
-    query += ` WHERE ${clauses.join(' AND ')}`
+    const clauses = filters
+      .map((f) => {
+        const colName = nameById.get(f.columnId)
+        if (!colName) return null
+        const col = quoteIdent(colName)
+        const val = escapeString(f.value)
+        if (f.operator === 'LIKE' || f.operator === 'NOT LIKE') {
+          return `${col} ${f.operator} '%' || ${val} || '%'`
+        }
+        return `${col} ${f.operator} ${val}`
+      })
+      .filter((c): c is string => c !== null)
+    if (clauses.length > 0) {
+      query += ` WHERE ${clauses.join(' AND ')}`
+    }
   }
 
   if (sort) {
-    query += ` ORDER BY ${quoteIdent(sort.column)} ${sort.direction}`
+    const sortColName = nameById.get(sort.columnId)
+    if (sortColName) {
+      query += ` ORDER BY ${quoteIdent(sortColName)} ${sort.direction}`
+    }
   }
 
   return query

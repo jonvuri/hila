@@ -30,13 +30,17 @@ export const clearFaceComponents = (): void => {
  */
 const FaceRenderer: Component<{
   config: FaceConfig
-  columns: { name: string; type: string }[]
+  columns: { id: number; name: string; type: string }[]
 }> = (props) => {
   const resolve = (): { Comp: FaceComponent; bindings: SlotBindingResult } | null => {
     const faceType = getFaceType(props.config.faceTypeId)
     const Comp = componentMap.get(props.config.faceTypeId)
     if (!faceType || !Comp) return null
-    const bindings = resolveSlotBindings(faceType, props.columns, props.config.slotBindings)
+    const explicit: Record<string, number> = {}
+    for (const [slot, colId] of Object.entries(props.config.slotBindings)) {
+      if (colId != null) explicit[slot] = colId
+    }
+    const bindings = resolveSlotBindings(faceType, props.columns, explicit)
     return { Comp, bindings }
   }
 

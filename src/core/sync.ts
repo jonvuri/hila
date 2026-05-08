@@ -126,6 +126,23 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'settings', type: 'TEXT' },
     { name: 'created_by_plugin', type: 'TEXT' },
   ],
+  face_slot_bindings: [
+    { name: 'face_config_id', type: 'TEXT' },
+    { name: 'slot_name', type: 'TEXT' },
+    { name: 'column_id', type: 'INTEGER' },
+  ],
+  face_sort_config: [
+    { name: 'face_config_id', type: 'TEXT' },
+    { name: 'column_id', type: 'INTEGER' },
+    { name: 'direction', type: 'TEXT' },
+  ],
+  face_filter_configs: [
+    { name: 'id', type: 'INTEGER' },
+    { name: 'face_config_id', type: 'TEXT' },
+    { name: 'column_id', type: 'INTEGER' },
+    { name: 'operator', type: 'TEXT' },
+    { name: 'value', type: 'TEXT' },
+  ],
 }
 
 /** Install change-tracking triggers on the four core tables. */

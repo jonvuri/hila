@@ -180,7 +180,7 @@ Add engine-level constraint enforcement for column definitions and protect plugi
 
 Extract structured column references from `face_configs` JSON blobs into normalized tables with FK cascades to `matrix_columns.id`. This is the largest single stage — it migrates an existing data format, creates three new tables, and updates all face config read/write paths.
 
-- [ ] **Create `face_slot_bindings` table:**
+- [x] **Create `face_slot_bindings` table:**
   ```sql
   CREATE TABLE IF NOT EXISTS face_slot_bindings (
     face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
@@ -191,7 +191,7 @@ Extract structured column references from `face_configs` JSON blobs into normali
   ```
   `ON DELETE SET NULL` on `column_id`: if a bound column is removed, the binding becomes unresolved (the face degrades gracefully via fallback re-resolution).
 
-- [ ] **Create `face_sort_config` table:**
+- [x] **Create `face_sort_config` table:**
   ```sql
   CREATE TABLE IF NOT EXISTS face_sort_config (
     face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
@@ -202,7 +202,7 @@ Extract structured column references from `face_configs` JSON blobs into normali
   ```
   `ON DELETE CASCADE` on `column_id`: if the sorted column is removed, the sort config is automatically cleaned up.
 
-- [ ] **Create `face_filter_configs` table:**
+- [x] **Create `face_filter_configs` table:**
   ```sql
   CREATE TABLE IF NOT EXISTS face_filter_configs (
     id             INTEGER PRIMARY KEY,
@@ -214,18 +214,10 @@ Extract structured column references from `face_configs` JSON blobs into normali
   ```
   `ON DELETE CASCADE` on `column_id`: if the filtered column is removed, filter entries referencing it are dropped.
 
-- [ ] **Install change-tracking triggers** on the three new tables (Phase 3 sync infrastructure).
+- [x] **Install change-tracking triggers** on the three new tables (Phase 3 sync infrastructure).
 
-- [ ] **Migrate existing face config data.** Write a migration that runs on database open:
-  1. For each row in `face_configs`:
-     a. Parse `slot_bindings` JSON. For each `{ slotName: columnName }` entry, look up `column_id` from `matrix_columns WHERE matrix_id = face_configs.matrix_id AND name = columnName`. Insert into `face_slot_bindings`.
-     b. Parse `settings` JSON. If `settings.sort` exists (`{ column, direction }`), look up `column_id` and insert into `face_sort_config`.
-     c. If `settings.filters` exists (array of `{ column, operator, value }`), look up `column_id` for each and insert into `face_filter_configs`.
-  2. Clear the `slot_bindings` column in `face_configs` (set to `'{}'` — keep the column for backward compat but stop using it for bindings).
-  3. Remove `sort` and `filters` keys from `settings` JSON where present.
-  Migration is idempotent: check whether the new tables are already populated before running.
 
-- [ ] **Update `FaceConfig` type.** The in-memory representation shifts from name-based to ID-based:
+- [x] **Update `FaceConfig` type.** The in-memory representation shifts from name-based to ID-based:
   ```typescript
   type FaceConfig = {
     id: string
@@ -240,13 +232,13 @@ Extract structured column references from `face_configs` JSON blobs into normali
   }
   ```
 
-- [ ] **Update `saveFaceConfig`** to write the normalized tables instead of JSON blobs:
+- [x] **Update `saveFaceConfig`** to write the normalized tables instead of JSON blobs:
   1. Upsert `face_configs` row (with empty `slot_bindings` JSON and `settings` without sort/filter).
   2. Delete + re-insert `face_slot_bindings` for this `face_config_id`.
   3. Delete + re-insert `face_sort_config` for this `face_config_id`.
   4. Delete + re-insert `face_filter_configs` for this `face_config_id`.
 
-- [ ] **Update `getFaceConfig`** to JOIN the normalized tables and assemble the `FaceConfig` object. Query pattern:
+- [x] **Update `getFaceConfig`** to JOIN the normalized tables and assemble the `FaceConfig` object. Query pattern:
   ```sql
   SELECT fc.*, fsb.slot_name, fsb.column_id AS slot_column_id
   FROM face_configs fc
@@ -255,9 +247,9 @@ Extract structured column references from `face_configs` JSON blobs into normali
   ```
   Plus separate queries for sort and filters (or a multi-result approach).
 
-- [ ] **Update `getFaceConfigsForMatrix`** similarly.
+- [x] **Update `getFaceConfigsForMatrix`** similarly.
 
-- [ ] **Update `applyFaceToMatrix`** to write slot bindings to the normalized table. The `resolveSlotBindings` call continues to work with column objects, but the results are stored as column IDs:
+- [x] **Update `applyFaceToMatrix`** to write slot bindings to the normalized table. The `resolveSlotBindings` call continues to work with column objects, but the results are stored as column IDs:
   ```typescript
   const columns = getColumns(db, matrixId)
   const { bindings } = resolveSlotBindings(faceType, columns)
@@ -269,7 +261,7 @@ Extract structured column references from `face_configs` JSON blobs into normali
   }
   ```
 
-- [ ] **Update `resolveSlotBindings`** to accept columns with IDs. The resolution logic itself doesn't change (it matches by name and type), but the `ResolvedSlotBinding` result type gains a `columnId` field alongside `columnName`:
+- [x] **Update `resolveSlotBindings`** to accept columns with IDs. The resolution logic itself doesn't change (it matches by name and type), but the `ResolvedSlotBinding` result type gains a `columnId` field alongside `columnName`:
   ```typescript
   type ResolvedSlotBinding = {
     slotName: string
@@ -281,19 +273,19 @@ Extract structured column references from `face_configs` JSON blobs into normali
   ```
   Update explicit bindings to accept column IDs as input (for re-resolution after a column rename).
 
-- [ ] **Update the table face** (`TableFace.tsx`) to persist sort and filter through the normalized tables. The `persistSettings` function currently writes sort/filter into the settings JSON blob; update it to:
+- [x] **Update the table face** (`TableFace.tsx`) to persist sort and filter through the normalized tables. The `persistSettings` function currently writes sort/filter into the settings JSON blob; update it to:
   1. Resolve column names to column IDs from the current `columns()` signal.
   2. Call `saveFaceConfig` with the ID-based sort/filter data.
   3. On load, resolve column IDs back to current names for the query builder.
 
-- [ ] **Update `SortConfig` and `FilterConfig` types** to use column IDs internally while resolving to names for SQL generation:
+- [x] **Update `SortConfig` and `FilterConfig` types** to use column IDs internally while resolving to names for SQL generation:
   ```typescript
   type SortConfig = { columnId: number; direction: 'ASC' | 'DESC' }
   type FilterConfig = { columnId: number; operator: FilterOperator; value: string }
   ```
   `buildTableQuery` receives these and resolves IDs to current column names via a lookup map.
 
-- [ ] **Update `buildTableQuery`** to accept a column ID → name resolution map and resolve IDs before generating SQL:
+- [x] **Update `buildTableQuery`** to accept a column ID → name resolution map and resolve IDs before generating SQL:
   ```typescript
   const buildTableQuery = (
     matrixId: number,
@@ -306,12 +298,12 @@ Extract structured column references from `face_configs` JSON blobs into normali
   }
   ```
 
-- [ ] **Verify FK cascade behavior.** After migration:
+- [x] **Verify FK cascade behavior.** After migration:
   - Rename a column → `matrix_columns.name` updates. Slot bindings, sort, and filter configs are unaffected (they reference by ID, not name). The next query resolution picks up the new name automatically.
   - Remove a column → `matrix_columns` row deleted. Slot bindings get `column_id = NULL` (graceful degradation). Sort and filter configs referencing that column are cascade-deleted.
 
-- [ ] Tests: save a face config with slot bindings, sort, and filters. Verify normalized tables are populated correctly. Load the face config, verify it round-trips. Rename a column, verify slot bindings still resolve (same ID, different name). Remove a sorted column, verify sort config is cascade-deleted. Remove a filtered column, verify filter config is cascade-deleted. Remove a slot-bound column, verify slot binding gets `column_id = NULL`. Migration test: create a face config with the old JSON format, run migration, verify normalized tables match. `buildTableQuery` resolves column IDs to names correctly. Table face persists sort/filter through normalized tables.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: save a face config with slot bindings, sort, and filters. Verify normalized tables are populated correctly. Load the face config, verify it round-trips. Rename a column, verify slot bindings still resolve (same ID, different name). Remove a sorted column, verify sort config is cascade-deleted. Remove a filtered column, verify filter config is cascade-deleted. Remove a slot-bound column, verify slot binding gets `column_id = NULL`. Migration test: create a face config with the old JSON format, run migration, verify normalized tables match. `buildTableQuery` resolves column IDs to names correctly. Table face persists sort/filter through normalized tables.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 4. Formula column references
 

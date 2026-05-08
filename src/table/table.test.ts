@@ -16,6 +16,7 @@ import {
 } from '../core/matrix'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { applyFaceToMatrix, getFaceConfig } from '../core/face-config'
+import type { ColumnDefinition } from '../core/matrix'
 
 import { buildTableQuery, type SortConfig, type FilterConfig } from './table-query'
 import {
@@ -31,62 +32,88 @@ afterEach(() => {
 
 // -- Query builder tests ------------------------------------------------------
 
+const makeCol = (id: number, name: string, type = 'TEXT'): ColumnDefinition => ({
+  id,
+  name,
+  type,
+  displayType: 'text',
+  order: id,
+  options: null,
+  formula: null,
+  constraints: null,
+  managedBy: null,
+})
+
 describe('buildTableQuery', () => {
+  const cols = [
+    makeCol(1, 'name'),
+    makeCol(2, 'age', 'INTEGER'),
+    makeCol(3, 'active', 'INTEGER'),
+  ]
+
   test('builds a basic SELECT * query with no sort or filters', () => {
-    const q = buildTableQuery(42, null, [])
+    const q = buildTableQuery(42, null, [], cols)
     expect(q).toBe('SELECT * FROM "mx_42_data"')
   })
 
   test('adds ORDER BY when sort is specified', () => {
-    const sort: SortConfig = { column: 'name', direction: 'ASC' }
-    const q = buildTableQuery(42, sort, [])
+    const sort: SortConfig = { columnId: 1, direction: 'ASC' }
+    const q = buildTableQuery(42, sort, [], cols)
     expect(q).toBe('SELECT * FROM "mx_42_data" ORDER BY "name" ASC')
   })
 
   test('adds ORDER BY DESC', () => {
-    const sort: SortConfig = { column: 'age', direction: 'DESC' }
-    const q = buildTableQuery(42, sort, [])
+    const sort: SortConfig = { columnId: 2, direction: 'DESC' }
+    const q = buildTableQuery(42, sort, [], cols)
     expect(q).toBe('SELECT * FROM "mx_42_data" ORDER BY "age" DESC')
   })
 
   test('adds WHERE clause for filters', () => {
-    const filters: FilterConfig[] = [{ column: 'age', operator: '>', value: '30' }]
-    const q = buildTableQuery(42, null, filters)
+    const filters: FilterConfig[] = [{ columnId: 2, operator: '>', value: '30' }]
+    const q = buildTableQuery(42, null, filters, cols)
     expect(q).toBe(`SELECT * FROM "mx_42_data" WHERE "age" > '30'`)
   })
 
   test('combines multiple filters with AND', () => {
     const filters: FilterConfig[] = [
-      { column: 'age', operator: '>', value: '30' },
-      { column: 'name', operator: '=', value: 'Alice' },
+      { columnId: 2, operator: '>', value: '30' },
+      { columnId: 1, operator: '=', value: 'Alice' },
     ]
-    const q = buildTableQuery(42, null, filters)
+    const q = buildTableQuery(42, null, filters, cols)
     expect(q).toBe(`SELECT * FROM "mx_42_data" WHERE "age" > '30' AND "name" = 'Alice'`)
   })
 
   test('handles LIKE operator with wrapping', () => {
-    const filters: FilterConfig[] = [{ column: 'name', operator: 'LIKE', value: 'Ali' }]
-    const q = buildTableQuery(42, null, filters)
+    const filters: FilterConfig[] = [{ columnId: 1, operator: 'LIKE', value: 'Ali' }]
+    const q = buildTableQuery(42, null, filters, cols)
     expect(q).toBe(`SELECT * FROM "mx_42_data" WHERE "name" LIKE '%' || 'Ali' || '%'`)
   })
 
   test('combines filters and sort', () => {
-    const sort: SortConfig = { column: 'name', direction: 'ASC' }
-    const filters: FilterConfig[] = [{ column: 'active', operator: '=', value: '1' }]
-    const q = buildTableQuery(42, sort, filters)
+    const sort: SortConfig = { columnId: 1, direction: 'ASC' }
+    const filters: FilterConfig[] = [{ columnId: 3, operator: '=', value: '1' }]
+    const q = buildTableQuery(42, sort, filters, cols)
     expect(q).toBe(`SELECT * FROM "mx_42_data" WHERE "active" = '1' ORDER BY "name" ASC`)
   })
 
   test('escapes single quotes in filter values', () => {
-    const filters: FilterConfig[] = [{ column: 'name', operator: '=', value: "O'Brien" }]
-    const q = buildTableQuery(42, null, filters)
+    const filters: FilterConfig[] = [{ columnId: 1, operator: '=', value: "O'Brien" }]
+    const q = buildTableQuery(42, null, filters, cols)
     expect(q).toBe(`SELECT * FROM "mx_42_data" WHERE "name" = 'O''Brien'`)
   })
 
   test('escapes double quotes in column names', () => {
-    const sort: SortConfig = { column: 'my"col', direction: 'ASC' }
-    const q = buildTableQuery(42, sort, [])
+    const specialCols = [makeCol(99, 'my"col')]
+    const sort: SortConfig = { columnId: 99, direction: 'ASC' }
+    const q = buildTableQuery(42, sort, [], specialCols)
     expect(q).toBe('SELECT * FROM "mx_42_data" ORDER BY "my""col" ASC')
+  })
+
+  test('ignores sort/filter referencing unknown column IDs', () => {
+    const sort: SortConfig = { columnId: 999, direction: 'ASC' }
+    const filters: FilterConfig[] = [{ columnId: 888, operator: '=', value: 'x' }]
+    const q = buildTableQuery(42, sort, filters, cols)
+    expect(q).toBe('SELECT * FROM "mx_42_data"')
   })
 })
 
@@ -225,6 +252,8 @@ describe('Table face schema', () => {
     expect(config.matrixId).toBe(matrixId)
     expect(config.slotBindings).toEqual({})
     expect(config.query).toBe(`SELECT * FROM "mx_${matrixId}_data"`)
+    expect(config.sort).toBeNull()
+    expect(config.filters).toEqual([])
 
     const loaded = getFaceConfig(db, config.id)
     expect(loaded).not.toBeNull()

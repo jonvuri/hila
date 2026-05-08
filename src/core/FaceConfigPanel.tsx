@@ -19,7 +19,7 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
   const [selectedFaceTypeId, setSelectedFaceTypeId] = createSignal<string>(
     props.initialFaceTypeId ?? '',
   )
-  const [overrides, setOverrides] = createSignal<Record<string, string>>({})
+  const [overrides, setOverrides] = createSignal<Record<string, number>>({})
   const [applying, setApplying] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
 
@@ -45,8 +45,7 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
     const ft = selectedFaceType()
     const cols = columns()
     if (!ft || cols.length === 0) return { bindings: [], overflowColumns: [] }
-    const colsForBinding = cols.map((c) => ({ name: c.name, type: c.type }))
-    return resolveSlotBindings(ft, colsForBinding, overrides())
+    return resolveSlotBindings(ft, cols, overrides())
   })
 
   const handleFaceTypeChange = (faceTypeId: string) => {
@@ -55,14 +54,14 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
     setError(null)
   }
 
-  const handleSlotBindingChange = (slotName: string, columnName: string) => {
+  const handleSlotBindingChange = (slotName: string, columnId: string) => {
     setOverrides((prev) => {
-      if (columnName === '') {
+      if (columnId === '') {
         const next = { ...prev }
         delete next[slotName]
         return next
       }
-      return { ...prev, [slotName]: columnName }
+      return { ...prev, [slotName]: Number(columnId) }
     })
   }
 
@@ -78,7 +77,10 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
 
       const currentOverrides = overrides()
       if (Object.keys(currentOverrides).length > 0) {
-        const merged = { ...config.slotBindings, ...currentOverrides }
+        const merged: Record<string, number | null> = { ...config.slotBindings }
+        for (const [slot, colId] of Object.entries(currentOverrides)) {
+          merged[slot] = colId
+        }
         const updatedConfig: FaceConfig = { ...config, slotBindings: merged }
         await saveFaceConfig(updatedConfig)
         props.onApply?.(updatedConfig)
@@ -174,7 +176,7 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
                           </span>
                           <select
                             class="face-config-binding-select"
-                            value={overrides()[binding.slotName] ?? binding.columnName}
+                            value={overrides()[binding.slotName] ?? binding.columnId}
                             onChange={(e) =>
                               handleSlotBindingChange(binding.slotName, e.currentTarget.value)
                             }
@@ -182,7 +184,7 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
                           >
                             <For each={columns()}>
                               {(col) => (
-                                <option value={col.name}>
+                                <option value={col.id}>
                                   {col.name} ({col.type})
                                 </option>
                               )}

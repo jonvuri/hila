@@ -1,6 +1,6 @@
 import type { FaceTypeDefinition, ResolvedSlotBinding, SlotBindingResult } from './face-types'
 
-type Column = { name: string; type: string }
+type Column = { id: number; name: string; type: string }
 
 /**
  * Map from SQLite column types to the semantic slot preferred types they
@@ -25,7 +25,7 @@ const sqliteTypeMatchesPreferred = (sqliteType: string, preferredType: string): 
  * Resolve slot bindings for a face type against a set of columns.
  *
  * Resolution chain (per Plugins.md - Slot binding resolution):
- *   1. Explicit binding -- if explicitBindings[slotName] specifies a column, use it.
+ *   1. Explicit binding -- if explicitBindings[slotName] specifies a column ID, use it.
  *   2. Name match -- column name matches slot name (case-insensitive).
  *   3. Type + position -- first unbound column matching the slot's preferred type.
  *   4. Fallback -- first unbound column regardless of type.
@@ -35,7 +35,7 @@ const sqliteTypeMatchesPreferred = (sqliteType: string, preferredType: string): 
 export const resolveSlotBindings = (
   faceType: FaceTypeDefinition,
   columns: Column[],
-  explicitBindings?: Record<string, string>,
+  explicitBindings?: Record<string, number>,
 ): SlotBindingResult => {
   const boundColumnNames = new Set<string>()
   const bindings: ResolvedSlotBinding[] = []
@@ -43,13 +43,14 @@ export const resolveSlotBindings = (
   for (const slot of faceType.slots) {
     let binding: ResolvedSlotBinding | undefined
 
-    // 1. Explicit binding
-    const explicitColName = explicitBindings?.[slot.name]
-    if (explicitColName !== undefined) {
-      const col = columns.find((c) => c.name === explicitColName)
+    // 1. Explicit binding (by column ID)
+    const explicitColId = explicitBindings?.[slot.name]
+    if (explicitColId !== undefined) {
+      const col = columns.find((c) => c.id === explicitColId)
       if (col) {
         binding = {
           slotName: slot.name,
+          columnId: col.id,
           columnName: col.name,
           columnType: col.type,
           resolution: 'explicit',
@@ -66,6 +67,7 @@ export const resolveSlotBindings = (
       if (col) {
         binding = {
           slotName: slot.name,
+          columnId: col.id,
           columnName: col.name,
           columnType: col.type,
           resolution: 'name-match',
@@ -83,6 +85,7 @@ export const resolveSlotBindings = (
       if (col) {
         binding = {
           slotName: slot.name,
+          columnId: col.id,
           columnName: col.name,
           columnType: col.type,
           resolution: 'type-position',
@@ -96,6 +99,7 @@ export const resolveSlotBindings = (
       if (col) {
         binding = {
           slotName: slot.name,
+          columnId: col.id,
           columnName: col.name,
           columnType: col.type,
           resolution: 'fallback',

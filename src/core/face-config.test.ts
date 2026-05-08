@@ -10,7 +10,7 @@ import {
   getFaceConfigsForMatrix,
 } from './face-config'
 import { registerFaceType, clearFaceTypeRegistry } from './face-registry'
-import { initMatrixSchema, createMatrix } from './matrix'
+import { initMatrixSchema, createMatrix, getColumns } from './matrix'
 import { getTraits } from './traits'
 
 afterEach(() => {
@@ -33,15 +33,19 @@ describe('Face config', () => {
 
   test('saveFaceConfig and getFaceConfig round-trip', () => {
     const matrixId = createMatrix(db, 'Test', [{ name: 'title', type: 'TEXT' }])
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
 
     const config: FaceConfig = {
       id: 'cfg-1',
       faceTypeId: 'hila.table',
       matrixId,
       query: `SELECT * FROM "mx_${matrixId}_data"`,
-      slotBindings: { title: 'title' },
+      slotBindings: { title: titleColId },
       settings: { sortBy: 'title' },
       createdByPlugin: null,
+      sort: null,
+      filters: [],
     }
 
     saveFaceConfig(db, config)
@@ -51,8 +55,10 @@ describe('Face config', () => {
     expect(loaded!.id).toBe('cfg-1')
     expect(loaded!.faceTypeId).toBe('hila.table')
     expect(loaded!.matrixId).toBe(matrixId)
-    expect(loaded!.slotBindings).toEqual({ title: 'title' })
+    expect(loaded!.slotBindings).toEqual({ title: titleColId })
     expect(loaded!.settings).toEqual({ sortBy: 'title' })
+    expect(loaded!.sort).toBeNull()
+    expect(loaded!.filters).toEqual([])
   })
 
   test('saveFaceConfig overwrites existing config with same ID', () => {
@@ -65,6 +71,8 @@ describe('Face config', () => {
       query: 'SELECT 1',
       slotBindings: {},
       settings: {},
+      sort: null,
+      filters: [],
     }
 
     saveFaceConfig(db, config)
@@ -89,6 +97,8 @@ describe('Face config', () => {
       query: 'SELECT 1',
       slotBindings: {},
       settings: {},
+      sort: null,
+      filters: [],
     })
     saveFaceConfig(db, {
       id: 'cfg-b',
@@ -97,6 +107,8 @@ describe('Face config', () => {
       query: 'SELECT 2',
       slotBindings: {},
       settings: {},
+      sort: null,
+      filters: [],
     })
     saveFaceConfig(db, {
       id: 'cfg-c',
@@ -105,6 +117,8 @@ describe('Face config', () => {
       query: 'SELECT 3',
       slotBindings: {},
       settings: {},
+      sort: null,
+      filters: [],
     })
 
     const m1Configs = getFaceConfigsForMatrix(db, m1)
@@ -135,17 +149,21 @@ describe('Face config', () => {
       { name: 'body', type: 'TEXT' },
     ])
 
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+    const bodyColId = cols.find((c) => c.name === 'body')!.id
+
     const config = applyFaceToMatrix(db, 'hila.note', matrixId)
 
     expect(config.faceTypeId).toBe('hila.note')
     expect(config.matrixId).toBe(matrixId)
-    expect(config.slotBindings).toEqual({ title: 'title', body: 'body' })
+    expect(config.slotBindings).toEqual({ title: titleColId, body: bodyColId })
     expect(config.id).toBeTruthy()
 
     // Verify persisted
     const loaded = getFaceConfig(db, config.id)
     expect(loaded).not.toBeNull()
-    expect(loaded!.slotBindings).toEqual({ title: 'title', body: 'body' })
+    expect(loaded!.slotBindings).toEqual({ title: titleColId, body: bodyColId })
   })
 
   test('applyFaceToMatrix provisions required traits', () => {
@@ -211,9 +229,190 @@ describe('Face config', () => {
       query: 'SELECT 1',
       slotBindings: {},
       settings: {},
+      sort: null,
+      filters: [],
     })
 
     const loaded = getFaceConfig(db, 'cfg-null-settings')
     expect(loaded!.settings).toEqual({})
+  })
+
+  // -- Normalized tables (sort, filter, slot bindings) --------------------------
+
+  test('saveFaceConfig persists sort config in normalized table', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'age', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const ageColId = cols.find((c) => c.name === 'age')!.id
+
+    const config: FaceConfig = {
+      id: 'cfg-sort',
+      faceTypeId: 'hila.table',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: {},
+      settings: {},
+      createdByPlugin: null,
+      sort: { columnId: ageColId, direction: 'DESC' },
+      filters: [],
+    }
+
+    saveFaceConfig(db, config)
+    const loaded = getFaceConfig(db, 'cfg-sort')
+
+    expect(loaded!.sort).toEqual({ columnId: ageColId, direction: 'DESC' })
+  })
+
+  test('saveFaceConfig persists filter configs in normalized table', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'age', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+    const ageColId = cols.find((c) => c.name === 'age')!.id
+
+    const config: FaceConfig = {
+      id: 'cfg-filters',
+      faceTypeId: 'hila.table',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: {},
+      settings: {},
+      createdByPlugin: null,
+      sort: null,
+      filters: [
+        { columnId: ageColId, operator: '>', value: '30' },
+        { columnId: titleColId, operator: 'LIKE', value: 'test' },
+      ],
+    }
+
+    saveFaceConfig(db, config)
+    const loaded = getFaceConfig(db, 'cfg-filters')
+
+    expect(loaded!.filters).toHaveLength(2)
+    expect(loaded!.filters[0]).toEqual({ columnId: ageColId, operator: '>', value: '30' })
+    expect(loaded!.filters[1]).toEqual({
+      columnId: titleColId,
+      operator: 'LIKE',
+      value: 'test',
+    })
+  })
+
+  test('removing a sorted column cascade-deletes sort config', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'age', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const ageColId = cols.find((c) => c.name === 'age')!.id
+
+    saveFaceConfig(db, {
+      id: 'cfg-cascade-sort',
+      faceTypeId: 'hila.table',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: {},
+      settings: {},
+      createdByPlugin: null,
+      sort: { columnId: ageColId, direction: 'ASC' },
+      filters: [],
+    })
+
+    // Remove the sorted column
+    db.exec('DELETE FROM matrix_columns WHERE id = ?', { bind: [ageColId] })
+
+    const loaded = getFaceConfig(db, 'cfg-cascade-sort')
+    expect(loaded!.sort).toBeNull()
+  })
+
+  test('removing a filtered column cascade-deletes filter config', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'age', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+    const ageColId = cols.find((c) => c.name === 'age')!.id
+
+    saveFaceConfig(db, {
+      id: 'cfg-cascade-filter',
+      faceTypeId: 'hila.table',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: {},
+      settings: {},
+      createdByPlugin: null,
+      sort: null,
+      filters: [
+        { columnId: ageColId, operator: '>', value: '30' },
+        { columnId: titleColId, operator: '=', value: 'foo' },
+      ],
+    })
+
+    // Remove the age column
+    db.exec('DELETE FROM matrix_columns WHERE id = ?', { bind: [ageColId] })
+
+    const loaded = getFaceConfig(db, 'cfg-cascade-filter')
+    expect(loaded!.filters).toHaveLength(1)
+    expect(loaded!.filters[0]!.columnId).toBe(titleColId)
+  })
+
+  test('removing a slot-bound column sets column_id to NULL', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+    const bodyColId = cols.find((c) => c.name === 'body')!.id
+
+    saveFaceConfig(db, {
+      id: 'cfg-cascade-slot',
+      faceTypeId: 'hila.note',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: { title: titleColId, body: bodyColId },
+      settings: {},
+      createdByPlugin: null,
+      sort: null,
+      filters: [],
+    })
+
+    // Remove the title column
+    db.exec('DELETE FROM matrix_columns WHERE id = ?', { bind: [titleColId] })
+
+    const loaded = getFaceConfig(db, 'cfg-cascade-slot')
+    expect(loaded!.slotBindings.title).toBeNull()
+    expect(loaded!.slotBindings.body).toBe(bodyColId)
+  })
+
+  test('renaming a column does not affect slot bindings (ID-based)', () => {
+    const matrixId = createMatrix(db, 'Test', [{ name: 'title', type: 'TEXT' }])
+    const cols = getColumns(db, matrixId)
+    const titleColId = cols.find((c) => c.name === 'title')!.id
+
+    saveFaceConfig(db, {
+      id: 'cfg-rename',
+      faceTypeId: 'hila.table',
+      matrixId,
+      query: `SELECT * FROM "mx_${matrixId}_data"`,
+      slotBindings: { title: titleColId },
+      settings: {},
+      createdByPlugin: null,
+      sort: { columnId: titleColId, direction: 'ASC' },
+      filters: [],
+    })
+
+    // Rename the column
+    db.exec('UPDATE matrix_columns SET name = ? WHERE id = ?', {
+      bind: ['heading', titleColId],
+    })
+
+    const loaded = getFaceConfig(db, 'cfg-rename')
+    expect(loaded!.slotBindings.title).toBe(titleColId)
+    expect(loaded!.sort!.columnId).toBe(titleColId)
   })
 })
