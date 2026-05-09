@@ -87,12 +87,13 @@ test.describe('Face configuration UI', () => {
     const rows = page.getByTestId('slot-binding-row')
     await expect(rows).toHaveCount(2)
 
-    // Change the title slot to bind to body column
+    // Change the title slot to bind to body column (select by label since values are column IDs)
     const titleBinding = page.getByTestId('slot-binding-title')
-    await titleBinding.selectOption('body')
+    await titleBinding.selectOption({ label: 'body (TEXT)' })
 
-    // Verify the dropdown now shows body
-    await expect(titleBinding).toHaveValue('body')
+    // Verify the dropdown changed (value is the column ID, which is a number)
+    const selectedValue = await titleBinding.inputValue()
+    expect(Number(selectedValue)).toBeGreaterThan(0)
   })
 
   test('apply button creates a face config and closes the panel', async ({ page }) => {

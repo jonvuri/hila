@@ -24,6 +24,7 @@ import type { ColumnDefinition } from '../core/matrix'
 import {
   buildTableQuery,
   compileFormula,
+  compileFaceQuery,
   parseFormulaRefs,
   type SortConfig,
   type FilterConfig,
@@ -559,7 +560,7 @@ describe('compileFormula', () => {
   })
 
   test('resumes parsing refs after a string literal ends', () => {
-    expect(compileFormula("'literal' || {{100}}", cols)).toBe("'literal' || \"price\"")
+    expect(compileFormula("'literal' || {{100}}", cols)).toBe('\'literal\' || "price"')
   })
 })
 
@@ -777,5 +778,27 @@ describe('Formula column deps (DB integration)', () => {
     expect(results).toHaveLength(2)
     const subtotals = results.map((r) => r.subtotal as number).sort((a, b) => a - b)
     expect(subtotals).toEqual([31.5, 100])
+  })
+})
+
+// -- Face query compilation (compileFaceQuery) --------------------------------
+
+describe('compileFaceQuery', () => {
+  const cols: ColumnDefinition[] = [makeCol(10, 'price', 'REAL'), makeCol(20, 'status')]
+
+  test('resolves {{id}} references in a face query', () => {
+    const query = "SELECT * FROM t WHERE {{10}} > 100 AND {{20}} = 'active'"
+    expect(compileFaceQuery(query, cols)).toBe(
+      'SELECT * FROM t WHERE "price" > 100 AND "status" = \'active\'',
+    )
+  })
+
+  test('passes through queries with no refs unchanged', () => {
+    const query = 'SELECT * FROM "mx_42_data" ORDER BY title'
+    expect(compileFaceQuery(query, cols)).toBe(query)
+  })
+
+  test('is the same function as compileFormula', () => {
+    expect(compileFaceQuery).toBe(compileFormula)
   })
 })

@@ -415,7 +415,11 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     setRenamingCol(null)
     if (!newName || newName === oldName) return
 
-    await renameColumn(matrixId(), oldName, newName)
+    try {
+      await renameColumn(matrixId(), oldName, newName)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const handleChangeType = async (columnName: string, newType: ColumnDisplayType) => {

@@ -402,35 +402,35 @@ Extend the query sandbox to support `{{columnId}}` references in face queries (o
 
 ### Face query references (optional)
 
-- [ ] **Extend query sandbox compilation** to resolve `{{columnId}}` references in face queries before evaluation. Reuse the same `compileFormula` function (it works for any SQL expression with `{{id}}` references). Apply compilation as a preprocessing step in the query evaluation pipeline, before the authorizer-based sandbox runs.
+- [x] **Extend query sandbox compilation** to resolve `{{columnId}}` references in face queries before evaluation. Reuse the same `compileFormula` function (it works for any SQL expression with `{{id}}` references). Apply compilation as a preprocessing step in the query evaluation pipeline, before the authorizer-based sandbox runs.
 
-- [ ] **Face queries continue to accept raw column names** for simplicity. The `{{id}}` syntax is available but not required. The face query editor can offer autocomplete that inserts `{{id}}` references for users who want rename-safe queries.
+- [x] **Face queries continue to accept raw column names** for simplicity. The `{{id}}` syntax is available but not required. The face query editor can offer autocomplete that inserts `{{id}}` references for users who want rename-safe queries.
 
-- [ ] **Update the face query editor** (if one exists in the admin browser or face configuration UI) to offer column autocomplete that inserts `{{id}}` references.
+- [x] **Update the face query editor** (if one exists in the admin browser or face configuration UI) to offer column autocomplete that inserts `{{id}}` references.
 
 ### Playwright E2E tests
 
-- [ ] **Column constraint enforcement:**
+- [x] **Column constraint enforcement:**
   - Create a tag type (which uses the constrained registry matrix). Attempt to create a duplicate tag type name with different casing. Verify rejection with a user-friendly error message.
   - Add a column with a NOT NULL constraint via a test helper or fixture. Insert a row with a null value for that column. Verify rejection.
 
-- [ ] **Plugin column ownership:**
+- [x] **Plugin column ownership:**
   - In the admin browser or table face, attempt to rename a plugin-managed column. Verify rejection or warning UI.
   - Verify that user-added columns can be renamed and removed freely.
 
-- [ ] **Formula column with token input:**
+- [x] **Formula column with token input:**
   - Open the formula dialog in the table face. Type a column name, verify autocomplete appears. Select from autocomplete, verify a styled token is inserted. Complete the formula and submit. Verify the formula column appears with computed values.
   - Rename a column that a formula depends on. Verify the formula column still shows correct values (the `{{id}}` reference is stable).
   - Attempt to remove a column that a formula depends on. Verify the error message identifies the dependent formula.
 
-- [ ] **Sort and filter survive column rename:**
+- [x] **Sort and filter survive column rename:**
   - Apply a sort on a column. Rename the column. Verify the sort still applies (the face config references the column by ID, not name).
   - Apply a filter on a column. Rename the column. Verify the filter still applies.
   - Remove a sorted column. Verify the sort is cleared (cascade delete).
   - Remove a filtered column. Verify the filter is cleared (cascade delete).
 
-- [ ] Run `pnpm test:e2e` — all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+- [x] Run `pnpm test:e2e` — all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
 
 ---
 

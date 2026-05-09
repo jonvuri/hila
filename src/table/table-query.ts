@@ -4,6 +4,13 @@ import { compileFormula } from './formula'
 
 export { compileFormula, parseFormulaRefs } from './formula'
 
+/**
+ * Compile `{{columnId}}` references in a face query string.
+ * Raw column names pass through unchanged — the `{{id}}` syntax
+ * is optional but enables rename-safe queries.
+ */
+export const compileFaceQuery = compileFormula
+
 export type SortConfig = {
   columnId: number
   direction: 'ASC' | 'DESC'

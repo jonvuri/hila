@@ -9,10 +9,7 @@ const REF_TOKEN = /\{\{(\d+)\}\}/g
  * NOT inside a SQL string literal. SQL strings are `'...'` with `''`
  * as the escape for a literal quote.
  */
-const walkRefs = (
-  formula: string,
-  onRef: (match: RegExpExecArray) => void,
-): void => {
+const walkRefs = (formula: string, onRef: (match: RegExpExecArray) => void): void => {
   let inString = false
   let pos = 0
 
