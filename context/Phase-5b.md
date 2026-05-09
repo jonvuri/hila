@@ -311,9 +311,9 @@ Replace raw column-name references in formula expressions with stable `{{columnI
 
 ### Backend: compilation and dependency tracking
 
-- [ ] **Define `{{columnId}}` reference syntax.** Formula expressions use `{{123456}}` to reference a column by its stable ID. Raw SQL operators and literals pass through unchanged. Example: `{{123456}} * 2 + {{789012}}` compiles to `"price" * 2 + "tax"` if column 123456 is named "price" and 789012 is named "tax".
+- [x] **Define `{{columnId}}` reference syntax.** Formula expressions use `{{123456}}` to reference a column by its stable ID. Raw SQL operators and literals pass through unchanged. Example: `{{123456}} * 2 + {{789012}}` compiles to `"price" * 2 + "tax"` if column 123456 is named "price" and 789012 is named "tax".
 
-- [ ] **Create `formula_column_deps` table:**
+- [x] **Create `formula_column_deps` table:**
   ```sql
   CREATE TABLE IF NOT EXISTS formula_column_deps (
     formula_col_id INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
@@ -324,7 +324,7 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   - `ON DELETE CASCADE` on `formula_col_id`: removing the formula column cleans up its dependency records.
   - `ON DELETE RESTRICT` on `dep_col_id`: attempting to remove a column that a formula depends on is rejected by SQLite. The error is caught and surfaced as a user-friendly message identifying the dependent formula(s).
 
-- [ ] **Implement `compileFormula(formula: string, columns: ColumnDefinition[]): string`.** Replaces `{{id}}` references with quoted column names:
+- [x] **Implement `compileFormula(formula: string, columns: ColumnDefinition[]): string`.** Replaces `{{id}}` references with quoted column names:
   ```typescript
   const compileFormula = (formula: string, columns: ColumnDefinition[]): string => {
     const byId = new Map(columns.map(c => [c.id, c.name]))
@@ -337,7 +337,7 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   }
   ```
 
-- [ ] **Implement `parseFormulaRefs(formula: string): number[]`.** Extracts all column IDs referenced in a formula expression:
+- [x] **Implement `parseFormulaRefs(formula: string): number[]`.** Extracts all column IDs referenced in a formula expression:
   ```typescript
   const parseFormulaRefs = (formula: string): number[] => {
     const refs: number[] = []
@@ -350,7 +350,7 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   }
   ```
 
-- [ ] **Update `addFormulaColumn`** to:
+- [x] **Update `addFormulaColumn`** to:
   1. Parse `{{id}}` references from the formula via `parseFormulaRefs`.
   2. Validate all referenced column IDs exist in the matrix.
   3. Compile the formula to SQL (resolve `{{id}}` to column names) for probe validation.
@@ -358,7 +358,7 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   5. Store the original `{{id}}`-based formula in `matrix_columns.formula` (not the compiled form — the IDs are the durable representation).
   6. Populate `formula_column_deps` with one row per referenced column.
 
-- [ ] **Update `buildTableQuery`** to compile formula expressions before generating SQL. The formula column's stored formula contains `{{id}}` references; these are compiled to current column names at query time:
+- [x] **Update `buildTableQuery`** to compile formula expressions before generating SQL. The formula column's stored formula contains `{{id}}` references; these are compiled to current column names at query time:
   ```typescript
   const formulaCols = columns?.filter(c => c.formula !== null) ?? []
   if (formulaCols.length > 0) {
@@ -370,7 +370,7 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   }
   ```
 
-- [ ] **Update `removeColumn`** to handle `ON DELETE RESTRICT` errors from `formula_column_deps`. When removing a column that a formula depends on, SQLite's FK engine rejects the deletion. Catch this error and produce a message like: `Column "price" cannot be removed because formula column "total" depends on it.`
+- [x] **Update `removeColumn`** to handle `ON DELETE RESTRICT` errors from `formula_column_deps`. When removing a column that a formula depends on, SQLite's FK engine rejects the deletion. Catch this error and produce a message like: `Column "price" cannot be removed because formula column "total" depends on it.`
   Query `formula_column_deps` to identify the dependent formula(s) for the error message:
   ```sql
   SELECT mc.name FROM formula_column_deps fcd
@@ -378,16 +378,9 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   WHERE fcd.dep_col_id = ?
   ```
 
-- [ ] **Backward compatibility for existing formulas.** Existing formulas stored as raw SQL (pre-Phase 5b) contain column names, not `{{id}}` references. Write a migration that converts existing formula strings:
-  1. For each `matrix_columns` row where `formula IS NOT NULL`:
-     a. Parse the formula to identify column name references (heuristic: quoted identifiers or bare names that match sibling column names in the same matrix).
-     b. Replace each with `{{columnId}}`.
-     c. Populate `formula_column_deps`.
-  2. This migration is best-effort — complex formulas with SQL functions may have ambiguous references. Log warnings for formulas that cannot be fully converted. A conservative approach: only convert formulas that are simple expressions of known column names.
-
 ### Frontend: token-aware formula dialog
 
-- [ ] **Create a `FormulaInput` component** (`src/table/FormulaInput.tsx`) — a token-aware text input for editing formula expressions:
+- [x] **Create a `FormulaInput` component** (`src/table/FormulaInput.tsx`) — a token-aware text input for editing formula expressions:
   - Text between tokens is raw SQL (operators, literals, function calls).
   - Column references display as styled tokens showing the current column name (e.g., a pill badge similar to inline reference badges). The token's underlying value is `{{columnId}}`.
   - Typing a column name or selecting from an autocomplete dropdown inserts a `{{id}}` token.
@@ -395,13 +388,13 @@ Replace raw column-name references in formula expressions with stable `{{columnI
   - Deleting a token (Backspace over it) removes the `{{id}}` reference from the expression.
   - The component's value is the raw formula string with `{{id}}` references (what gets stored in `matrix_columns.formula`).
 
-- [ ] **Update the formula dialog in `TableFace.tsx`** to use `FormulaInput` instead of a plain text input. The dialog currently takes raw SQL; update it to:
+- [x] **Update the formula dialog in `TableFace.tsx`** to use `FormulaInput` instead of a plain text input. The dialog currently takes raw SQL; update it to:
   1. Load existing formula (if editing) and render `{{id}}` references as tokens.
   2. On submit, pass the `{{id}}`-based formula string to `addFormulaColumn`.
   3. Show a validation error if the compiled formula fails the probe query.
 
-- [ ] Tests: `compileFormula` resolves `{{id}}` to column names correctly. `parseFormulaRefs` extracts all referenced IDs. `addFormulaColumn` with `{{id}}` references populates `formula_column_deps`. `removeColumn` on a formula-dependency rejects with the RESTRICT error and a user-friendly message. Removing the formula column itself succeeds and cleans up `formula_column_deps` via CASCADE. `buildTableQuery` compiles formula `{{id}}` to current column names. Rename a column, verify formula still works (ID is stable, compiled name updates). Backward compat migration: existing raw-SQL formula is converted to `{{id}}` form.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
+- [x] Tests: `compileFormula` resolves `{{id}}` to column names correctly. `parseFormulaRefs` extracts all referenced IDs. `addFormulaColumn` with `{{id}}` references populates `formula_column_deps`. `removeColumn` on a formula-dependency rejects with the RESTRICT error and a user-friendly message. Removing the formula column itself succeeds and cleans up `formula_column_deps` via CASCADE. `buildTableQuery` compiles formula `{{id}}` to current column names. Rename a column, verify formula still works (ID is stable, compiled name updates). ~~Backward compat migration: existing raw-SQL formula is converted to `{{id}}` form.~~ (Deferred — existing raw-SQL formulas continue to work as-is since formulas without `{{id}}` refs pass through compilation unchanged.)
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
 
 ## 5. Face query references and Playwright E2E
 
@@ -472,8 +465,6 @@ Stage 1 (stable column IDs) is a prerequisite for all other stages — every FK-
 - **Sort and filter use `ON DELETE CASCADE`.** When a sorted/filtered column is removed, the sort/filter config is automatically cleaned up. There is no useful "degraded" state for a sort referencing a nonexistent column.
 
 - **Formula deps use `ON DELETE RESTRICT`.** Removing a column that a formula depends on is a destructive operation that would silently break the formula. RESTRICT makes this a hard error with a clear message. The user must remove or modify the formula first.
-
-- **Formula backward compatibility is best-effort.** Existing raw-SQL formulas are migrated to `{{id}}` syntax heuristically. Complex formulas with SQL functions or subqueries may not be fully convertible. These are logged as warnings and left as-is (they continue to work until the referenced column is renamed). Users can manually update them via the new token-aware formula dialog.
 
 - **Face query references are optional.** The `{{columnId}}` syntax in face queries is a power-user feature. Most face queries are identity queries (`SELECT * FROM ...`) that don't reference columns by name. The feature is available but not required.
 

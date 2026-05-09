@@ -37,6 +37,7 @@ import {
   type FilterOperator,
   FILTER_OPERATORS,
 } from './table-query'
+import FormulaInput from './FormulaInput'
 import styles from './TableFace.module.css'
 
 // -- Column type system -------------------------------------------------------
@@ -399,8 +400,13 @@ const TableFace: Component<FaceComponentProps> = (props) => {
     const updatedFilters = col ? filters().filter((f) => f.columnId !== col.id) : filters()
     setFilters(updatedFilters)
 
-    await removeColumn(matrixId(), columnName)
-    await persistSettings(sort(), updatedFilters)
+    try {
+      await removeColumn(matrixId(), columnName)
+      await persistSettings(sort(), updatedFilters)
+    } catch (err) {
+      // Surface dependency errors (formula RESTRICT) to the user
+      alert(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const handleRenameColumn = async (oldName: string) => {
@@ -720,6 +726,7 @@ const TableFace: Component<FaceComponentProps> = (props) => {
                       error={formulaError()}
                       name={formulaName()}
                       expr={formulaExpr()}
+                      columns={columns()}
                       onNameInput={setFormulaName}
                       onExprInput={setFormulaExpr}
                       onAdd={() => void handleAddFormulaColumn()}
@@ -1013,6 +1020,7 @@ const FormulaDialog: Component<{
   error: string | null
   name: string
   expr: string
+  columns: ColumnDefinition[]
   onNameInput: (v: string) => void
   onExprInput: (v: string) => void
   onAdd: () => void
@@ -1030,16 +1038,11 @@ const FormulaDialog: Component<{
       }}
       ref={(el) => setTimeout(() => el.focus())}
     />
-    <input
-      type="text"
+    <FormulaInput
       value={props.expr}
-      onInput={(e) => props.onExprInput(e.currentTarget.value)}
-      placeholder="SQL expression, e.g. length(title)"
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && props.name && props.expr) props.onAdd()
-        if (e.key === 'Escape') props.onClose()
-      }}
-      style={{ 'min-width': '200px' }}
+      columns={props.columns}
+      onInput={props.onExprInput}
+      placeholder="e.g. {{colId}} * 2 + {{colId}}"
     />
     <button style={{ background: '#2563eb', color: '#fff' }} onClick={() => props.onAdd()}>
       Add

@@ -7,6 +7,9 @@ import {
   createMatrix,
   getColumns,
   addColumn,
+  addFormulaColumn,
+  removeColumn,
+  renameColumn,
   insertDataRow,
   updateRow,
   insertJoin,
@@ -18,7 +21,13 @@ import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { applyFaceToMatrix, getFaceConfig } from '../core/face-config'
 import type { ColumnDefinition } from '../core/matrix'
 
-import { buildTableQuery, type SortConfig, type FilterConfig } from './table-query'
+import {
+  buildTableQuery,
+  compileFormula,
+  parseFormulaRefs,
+  type SortConfig,
+  type FilterConfig,
+} from './table-query'
 import {
   getColumnTypeInfo,
   type ReferenceCellValue,
@@ -506,5 +515,267 @@ describe('Reference column schema', () => {
     const row = stmt.get({}) as { cnt: number }
     expect(row.cnt).toBe(0)
     stmt.finalize()
+  })
+})
+
+// -- Formula column references ({{columnId}} syntax) --------------------------
+
+describe('compileFormula', () => {
+  const cols: ColumnDefinition[] = [
+    makeCol(100, 'price', 'REAL'),
+    makeCol(200, 'tax', 'REAL'),
+    makeCol(300, 'name'),
+  ]
+
+  test('resolves {{id}} to quoted column names', () => {
+    expect(compileFormula('{{100}} * 2 + {{200}}', cols)).toBe('"price" * 2 + "tax"')
+  })
+
+  test('passes through expressions with no refs unchanged', () => {
+    expect(compileFormula('length("name")', cols)).toBe('length("name")')
+  })
+
+  test('throws on unknown column ID', () => {
+    expect(() => compileFormula('{{999}}', cols)).toThrow('unknown column ID 999')
+  })
+
+  test('handles column names with double quotes', () => {
+    const quotedCols = [makeCol(50, 'my"col')]
+    expect(compileFormula('{{50}} + 1', quotedCols)).toBe('"my""col" + 1')
+  })
+
+  test('ignores {{id}} inside SQL string literals', () => {
+    expect(compileFormula("'prefix {{100}} suffix'", cols)).toBe("'prefix {{100}} suffix'")
+  })
+
+  test('resolves ref before a string literal but not inside it', () => {
+    expect(compileFormula("{{100}} || ' has {{200}} in text'", cols)).toBe(
+      '"price" || \' has {{200}} in text\'',
+    )
+  })
+
+  test('handles escaped single quotes in SQL strings', () => {
+    expect(compileFormula("'it''s {{100}} here'", cols)).toBe("'it''s {{100}} here'")
+  })
+
+  test('resumes parsing refs after a string literal ends', () => {
+    expect(compileFormula("'literal' || {{100}}", cols)).toBe("'literal' || \"price\"")
+  })
+})
+
+describe('parseFormulaRefs', () => {
+  test('extracts all referenced column IDs', () => {
+    expect(parseFormulaRefs('{{100}} * 2 + {{200}}')).toEqual([100, 200])
+  })
+
+  test('returns empty array for no refs', () => {
+    expect(parseFormulaRefs('length("name")')).toEqual([])
+  })
+
+  test('handles duplicate refs', () => {
+    expect(parseFormulaRefs('{{100}} + {{100}}')).toEqual([100, 100])
+  })
+
+  test('ignores {{id}} inside SQL string literals', () => {
+    expect(parseFormulaRefs("'{{100}}' || {{200}}")).toEqual([200])
+  })
+
+  test('handles escaped quotes inside SQL strings', () => {
+    expect(parseFormulaRefs("'it''s {{100}}' || {{200}}")).toEqual([200])
+  })
+})
+
+describe('buildTableQuery with {{id}} formulas', () => {
+  test('compiles formula {{id}} references to column names at query time', () => {
+    const cols: ColumnDefinition[] = [
+      makeCol(10, 'price', 'REAL'),
+      makeCol(20, 'tax', 'REAL'),
+      { ...makeCol(30, 'total'), formula: '{{10}} + {{20}}' },
+    ]
+    const q = buildTableQuery(42, null, [], cols)
+    expect(q).toBe('SELECT *, ("price" + "tax") AS "total" FROM "mx_42_data"')
+  })
+
+  test('handles raw SQL formulas (no {{id}} refs) unchanged', () => {
+    const cols: ColumnDefinition[] = [
+      makeCol(10, 'title'),
+      { ...makeCol(20, 'title_len'), formula: 'length("title")' },
+    ]
+    const q = buildTableQuery(42, null, [], cols)
+    expect(q).toBe('SELECT *, (length("title")) AS "title_len" FROM "mx_42_data"')
+  })
+})
+
+describe('Formula column deps (DB integration)', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('addFormulaColumn with {{id}} references populates formula_column_deps', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'price', type: 'REAL' },
+      { name: 'tax', type: 'REAL' },
+    ])
+
+    const cols = getColumns(db, matrixId)
+    const priceCol = cols.find((c) => c.name === 'price')!
+    const taxCol = cols.find((c) => c.name === 'tax')!
+
+    const formulaColId = addFormulaColumn(
+      db,
+      matrixId,
+      'total',
+      `{{${priceCol.id}}} + {{${taxCol.id}}}`,
+    )
+
+    const deps = db.selectArrays(
+      'SELECT formula_col_id, dep_col_id FROM formula_column_deps WHERE formula_col_id = ? ORDER BY dep_col_id',
+      [formulaColId],
+    )
+    const depColIds = deps.map((d) => d[1])
+    expect(depColIds).toContain(priceCol.id)
+    expect(depColIds).toContain(taxCol.id)
+    expect(deps).toHaveLength(2)
+  })
+
+  test('addFormulaColumn validates referenced column IDs exist', () => {
+    const matrixId = createMatrix(db, 'Test', [{ name: 'price', type: 'REAL' }])
+
+    expect(() => addFormulaColumn(db, matrixId, 'bad', '{{999999}} + 1')).toThrow(
+      'unknown column ID 999999',
+    )
+  })
+
+  test('addFormulaColumn with no {{id}} refs stores raw formula and creates no deps', () => {
+    const matrixId = createMatrix(db, 'Test', [{ name: 'title', type: 'TEXT' }])
+    const colId = addFormulaColumn(db, matrixId, 'title_len', 'length("title")')
+
+    const deps = db.selectArrays('SELECT * FROM formula_column_deps WHERE formula_col_id = ?', [
+      colId,
+    ])
+    expect(deps).toHaveLength(0)
+
+    const formulaCol = getColumns(db, matrixId).find((c) => c.name === 'title_len')!
+    expect(formulaCol.formula).toBe('length("title")')
+  })
+
+  test('removeColumn on a formula dependency rejects with RESTRICT error', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'price', type: 'REAL' },
+      { name: 'tax', type: 'REAL' },
+    ])
+
+    const cols = getColumns(db, matrixId)
+    const priceCol = cols.find((c) => c.name === 'price')!
+
+    addFormulaColumn(db, matrixId, 'total', `{{${priceCol.id}}} * 2`)
+
+    expect(() => removeColumn(db, matrixId, 'price')).toThrow(
+      /cannot be removed because formula column "total" depends on it/,
+    )
+  })
+
+  test('removing the formula column itself succeeds and cleans up deps via CASCADE', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'price', type: 'REAL' },
+      { name: 'tax', type: 'REAL' },
+    ])
+
+    const cols = getColumns(db, matrixId)
+    const priceCol = cols.find((c) => c.name === 'price')!
+
+    const formulaColId = addFormulaColumn(db, matrixId, 'total', `{{${priceCol.id}}} * 2`)
+
+    // Verify deps exist
+    let deps = db.selectArrays('SELECT * FROM formula_column_deps WHERE formula_col_id = ?', [
+      formulaColId,
+    ])
+    expect(deps).toHaveLength(1)
+
+    // Remove the formula column
+    removeColumn(db, matrixId, 'total')
+
+    // Verify deps cleaned up
+    deps = db.selectArrays('SELECT * FROM formula_column_deps WHERE formula_col_id = ?', [
+      formulaColId,
+    ])
+    expect(deps).toHaveLength(0)
+
+    // Now the dependency column can be removed too
+    removeColumn(db, matrixId, 'price')
+    const remaining = getColumns(db, matrixId)
+    expect(remaining.find((c) => c.name === 'price')).toBeUndefined()
+  })
+
+  test('rename a column, verify formula still works (ID is stable, compiled name updates)', () => {
+    const matrixId = createMatrix(db, 'Test', [{ name: 'price', type: 'REAL' }])
+
+    const cols = getColumns(db, matrixId)
+    const priceCol = cols.find((c) => c.name === 'price')!
+
+    addFormulaColumn(db, matrixId, 'double_price', `{{${priceCol.id}}} * 2`)
+    insertDataRow(db, matrixId, { price: 50 })
+
+    // Rename the column
+    renameColumn(db, matrixId, 'price', 'unit_price')
+
+    // The formula column should still compile correctly with the new name
+    const updatedCols = getColumns(db, matrixId)
+    const formulaCol = updatedCols.find((c) => c.name === 'double_price')!
+    expect(formulaCol.formula).toBe(`{{${priceCol.id}}} * 2`)
+
+    // compileFormula should now resolve to the new column name
+    const compiled = compileFormula(formulaCol.formula!, updatedCols)
+    expect(compiled).toBe('"unit_price" * 2')
+
+    // buildTableQuery should produce valid SQL
+    const q = buildTableQuery(matrixId, null, [], updatedCols)
+    expect(q).toContain('"unit_price" * 2')
+
+    // Actually run the query
+    const stmt = db.prepare(q)
+    const results: Record<string, unknown>[] = []
+    while (stmt.step()) {
+      results.push(stmt.get({}) as Record<string, unknown>)
+    }
+    stmt.finalize()
+    expect(results).toHaveLength(1)
+    expect(results[0]!.double_price).toBe(100)
+  })
+
+  test('formula with {{id}} computes correct values via buildTableQuery', () => {
+    const matrixId = createMatrix(db, 'Test', [
+      { name: 'price', type: 'REAL' },
+      { name: 'qty', type: 'INTEGER' },
+    ])
+
+    const cols = getColumns(db, matrixId)
+    const priceCol = cols.find((c) => c.name === 'price')!
+    const qtyCol = cols.find((c) => c.name === 'qty')!
+
+    addFormulaColumn(db, matrixId, 'subtotal', `{{${priceCol.id}}} * {{${qtyCol.id}}}`)
+
+    insertDataRow(db, matrixId, { price: 10.5, qty: 3 })
+    insertDataRow(db, matrixId, { price: 20, qty: 5 })
+
+    const allCols = getColumns(db, matrixId)
+    const q = buildTableQuery(matrixId, null, [], allCols)
+    const stmt = db.prepare(q)
+    const results: Record<string, unknown>[] = []
+    while (stmt.step()) {
+      results.push(stmt.get({}) as Record<string, unknown>)
+    }
+    stmt.finalize()
+
+    expect(results).toHaveLength(2)
+    const subtotals = results.map((r) => r.subtotal as number).sort((a, b) => a - b)
+    expect(subtotals).toEqual([31.5, 100])
   })
 })

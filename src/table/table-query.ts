@@ -1,5 +1,9 @@
 import type { ColumnDefinition } from '../core/matrix'
 
+import { compileFormula } from './formula'
+
+export { compileFormula, parseFormulaRefs } from './formula'
+
 export type SortConfig = {
   columnId: number
   direction: 'ASC' | 'DESC'
@@ -13,7 +17,7 @@ export type FilterConfig = {
   value: string
 }
 
-const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
+export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 
 const escapeString = (value: string): string => `'${value.replace(/'/g, "''")}'`
 
@@ -32,7 +36,12 @@ export const buildTableQuery = (
 
   let selectClause: string
   if (formulaCols.length > 0) {
-    const extras = formulaCols.map((c) => `(${c.formula}) AS ${quoteIdent(c.name)}`).join(', ')
+    const extras = formulaCols
+      .map((c) => {
+        const compiled = compileFormula(c.formula!, columns)
+        return `(${compiled}) AS ${quoteIdent(c.name)}`
+      })
+      .join(', ')
     selectClause = `SELECT *, ${extras} FROM "mx_${matrixId}_data"`
   } else {
     selectClause = `SELECT * FROM "mx_${matrixId}_data"`

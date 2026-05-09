@@ -1,5 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import { compileFormula, parseFormulaRefs } from '../table/formula'
+
 import { parseKey } from './lexorank'
 import {
   dropChangeTrackingTriggers,
@@ -203,6 +205,16 @@ export const initMatrixSchema = (db: Database) => {
     // Column already exists (new database or previously migrated)
   }
 
+  // -- Formula column dependency tracking -------------------------------------
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS formula_column_deps (
+      formula_col_id INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
+      dep_col_id     INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE RESTRICT,
+      PRIMARY KEY (formula_col_id, dep_col_id)
+    ) STRICT;
+  `)
+
   // -- Normalized face config tables ------------------------------------------
 
   db.exec(`
@@ -228,7 +240,6 @@ export const initMatrixSchema = (db: Database) => {
       value          TEXT    NOT NULL
     ) STRICT;
   `)
-
 }
 
 /**
@@ -921,9 +932,23 @@ export const removeColumn = (
       db.exec(`ALTER TABLE "mx_${matrixId}_data" DROP COLUMN ${quoteIdent(columnName)}`)
     }
 
-    db.exec('DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?', {
-      bind: [matrixId, columnName],
-    })
+    try {
+      db.exec('DELETE FROM matrix_columns WHERE matrix_id = ? AND name = ?', {
+        bind: [matrixId, columnName],
+      })
+    } catch (err) {
+      // ON DELETE RESTRICT on formula_column_deps.dep_col_id rejects deletion
+      // of columns that formulas depend on. Surface a user-friendly message.
+      if (err instanceof Error && /FOREIGN KEY constraint failed/i.test(err.message)) {
+        const depNames = getFormulaDependents(db, col.id)
+        const depList =
+          depNames.length > 0 ? depNames.map((n) => `"${n}"`).join(', ') : 'unknown'
+        throw new Error(
+          `Column "${columnName}" cannot be removed because formula column ${depList} depends on it.`,
+        )
+      }
+      throw err
+    }
 
     if (!isFormula) {
       const deviceId = getOrCreateDeviceId(db)
@@ -931,6 +956,22 @@ export const removeColumn = (
       installDataTableTriggers(db, matrixId, deviceId, remaining)
     }
   })
+}
+
+/** Query which formula columns depend on a given column. */
+const getFormulaDependents = (db: Database, columnId: number): string[] => {
+  const stmt = db.prepare(
+    `SELECT mc.name FROM formula_column_deps fcd
+     JOIN matrix_columns mc ON mc.id = fcd.formula_col_id
+     WHERE fcd.dep_col_id = ?`,
+  )
+  stmt.bind([columnId])
+  const names: string[] = []
+  while (stmt.step()) {
+    names.push((stmt.get({}) as { name: string }).name)
+  }
+  stmt.finalize()
+  return names
 }
 
 /** Rename a column in a matrix's data table and registry. */
@@ -1022,9 +1063,21 @@ export const addFormulaColumn = (
       throw new Error(`Column "${name}" already exists in matrix ${matrixId}`)
     }
 
-    // Validate the formula by attempting a read-only probe query
+    // Parse {{id}} references and validate all referenced columns exist
+    const refs = parseFormulaRefs(formula)
+    const colById = new Map(current.map((c) => [c.id, c]))
+    for (const refId of refs) {
+      if (!colById.has(refId)) {
+        throw new Error(`Formula references unknown column ID ${refId}`)
+      }
+    }
+
+    // Compile {{id}} to current column names for the probe query
+    const compiled = refs.length > 0 ? compileFormula(formula, current) : formula
+
+    // Validate the compiled formula by attempting a read-only probe query
     try {
-      const probeStmt = db.prepare(`SELECT (${formula}) FROM "mx_${matrixId}_data" LIMIT 0`)
+      const probeStmt = db.prepare(`SELECT (${compiled}) FROM "mx_${matrixId}_data" LIMIT 0`)
       probeStmt.step()
       probeStmt.finalize()
     } catch (err) {
@@ -1033,6 +1086,7 @@ export const addFormulaColumn = (
       )
     }
 
+    // Store the original {{id}}-based formula (not the compiled form)
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
     const stmt = db.prepare(
       'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", formula) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
@@ -1044,6 +1098,19 @@ export const addFormulaColumn = (
     }
     const colId = (stmt.get({}) as { id: number }).id
     stmt.finalize()
+
+    // Populate formula_column_deps
+    if (refs.length > 0) {
+      const depStmt = db.prepare(
+        'INSERT INTO formula_column_deps (formula_col_id, dep_col_id) VALUES (?, ?)',
+      )
+      for (const refId of new Set(refs)) {
+        depStmt.bind([colId, refId])
+        depStmt.step()
+        depStmt.reset()
+      }
+      depStmt.finalize()
+    }
 
     return colId
   })
