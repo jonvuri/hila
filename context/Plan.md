@@ -366,6 +366,8 @@ Concrete use of the tag system for two different real-world patterns. Each tag t
 
 **Proves:** Tag aspects handle diverse structured data through owned joins. Spreadsheet-like editing works for real use cases. Custom cell renderers extend the table face. Default values reduce friction for data entry.
 
+> Detailed task list: [Phase-6.md](Phase-6.md)
+
 ---
 
 ### Phase 7 -- Scheduling infrastructure and notifications
