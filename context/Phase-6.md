@@ -185,10 +185,10 @@ Verify that renaming a column preserves its role (this should work automatically
 
 ## 7. Sync trigger update
 
-- [ ] **Update sync change tracking triggers** on `matrix_columns` (if the role column is not already included). The existing trigger reinstallation on schema changes should pick up the new column, but verify that role changes to `matrix_columns` are captured in `_sync_changelog`.
+- [x] **Update sync change tracking triggers** on `matrix_columns` (if the role column is not already included). The existing trigger reinstallation on schema changes should pick up the new column, but verify that role changes to `matrix_columns` are captured in `_sync_changelog`.
 
-- [ ] Tests: change a column's role, verify a changelog entry is written for the `matrix_columns` change.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: change a column's role, verify a changelog entry is written for the `matrix_columns` change.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ---
 

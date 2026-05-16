@@ -13,6 +13,7 @@ import {
   removeColumn,
   renameColumn,
   getColumns,
+  updateColumnRole,
 } from './matrix'
 import { makeKey, parseKey } from './lexorank'
 import {
@@ -289,6 +290,28 @@ describe('Change tracking infrastructure', () => {
     expect(colData).toContainEqual(
       expect.objectContaining({ matrix_id: matrixId, name: 'age', type: 'INTEGER' }),
     )
+  })
+
+  test('UPDATE to matrix_columns role is tracked in changelog', () => {
+    const matrixId = createMatrixWithTraits(db, 'M', [
+      { name: 'label', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    clearChangelog()
+
+    updateColumnRole(db, matrixId, 'label', 'label')
+
+    const log = getChangelog()
+    const colUpdates = log.filter(
+      (e) => e.table_name === 'matrix_columns' && e.operation === 'UPDATE',
+    )
+
+    expect(colUpdates).toHaveLength(1)
+
+    const data = JSON.parse(colUpdates[0]!.data!) as Record<string, unknown>
+    expect(data.name).toBe('label')
+    expect(data.role).toBe('label')
+    expect(data.matrix_id).toBe(matrixId)
   })
 
   test('INSERT into rank table is tracked with hex-encoded key', () => {

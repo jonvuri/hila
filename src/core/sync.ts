@@ -99,6 +99,9 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'order', type: 'INTEGER' },
     { name: 'options', type: 'TEXT' },
     { name: 'formula', type: 'TEXT' },
+    { name: 'constraints', type: 'TEXT' },
+    { name: 'managed_by', type: 'TEXT' },
+    { name: 'role', type: 'TEXT' },
   ],
   matrix_traits: [
     { name: 'matrix_id', type: 'INTEGER' },
@@ -145,9 +148,10 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
   ],
 }
 
-/** Install change-tracking triggers on the four core tables. */
+/** Install change-tracking triggers on the core tables (drop+recreate to pick up column changes). */
 export const installCoreTableTriggers = (db: Database, deviceId: string): void => {
   for (const [tableName, columns] of Object.entries(CORE_TABLE_COLUMNS)) {
+    dropChangeTrackingTriggers(db, tableName)
     installChangeTrackingTriggers(db, tableName, deviceId, columns)
   }
 }
