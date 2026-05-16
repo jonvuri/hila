@@ -128,7 +128,7 @@ Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
 
 The navigation panel is the core of the stream view -- a scrollable, virtualized outline with full editing interactions. It refactors `OutlineFace.tsx` into a reusable component that can appear at root level or as a child subtree inside a focus panel.
 
-- [ ] **Create `src/workspace/NavigationPanel.tsx`.**
+- [x] **Create `src/workspace/NavigationPanel.tsx`.**
 
   Props:
   ```typescript
@@ -140,7 +140,7 @@ The navigation panel is the core of the stream view -- a scrollable, virtualized
   }
   ```
 
-- [ ] **Port outline interactions from `OutlineFace.tsx`.** The navigation panel retains all existing outline behavior:
+- [x] **Port outline interactions from `OutlineFace.tsx`.** The navigation panel retains all existing outline behavior:
   - Enter creates new sibling (inserts row with empty `label`, null `content`)
   - Tab / Shift-Tab indent / outdent
   - Backspace at start merges / deletes
@@ -150,25 +150,25 @@ The navigation panel is the core of the stream view -- a scrollable, virtualized
   - Focus view (zoom into subtree via breadcrumb)
   - Virtualized scrolling via `ScrollVirtualizer`
 
-- [ ] **Update row rendering.** Each row in the navigation panel shows:
+- [x] **Update row rendering.** Each row in the navigation panel shows:
   1. **Label**: full display, wrapping to multiple lines. Edited inline via a single-line ProseMirror editor (paragraph-only schema, no headings). This is the primary editing surface.
   2. **Content preview**: smaller font below the label, clamped to two lines (CSS `-webkit-line-clamp` or similar). Shows extracted text from content column. When focused/clicked, expands into a full ProseMirror editor for inline editing.
   3. **Right-arrow button**: aligned to right edge of the row, visible on hover (dimmed) or focus (primary color). Clicking calls `onOpenFocus(rowId, key)`.
 
-- [ ] **Wire inline references** for label editing. The ProseMirror setup for label uses the same `createInlinerefPlugin` and inline ref node views as the current outline. `@`-references and `#`-tags work in label text.
+- [x] **Wire inline references** for label editing. The ProseMirror setup for label uses the same `createInlinerefPlugin` and inline ref node views as the current outline. `@`-references and `#`-tags work in label text.
 
-- [ ] **Wire inline references for content editing** when the content preview is expanded. Same ProseMirror setup with full schema (paragraphs, headings, marks).
+- [x] **Wire inline references for content editing** when the content preview is expanded. Same ProseMirror setup with full schema (paragraphs, headings, marks).
 
-- [ ] **Update `insertRow` calls.** New rows are inserted with `values: { label: emptyDocJson, content: null }` instead of `values: { content: emptyDocJson }`.
+- [x] **Update `insertRow` calls.** New rows are inserted with `values: { label: emptyDocJson, content: null }` instead of `values: { content: emptyDocJson }`.
 
-- [ ] **Breadcrumb display.** When `rootKey` is set (subtree mode), show breadcrumbs at the top of the panel. Port from existing `OutlineFace.tsx` breadcrumb rendering. Update query to select `d.label` for breadcrumb text.
+- [x] **Breadcrumb display.** When `rootKey` is set (subtree mode), show breadcrumbs at the top of the panel. Port from existing `OutlineFace.tsx` breadcrumb rendering. Update query to select `d.label` for breadcrumb text.
 
-- [ ] **Shift-Enter handler.** When pressing Shift-Enter in the label editor, move focus to the row's inline content editor (expanding the content preview into a full ProseMirror editor if it isn't already). This is analogous to Shift-Enter in Workflowy, which focuses the "note" field for the current bullet. If the content is null, initialize it with an empty PM doc and focus the new editor.
+- [x] **Shift-Enter handler.** When pressing Shift-Enter in the label editor, move focus to the row's inline content editor (expanding the content preview into a full ProseMirror editor if it isn't already). This is analogous to Shift-Enter in Workflowy, which focuses the "note" field for the current bullet. If the content is null, initialize it with an empty PM doc and focus the new editor.
 
-- [ ] **Cmd/Ctrl+L handler.** Opens a focus panel for the currently focused row (calls `onOpenFocus(rowId, key)`). This is the keyboard shortcut for the right-arrow button.
+- [x] **Cmd/Ctrl+L handler.** Opens a focus panel for the currently focused row (calls `onOpenFocus(rowId, key)`). This is the keyboard shortcut for the right-arrow button.
 
-- [ ] Tests (Playwright): navigation panel renders rows with label text. Enter creates a new row. Tab indents, Shift-Tab outdents. Backspace merges. Arrow keys navigate. Collapse/expand works. Drag-and-drop reorders. Right-arrow button appears on hover. Breadcrumbs display in subtree mode.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): navigation panel renders rows with label text. Enter creates a new row. Tab indents, Shift-Tab outdents. Backspace merges. Arrow keys navigate. Collapse/expand works. Drag-and-drop reorders. Right-arrow button appears on hover. Breadcrumbs display in subtree mode.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Focus panel component
 

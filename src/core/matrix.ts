@@ -786,7 +786,7 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       const randomSuffix = Math.floor(Math.random() * 1000)
       const values: Record<string, unknown> = {}
       for (const col of columns) {
-        if (col.name === 'content') {
+        if (col.name === 'content' || col.name === 'label') {
           values[col.name] = JSON.stringify({
             type: 'doc',
             content: [

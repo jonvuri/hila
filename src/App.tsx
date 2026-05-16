@@ -17,6 +17,7 @@ import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
 import { outlinePlugin } from './outline/outline-plugin'
 import { notesPlugin } from './notes/notes-plugin'
 import { tagsPlugin } from './tags/tags-plugin'
+import { workspacePlugin } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
@@ -28,8 +29,9 @@ const NoteListFace = lazy(() => import('./notes/NoteListFace'))
 const NoteFace = lazy(() => import('./notes/NoteFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
+const NavigationPanel = lazy(() => import('./workspace/NavigationPanel'))
 
-type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline' | 'tags'
+type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline' | 'tags' | 'workspace'
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
@@ -40,6 +42,7 @@ const App: Component = () => {
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [selectedNoteId, setSelectedNoteId] = createSignal<number | null>(null)
   const [notesOutlineReady, setNotesOutlineReady] = createSignal(false)
+  const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -61,6 +64,7 @@ const App: Component = () => {
     setOutlineMatrixId(null)
     setNotesMatrixId(null)
     setNotesOutlineReady(false)
+    setWorkspaceMatrixId(null)
     setTableFaceConfig(null)
     setSelectedNoteId(null)
 
@@ -87,6 +91,10 @@ const App: Component = () => {
     setNotesMatrixId(notesId)
 
     await registerPlugin(tagsPlugin)
+
+    const workspaceCtx = await registerPlugin(workspacePlugin)
+    const wsId = workspaceCtx.matrixIds['root']!
+    setWorkspaceMatrixId(wsId)
   }
 
   const handleTagPanelEvent = (e: Event) => {
@@ -185,6 +193,14 @@ const App: Component = () => {
             >
               Tags
             </button>
+            <button
+              class="view-tab"
+              data-active={activeView() === 'workspace'}
+              data-testid="workspace-tab"
+              onClick={() => setActiveView('workspace')}
+            >
+              Workspace
+            </button>
             <Show when={notesMatrixId()}>
               <button
                 class="view-tab"
@@ -251,7 +267,19 @@ const App: Component = () => {
                         fallback={
                           <Show
                             when={activeView() === 'table' && tableFaceConfig()}
-                            fallback={<OutlineFace matrixId={matrixId()} />}
+                            fallback={
+                              <Show
+                                when={activeView() === 'workspace' && workspaceMatrixId()}
+                                fallback={<OutlineFace matrixId={matrixId()} />}
+                              >
+                                {(wsId) => (
+                                  <NavigationPanel
+                                    matrixId={wsId()}
+                                    onOpenFocus={() => {}}
+                                  />
+                                )}
+                              </Show>
+                            }
                           >
                             {(config) => (
                               <TableFace

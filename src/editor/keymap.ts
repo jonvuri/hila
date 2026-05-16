@@ -20,6 +20,8 @@ export type OutlineCallbacks = {
   onToggleCollapse: () => void
   onZoomIn: () => void
   onZoomOut: () => void
+  onShiftEnter?: () => void
+  onOpenFocus?: () => void
 }
 
 const hardBreak = (): Command => {
@@ -92,8 +94,7 @@ const modKToOutline = (callback: () => void): Command => {
 }
 
 export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string, Command> => {
-  return {
-    'Shift-Enter': chainCommands(newlineInCode, createParagraphNear, hardBreak()),
+  const map: Record<string, Command> = {
     Enter: enterToOutline(callbacks.onEnter),
     Backspace: backspaceAtStart(callbacks.onBackspaceAtStart),
     Tab: tabToOutline(callbacks.onIndent),
@@ -108,4 +109,16 @@ export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string,
     'Mod-ArrowDown': tabToOutline(callbacks.onZoomIn),
     'Mod-ArrowUp': tabToOutline(callbacks.onZoomOut),
   }
+
+  if (callbacks.onShiftEnter) {
+    map['Shift-Enter'] = tabToOutline(callbacks.onShiftEnter)
+  } else {
+    map['Shift-Enter'] = chainCommands(newlineInCode, createParagraphNear, hardBreak())
+  }
+
+  if (callbacks.onOpenFocus) {
+    map['Mod-l'] = tabToOutline(callbacks.onOpenFocus)
+  }
+
+  return map
 }
