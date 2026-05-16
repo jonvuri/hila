@@ -29,8 +29,7 @@ const NoteListFace = lazy(() => import('./notes/NoteListFace'))
 const NoteFace = lazy(() => import('./notes/NoteFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
-const NavigationPanel = lazy(() => import('./workspace/NavigationPanel'))
-const FocusPanel = lazy(() => import('./workspace/FocusPanel'))
+const StreamView = lazy(() => import('./workspace/StreamView'))
 
 type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline' | 'tags' | 'workspace'
 
@@ -47,11 +46,6 @@ const App: Component = () => {
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
-  } | null>(null)
-
-  const [focusPanelTarget, setFocusPanelTarget] = createSignal<{
-    rowId: number
-    rowKey: Uint8Array
   } | null>(null)
 
   const [tagPanel, setTagPanel] = createSignal<{
@@ -278,30 +272,7 @@ const App: Component = () => {
                                 when={activeView() === 'workspace' && workspaceMatrixId()}
                                 fallback={<OutlineFace matrixId={matrixId()} />}
                               >
-                                {(wsId) => (
-                                  <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                                    <div style={{ flex: 1, overflow: 'auto', 'min-width': '300px' }}>
-                                      <NavigationPanel
-                                        matrixId={wsId()}
-                                        onOpenFocus={(rowId, key) => setFocusPanelTarget({ rowId, rowKey: new Uint8Array(key) })}
-                                        focusedRowId={focusPanelTarget()?.rowId}
-                                      />
-                                    </div>
-                                    <Show when={focusPanelTarget()}>
-                                      {(target) => (
-                                        <div style={{ flex: 1, overflow: 'auto', 'min-width': '360px' }}>
-                                          <FocusPanel
-                                            matrixId={wsId()}
-                                            rowId={target().rowId}
-                                            rowKey={target().rowKey}
-                                            onOpenFocus={(rowId, key) => setFocusPanelTarget({ rowId, rowKey: new Uint8Array(key) })}
-                                            onClose={() => setFocusPanelTarget(null)}
-                                          />
-                                        </div>
-                                      )}
-                                    </Show>
-                                  </div>
-                                )}
+                                {(wsId) => <StreamView matrixId={wsId()} />}
                               </Show>
                             }
                           >

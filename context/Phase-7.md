@@ -219,7 +219,7 @@ The focus panel shows all details for a single row: label as header, content as 
 
 The stream view composes navigation panels and focus panels into a left-to-right arrangement.
 
-- [ ] **Create `src/workspace/StreamView.tsx`.**
+- [x] **Create `src/workspace/StreamView.tsx`.**
 
   This is the top-level component for the workspace face. It manages the panel stack.
 
@@ -234,25 +234,25 @@ The stream view composes navigation panels and focus panels into a left-to-right
   ])
   ```
 
-- [ ] **Panel opening logic.** When `onOpenFocus` is called from a navigation panel at index `i`:
+- [x] **Panel opening logic.** When `onOpenFocus` is called from a navigation panel at index `i`:
   1. Remove all panels after index `i`.
   2. Append a focus panel for the target row. (The focus panel internally renders a nested navigation panel for the row's children -- this is a component concern, not panel-stack state.)
   3. If the resulting number of navigation panels exceeds 4, remove the leftmost navigation panel (and its associated focus panel, if any).
 
   The panel limit counts **navigation panels only**. A focus panel with its nested child navigation panel forms a single visual column. This means the state array can hold more than 4 entries, but at most 4 of them are `type: 'navigation'`.
 
-- [ ] **Panel closing logic.** `onClose` from a focus panel removes it and any panels to its right. The panel to its left (the navigation panel that spawned it) receives focus.
+- [x] **Panel closing logic.** `onClose` from a focus panel removes it and any panels to its right. The panel to its left (the navigation panel that spawned it) receives focus.
 
-- [ ] **Panel layout.** Panels are laid out left-to-right in a flex container. A navigation panel and the focus panel it spawned form a visual column together. Each column has a minimum width and grows to fill available space. When multiple columns are open, they share width proportionally. Consider horizontal scrolling if total minimum width exceeds viewport.
+- [x] **Panel layout.** Panels are laid out left-to-right in a flex container. A navigation panel and the focus panel it spawned form a visual column together. Each column has a minimum width and grows to fill available space. When multiple columns are open, they share width proportionally. Consider horizontal scrolling if total minimum width exceeds viewport.
 
-- [ ] **Ancestry constraint.** All visible panels represent a single line of ancestry. The combined breadcrumb chain is unbroken. This is enforced by the panel opening logic (replacing panels to the right).
+- [x] **Ancestry constraint.** All visible panels represent a single line of ancestry. The combined breadcrumb chain is unbroken. This is enforced by the panel opening logic (replacing panels to the right).
 
-- [ ] **Keyboard: Cmd/Ctrl+L.** Opens a focus panel for the currently focused row (same as clicking the right-arrow button). Handled in the navigation panel and forwarded to the stream view via `onOpenFocus`.
+- [x] **Keyboard: Cmd/Ctrl+L.** Opens a focus panel for the currently focused row (same as clicking the right-arrow button). Handled in the navigation panel and forwarded to the stream view via `onOpenFocus`.
 
-- [ ] **Keyboard: Cmd+Left.** Closes the rightmost panel (navigates back).
+- [x] **Keyboard: Cmd+Left.** Closes the rightmost panel (navigates back).
 
-- [ ] Tests (Playwright): initial state is single navigation panel at full width. Click right-arrow on a row → focus panel opens to the right. Click right-arrow on a child row inside focus panel's children → second focus panel replaces the first. Navigation panel count never exceeds 4 (opening a 5th removes the leftmost column). Cmd/Ctrl+L opens focus panel. Cmd+Left closes rightmost panel.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): initial state is single navigation panel at full width. Click right-arrow on a row → focus panel opens to the right. Click right-arrow on a child row inside focus panel's children → second focus panel replaces the first. Navigation panel count never exceeds 4 (opening a 5th removes the leftmost column). Cmd/Ctrl+L opens focus panel. Cmd+Left closes rightmost panel.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 5. App shell restructuring
 

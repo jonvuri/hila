@@ -453,7 +453,10 @@ const FocusPanel = (props: FocusPanelProps) => {
         'background-color': '#fafafa',
       }}
     >
-      <Show when={rowData()} fallback={<div style={{ padding: '16px', color: '#888' }}>Loading...</div>}>
+      <Show
+        when={rowData()}
+        fallback={<div style={{ padding: '16px', color: '#888' }}>Loading...</div>}
+      >
         {(data) => (
           <Show
             when={!isChildMatrixRef()}
@@ -647,7 +650,11 @@ const FocusPanel = (props: FocusPanelProps) => {
                   </div>
                 }
               >
-                <Suspense fallback={<div style={{ color: '#888', padding: '8px' }}>Loading children...</div>}>
+                <Suspense
+                  fallback={
+                    <div style={{ color: '#888', padding: '8px' }}>Loading children...</div>
+                  }
+                >
                   <NavigationPanel
                     matrixId={props.matrixId}
                     rootKey={props.rowKey}
