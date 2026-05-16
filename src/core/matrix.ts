@@ -339,7 +339,7 @@ const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 export const createMatrix = (
   db: Database,
   title: string,
-  columns: { name: string; type: string; constraints?: string }[] = [
+  columns: { name: string; type: string; constraints?: string; role?: 'label' | 'content' }[] = [
     { name: 'title', type: 'TEXT' },
   ],
   options?: { managedBy?: string },
@@ -359,7 +359,7 @@ export const createMatrix = (
 
     // Store column definitions in the normalized table
     const colStmt = db.prepare(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", constraints, managed_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", constraints, managed_by, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     )
     for (let i = 0; i < columns.length; i++) {
       colStmt.bind([
@@ -370,6 +370,7 @@ export const createMatrix = (
         i,
         columns[i]!.constraints ?? null,
         options?.managedBy ?? null,
+        columns[i]!.role ?? null,
       ])
       colStmt.step()
       colStmt.reset()

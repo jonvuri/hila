@@ -92,15 +92,15 @@ Wire the `role` field through the type system and query layer.
 
 ## 3. Update `createMatrix` to store roles
 
-- [ ] **Update `createMatrix`** to pass `role` when inserting into `matrix_columns`. Extend the INSERT statement:
+- [x] **Update `createMatrix`** to pass `role` when inserting into `matrix_columns`. Extend the INSERT statement:
   ```sql
   INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", constraints, managed_by, role)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   ```
   Bind `columns[i].role ?? null` as the last parameter.
 
-- [ ] Tests: create a matrix with `columns: [{ name: 'label', type: 'TEXT', role: 'label' }, { name: 'content', type: 'TEXT', role: 'content' }]`. Verify `getColumns` returns the correct roles. Create a matrix with no roles specified. Verify all roles are null.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: create a matrix with `columns: [{ name: 'label', type: 'TEXT', role: 'label' }, { name: 'content', type: 'TEXT', role: 'content' }]`. Verify `getColumns` returns the correct roles. Create a matrix with no roles specified. Verify all roles are null.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Update `addColumn` to accept a role
 

@@ -4328,3 +4328,41 @@ describe('Column display roles — types and queries', () => {
     expect(col).toHaveProperty('role')
   })
 })
+
+// Column display roles (Phase 6 stage 3)
+// ---------------------------------------------------------------------------
+describe('Column display roles — createMatrix stores roles', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('createMatrix stores role values for columns', () => {
+    const matrixId = createMatrix(db, 'Roles Test', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+      { name: 'content', type: 'TEXT', role: 'content' },
+    ])
+    const cols = getColumns(db, matrixId)
+    const labelCol = cols.find((c) => c.name === 'label')
+    const contentCol = cols.find((c) => c.name === 'content')
+    expect(labelCol?.role).toBe('label')
+    expect(contentCol?.role).toBe('content')
+  })
+
+  test('createMatrix stores null roles when no roles are specified', () => {
+    const matrixId = createMatrix(db, 'No Roles', [
+      { name: 'col_a', type: 'TEXT' },
+      { name: 'col_b', type: 'INTEGER' },
+    ])
+    const cols = getColumns(db, matrixId)
+    for (const col of cols) {
+      expect(col.role).toBeNull()
+    }
+  })
+})
