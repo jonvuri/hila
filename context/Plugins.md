@@ -184,19 +184,23 @@ When a face type with trait requirements is applied to a matrix, the system auto
 
 ## Concrete examples
 
-### Outline plugin
+### Workspace plugin
 
-The outline plugin provides the main scrollable outline view -- the primary way users organize and navigate their data.
+The workspace plugin (`hila.workspace`) replaces the separate outline and notes plugins with a unified experience. Every row is simultaneously an outline bullet and a potential document -- the distinction is one of zoom level, not data type.
 
 **Matrixes and traits:**
 
-- A "workspace" concept: which matrixes the user has placed in their outline and their top-level order.
+- A single workspace matrix with two columns:
+  - `label` (TEXT, role: `'label'`) -- the row's identifying text. Single line of richtext (single paragraph in ProseMirror terms).
+  - `content` (TEXT, role: `'content'`) -- the row's body content. Full richtext, multi-paragraph.
 - A rank trait (Lexorank) for the global outline row order.
-- Closure traits for hierarchy tracking within outlined matrixes.
+- Closure traits for hierarchy tracking.
+- Join table rows for cross-row references are managed by the inline references plugin.
 
 **Slot declaration:**
-- `primary_content` (prefers: rich text) -- renders as the row's bullet content.
-- Overflow columns render as horizontal side-columns (tree-table behavior).
+- `label` (prefers: richtext) -- the row's identifying text. In navigation panels, rendered as the compact bullet. In focus panels, rendered as a large header.
+- `content` (prefers: richtext) -- the row's body. In navigation panels, rendered as a truncated preview. In focus panels, rendered as a full ProseMirror editor.
+- Overflow columns render in a property panel (in focus panels) or as compact previews (in navigation panels).
 
 **Named queries:**
 
@@ -215,19 +219,32 @@ WHERE r.matrix_id = :mid
 ORDER BY r.key
 LIMIT :page_size;
 
--- Subtree for focus view
+-- Subtree children for focus panel navigation
 SELECT r.key, r.row_id, d.*
 FROM rank r
 JOIN mx_{mid}_data d ON r.row_id = d.id
-WHERE r.key >= :focus_key
-  AND r.key < substr(:focus_key, 1, length(:focus_key) - 1) || X'01'
+WHERE r.key >= :parent_key
+  AND r.key < substr(:parent_key, 1, length(:parent_key) - 1) || X'01'
 ORDER BY r.key;
+
+-- Single row for focus panel
+SELECT d.*
+FROM mx_{mid}_data d
+WHERE d.id = :row_id;
 
 -- Breadcrumbs for a row
 SELECT c.ancestor_key, c.depth
 FROM closure c
 WHERE c.descendant_key = :key AND c.depth > 0
 ORDER BY c.depth DESC;
+
+-- Backlinks for a row
+SELECT j.source_row_id AS id, j.kind, d.label
+FROM joins j
+JOIN mx_{mid}_data d ON j.source_row_id = d.id
+WHERE j.target_matrix_id = :mid AND j.target_row_id = :rid
+  AND j.source_matrix_id = :mid
+ORDER BY d.label;
 ```
 
 **Named mutations:**
@@ -242,69 +259,14 @@ ORDER BY c.depth DESC;
 
 **Faces:**
 
-- The main outline face: a scrollable, keyboard-navigable view bound to the visible-rows query.
-- Focus view: bound to the subtree query, rooted at a specific row.
+- The **stream view** face: the primary workspace experience, composed of navigation panels and focus panels arranged left-to-right. Navigation panels show the outline tree with compact row views; focus panels show full detail for a single row with content editor, properties, backlinks, and children.
 
 **Key behavior:**
 
-- Matrixes appear in the outline through their identity faces, placed explicitly by the user or by a plugin.
-- The outline plugin does not know about tags, notes, or any other domain concept. It just ranks and displays rows and matrixes.
+- Every row is both an outline bullet (`label`) and a potential document (`content`). The stream view lets users work at any depth.
+- Matrixes appear in the outline through child matrix references (`row_kind = 1`), placed explicitly by the user.
+- The workspace plugin does not know about tags or any other domain concept. It composes outline structure, document editing, and inline references over a single matrix.
 - When applied to a matrix that lacks rank/closure traits, the system provisions them automatically.
-
-### Notes plugin
-
-The notes plugin provides an Obsidian-like document editing experience: titled notes with rich text bodies and `@`-references between them.
-
-**Matrixes and traits:**
-
-- A note matrix with `title` (text) and `body` (rich text, ProseMirror JSON) columns.
-- A rank trait for user-defined ordering in the note list.
-- No closure trait (notes are flat, connected by `@`-references rather than tree hierarchy).
-- Join table rows for cross-note references are managed by the inline references plugin.
-
-**Slot declaration:**
-- `title` (prefers: text) -- rendered as the heading at the top of the note.
-- `body` (prefers: rich text) -- rendered as the main ProseMirror editor below the title.
-- Overflow columns render in a property panel (Notion-style page properties).
-
-**Named queries:**
-
-```sql
--- All notes in list order
-SELECT r.row_id, d.title, d.body
-FROM rank r
-JOIN mx_{mid}_data d ON r.row_id = d.id
-WHERE r.matrix_id = :mid
-ORDER BY r.key;
-
--- Single note by ID
-SELECT d.title, d.body
-FROM mx_{mid}_data d
-WHERE d.id = :row_id;
-
--- Backlinks: all rows that reference a given note (via join table)
-SELECT j.source_matrix_id, j.source_row_id, j.kind
-FROM joins j
-WHERE j.target_matrix_id = :mid AND j.target_row_id = :target_rid;
-```
-
-**Named mutations:**
-
-```sql
--- Create a new note
-INSERT INTO mx_{mid}_data (id, title, body)
-VALUES (:row_id, :title, :default_body);
-
--- Update note content
-UPDATE mx_{mid}_data SET title = :title, body = :body WHERE id = :row_id;
-```
-
-**Faces:**
-
-- Note list face (sidebar): scrollable list of all notes showing title and body preview, searchable.
-- Single-note face (main pane): title as editable heading, body as ProseMirror editor, backlinks panel below.
-
-The notes plugin uses the inline references plugin (below) for `@`-references between notes and `#`-tags in note body text.
 
 ### Inline references plugin
 
@@ -392,22 +354,22 @@ WHERE j.target_matrix_id = :tag_mid AND j.kind = 'own';
 
 ### Rendering inline references and tags
 
-1. The **outline plugin** renders a row. The ProseMirror content contains `inlineref` nodes (both `@`-references and `#`-tags).
-2. The **inline references plugin** renders each node: `@`-references resolve to the target row's current title via a reactive query; `#`-tags resolve to the tag type name and key property values from the aspect row.
+1. The **workspace plugin** renders a row in a navigation panel. The ProseMirror content in `label` and `content` columns contains `inlineref` nodes (both `@`-references and `#`-tags).
+2. The **inline references plugin** renders each node: `@`-references resolve to the target row's current `label` via a reactive query; `#`-tags resolve to the tag type name and key property values from the aspect row.
 3. The tag's aspect columns are hydrated -- they flow from the tag matrix unmodified -- so they are live-editable in place via the tag property editor.
-4. If the user clicks an `@`-reference, it navigates to the target row. If they click a `#`-tag, the **tags plugin's** property editor opens, showing the aspect row's full properties.
+4. If the user clicks an `@`-reference, it navigates to the target row (e.g. opening it in a focus panel). If they click a `#`-tag, the **tags plugin's** property editor opens, showing the aspect row's full properties.
 5. Edits to the aspect row propagate through the shared tag matrix -- any face showing the same data sees the update via reactive query invalidation.
 
-All of this happens through SQL (join table queries, matrix reads, named mutations) and face composition, not through a direct coupling between the outline, inline references, and tags plugin code.
+All of this happens through SQL (join table queries, matrix reads, named mutations) and face composition, not through a direct coupling between the workspace, inline references, and tags plugin code.
 
-### Cross-face data sharing: note matrix through multiple faces
+### Cross-face data sharing: workspace matrix through the table face
 
-The same note matrix viewed through two different face types:
+The same workspace matrix viewed through two different face types:
 
-1. **Note face (default view).** The user works in the notes plugin. `title` and `body` columns auto-bind by name to the note face's slots. The user sees titled documents with rich text bodies, `@`-references, and backlinks. Additional columns (if any) appear in a property panel.
+1. **Stream view (default).** The user works in the workspace plugin's stream view. `label` and `content` columns bind to the workspace face's slots. Navigation panels show the outline tree; focus panels show full documents with rich text editing, `@`-references, backlinks, and properties.
 
-2. **Outline face (applied view).** The user applies the outline face to the note matrix. The system auto-provisions rank and closure traits for the matrix. The `title` column binds to the outline's `primary_content` slot (first text column). The `body` column becomes an overflow side-column, visible as a secondary cell alongside the title in each row. The user now has a hierarchical outline of their notes with bodies visible inline.
+2. **Table face (applied view).** The user applies the table face to the workspace matrix. All columns (`label`, `content`, and any user-added columns) appear as spreadsheet columns. The user can sort, filter, and bulk-edit data that they normally interact with through the stream view.
 
-Both faces write to the same underlying matrix rows. An edit to a note's title in the outline face is immediately visible in the note face (via reactive query invalidation). The faces compose different traits and slot bindings over the same data.
+Both faces write to the same underlying matrix rows. An edit to a row's `label` in the table face is immediately visible in the stream view's navigation panel (via reactive query invalidation). The faces compose different slot bindings and layout strategies over the same data.
 
-This pattern extends to richer workflows: nesting an outline inside a note (a live embedded face bound to a filtered query), expanding an outline bullet into a full note face for longer writing (progressive depth), or opening two faces side-by-side for synchronized editing. See [Architecture - Cross-face data sharing](./Architecture.md#cross-face-data-sharing) for the full set of cross-face workflows.
+This pattern extends to richer workflows: embedding a live table of filtered rows inside a focus panel's content (a live embedded face bound to a query), or opening the table face side-by-side with the stream view for bulk data management alongside contextual editing. See [Architecture - Cross-face data sharing](./Architecture.md#cross-face-data-sharing) for the full set of cross-face workflows.

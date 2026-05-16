@@ -2,7 +2,7 @@
 
 Concrete tasks for Phase 5b. See [Plan.md](Plan.md) for context and objectives, [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale, and [Plugins.md](Plugins.md) for the plugin model.
 
-Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 6 introduces predefined tag type columns.
+Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 8 introduces predefined tag type columns.
 
 ### Current implementation state (prerequisites from Phase 5)
 

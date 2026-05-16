@@ -1,6 +1,6 @@
-# Phase 10 -- Live sync, files, and Dropbox
+# Phase 12 -- Live sync, files, and Dropbox
 
-Concrete tasks for Phase 10. See [Plan.md](Plan.md) for context and objectives, and [Sync.md](Sync.md) for the full specification.
+Concrete tasks for Phase 12. See [Plan.md](Plan.md) for context and objectives, and [Sync.md](Sync.md) for the full specification.
 
 This phase builds on the sync-readiness infrastructure from [Phase 3](Phase-3.md) (unique IDs, change tracking, changeset abstraction, conflict detection) and adds the live pieces: content-addressed file storage, file attachments on outline rows, the sync engine coordinator, the Dropbox provider, and the sync UI. By the end, data flows continuously between devices via Dropbox.
 

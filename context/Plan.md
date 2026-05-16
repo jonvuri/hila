@@ -113,7 +113,7 @@ The first real user-facing feature. This is where the system becomes an app some
 > Detailed task list: [Phase-3.md](Phase-3.md)
 > Detailed specification: [Sync.md](Sync.md)
 
-Core infrastructure changes to make the schema sync-safe and all data mutations trackable. No live sync, no file storage, no Dropbox -- those come in [Phase 10](#phase-10----live-sync-files-and-dropbox). The goal is to ensure that from this point forward, every data mutation is tracked and the system is ready for remote sync when the time comes.
+Core infrastructure changes to make the schema sync-safe and all data mutations trackable. No live sync, no file storage, no Dropbox -- those come in [Phase 12](#phase-12----live-sync-files-and-dropbox). The goal is to ensure that from this point forward, every data mutation is tracked and the system is ready for remote sync when the time comes.
 
 **Work:**
 
@@ -279,7 +279,7 @@ The tags plugin, proving cross-plugin composition through SQL and the join table
 
 > Detailed task list: [Phase-5b.md](Phase-5b.md)
 
-Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 6 introduces predefined tag type columns. See [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale.
+Core infrastructure to make column schema mutations safe, automatic, and extensible. Motivated by Phase 5's tag registry migration (which moved engine-level constraints to fragile application-level checks) and the need for plugin schema contracts before Phase 8 introduces predefined tag type columns. See [Architecture - Column identity](./Architecture.md#column-identity) for the design rationale.
 
 **Work:**
 
@@ -334,7 +334,115 @@ Core infrastructure to make column schema mutations safe, automatic, and extensi
 
 ---
 
-### Phase 6 -- Tasks and movie reviews (tag aspects in practice)
+### Phase 6 -- Column display roles
+
+A small, targeted addition to the column schema that gives columns semantic roles beyond their data type. Roles indicate what a column represents in the matrix's conceptual model -- its identifying label, its rich content body -- enabling features like search, quick navigation, and the workspace stream view (Phase 7) to locate the right columns without hardcoded names.
+
+**Work:**
+
+- **Add `role` column to `matrix_columns`.**
+
+  - `role TEXT CHECK (role IN ('label', 'content'))`, nullable. Most columns have no role.
+  - At most one column per role per matrix. Enforced by a partial unique index: `CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique ON matrix_columns (matrix_id, role) WHERE role IS NOT NULL`.
+  - `label` -- the short, identifying text of a row. Expected to be a single line of richtext. This is what appears in search results, `@`-autocomplete, inline reference badges, and navigation lists.
+  - `content` -- the rich body content of a row. Longer prose, documents, notes. Searchable in deep-search mode but not the primary identification.
+
+- **Update `ColumnDefinition` type** to include `role: 'label' | 'content' | null`.
+
+- **Update `getColumns`** to return the `role` field.
+
+- **Extend `MatrixSpec` column declarations** with optional `role`.
+
+- **Update `createMatrix`** to store `role` in `matrix_columns` when provided.
+
+- **Update `addColumn`** to accept an optional `role` parameter and store it. Enforce the uniqueness constraint (at most one column per role per matrix).
+
+- **Add `updateColumnRole` op.** Set or clear a column's role. Validates uniqueness.
+
+- **Update worker message types** in `matrix-types.ts`.
+
+- **No integration with face slots.** Roles and slots serve different purposes: roles are about data semantics (what a column means), slots are about presentation (where a column renders in a face). The workspace face (Phase 7) uses roles directly to find its target columns, independent of the slot binding resolution chain. Future face types may optionally use roles as an additional slot resolution hint, but this is not needed now.
+
+**Testing:** Vitest for: role storage and retrieval, uniqueness constraint (second `label` column rejected), `updateColumnRole` (set, clear, swap), role survives column rename, role in `getColumns` output. No Playwright tests needed -- roles have no UI surface in this phase.
+
+**Proves:** Columns can carry semantic role annotations beyond their data type. The annotation is lightweight, optional, and enforced at the schema level. The foundation is set for search (FTS5 over role-annotated columns) and for the workspace face (which locates its data by role rather than by hardcoded column name).
+
+---
+
+### Phase 7 -- Workspace plugin and stream view
+
+Merge the outline and notes plugins into a single **workspace plugin** with a unified matrix and a new **stream view** face. The stream view replaces the separate Outline, Notes, and Notes Outline tabs with a composable multi-panel interface where hierarchy flows left-to-right and detail flows top-to-bottom. Each row is simultaneously an outline bullet and a potential document -- the distinction is one of zoom level, not data type.
+
+**Work:**
+
+- **Workspace plugin (`hila.workspace`).**
+
+  - Replaces `hila.outline` and `hila.notes` as the primary user-facing plugin.
+  - Single matrix with two columns:
+    - `label` (TEXT, role: `'label'`) -- the row's identifying text. Single line of richtext (single paragraph in ProseMirror terms). If the PM doc contains heading styling, it applies to the entire label.
+    - `content` (TEXT, role: `'content'`) -- the row's body content. Full richtext, multi-paragraph.
+  - Rank and closure traits (tree hierarchy).
+  - The inline references plugin is wired for both `label` and `content` columns (`@`-references, `#`-tags).
+
+- **Workspace face type (`hila.workspace`).**
+
+  - Slots: `label` (prefers: richtext, required: true), `content` (prefers: richtext, required: false).
+  - Trait requirements: rank, closure.
+  - Overflow behavior: property-panel (additional columns render as property fields in focus panels).
+
+- **Stream view: panel types.**
+
+  The stream view is composed of **navigation panels** and **focus panels**, arranged left to right, always representing a single line of ancestry. The combined breadcrumb of all visible panels forms a single, unbroken chain (though it may not start at the root).
+
+  - **Navigation panels** display the outline tree as a scrollable, virtualized list of rows with full editing capabilities (Enter, Tab/Shift-Tab, Backspace, arrow keys, collapse/expand, drag-and-drop). Each row shows a compact view:
+    - **Label**: fully displayed, wrapping to multiple lines if needed. Edited inline via a ProseMirror editor (single-line richtext). Pressing **Shift-Enter** while editing the label moves focus to the row's inline content editor (expanding it if collapsed), analogous to Workflowy's note field.
+    - **Content preview**: smaller font below the label, clamped to two lines unless being actively edited. Full ProseMirror editor that expands when focused.
+    - **Overflow column previews**: compact single-line previews of other column values, truncated unless the row is focused.
+  - Navigation panels can start at the global root, or be focused on a specific row as the root. If focused, a breadcrumb at the top shows the path from root to the focus row.
+  - Rows have a **right-arrow button** aligned to the right edge of the panel, visible when the row is focused (primary color) or hovered (dimmed). Clicking it opens a focus panel for that row to the right.
+
+  - **Focus panels** display all details for a single row:
+    1. **Label** as a large header at the top, always the same display size regardless of any heading styling in the richtext.
+    2. **Content** as a full ProseMirror editor below the label. Placeholder shown when empty.
+    3. **Overflow columns** as a property list with type-appropriate previews/editors.
+    4. **Backlinks** as a collapsible section (default collapsed), showing all rows that reference this row via the join table.
+    5. **Children** as a nested navigation panel at the bottom, showing the focused row's outline subtree. Placeholder shown when there are no children.
+  - If the row is a child matrix reference (`row_kind = 1`), the focus panel displays the matrix's identity face (table face) inline. Face affinity (a preferred face per matrix) is deferred.
+
+- **Stream view: panel management.**
+
+  - Opening a focus panel: clicking the right-arrow button on a row in a navigation panel opens a focus panel to the right. Any panels already to the right are closed and replaced.
+  - **Maximum 4 navigation panels.** The limit counts navigation panels only -- a focus panel with its nested child navigation panel forms a single visual column. If opening a new column would exceed 4, the leftmost column is removed, progressively focusing deeper.
+  - All visible panels represent a single line of ancestry.
+
+- **Stream view: keyboard navigation.**
+
+  - Within navigation panels: arrow keys move between rows, Enter creates a new sibling, Tab/Shift-Tab indent/outdent, Backspace at start merges/deletes. These are the existing outline interactions.
+  - **Shift-Enter** in a label editor: moves focus to the row's inline content editor (expanding it if collapsed). Analogous to Workflowy's Shift-Enter for the note field.
+  - **Cmd/Ctrl+L**: opens a focus panel for the currently focused row (same as clicking the right-arrow button).
+  - **Cmd+Left**: closes the rightmost panel (navigates back).
+  - **Escape**: when in a focus panel's editor, returns focus to the navigation panel that spawned it.
+
+- **App shell restructuring.**
+
+  - Replace the Outline, Notes, and Notes Outline tabs with a single Workspace view (the default on app load).
+  - The Table and Tags tabs remain as separate views for now.
+  - Remove `NoteListFace`, `NoteFace`, and the notes-outline cross-face wiring from `App.tsx`.
+
+- **Initial empty state.**
+
+  - Single navigation panel at root level, full width.
+  - One welcome row with label "Welcome to Hila" and content with getting-started text.
+  - No focus panels open. The UI is a clean, simple outliner.
+  - The multi-panel system is invisible until the user opens a focus panel.
+
+**Testing:** Vitest for: workspace plugin registration (single matrix, roles assigned), column role enforcement. Playwright for: navigation panel outline interactions (Enter, Tab, Backspace, drag-drop, collapse/expand), opening a focus panel (right-arrow click or Cmd/Ctrl+L), focus panel content editing, Shift-Enter from label to inline content editor, panel chaining (open focus → click child → second focus panel), navigation panel maximum (5th column removes leftmost), breadcrumb chain across panels, backlinks in focus panel, keyboard navigation (Cmd+Left to close panel, Escape to return).
+
+**Proves:** The outline-notes continuum works in practice -- every row is simultaneously a bullet and a potential document. The stream view provides connected context across hierarchy levels. Navigation and focus compose naturally. The multi-panel system emerges progressively from simple outliner interactions. Column display roles connect the workspace face to its data without hardcoded column names.
+
+---
+
+### Phase 8 -- Tasks and movie reviews (tag aspects in practice)
 
 Concrete use of the tag system for two different real-world patterns. Each tag type is a matrix whose rows are created as owned aspects of source rows via `#`-tagging.
 
@@ -362,15 +470,15 @@ Concrete use of the tag system for two different real-world patterns. Each tag t
   - Column types can have custom display/edit components (star rating, status toggle, date picker).
   - Renderer registry: given a column type and optional configuration, return the appropriate component.
 
-**Testing:** Vitest for default value application on row creation, formula/expression evaluation. Playwright for custom cell renderers (star rating click interaction, status toggle, date picker), inline task status toggling from the outline.
+**Testing:** Vitest for default value application on row creation, formula/expression evaluation. Playwright for custom cell renderers (star rating click interaction, status toggle, date picker), inline task status toggling from the workspace.
 
 **Proves:** Tag aspects handle diverse structured data through owned joins. Spreadsheet-like editing works for real use cases. Custom cell renderers extend the table face. Default values reduce friction for data entry.
 
-> Detailed task list: [Phase-6.md](Phase-6.md)
+> Detailed task list: [Phase-8.md](Phase-8.md)
 
 ---
 
-### Phase 7 -- Scheduling infrastructure and notifications
+### Phase 9 -- Scheduling infrastructure and notifications
 
 Core capability layer for all time-based features.
 
@@ -407,7 +515,7 @@ Core capability layer for all time-based features.
 
 ---
 
-### Phase 8 -- Spaced-repetition system
+### Phase 10 -- Spaced-repetition system
 
 A custom face type with a unique interaction model, proving that faces can be far more than tables and outlines.
 
@@ -443,7 +551,7 @@ A custom face type with a unique interaction model, proving that faces can be fa
 
 ---
 
-### Phase 9 -- Micro-journaling
+### Phase 11 -- Micro-journaling
 
 Form-based faces and timed prompts, completing the use case set.
 
@@ -456,7 +564,7 @@ Form-based faces and timed prompts, completing the use case set.
 
 - **Timed prompt system.**
 
-  - Uses the scheduler from Phase 7 to fire prompts at configured intervals.
+  - Uses the scheduler from Phase 9 to fire prompts at configured intervals.
   - Configurable schedule: every N hours, specific times of day, or N times per day evenly spaced.
   - On prompt fire: notification with "Journal now" action that opens the quick-entry face.
 
@@ -478,9 +586,9 @@ Form-based faces and timed prompts, completing the use case set.
 
 ---
 
-### Phase 10 -- Live sync, files, and Dropbox
+### Phase 12 -- Live sync, files, and Dropbox
 
-> Detailed task list: [Phase-10.md](Phase-10.md)
+> Detailed task list: [Phase-12.md](Phase-12.md)
 > Detailed specification: [Sync.md](Sync.md)
 
 Builds on Phase 3's sync-readiness infrastructure to add live sync. Content-addressed file storage, file attachments on outline rows, the sync engine coordinator, the Dropbox provider, and sync UI. By the end, data flows continuously between devices.
@@ -503,11 +611,11 @@ Builds on Phase 3's sync-readiness infrastructure to add live sync. Content-addr
 
 ---
 
-### Phase 11 -- Op system, batch ops, and MCP server
+### Phase 13 -- Op system, batch ops, and MCP server
 
 Formalize the op interface, build the batch executor, and expose the system to external agents via MCP. See [Architecture - Operations](./Architecture.md#operations) and [Architecture - External interfaces](./Architecture.md#external-interfaces) for the design.
 
-This phase can proceed any time after Phase 4b. The op registry (`MatrixOperationMap`) already exists; this phase formalizes it, adds the batch executor, builds the Markdown I/O layer, and ships the MCP server. Earlier phases benefit from agent access (agents can help create content, manage tasks, build outlines), so earlier is better.
+This phase can proceed any time after Phase 5b. The op registry (`MatrixOperationMap`) already exists; this phase formalizes it, adds the batch executor, builds the Markdown I/O layer, and ships the MCP server. Earlier phases benefit from agent access (agents can help create content, manage tasks, build outlines), so earlier is better.
 
 **Work:**
 
@@ -587,7 +695,8 @@ Every operation should be keyboard-accessible. Build a shortcut system early (Ph
 - Phase 2: Outline navigation, editing, reorder, indent/outdent.
 - Phase 4: Table navigation (arrow keys between cells), column operations, note face navigation, `@`-reference insertion (`[[` or `@` trigger), `#`-tag insertion (`#` trigger).
 - Phase 5: Tag type autocomplete, tag property navigation.
-- Phase 6+: Context-specific shortcuts for each face type.
+- Phase 7: Workspace stream view navigation (Shift-Enter to inline content, Cmd/Ctrl+L to open focus panel, Cmd+Left to close panel, Escape to return).
+- Phase 8+: Context-specific shortcuts for each face type.
 
 ### Undo / redo
 
@@ -629,13 +738,15 @@ This work is implemented in [Phase 5b](#phase-5b----column-identity-and-schema-i
 
 ### Search
 
-Full-text search across all matrix content. SQLite FTS5 is the natural choice:
+Full-text search across matrix content, guided by column display roles (Phase 6). SQLite FTS5 is the natural choice:
 
-- Maintain an FTS5 index over text content from all matrixes.
+- Maintain an FTS5 virtual table indexed by `(matrix_id, row_id, role, text)`.
+- `label`-role columns are indexed for quick search (Cmd+K). `content`-role columns are indexed for deep search (optional toggle).
+- Richtext columns are text-extracted (strip ProseMirror JSON to plaintext) at index time.
 - Update the index on writes (trigger-based or explicit).
-- Search face: a global search bar that queries FTS5 and presents results with context.
+- Search face: a global search bar that queries FTS5 and presents results with context -- label as the heading, content snippets below.
 
-Introduce when there's enough content to make search useful (Phase 4 or 5).
+Introduce when there's enough content to make search useful (Phase 7+).
 
 ---
 
@@ -652,7 +763,7 @@ Phase 3 (Sync-readiness)
   │
   ├───────────────────────────┐
   ▼                           ▼
-Phase 4 (Plugins, Faces,    Phase 7 (Scheduling
+Phase 4 (Plugins, Faces,    Phase 9 (Scheduling
   Notes, Traits, Slots) ✓      + Notifications)
   │                           │
   ▼                           │
@@ -661,28 +772,36 @@ Phase 4b (Inline Refs,        │
   │                           │
   ├─────────────────────┐     │
   ▼                     ▼     │
-Phase 5 (Tags)    Phase 11    │
+Phase 5 (Tags)    Phase 13   │
   │               (Ops, Batch,│
   ▼               MCP server) │
 Phase 5b (Column             │
   Identity + Schema)          │
   │                           │
   ▼                           │
-Phase 6 (Tasks +              │
+Phase 6 (Column              │
+  Display Roles)              │
+  │                           │
+  ▼                           │
+Phase 7 (Workspace +         │
+  Stream View)                │
+  │                           │
+  ▼                           │
+Phase 8 (Tasks +              │
   Movie Reviews)              │
   │                           │
   ├── Task reminders ◄────────┘
   │
   ├──────────────────┐
   ▼                  ▼
-Phase 8 (SRS)     Phase 9 (Journaling)
+Phase 10 (SRS)    Phase 11 (Journaling)
 
-Phase 10 (Live sync, files, Dropbox) ◄── Phase 3
+Phase 12 (Live sync, files, Dropbox) ◄── Phase 3
   (can proceed any time after Phase 3;
-   independent of Phases 4-9)
+   independent of Phases 4-11)
 ```
 
-Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 10 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-9; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 7 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 5b (column identity and schema integrity) follows Phase 5 -- it introduces stable column IDs, column constraints, FK-backed column references, and formula column references. It addresses gaps exposed by Phase 5's tag registry migration and should land before Phase 6, whose predefined tag type columns (status, due_date, priority) are the first heavy users of plugin schema contracts. Phase 6 (tasks and movie reviews as tag aspect types) requires Phase 5b. Tasks ship initially without reminders; task reminders are added once Phase 7 lands. Phases 8 and 9 both require the scheduling infrastructure from Phase 7 and can proceed in parallel after it. Phase 11 (op system, batch ops, MCP server) can proceed any time after Phase 4b -- it formalizes the op registry that already exists, adds the batch executor and Markdown I/O layer, and ships the MCP server. Earlier is better: agent access benefits all subsequent phases.
+Phase 3 (sync-readiness) is a prerequisite for everything that follows -- all data changes should be sync-tracked from the start. It establishes unique IDs, change tracking, and the changeset/conflict layer but does not include live sync or file storage. Phase 12 (live sync, files, Dropbox) can proceed any time after Phase 3 and is independent of phases 4-11; it is placed last because the feature work benefits from having more content and use cases before investing in live sync. Phases 4 and 9 can proceed in parallel after Phase 3. Phase 4 (complete) formalized the plugin system, built the face slot model, introduced trait auto-provisioning, and delivered the notes plugin with wiki-links alongside the refactored outline. Phase 4b retrofits the wiki-link implementation with the generalized inline reference system, adds `ref`/`own` join kinds with cascade deletion to the core, and adds reference-type cells to the table face. Phase 5 (tags) builds on the inline references plugin's `#` mode to provide tag type management and the tag-specific UX. Phase 5b (column identity and schema integrity) follows Phase 5 -- it introduces stable column IDs, column constraints, FK-backed column references, and formula column references. It addresses gaps exposed by Phase 5's tag registry migration and should land before Phase 8, whose predefined tag type columns (status, due_date, priority) are the first heavy users of plugin schema contracts. Phase 6 (column display roles) is a small core addition that prepares for Phase 7 and future search. Phase 7 (workspace plugin and stream view) merges the outline and notes plugins into a single workspace with the stream view face, replacing the separate Outline/Notes/Notes Outline tabs. Phase 8 (tasks and movie reviews as tag aspect types) requires Phase 5b. Tasks ship initially without reminders; task reminders are added once Phase 9 lands. Phases 10 and 11 both require the scheduling infrastructure from Phase 9 and can proceed in parallel after it. Phase 13 (op system, batch ops, MCP server) can proceed any time after Phase 5b -- it formalizes the op registry that already exists, adds the batch executor and Markdown I/O layer, and ships the MCP server. Earlier is better: agent access benefits all subsequent phases.
 
 ---
 
@@ -736,14 +855,22 @@ Decisions that emerged from design exploration and are now settled.
 
 4. **Plugin schema contracts.** Plugins declare column constraints (NOT NULL, UNIQUE, CHECK, FK) in their matrix column definitions. These compile to SQLite DDL constraints on the data table, providing engine-level invariant enforcement regardless of write path. Plugin-declared columns are marked with `managed_by` in `matrix_columns` to prevent accidental schema mutations.
 
+5. **Column display roles.** Columns carry an optional `role` annotation (`'label'` or `'content'`) indicating their semantic purpose in the matrix. `label` is the short identifying text (search results, autocomplete, reference badges). `content` is the rich body (longer prose, documents). At most one column per role per matrix. Roles are data-level semantics, independent of face-level slots. The workspace face uses roles to locate its target columns; future search (FTS5) will index by role.
+
+6. **Unified workspace matrix.** The outline and notes are a single matrix with `label` (single-line richtext) and `content` (multi-paragraph richtext) columns. Every row is simultaneously an outline bullet and a potential document -- the distinction is zoom level, not data type. This eliminates the artificial boundary between outliners and document editors and makes the progressive depth workflow concrete. The stream view (navigation panels + focus panels) provides the UX surface.
+
+7. **Matrixes remain independent at the top level.** Matrixes are not nested inside a single root tree. They live in a flat registry and can be optionally placed in the outline via child matrix references (`row_kind = 1`). Plugin housekeeping matrixes (tag registry, etc.) remain as background infrastructure accessible through their identity faces and the matrix browser, not forced into the user's workspace.
+
 ## Open design questions
 
 These don't need answers now but should be resolved as their phases approach.
 
 1. **Undo scope.** ProseMirror handles text undo. Structural and data undo is harder. Per-face undo stacks? Global transaction log? Defer until the pain is real?
 
-2. **Full-text search timing.** FTS5 index over all matrix content. Deferred for now -- the ProseMirror JSON supports simple text extraction, so the index can be added later without schema changes. Revisit when there's enough content to warrant it (likely Phase 5+).
+2. **Full-text search timing.** FTS5 index over matrix content, guided by column display roles (Phase 6). Deferred for now -- the ProseMirror JSON supports simple text extraction, so the index can be added later without schema changes. Revisit when the workspace has enough content to warrant it (likely Phase 8+).
 
 3. **Singleton tags and shared aspects.** The current design treats `#`-tags as always creating a new owned aspect row (instance tags). Singleton tags -- where `#project-alpha` references an existing, independently-living row -- are deferred. The `@`-reference mechanism covers the "link to an existing entity" use case. If singleton tags prove necessary (e.g. for a more tag-like UX around selecting from a curated list), they could be added as a `#` autocomplete option that creates a `ref`-kind join instead of `own`-kind. Revisit when real usage patterns emerge.
 
-4. **Labeled/typed joins.** The join table currently carries `kind` (`ref`/`own`) but no role or label (e.g. "author", "assignee"). Tana-style instance fields (a field that references nodes of a specific supertag type) would benefit from labeled joins for richer reverse lookups ("appears as Author in...", "appears as Assignee in..."). Deferred until structured field references are needed (likely Phase 5-6).
+4. **Labeled/typed joins.** The join table currently carries `kind` (`ref`/`own`) but no role or label (e.g. "author", "assignee"). Tana-style instance fields (a field that references nodes of a specific supertag type) would benefit from labeled joins for richer reverse lookups ("appears as Author in...", "appears as Assignee in..."). Deferred until structured field references are needed.
+
+5. **Face affinity for matrixes.** When a child matrix reference appears in a focus panel, which face should render it? Currently defaults to the table identity face. A "preferred face" annotation on matrixes would let plugins specify a more appropriate default (e.g. a tag matrix might prefer the tag browser face). Deferred until multiple face types compete for the same matrix.

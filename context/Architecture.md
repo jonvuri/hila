@@ -155,7 +155,7 @@ This is not an abstract capability -- it enables concrete workflows:
 
 **Side-by-side synchronized editing.** Two faces of the same matrix open in a split view. Edit a task's status in the table face; see the inline tag update in the outline in real time. Useful for bulk data management (table) alongside contextual editing (outline or notes).
 
-**Progressive depth.** An outline row expands into a full note face when focused, for writing longer prose. Collapse back to a one-line bullet. The data (the row's columns) doesn't change -- just the rendering granularity. A bullet IS a note if you zoom in far enough. This is the outline-to-note continuum enabled by shared slot bindings over the same matrix.
+**Progressive depth.** The workspace stream view embodies this directly: every row has a `label` (the outline bullet) and a `content` (the document body). In the navigation panel, a row appears as a compact bullet. Opening it in a focus panel reveals the full document. The data doesn't change -- just the rendering granularity. A bullet IS a note if you zoom in far enough. The stream view's composable panels let the user hold context at multiple depths simultaneously.
 
 **Alternative visualization face types.** The same task matrix viewed as a kanban board (status column mapped to lanes), a calendar (due date column mapped to timeline positions), or a table (all columns as spreadsheet cells). No data duplication -- just different face types with different slot bindings over the same query. New face types can be added without changing the data model.
 
@@ -291,7 +291,7 @@ On write, the system parses Markdown back to ProseMirror JSON and runs the stand
 
 The primary external interface. An MCP server exposes the op registry as MCP tools, with tool schemas generated from the op type definitions. The MCP server also exposes the SQL read sandbox as a query tool and provides Markdown-formatted content for rich text columns.
 
-See [Plan - Phase 11](#phase-11----mcp-server-and-agent-interface) for the implementation plan.
+See [Plan - Phase 13](#phase-13----op-system-batch-ops-and-mcp-server) for the implementation plan.
 
 ## Core concepts
 
@@ -319,6 +319,8 @@ Stable column IDs enable **durable cross-references to columns** that survive re
 **Plugin schema contracts.** Columns declared by a plugin are marked in `matrix_columns` with a `managed_by` field recording the plugin ID. Schema mutation ops (`removeColumn`, `renameColumn`) refuse to modify plugin-managed columns unless the caller passes `force`. This protects plugin invariants without preventing power users or agents from overriding when they know what they're doing.
 
 **FK-backed column references.** Structured references to columns -- face slot bindings, sort configurations, filter configurations -- are stored in normalized tables with foreign keys to `matrix_columns` (by stable column ID). The FK carries `ON UPDATE CASCADE` for renames and appropriate `ON DELETE` behavior (e.g. `SET NULL` for slot bindings, `CASCADE` for sort configs, `RESTRICT` for formula dependencies). This means `renameColumn` only updates `matrix_columns.name` -- all downstream references are cascaded automatically by the SQLite FK engine. No application code enumerates consumers, and new features that reference columns automatically participate by creating their own FK-backed table. The convention is structural: **if you reference a column, FK to `matrix_columns`.**
+
+**Column display roles.** Columns carry an optional `role` annotation indicating their semantic purpose in the matrix: `label` (the short identifying text of a row) or `content` (the rich body content). At most one column per role per matrix, enforced by a partial unique index. Roles serve two purposes: (1) they enable search infrastructure (FTS5 indexes `label`-role columns for quick search, `content`-role columns for deep search), and (2) they allow the workspace face to locate its target columns by semantic role rather than by hardcoded column name. Roles are data-level semantics, independent of face-level slots -- a column's role describes what it *means*, while its slot binding describes where it *renders* in a particular face.
 
 ### Query expression
 
