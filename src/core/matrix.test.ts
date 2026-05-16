@@ -26,6 +26,7 @@ import {
   removeColumn,
   renameColumn,
   reorderColumns,
+  updateColumnRole,
   getOrCreateDeviceId,
   resetDeviceIdCache,
   ConstraintViolationError,
@@ -4068,6 +4069,87 @@ describe('addColumn with role', () => {
     const cols = getColumns(db, id)
     const extraCol = cols.find((c) => c.name === 'extra')!
     expect(extraCol.role).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// updateColumnRole
+// ---------------------------------------------------------------------------
+describe('updateColumnRole', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm()
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    resetDeviceIdCache()
+  })
+
+  test('set a column role to label', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'body', type: 'TEXT' },
+    ])
+    updateColumnRole(db, id, 'title', 'label')
+
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'title')!.role).toBe('label')
+  })
+
+  test('change a column role from label to content', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    updateColumnRole(db, id, 'title', 'label')
+    updateColumnRole(db, id, 'title', 'content')
+
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'title')!.role).toBe('content')
+  })
+
+  test('clear a column role by setting to null', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    updateColumnRole(db, id, 'title', 'label')
+    updateColumnRole(db, id, 'title', null)
+
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'title')!.role).toBeNull()
+  })
+
+  test('setting duplicate role throws with conflicting column name', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'colA', type: 'TEXT' },
+      { name: 'colB', type: 'TEXT' },
+    ])
+    updateColumnRole(db, id, 'colA', 'label')
+
+    expect(() => updateColumnRole(db, id, 'colB', 'label')).toThrow(
+      /Matrix already has a column with role 'label': colA/,
+    )
+  })
+
+  test('swap roles between two columns', () => {
+    const id = createMatrix(db, 'M', [
+      { name: 'colA', type: 'TEXT' },
+      { name: 'colB', type: 'TEXT' },
+    ])
+    updateColumnRole(db, id, 'colA', 'label')
+    updateColumnRole(db, id, 'colB', 'content')
+
+    // Swap: clear A, set B to label, set A to content
+    updateColumnRole(db, id, 'colA', null)
+    updateColumnRole(db, id, 'colB', 'label')
+    updateColumnRole(db, id, 'colA', 'content')
+
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'colA')!.role).toBe('content')
+    expect(cols.find((c) => c.name === 'colB')!.role).toBe('label')
+  })
+
+  test('updateColumnRole on nonexistent column throws', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+
+    expect(() => updateColumnRole(db, id, 'nonexistent', 'label')).toThrow(
+      /Column "nonexistent" not found/,
+    )
   })
 })
 

@@ -1069,6 +1069,34 @@ export const updateColumnOptions = (
   })
 }
 
+/** Update the role of a column (set, change, or clear). */
+export const updateColumnRole = (
+  db: Database,
+  matrixId: number,
+  columnName: string,
+  role: 'label' | 'content' | null,
+): void => {
+  const current = getColumns(db, matrixId)
+  const col = current.find((c) => c.name === columnName)
+  if (!col) {
+    throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
+  }
+
+  try {
+    db.exec('UPDATE matrix_columns SET role = ? WHERE matrix_id = ? AND name = ?', {
+      bind: [role, matrixId, columnName],
+    })
+  } catch (err) {
+    if (err instanceof Error && /UNIQUE constraint/i.test(err.message)) {
+      const conflicting = current.find((c) => c.role === role && c.name !== columnName)
+      throw new Error(
+        `Matrix already has a column with role '${role}': ${conflicting?.name ?? 'unknown'}`,
+      )
+    }
+    throw err
+  }
+}
+
 /** Add a formula (computed) column. No physical column is created. Returns the new column's stable ID. */
 export const addFormulaColumn = (
   db: Database,

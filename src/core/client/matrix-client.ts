@@ -154,6 +154,12 @@ export const updateColumnOptions = (
   options: string | null,
 ): Promise<void> => workerCall('updateColumnOptions', { matrixId, columnName, options })
 
+export const updateColumnRole = (
+  matrixId: number,
+  columnName: string,
+  role: 'label' | 'content' | null,
+): Promise<void> => workerCall('updateColumnRole', { matrixId, columnName, role })
+
 export const reorderColumns = (matrixId: number, columnNames: string[]): Promise<void> =>
   workerCall('reorderColumns', { matrixId, columnNames })
 

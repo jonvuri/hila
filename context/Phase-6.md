@@ -132,7 +132,7 @@ Wire the `role` field through the type system and query layer.
 
 A new operation to set, change, or clear a column's role.
 
-- [ ] **Add `updateColumnRole` to the op registry** in `matrix-types.ts`:
+- [x] **Add `updateColumnRole` to the op registry** in `matrix-types.ts`:
   ```typescript
   updateColumnRole: {
     params: { matrixId: number; columnName: string; role: 'label' | 'content' | null }
@@ -140,7 +140,7 @@ A new operation to set, change, or clear a column's role.
   }
   ```
 
-- [ ] **Implement `updateColumnRole`** in `matrix.ts`:
+- [x] **Implement `updateColumnRole`** in `matrix.ts`:
   ```typescript
   export const updateColumnRole = (
     db: Database,
@@ -155,9 +155,9 @@ A new operation to set, change, or clear a column's role.
   ```
   If the update would violate the uniqueness constraint (another column already has that role in this matrix), SQLite will throw. Catch the UNIQUE constraint error and rethrow with a descriptive message (e.g. "Matrix already has a column with role 'label': column_name").
 
-- [ ] **Add handler** in `matrix-handler.ts` for the `updateColumnRole` message type.
+- [x] **Add handler** in `matrix-handler.ts` for the `updateColumnRole` message type.
 
-- [ ] **Add client function** in `matrix-client.ts`:
+- [x] **Add client function** in `matrix-client.ts`:
   ```typescript
   export const updateColumnRole = (
     matrixId: number,
@@ -167,14 +167,14 @@ A new operation to set, change, or clear a column's role.
     matrixOp('updateColumnRole', { matrixId, columnName, role })
   ```
 
-- [ ] Tests:
+- [x] Tests:
   - Set a column's role to `'label'`. Verify `getColumns` returns the role.
   - Set the same column's role to `'content'`. Verify it changes.
   - Clear the role (set to `null`). Verify it's null.
   - Set column A to `'label'`, then try to set column B to `'label'` in the same matrix. Verify the error message names the conflicting column.
   - Swap roles: column A has `'label'`, column B has `'content'`. Clear A's role, set B to `'label'`, set A to `'content'`. Verify the swap completes.
   - Verify `updateColumnRole` on a nonexistent column throws an appropriate error.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Role survives column rename
 

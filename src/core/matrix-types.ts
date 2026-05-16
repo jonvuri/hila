@@ -137,6 +137,10 @@ export type MatrixOperationMap = {
     params: { matrixId: number; columnName: string; options: string | null }
     result: void
   }
+  updateColumnRole: {
+    params: { matrixId: number; columnName: string; role: 'label' | 'content' | null }
+    result: void
+  }
   reorderColumns: {
     params: { matrixId: number; columnNames: string[] }
     result: void

@@ -17,6 +17,7 @@ import {
   renameColumn as renameColumnImpl,
   updateColumnDisplayType as updateColumnDisplayTypeImpl,
   updateColumnOptions as updateColumnOptionsImpl,
+  updateColumnRole as updateColumnRoleImpl,
   reorderColumns as reorderColumnsImpl,
   insertJoin as insertJoinImpl,
   deleteJoin as deleteJoinImpl,
@@ -444,6 +445,19 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'updateColumnOptionsSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'updateColumnOptionsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'updateColumnRole': {
+      const { id, matrixId, columnName, role } = message
+      try {
+        const { db } = await sqliteWasm
+        updateColumnRoleImpl(db, matrixId, columnName, role)
+        triggerSubscribedQueries('matrix_columns')
+        postMessage({ type: 'updateColumnRoleSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'updateColumnRoleError', id, error: toError(err) })
       }
       break
     }
