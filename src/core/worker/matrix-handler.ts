@@ -348,7 +348,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'addColumn': {
-      const { id, matrixId, name, columnType, displayType, options, constraints } = message
+      const { id, matrixId, name, columnType, displayType, options, constraints, role } = message
       try {
         const { db } = await sqliteWasm
         const colId = addColumnImpl(db, matrixId, {
@@ -357,6 +357,7 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           displayType,
           options,
           constraints,
+          role,
         })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')

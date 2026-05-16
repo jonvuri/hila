@@ -875,6 +875,7 @@ export const addColumn = (
     displayType?: string
     options?: string
     constraints?: string
+    role?: 'label' | 'content'
   },
 ): number => {
   return withTransaction(db, () => {
@@ -894,7 +895,7 @@ export const addColumn = (
     const displayType = column.displayType ?? sqliteTypeToDisplayType(column.type)
     const nextOrder = current.length > 0 ? Math.max(...current.map((c) => c.order)) + 1 : 0
     const stmt = db.prepare(
-      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options, constraints) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
+      'INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order", options, constraints, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
     )
     stmt.bind([
       matrixId,
@@ -904,6 +905,7 @@ export const addColumn = (
       nextOrder,
       column.options ?? null,
       column.constraints ?? null,
+      column.role ?? null,
     ])
     if (!stmt.step()) {
       stmt.finalize()

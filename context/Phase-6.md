@@ -104,7 +104,7 @@ Wire the `role` field through the type system and query layer.
 
 ## 4. Update `addColumn` to accept a role
 
-- [ ] **Update `addColumn`** signature to accept an optional `role` parameter:
+- [x] **Update `addColumn`** signature to accept an optional `role` parameter:
   ```typescript
   export const addColumn = (
     db: Database,
@@ -121,12 +121,12 @@ Wire the `role` field through the type system and query layer.
   ```
   Include `role` in the INSERT into `matrix_columns`.
 
-- [ ] **Update `MatrixOperationMap` for `addColumn`** in `matrix-types.ts` -- add `role?: 'label' | 'content'` to the params type.
+- [x] **Update `MatrixOperationMap` for `addColumn`** in `matrix-types.ts` -- add `role?: 'label' | 'content'` to the params type.
 
-- [ ] **Update the `addColumn` handler** in `matrix-handler.ts` to pass the role through.
+- [x] **Update the `addColumn` handler** in `matrix-handler.ts` to pass the role through.
 
-- [ ] Tests: add a column with `role: 'label'` to a matrix that has no label column. Verify it succeeds and `getColumns` returns the role. Add a second column with `role: 'label'` to the same matrix. Verify it fails with a constraint violation (the partial unique index). Add a column with `role: 'content'` to the same matrix. Verify it succeeds (different role). Add a column with no role. Verify it succeeds (null role, no uniqueness conflict).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: add a column with `role: 'label'` to a matrix that has no label column. Verify it succeeds and `getColumns` returns the role. Add a second column with `role: 'label'` to the same matrix. Verify it fails with a constraint violation (the partial unique index). Add a column with `role: 'content'` to the same matrix. Verify it succeeds (different role). Add a column with no role. Verify it succeeds (null role, no uniqueness conflict).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 5. Add `updateColumnRole` operation
 

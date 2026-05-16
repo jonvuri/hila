@@ -105,6 +105,7 @@ export type MatrixOperationMap = {
       displayType?: string
       options?: string
       constraints?: string
+      role?: 'label' | 'content'
     }
     result: number
   }

@@ -4023,6 +4023,55 @@ describe('Column constraints', () => {
 })
 
 // ---------------------------------------------------------------------------
+// addColumn with role
+// ---------------------------------------------------------------------------
+describe('addColumn with role', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm()
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    resetDeviceIdCache()
+  })
+
+  test('addColumn with role: label succeeds and getColumns returns the role', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'heading', type: 'TEXT', role: 'label' })
+
+    const cols = getColumns(db, id)
+    const headingCol = cols.find((c) => c.name === 'heading')!
+    expect(headingCol.role).toBe('label')
+  })
+
+  test('second label column on the same matrix fails with constraint violation', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'heading', type: 'TEXT', role: 'label' })
+
+    expect(() => addColumn(db, id, { name: 'alt', type: 'TEXT', role: 'label' })).toThrow()
+  })
+
+  test('addColumn with role: content succeeds alongside an existing label column', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'heading', type: 'TEXT', role: 'label' })
+    addColumn(db, id, { name: 'body', type: 'TEXT', role: 'content' })
+
+    const cols = getColumns(db, id)
+    expect(cols.find((c) => c.name === 'body')!.role).toBe('content')
+  })
+
+  test('addColumn with no role succeeds without uniqueness conflict', () => {
+    const id = createMatrix(db, 'M', [{ name: 'title', type: 'TEXT' }])
+    addColumn(db, id, { name: 'heading', type: 'TEXT', role: 'label' })
+    addColumn(db, id, { name: 'extra', type: 'TEXT' })
+
+    const cols = getColumns(db, id)
+    const extraCol = cols.find((c) => c.name === 'extra')!
+    expect(extraCol.role).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Plugin column ownership (managed_by)
 // ---------------------------------------------------------------------------
 describe('Plugin column ownership', () => {
