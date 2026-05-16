@@ -19,6 +19,14 @@ See the `context/` directory for documentation on architecture and planning. In 
 - [Plan](context/Plan.md) -- the current implementation plan in depth
 - [Plugins](context/Plugins.md) -- plugin model, face slot system, concrete examples (outline, notes, tags)
 
+## Working with phased plans
+
+Implementation plans live in `context/Phase-*.md` as numbered stages with checkbox items (`- [ ]` / `- [x]`). When executing a stage:
+
+- Work through each item in order, running the verification step (typecheck/lint/test) specified at the end of the stage.
+- **Check off items** (`- [ ]` → `- [x]`) in the phase document as they are completed. This is the primary progress record.
+- If a stage has sub-items (tests, implementation steps), check them off individually as you go.
+
 ## Code style
 
 - Prefer `type` over `interface` for type definitions.
