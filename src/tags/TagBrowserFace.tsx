@@ -37,10 +37,8 @@ type TagInstanceRow = {
 }
 
 type TagBrowserFaceProps = {
-  outlineMatrixId?: number
-  notesMatrixId?: number
-  onNavigateToOutlineRow?: (matrixId: number, rowId: number) => void
-  onNavigateToNote?: (matrixId: number, noteId: number) => void
+  workspaceMatrixId?: number
+  onNavigateToWorkspaceRow?: (matrixId: number, rowId: number) => void
   onOpenTableFace?: (matrixId: number) => void
 }
 
@@ -254,10 +252,8 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
   // -- Navigation --
 
   const handleInstanceClick = (inst: TagInstanceRow) => {
-    if (props.notesMatrixId && inst.source_matrix_id === props.notesMatrixId) {
-      props.onNavigateToNote?.(inst.source_matrix_id, inst.source_row_id)
-    } else if (props.outlineMatrixId && inst.source_matrix_id === props.outlineMatrixId) {
-      props.onNavigateToOutlineRow?.(inst.source_matrix_id, inst.source_row_id)
+    if (props.workspaceMatrixId && inst.source_matrix_id === props.workspaceMatrixId) {
+      props.onNavigateToWorkspaceRow?.(inst.source_matrix_id, inst.source_row_id)
     } else {
       props.onOpenTableFace?.(inst.source_matrix_id)
     }

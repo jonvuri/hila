@@ -22,10 +22,6 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
-}
-
 const waitForRows = async (page: Page, minCount = 1) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
   await expect(async () => {
@@ -55,7 +51,6 @@ const openFocusPanelOnRow = async (page: Page, rowIndex: number) => {
 test.describe('Stream view: panel management', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await goToWorkspace(page)
     await waitForRows(page, 1)
   })
 

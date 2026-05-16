@@ -1,4 +1,6 @@
-import { createMemo, createSignal, For, onCleanup, onMount, Suspense } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Suspense } from 'solid-js'
+
+import { execQuery } from '../core/client/sql-client'
 
 import NavigationPanel from './NavigationPanel'
 import FocusPanel from './FocusPanel'
@@ -13,6 +15,8 @@ type PanelState =
 
 type StreamViewProps = {
   matrixId: number
+  navigateToRowId?: number | null
+  onNavigated?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -72,12 +76,47 @@ const StreamView = (props: StreamViewProps) => {
     }
   }
 
+  const navigateToRow = async (rowId: number) => {
+    const result = await execQuery(
+      `SELECT key FROM rank WHERE matrix_id = ${props.matrixId} AND row_id = ${rowId}`,
+    )
+    if (result && result.length > 0) {
+      const key = (result[0] as { key: Uint8Array }).key
+      handleOpenFocus(0, rowId, new Uint8Array(key))
+    }
+  }
+
+  // External navigation via prop (e.g. tag browser → workspace)
+  createEffect(
+    on(
+      () => props.navigateToRowId,
+      (rowId) => {
+        if (rowId != null) {
+          void navigateToRow(rowId)
+          props.onNavigated?.()
+        }
+      },
+    ),
+  )
+
+  let viewRef: HTMLDivElement | undefined
+
+  const handleInlinerefNavigate = (e: Event) => {
+    const detail = (e as CustomEvent<{ rowId: number }>).detail
+    if (detail?.rowId != null) {
+      e.stopPropagation()
+      void navigateToRow(detail.rowId)
+    }
+  }
+
   onMount(() => {
     document.addEventListener('keydown', handleKeyDown, { capture: true })
+    viewRef?.addEventListener('inlineref-navigate', handleInlinerefNavigate)
   })
 
   onCleanup(() => {
     document.removeEventListener('keydown', handleKeyDown, { capture: true })
+    viewRef?.removeEventListener('inlineref-navigate', handleInlinerefNavigate)
   })
 
   // Map from navigation-panel index → focused row ID (the rowId of the
@@ -98,6 +137,7 @@ const StreamView = (props: StreamViewProps) => {
 
   return (
     <div
+      ref={viewRef}
       class="stream-view"
       data-testid="stream-view"
       style={{

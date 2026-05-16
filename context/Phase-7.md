@@ -258,7 +258,7 @@ The stream view composes navigation panels and focus panels into a left-to-right
 
 Replace the tab-based multi-view layout with the workspace as the default. The old database should be deleted before running the app for the first time after this change -- no data migration is needed.
 
-- [ ] **Update `App.tsx`.** Replace the `outlinePlugin` and `notesPlugin` registrations with `workspacePlugin`. Remove:
+- [x] **Update `App.tsx`.** Replace the `outlinePlugin` and `notesPlugin` registrations with `workspacePlugin`. Remove:
   - `outlinePlugin` import and registration
   - `notesPlugin` import and registration
   - `outlineMatrixId` / `notesMatrixId` signals
@@ -271,22 +271,22 @@ Replace the tab-based multi-view layout with the workspace as the default. The o
   - `workspaceMatrixId` signal
   - Lazy import for `StreamView`
 
-- [ ] **Update tab structure.** The view tabs become:
+- [x] **Update tab structure.** The view tabs become:
   - **Workspace** (default, active on load) → renders `StreamView`
   - **Table** → renders `TableFace` for the workspace matrix
   - **Tags** → renders `TagBrowserFace`
 
-- [ ] **Update `ActiveView` type.** Remove `'outline' | 'notes' | 'notes-outline'`, add `'workspace'`:
+- [x] **Update `ActiveView` type.** Remove `'outline' | 'notes' | 'notes-outline'`, add `'workspace'`:
   ```typescript
   type ActiveView = 'workspace' | 'table' | 'tags'
   ```
 
-- [ ] **Update tag browser integration.** The tag browser's "navigate to source row" action should open the workspace view and navigate to the row (open a focus panel for it). Port from the current outline navigation callback.
+- [x] **Update tag browser integration.** The tag browser's "navigate to source row" action should open the workspace view and navigate to the row (open a focus panel for it). Port from the current outline navigation callback.
 
-- [ ] **Update inline reference navigation.** Clicking an `@`-reference in the workspace navigates within the stream view (opens a focus panel for the target row) rather than switching tabs.
+- [x] **Update inline reference navigation.** Clicking an `@`-reference in the workspace navigates within the stream view (opens a focus panel for the target row) rather than switching tabs.
 
-- [ ] Tests (Playwright): app loads with Workspace tab active. Stream view renders. Table tab shows workspace matrix in table face. Tags tab shows tag browser. No Outline, Notes, or Notes Outline tabs exist. Matrix browser shows the workspace matrix with label and content columns.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): app loads with Workspace tab active. Stream view renders. Table tab shows workspace matrix in table face. Tags tab shows tag browser. No Outline, Notes, or Notes Outline tabs exist. Matrix browser shows the workspace matrix with label and content columns.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 6. Remove old outline and notes code
 

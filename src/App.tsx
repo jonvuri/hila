@@ -10,12 +10,10 @@ import {
 
 import type { FaceConfig } from './core/face-types'
 import { registerFaceComponent } from './core/FaceRenderer'
-import { applyFaceToMatrix, getFaceConfigs, registerPlugin } from './core/client/matrix-client'
+import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
-import { outlinePlugin } from './outline/outline-plugin'
-import { notesPlugin } from './notes/notes-plugin'
 import { tagsPlugin } from './tags/tags-plugin'
 import { workspacePlugin } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
@@ -23,26 +21,20 @@ import TagPropertyPanel from './tags/TagPropertyPanel'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
-const OutlineFace = lazy(() => import('./outline/OutlineFace'))
 const TableFace = lazy(() => import('./table/TableFace'))
-const NoteListFace = lazy(() => import('./notes/NoteListFace'))
-const NoteFace = lazy(() => import('./notes/NoteFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
 const StreamView = lazy(() => import('./workspace/StreamView'))
 
-type ActiveView = 'outline' | 'table' | 'notes' | 'notes-outline' | 'tags' | 'workspace'
+type ActiveView = 'workspace' | 'table' | 'tags'
 
 const App: Component = () => {
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
-  const [outlineMatrixId, setOutlineMatrixId] = createSignal<number | null>(null)
-  const [notesMatrixId, setNotesMatrixId] = createSignal<number | null>(null)
-  const [activeView, setActiveView] = createSignal<ActiveView>('outline')
+  const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
-  const [selectedNoteId, setSelectedNoteId] = createSignal<number | null>(null)
-  const [notesOutlineReady, setNotesOutlineReady] = createSignal(false)
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
+  const [workspaceNavigateToRowId, setWorkspaceNavigateToRowId] = createSignal<number | null>(null)
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -59,42 +51,23 @@ const App: Component = () => {
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
   const initPlugins = async () => {
-    // Clear stale state so Show guards go falsy → truthy, forcing face
-    // remount with fresh matrixIds (critical after DB reset).
-    setOutlineMatrixId(null)
-    setNotesMatrixId(null)
-    setNotesOutlineReady(false)
     setWorkspaceMatrixId(null)
     setTableFaceConfig(null)
-    setSelectedNoteId(null)
 
-    // Table face type is core infrastructure — register it first so all
-    // plugins can create identity faces for their matrixes.
     await registerTableFaceType()
     const TableFaceComponent = (await import('./table/TableFace')).default
     registerFaceComponent('hila.table', TableFaceComponent)
 
-    // Plugins declare their own face types via faceTypes in PluginDefinition;
-    // registerPlugin handles registration both locally and in the worker.
     await registerPlugin(inlineReferencesPlugin)
-
-    const outlineCtx = await registerPlugin(outlinePlugin)
-    const matrixId = outlineCtx.matrixIds['root']!
-    setOutlineMatrixId(matrixId)
-
-    const configs = await getFaceConfigs(matrixId)
-    const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
-    if (tableConfig) setTableFaceConfig(tableConfig)
-
-    const notesCtx = await registerPlugin(notesPlugin)
-    const notesId = notesCtx.matrixIds['notes']!
-    setNotesMatrixId(notesId)
-
     await registerPlugin(tagsPlugin)
 
     const workspaceCtx = await registerPlugin(workspacePlugin)
     const wsId = workspaceCtx.matrixIds['root']!
     setWorkspaceMatrixId(wsId)
+
+    const configs = await getFaceConfigs(wsId)
+    const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
+    if (tableConfig) setTableFaceConfig(tableConfig)
   }
 
   const handleTagPanelEvent = (e: Event) => {
@@ -149,41 +122,25 @@ const App: Component = () => {
     })
   })
 
-  const handleSelectNote = (noteId: number) => setSelectedNoteId(noteId)
-
-  const handleBackToList = () => setSelectedNoteId(null)
-
   return (
     <div class="app-shell">
       <div class="app-main">
-        <Show when={outlineMatrixId()}>
+        <Show when={workspaceMatrixId()}>
           <div class="view-switcher">
             <button
               class="view-tab"
-              data-active={activeView() === 'outline'}
-              onClick={() => {
-                setActiveView('outline')
-                setSelectedNoteId(null)
-              }}
+              data-active={activeView() === 'workspace'}
+              data-testid="workspace-tab"
+              onClick={() => setActiveView('workspace')}
             >
-              Outline
+              Workspace
             </button>
             <button
               class="view-tab"
               data-active={activeView() === 'table'}
-              onClick={() => {
-                setActiveView('table')
-                setSelectedNoteId(null)
-              }}
+              onClick={() => setActiveView('table')}
             >
               Table
-            </button>
-            <button
-              class="view-tab"
-              data-active={activeView() === 'notes'}
-              onClick={() => setActiveView('notes')}
-            >
-              Notes
             </button>
             <button
               class="view-tab"
@@ -194,37 +151,9 @@ const App: Component = () => {
               Tags
             </button>
             <button
-              class="view-tab"
-              data-active={activeView() === 'workspace'}
-              data-testid="workspace-tab"
-              onClick={() => setActiveView('workspace')}
-            >
-              Workspace
-            </button>
-            <Show when={notesMatrixId()}>
-              <button
-                class="view-tab"
-                data-active={activeView() === 'notes-outline'}
-                data-testid="notes-outline-tab"
-                onClick={() => {
-                  const mid = notesMatrixId()
-                  if (mid && !notesOutlineReady()) {
-                    void applyFaceToMatrix('hila.outline', mid).then(() => {
-                      setNotesOutlineReady(true)
-                      setActiveView('notes-outline')
-                    })
-                  } else {
-                    setActiveView('notes-outline')
-                  }
-                }}
-              >
-                Notes Outline
-              </button>
-            </Show>
-            <button
               class="view-tab view-as-btn"
               onClick={() => {
-                const mid = activeView() === 'notes' ? notesMatrixId() : outlineMatrixId()
+                const mid = workspaceMatrixId()
                 if (mid) setFaceConfigTarget({ matrixId: mid })
               }}
               data-testid="view-as-button"
@@ -252,95 +181,48 @@ const App: Component = () => {
               </div>
             )}
           </Show>
-          <Show when={outlineMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
-            {(matrixId) => (
+          <Show when={workspaceMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
+            {(wsId) => (
               <Show
-                when={
-                  activeView() === 'notes-outline' && notesOutlineReady() && notesMatrixId()
-                }
+                when={activeView() === 'tags'}
                 fallback={
                   <Show
-                    when={activeView() === 'notes' && notesMatrixId()}
+                    when={activeView() === 'table' && tableFaceConfig()}
                     fallback={
-                      <Show
-                        when={activeView() === 'tags'}
-                        fallback={
-                          <Show
-                            when={activeView() === 'table' && tableFaceConfig()}
-                            fallback={
-                              <Show
-                                when={activeView() === 'workspace' && workspaceMatrixId()}
-                                fallback={<OutlineFace matrixId={matrixId()} />}
-                              >
-                                {(wsId) => <StreamView matrixId={wsId()} />}
-                              </Show>
-                            }
-                          >
-                            {(config) => (
-                              <TableFace
-                                config={config()}
-                                bindings={{ bindings: [], overflowColumns: [] }}
-                              />
-                            )}
-                          </Show>
-                        }
-                      >
-                        <TagBrowserFace
-                          outlineMatrixId={outlineMatrixId() ?? undefined}
-                          notesMatrixId={notesMatrixId() ?? undefined}
-                          onNavigateToOutlineRow={() => {
-                            setActiveView('outline')
-                          }}
-                          onNavigateToNote={(_matrixId, noteId) => {
-                            setActiveView('notes')
-                            setSelectedNoteId(noteId)
-                          }}
-                          onOpenTableFace={(targetMatrixId) => {
-                            void getFaceConfigs(targetMatrixId).then((configs) => {
-                              const tableConfig = configs.find(
-                                (c) => c.faceTypeId === 'hila.table',
-                              )
-                              if (tableConfig) {
-                                setTableFaceConfig(tableConfig)
-                                setActiveView('table')
-                              }
-                            })
-                          }}
-                        />
-                      </Show>
+                      <StreamView
+                        matrixId={wsId()}
+                        navigateToRowId={workspaceNavigateToRowId()}
+                        onNavigated={() => setWorkspaceNavigateToRowId(null)}
+                      />
                     }
                   >
-                    {(notesId) => (
-                      <Show
-                        when={selectedNoteId()}
-                        keyed
-                        fallback={
-                          <NoteListFace matrixId={notesId()} onSelectNote={handleSelectNote} />
-                        }
-                      >
-                        {(noteId) => (
-                          <NoteFace
-                            matrixId={notesId()}
-                            noteId={noteId}
-                            onBack={handleBackToList}
-                            onNavigateToNote={handleSelectNote}
-                          />
-                        )}
-                      </Show>
+                    {(config) => (
+                      <TableFace
+                        config={config()}
+                        bindings={{ bindings: [], overflowColumns: [] }}
+                      />
                     )}
                   </Show>
                 }
               >
-                {(notesId) => (
-                  <OutlineFace
-                    matrixId={notesId()}
-                    contentColumn="title"
-                    contentIsPlainText={true}
-                    defaultRowValues={{
-                      body: JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] }),
-                    }}
-                  />
-                )}
+                <TagBrowserFace
+                  workspaceMatrixId={workspaceMatrixId() ?? undefined}
+                  onNavigateToWorkspaceRow={(_matrixId, rowId) => {
+                    setWorkspaceNavigateToRowId(rowId)
+                    setActiveView('workspace')
+                  }}
+                  onOpenTableFace={(targetMatrixId) => {
+                    void getFaceConfigs(targetMatrixId).then((configs) => {
+                      const tableConfig = configs.find(
+                        (c) => c.faceTypeId === 'hila.table',
+                      )
+                      if (tableConfig) {
+                        setTableFaceConfig(tableConfig)
+                        setActiveView('table')
+                      }
+                    })
+                  }}
+                />
               </Show>
             )}
           </Show>
