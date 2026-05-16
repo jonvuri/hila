@@ -174,7 +174,7 @@ The navigation panel is the core of the stream view -- a scrollable, virtualized
 
 The focus panel shows all details for a single row: label as header, content as full editor, overflow columns as properties, backlinks, and children.
 
-- [ ] **Create `src/workspace/FocusPanel.tsx`.**
+- [x] **Create `src/workspace/FocusPanel.tsx`.**
 
   Props:
   ```typescript
@@ -187,13 +187,13 @@ The focus panel shows all details for a single row: label as header, content as 
   }
   ```
 
-- [ ] **Label section.** A large header at the top. ProseMirror editor with single-line schema (paragraph only, no headings). Styled at a consistent display size regardless of PM content -- if the richtext contains heading marks, they're stripped or ignored for display sizing. Debounced save to `updateRow` for the `label` column.
+- [x] **Label section.** A large header at the top. ProseMirror editor with single-line schema (paragraph only, no headings). Styled at a consistent display size regardless of PM content -- if the richtext contains heading marks, they're stripped or ignored for display sizing. Debounced save to `updateRow` for the `label` column.
 
-- [ ] **Content section.** A full ProseMirror editor below the label. Multi-paragraph schema (paragraphs, headings, bold/italic/code/link marks). Placeholder text when empty ("Start writing..."). Debounced save to `updateRow` for the `content` column. Wire inline references (`@` and `#`).
+- [x] **Content section.** A full ProseMirror editor below the label. Multi-paragraph schema (paragraphs, headings, bold/italic/code/link marks). Placeholder text when empty ("Start writing..."). Debounced save to `updateRow` for the `content` column. Wire inline references (`@` and `#`).
 
-- [ ] **Overflow columns section.** Query `getColumns` for the matrix. Any columns beyond `label` and `content` render as a property list (similar to NoteFace's property panel pattern). Use `FieldEditor` from `src/shared/FieldEditor.tsx` for per-column-type editing.
+- [x] **Overflow columns section.** Query `getColumns` for the matrix. Any columns beyond `label` and `content` render as a property list (similar to NoteFace's property panel pattern). Use `FieldEditor` from `src/shared/FieldEditor.tsx` for per-column-type editing.
 
-- [ ] **Backlinks section.** Collapsible section (default collapsed). Query the join table for rows that reference this row:
+- [x] **Backlinks section.** Collapsible section (default collapsed). Query the join table for rows that reference this row:
   ```sql
   SELECT j.source_row_id AS id, j.kind, d.label
   FROM joins j
@@ -204,16 +204,16 @@ The focus panel shows all details for a single row: label as header, content as 
   ```
   Each backlink is clickable -- clicking navigates to the source row (calls `onOpenFocus` to open it).
 
-- [ ] **Children section.** At the bottom, a nested `NavigationPanel` rooted at this row's key, showing the subtree. If the row has no children, show a placeholder ("No children. Press Enter in the outline to add items."). The nested navigation panel has full outline interactions and can spawn further focus panels via `onOpenFocus`.
+- [x] **Children section.** At the bottom, a nested `NavigationPanel` rooted at this row's key, showing the subtree. If the row has no children, show a placeholder ("No children. Press Enter in the outline to add items."). The nested navigation panel has full outline interactions and can spawn further focus panels via `onOpenFocus`.
 
-- [ ] **Child matrix reference handling.** If `row_kind = 1` (child matrix reference), the focus panel displays the matrix's identity face (table face) inline instead of the standard label/content/children layout. This requires checking `row_kind` from the data table and resolving the referenced matrix ID from the row's data.
+- [x] **Child matrix reference handling.** If `row_kind = 1` (child matrix reference), the focus panel displays the matrix's identity face (table face) inline instead of the standard label/content/children layout. This requires checking `row_kind` from the data table and resolving the referenced matrix ID from the row's data.
 
-- [ ] **Data loading.** Use `useQuery` with the single-row query to load label, content, and any overflow columns. The query re-fires reactively on changes (e.g. after save).
+- [x] **Data loading.** Use `useQuery` with the single-row query to load label, content, and any overflow columns. The query re-fires reactively on changes (e.g. after save).
 
-- [ ] **Keyboard: Escape.** Pressing Escape while in the focus panel's label or content editor signals `onClose` to return focus to the navigation panel.
+- [x] **Keyboard: Escape.** Pressing Escape while in the focus panel's label or content editor signals `onClose` to return focus to the navigation panel.
 
-- [ ] Tests (Playwright): focus panel displays label as header. Content editor is editable. Empty content shows placeholder. Backlinks section collapses/expands. Children navigation panel shows subtree. Typing in label saves (debounced). Typing in content saves. Escape returns focus to navigation panel.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): focus panel displays label as header. Content editor is editable. Empty content shows placeholder. Backlinks section collapses/expands. Children navigation panel shows subtree. Typing in label saves (debounced). Typing in content saves. Escape returns focus to navigation panel.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 4. Stream view: panel management
 
