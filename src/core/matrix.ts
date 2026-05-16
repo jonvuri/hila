@@ -339,9 +339,12 @@ const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 export const createMatrix = (
   db: Database,
   title: string,
-  columns: { name: string; type: string; constraints?: string; role?: 'label' | 'content' }[] = [
-    { name: 'title', type: 'TEXT' },
-  ],
+  columns: {
+    name: string
+    type: string
+    constraints?: string
+    role?: 'label' | 'content'
+  }[] = [{ name: 'title', type: 'TEXT' }],
   options?: { managedBy?: string },
 ): number => {
   return withTransaction(db, () => {

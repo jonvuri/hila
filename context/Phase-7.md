@@ -37,7 +37,7 @@ What Phase 7 preserves:
 
 Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
 
-- [ ] **Create `src/workspace/workspace-plugin.ts`.**
+- [x] **Create `src/workspace/workspace-plugin.ts`.**
 
   Define the plugin with a single matrix and two columns:
   ```typescript
@@ -74,7 +74,7 @@ Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
   }
   ```
 
-- [ ] **Define `workspaceFaceTypeDefinition`:**
+- [x] **Define `workspaceFaceTypeDefinition`:**
   ```typescript
   export const workspaceFaceTypeDefinition: FaceTypeDefinition = {
     id: 'hila.workspace',
@@ -88,9 +88,9 @@ Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
   }
   ```
 
-- [ ] **Update `seedWelcomeRow`** (or add a new seeding mechanism) to accept both label and content values. The welcome row: label = "Welcome to Hila", content = getting-started prose explaining the stream view basics.
+- [x] **Update `seedWelcomeRow`** (or add a new seeding mechanism) to accept both label and content values. The welcome row: label = "Welcome to Hila", content = getting-started prose explaining the stream view basics.
 
-- [ ] **Port outline query builders** from `outline-plugin.ts` to `workspace-plugin.ts`. Update column references from `d.content` to `d.label, d.content` in the SELECT. The main paged outline query becomes:
+- [x] **Port outline query builders** from `outline-plugin.ts` to `workspace-plugin.ts`. Update column references from `d.content` to `d.label, d.content` in the SELECT. The main paged outline query becomes:
   ```sql
   SELECT r.key, r.row_id, d.label, d.content,
          COALESCE(c.depth, 0) as depth,
@@ -104,14 +104,14 @@ Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
   ORDER BY r.key
   ```
 
-- [ ] **Add single-row query** for focus panels:
+- [x] **Add single-row query** for focus panels:
   ```sql
   SELECT d.* FROM "mx_{mid}_data" d WHERE d.id = {rowId}
   ```
 
-- [ ] **Port breadcrumb query** from `outline-plugin.ts`. Update to select `d.label` instead of `d.content`.
+- [x] **Port breadcrumb query** from `outline-plugin.ts`. Update to select `d.label` instead of `d.content`.
 
-- [ ] **Add backlinks query** (ported from `NoteFace.tsx`):
+- [x] **Add backlinks query** (ported from `NoteFace.tsx`):
   ```sql
   SELECT j.source_row_id AS id, j.kind, d.label
   FROM joins j
@@ -121,8 +121,8 @@ Replace `hila.outline` and `hila.notes` with a single `hila.workspace` plugin.
   ORDER BY d.label
   ```
 
-- [ ] Tests: workspace plugin registers correctly with `registerPlugin`. The matrix is created with two columns (`label`, `content`). Both columns have correct roles assigned. Rank and closure traits are provisioned. The face type is registered. The welcome row is seeded with both label and content.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: workspace plugin registers correctly with `registerPlugin`. The matrix is created with two columns (`label`, `content`). Both columns have correct roles assigned. Rank and closure traits are provisioned. The face type is registered. The welcome row is seeded with both label and content.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Navigation panel component
 
