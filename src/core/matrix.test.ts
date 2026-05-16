@@ -4497,3 +4497,40 @@ describe('Column display roles — createMatrix stores roles', () => {
     }
   })
 })
+
+// Column display roles (Phase 6 stage 6)
+// ---------------------------------------------------------------------------
+describe('Role survives column rename', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('renaming a column preserves its role', () => {
+    const matrixId = createMatrix(db, 'Rename Role Test', [
+      { name: 'title', type: 'TEXT', role: 'label' },
+      { name: 'body', type: 'TEXT', role: 'content' },
+    ])
+    const colsBefore = getColumns(db, matrixId)
+    const titleBefore = colsBefore.find((c) => c.name === 'title')!
+    expect(titleBefore.role).toBe('label')
+
+    renameColumn(db, matrixId, 'title', 'heading')
+
+    const colsAfter = getColumns(db, matrixId)
+    const headingAfter = colsAfter.find((c) => c.name === 'heading')!
+    expect(headingAfter).toBeDefined()
+    expect(headingAfter.id).toBe(titleBefore.id)
+    expect(headingAfter.role).toBe('label')
+
+    // content column should also be unaffected
+    const bodyAfter = colsAfter.find((c) => c.name === 'body')!
+    expect(bodyAfter.role).toBe('content')
+  })
+})

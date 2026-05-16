@@ -180,8 +180,8 @@ A new operation to set, change, or clear a column's role.
 
 Verify that renaming a column preserves its role (this should work automatically since `renameColumn` updates `matrix_columns.name` and `role` is on the same row, but an explicit test confirms it).
 
-- [ ] Tests: create a matrix with a column that has `role: 'label'`. Rename the column. Verify `getColumns` still returns `role: 'label'` for the renamed column (same `id`, new name, same role).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: create a matrix with a column that has `role: 'label'`. Rename the column. Verify `getColumns` still returns `role: 'label'` for the renamed column (same `id`, new name, same role).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 7. Sync trigger update
 
