@@ -50,7 +50,7 @@ Add the `role` column and uniqueness constraint.
 
 Wire the `role` field through the type system and query layer.
 
-- [ ] **Update `ColumnDefinition` type** in `matrix.ts`:
+- [x] **Update `ColumnDefinition` type** in `matrix.ts`:
   ```typescript
   export type ColumnDefinition = {
     id: number
@@ -66,14 +66,14 @@ Wire the `role` field through the type system and query layer.
   }
   ```
 
-- [ ] **Update `getColumns`** to include `role` in the SELECT:
+- [x] **Update `getColumns`** to include `role` in the SELECT:
   ```sql
   SELECT id, name, type, display_type AS displayType, "order", options, formula,
          constraints, managed_by AS managedBy, role
   FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"
   ```
 
-- [ ] **Extend `MatrixSpec` column declarations** in `plugin-types.ts` with optional `role`:
+- [x] **Extend `MatrixSpec` column declarations** in `plugin-types.ts` with optional `role`:
   ```typescript
   export type MatrixSpec = {
     key: string
@@ -87,8 +87,8 @@ Wire the `role` field through the type system and query layer.
   }
   ```
 
-- [ ] Tests: verify `getColumns` returns `role: null` for existing columns. Verify the `ColumnDefinition` type matches the query result shape.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: verify `getColumns` returns `role: null` for existing columns. Verify the `ColumnDefinition` type matches the query result shape.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 3. Update `createMatrix` to store roles
 

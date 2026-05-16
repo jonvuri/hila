@@ -303,6 +303,7 @@ export type ColumnDefinition = {
   formula: string | null
   constraints: string | null
   managedBy: string | null
+  role: 'label' | 'content' | null
 }
 
 /**
@@ -851,7 +852,7 @@ export const getColumns = (db: Database, matrixId: number): ColumnDefinition[] =
   existsStmt.finalize()
 
   const stmt = db.prepare(
-    'SELECT id, name, type, display_type AS displayType, "order", options, formula, constraints, managed_by AS managedBy FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
+    'SELECT id, name, type, display_type AS displayType, "order", options, formula, constraints, managed_by AS managedBy, role FROM matrix_columns WHERE matrix_id = ? ORDER BY "order"',
   )
   stmt.bind([matrixId])
 

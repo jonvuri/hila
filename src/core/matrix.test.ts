@@ -4271,3 +4271,60 @@ describe('Column display roles — schema migration', () => {
     }).not.toThrow()
   })
 })
+
+// Column display roles (Phase 6 stage 2)
+// ---------------------------------------------------------------------------
+describe('Column display roles — types and queries', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('getColumns returns role: null for columns without a role', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const cols = getColumns(db, matrixId)
+    expect(cols.length).toBeGreaterThan(0)
+    for (const col of cols) {
+      expect(col.role).toBeNull()
+    }
+  })
+
+  test('getColumns returns the correct role when set via SQL', () => {
+    const matrixId = createMatrix(db, 'Test')
+    db.exec(
+      "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl', 'TEXT', 'text', 99, 'label')",
+      { bind: [matrixId] },
+    )
+    db.exec(
+      "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'cnt', 'TEXT', 'text', 100, 'content')",
+      { bind: [matrixId] },
+    )
+    const cols = getColumns(db, matrixId)
+    const labelCol = cols.find((c) => c.name === 'lbl')
+    const contentCol = cols.find((c) => c.name === 'cnt')
+    expect(labelCol?.role).toBe('label')
+    expect(contentCol?.role).toBe('content')
+  })
+
+  test('ColumnDefinition shape matches getColumns result', () => {
+    const matrixId = createMatrix(db, 'Test')
+    const cols = getColumns(db, matrixId)
+    const col = cols[0]!
+    expect(col).toHaveProperty('id')
+    expect(col).toHaveProperty('name')
+    expect(col).toHaveProperty('type')
+    expect(col).toHaveProperty('displayType')
+    expect(col).toHaveProperty('order')
+    expect(col).toHaveProperty('options')
+    expect(col).toHaveProperty('formula')
+    expect(col).toHaveProperty('constraints')
+    expect(col).toHaveProperty('managedBy')
+    expect(col).toHaveProperty('role')
+  })
+})

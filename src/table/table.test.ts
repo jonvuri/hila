@@ -52,6 +52,7 @@ const makeCol = (id: number, name: string, type = 'TEXT'): ColumnDefinition => (
   formula: null,
   constraints: null,
   managedBy: null,
+  role: null,
 })
 
 describe('buildTableQuery', () => {
