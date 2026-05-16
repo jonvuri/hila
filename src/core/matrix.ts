@@ -205,6 +205,22 @@ export const initMatrixSchema = (db: Database) => {
     // Column already exists (new database or previously migrated)
   }
 
+  // Migration: add role column to matrix_columns
+  try {
+    db.exec(
+      "ALTER TABLE matrix_columns ADD COLUMN role TEXT CHECK (role IN ('label', 'content'))",
+    )
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+
+  // At most one column per role per matrix (null roles are unrestricted)
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique
+      ON matrix_columns (matrix_id, role)
+      WHERE role IS NOT NULL;
+  `)
+
   // -- Formula column dependency tracking -------------------------------------
 
   db.exec(`

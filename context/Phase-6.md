@@ -29,13 +29,13 @@ After this phase:
 
 Add the `role` column and uniqueness constraint.
 
-- [ ] **Add `role` column via migration.** TEXT, nullable. Only `'label'` and `'content'` are valid values. Migration in `initSchema` (same pattern as `constraints` and `managed_by`):
+- [x] **Add `role` column via migration.** TEXT, nullable. Only `'label'` and `'content'` are valid values. Migration in `initSchema` (same pattern as `constraints` and `managed_by`):
   ```sql
   ALTER TABLE matrix_columns ADD COLUMN role TEXT CHECK (role IN ('label', 'content'));
   ```
   Wrapped in try/catch for idempotency (column already exists on new databases or previously migrated).
 
-- [ ] **Add partial unique index.** At most one column per role per matrix. This must be created separately from the ALTER TABLE since it's an index, not a column attribute:
+- [x] **Add partial unique index.** At most one column per role per matrix. This must be created separately from the ALTER TABLE since it's an index, not a column attribute:
   ```sql
   CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique
     ON matrix_columns (matrix_id, role)
@@ -43,8 +43,8 @@ Add the `role` column and uniqueness constraint.
   ```
   Place this in `initSchema` after the migration block. `IF NOT EXISTS` makes it idempotent.
 
-- [ ] Tests: verify the migration runs without error on a fresh database. Verify the migration is idempotent (runs twice without error). Verify the CHECK constraint rejects invalid role values (e.g. `'foo'`). Verify the partial unique index rejects a second `'label'` column in the same matrix. Verify two different matrixes can each have a `'label'` column. Verify null roles are unrestricted (multiple columns with null role in the same matrix).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests: verify the migration runs without error on a fresh database. Verify the migration is idempotent (runs twice without error). Verify the CHECK constraint rejects invalid role values (e.g. `'foo'`). Verify the partial unique index rejects a second `'label'` column in the same matrix. Verify two different matrixes can each have a `'label'` column. Verify null roles are unrestricted (multiple columns with null role in the same matrix).
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 2. Update types and queries
 

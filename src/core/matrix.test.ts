@@ -4169,3 +4169,105 @@ describe('Tag type constraint integration', () => {
     )
   })
 })
+
+// Column display roles (Phase 6 stage 1)
+// ---------------------------------------------------------------------------
+describe('Column display roles — schema migration', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({
+      print: () => {},
+      printErr: () => {},
+    })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('role column exists on a fresh database', () => {
+    const cols = db.exec('PRAGMA table_info(matrix_columns)', { returnValue: 'resultRows' })
+    const names = cols.map((row) => row[1])
+    expect(names).toContain('role')
+  })
+
+  test('migration is idempotent (initMatrixSchema runs twice without error)', () => {
+    expect(() => initMatrixSchema(db)).not.toThrow()
+
+    const cols = db.exec('PRAGMA table_info(matrix_columns)', { returnValue: 'resultRows' })
+    const roleCount = cols.filter((row) => row[1] === 'role').length
+    expect(roleCount).toBe(1)
+  })
+
+  test('CHECK constraint rejects invalid role values', () => {
+    const matrixId = createMatrix(db, 'Test')
+    expect(() =>
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'extra', 'TEXT', 'text', 99, 'foo')",
+        { bind: [matrixId] },
+      ),
+    ).toThrow()
+  })
+
+  test('CHECK constraint accepts valid role values', () => {
+    const matrixId = createMatrix(db, 'Test')
+    expect(() =>
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl', 'TEXT', 'text', 99, 'label')",
+        { bind: [matrixId] },
+      ),
+    ).not.toThrow()
+    expect(() =>
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'cnt', 'TEXT', 'text', 100, 'content')",
+        { bind: [matrixId] },
+      ),
+    ).not.toThrow()
+  })
+
+  test('partial unique index rejects a second label column in the same matrix', () => {
+    const matrixId = createMatrix(db, 'Test')
+    db.exec(
+      "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl', 'TEXT', 'text', 99, 'label')",
+      { bind: [matrixId] },
+    )
+    expect(() =>
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl2', 'TEXT', 'text', 100, 'label')",
+        { bind: [matrixId] },
+      ),
+    ).toThrow()
+  })
+
+  test('two different matrixes can each have a label column', () => {
+    const m1 = createMatrix(db, 'M1')
+    const m2 = createMatrix(db, 'M2')
+    expect(() => {
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl', 'TEXT', 'text', 99, 'label')",
+        { bind: [m1] },
+      )
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'lbl', 'TEXT', 'text', 99, 'label')",
+        { bind: [m2] },
+      )
+    }).not.toThrow()
+  })
+
+  test('null roles are unrestricted (multiple columns with null role)', () => {
+    const matrixId = createMatrix(db, 'Test')
+    expect(() => {
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'a', 'TEXT', 'text', 99, NULL)",
+        { bind: [matrixId] },
+      )
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\", role) VALUES (?, 'b', 'TEXT', 'text', 100, NULL)",
+        { bind: [matrixId] },
+      )
+      db.exec(
+        "INSERT INTO matrix_columns (matrix_id, name, type, display_type, \"order\") VALUES (?, 'c', 'TEXT', 'text', 101)",
+        { bind: [matrixId] },
+      )
+    }).not.toThrow()
+  })
+})
