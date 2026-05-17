@@ -2,7 +2,6 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 
 import { execQuery } from '../core/client/sql-client'
-import { schema } from '../editor/schema'
 
 export type AutocompleteOption = { id: number; title: string }
 
@@ -145,7 +144,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
     const state = getAutocompleteState(view)
     if (!state.active) return
     const kind = state.trigger === '#' ? 'own' : 'ref'
-    const inlinerefType = schema.nodes.inlineref!
+    const inlinerefType = view.state.schema.nodes.inlineref!
     const node = inlinerefType.create({
       targetMatrixId: attrs.targetMatrixId,
       targetRowId: attrs.targetRowId,

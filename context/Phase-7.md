@@ -319,23 +319,23 @@ Clean up the codebase after the workspace plugin is fully wired.
 
 Two distinct editor configurations are needed for the workspace: single-line (label) and multi-line (content).
 
-- [ ] **Single-line label editor.** A ProseMirror schema that allows only a single paragraph (no headings, no multi-block content). Custom keymap:
+- [x] **Single-line label editor.** A ProseMirror schema (`labelSchema` in `src/editor/label-schema.ts`) that allows only a single paragraph (no headings, no multi-block content). Custom keymap:
   - **Enter**: should NOT insert a newline. Instead, it creates a new sibling row (in navigation panel context) or does nothing (in focus panel context).
   - **Shift-Enter**: moves focus to the row's inline content editor (expanding it if collapsed). Analogous to Workflowy's Shift-Enter for focusing the note field.
   - Arrow keys, basic marks (bold, italic, code) work normally.
   - Inline references (`@`, `#`) work.
 
-- [ ] **Multi-line content editor.** The full ProseMirror schema (paragraphs, headings, marks, inline refs). This is essentially the existing note body editor configuration.
+- [x] **Multi-line content editor.** The full ProseMirror schema (paragraphs, headings, marks, inline refs). `createContentEditorState` in `src/editor/editor-setup.ts` provides markdown input rules (headings, bold, italic, code) and baseKeymap.
   - **Enter**: creates a new paragraph (normal ProseMirror behavior).
   - **Shift-Enter**: soft newline / hard break.
   - Full mark support.
 
-- [ ] **Extract shared editor setup.** Factor common ProseMirror configuration (inline ref plugin, node views, sync logic) into shared utilities. Both label and content editors use the same inline ref infrastructure but different schemas and keymaps.
+- [x] **Extract shared editor setup.** `src/editor/editor-setup.ts` provides `createLabelEditorState`, `createContentEditorState`, and `createDebouncedSave`. Both label and content editors use the same inline ref infrastructure (the `inlineref-plugin.ts` now reads the schema from the editor view state rather than importing it statically) but different schemas and keymaps. `keymap.ts` updated to accept a schema parameter for mark toggles.
 
-- [ ] **Debounced save.** Both editors debounce saves. Label changes save to the `label` column, content changes save to the `content` column. Use the existing `updateRow` call pattern. Consider whether a single save call (both columns) or separate per-column saves are more appropriate. Per-column saves avoid unnecessary writes when only one field changes.
+- [x] **Debounced save.** `createDebouncedSave` returns `{ schedule, flush, destroy }`. Both editors use per-column saves: label changes save to the `label` column, content changes save to the `content` column. `destroy()` flushes any pending save on cleanup.
 
-- [ ] Tests (Vitest): single-line schema rejects multi-paragraph content. Multi-line schema accepts paragraphs and headings. Inline ref sync works for both schemas. (Playwright): type in label editor → saves to label column. Type in content editor → saves to content column. `@`-reference works in both.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Vitest): single-line schema content expression only allows a single paragraph and has no heading node type. Multi-line schema accepts paragraphs and headings. Inline ref sync works for both schemas. `createDebouncedSave` tested with fake timers (debounce, flush, destroy). 21 new tests in `editor-setup.test.ts`. (Playwright): 10 tests in `editor-config.spec.ts` covering label save, content save, Enter behavior, bold marks, Shift-Enter, @-reference triggers, content focus via Shift-Enter.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (663 tests)
 
 ## 8. Initial empty state and welcome content
 

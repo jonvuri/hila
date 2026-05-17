@@ -9,24 +9,22 @@ import {
   Suspense,
   lazy,
 } from 'solid-js'
-import type { Node as PmNode } from 'prosemirror-model'
 import { EditorView } from 'prosemirror-view'
 import { Selection, type Plugin as StatePlugin } from 'prosemirror-state'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
 import { keymap } from 'prosemirror-keymap'
-import {
-  chainCommands,
-  toggleMark,
-  newlineInCode,
-  createParagraphNear,
-} from 'prosemirror-commands'
+import { toggleMark } from 'prosemirror-commands'
 import 'prosemirror-view/style/prosemirror.css'
 
 import { updateRow, getColumns } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
-import { createEditorState } from '../editor/createEditorState'
-import { schema } from '../editor/schema'
+import {
+  createLabelEditorState,
+  createContentEditorState,
+  createDebouncedSave,
+  labelSchema,
+} from '../editor/editor-setup'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
@@ -77,40 +75,23 @@ type BacklinkData = {
 }
 
 // ---------------------------------------------------------------------------
-// Content editor keymap (multi-paragraph, Escape to close)
+// Focus panel keymaps (Escape to close, schema-aware marks)
 // ---------------------------------------------------------------------------
-
-const hardBreakCmd = (
-  state: Parameters<import('prosemirror-state').Command>[0],
-  dispatch: Parameters<import('prosemirror-state').Command>[1],
-): boolean => {
-  const br = schema.nodes.hard_break!
-  dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView())
-  return true
-}
 
 const buildContentKeymap = (onEscape: () => void): StatePlugin =>
   keymap({
-    'Shift-Enter': chainCommands(newlineInCode, createParagraphNear, hardBreakCmd),
-    'Mod-b': toggleMark(schema.marks.bold!),
-    'Mod-i': toggleMark(schema.marks.italic!),
-    'Mod-e': toggleMark(schema.marks.code!),
     Escape: () => {
       onEscape()
       return true
     },
   })
 
-// ---------------------------------------------------------------------------
-// Label editor keymap (single-line: Enter is no-op, Escape closes)
-// ---------------------------------------------------------------------------
-
 const buildLabelKeymap = (onEscape: () => void): StatePlugin =>
   keymap({
     Enter: () => true,
-    'Mod-b': toggleMark(schema.marks.bold!),
-    'Mod-i': toggleMark(schema.marks.italic!),
-    'Mod-e': toggleMark(schema.marks.code!),
+    'Mod-b': toggleMark(labelSchema.marks.bold!),
+    'Mod-i': toggleMark(labelSchema.marks.italic!),
+    'Mod-e': toggleMark(labelSchema.marks.code!),
     Escape: () => {
       onEscape()
       return true
@@ -131,35 +112,14 @@ type FocusLabelEditorProps = {
 const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let pendingDoc: PmNode | undefined
 
-  const saveWithInlineRefs = async (doc: PmNode) => {
-    const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
-    void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(docJson) })
+  const saveHandle = createDebouncedSave((doc) => {
+    const docJson = doc.toJSON() as Record<string, unknown>
+    void refreshCachedTitles(docJson).then((updated) => {
+      void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(updated) })
+    })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
-  }
-
-  const debouncedSave = (doc: PmNode) => {
-    pendingDoc = doc
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      if (pendingDoc !== undefined) {
-        const d = pendingDoc
-        pendingDoc = undefined
-        void saveWithInlineRefs(d)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  const flushSave = () => {
-    clearTimeout(saveTimer)
-    if (pendingDoc !== undefined) {
-      const d = pendingDoc
-      pendingDoc = undefined
-      void saveWithInlineRefs(d)
-    }
-  }
+  }, SAVE_DEBOUNCE_MS)
 
   const mountEditor = (el: HTMLDivElement) => {
     let docJson: unknown | undefined
@@ -176,7 +136,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
       }),
       buildLabelKeymap(props.onEscape),
     ]
-    const state = createEditorState(docJson, undefined, extraPlugins)
+    const state = createLabelEditorState(docJson, undefined, extraPlugins)
 
     const view = new EditorView(el, {
       state,
@@ -185,9 +145,6 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
           component: ParagraphView,
           as: 'div',
           contentAs: 'p',
-        }),
-        heading: nodeViewFactory({
-          component: HeadingView,
         }),
         inlineref: nodeViewFactory({
           component: InlineRefView,
@@ -198,7 +155,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
         const newState = view.state.apply(tr)
         view.updateState(newState)
         if (tr.docChanged) {
-          debouncedSave(newState.doc)
+          saveHandle.schedule(newState.doc)
         }
       },
     })
@@ -207,7 +164,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
   }
 
   onCleanup(() => {
-    flushSave()
+    saveHandle.destroy()
     editorView?.destroy()
   })
 
@@ -252,35 +209,14 @@ type FocusContentEditorProps = {
 const FocusContentEditorInner = (props: FocusContentEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let pendingDoc: PmNode | undefined
 
-  const saveWithInlineRefs = async (doc: PmNode) => {
-    const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
-    void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(docJson) })
+  const saveHandle = createDebouncedSave((doc) => {
+    const docJson = doc.toJSON() as Record<string, unknown>
+    void refreshCachedTitles(docJson).then((updated) => {
+      void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(updated) })
+    })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
-  }
-
-  const debouncedSave = (doc: PmNode) => {
-    pendingDoc = doc
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      if (pendingDoc !== undefined) {
-        const d = pendingDoc
-        pendingDoc = undefined
-        void saveWithInlineRefs(d)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  const flushSave = () => {
-    clearTimeout(saveTimer)
-    if (pendingDoc !== undefined) {
-      const d = pendingDoc
-      pendingDoc = undefined
-      void saveWithInlineRefs(d)
-    }
-  }
+  }, SAVE_DEBOUNCE_MS)
 
   const mountEditor = (el: HTMLDivElement) => {
     let docJson: unknown | undefined
@@ -297,7 +233,7 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
       }),
       buildContentKeymap(props.onEscape),
     ]
-    const state = createEditorState(docJson, undefined, extraPlugins)
+    const state = createContentEditorState(docJson, extraPlugins)
 
     const view = new EditorView(el, {
       state,
@@ -319,14 +255,13 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
         const newState = view.state.apply(tr)
         view.updateState(newState)
         if (tr.docChanged) {
-          debouncedSave(newState.doc)
+          saveHandle.schedule(newState.doc)
         }
       },
     })
 
     editorView = view
 
-    // Focus content editor on mount so the user can start typing immediately
     queueMicrotask(() => {
       view.focus()
       const selection = Selection.atEnd(view.state.doc)
@@ -335,7 +270,7 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
   }
 
   onCleanup(() => {
-    flushSave()
+    saveHandle.destroy()
     editorView?.destroy()
   })
 

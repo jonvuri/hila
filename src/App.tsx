@@ -140,6 +140,7 @@ const App: Component = () => {
             <button
               class="view-tab"
               data-active={activeView() === 'table'}
+              data-testid="table-tab"
               onClick={() => setActiveView('table')}
             >
               Table

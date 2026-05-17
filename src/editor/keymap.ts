@@ -1,5 +1,6 @@
 import type { Command } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
+import type { Schema } from 'prosemirror-model'
 import {
   chainCommands,
   toggleMark,
@@ -7,7 +8,7 @@ import {
   createParagraphNear,
 } from 'prosemirror-commands'
 
-import { schema } from './schema'
+import { schema as defaultSchema } from './schema'
 
 export type OutlineCallbacks = {
   onEnter: (view: EditorView) => void
@@ -24,8 +25,8 @@ export type OutlineCallbacks = {
   onOpenFocus?: () => void
 }
 
-const hardBreak = (): Command => {
-  const br = schema.nodes.hard_break!
+const hardBreak = (s: Schema): Command => {
+  const br = s.nodes.hard_break!
   return (state, dispatch) => {
     dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView())
     return true
@@ -93,7 +94,10 @@ const modKToOutline = (callback: () => void): Command => {
   }
 }
 
-export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string, Command> => {
+export const createOutlineKeymap = (
+  callbacks: OutlineCallbacks,
+  s: Schema = defaultSchema,
+): Record<string, Command> => {
   const map: Record<string, Command> = {
     Enter: enterToOutline(callbacks.onEnter),
     Backspace: backspaceAtStart(callbacks.onBackspaceAtStart),
@@ -101,9 +105,9 @@ export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string,
     'Shift-Tab': tabToOutline(callbacks.onOutdent),
     ArrowUp: arrowUpToOutline(callbacks.onArrowUp),
     ArrowDown: arrowDownToOutline(callbacks.onArrowDown),
-    'Mod-b': toggleMark(schema.marks.bold!),
-    'Mod-i': toggleMark(schema.marks.italic!),
-    'Mod-e': toggleMark(schema.marks.code!),
+    'Mod-b': toggleMark(s.marks.bold!),
+    'Mod-i': toggleMark(s.marks.italic!),
+    'Mod-e': toggleMark(s.marks.code!),
     'Mod-k': modKToOutline(callbacks.onInsertLink),
     'Mod-Enter': tabToOutline(callbacks.onToggleCollapse),
     'Mod-ArrowDown': tabToOutline(callbacks.onZoomIn),
@@ -113,7 +117,7 @@ export const createOutlineKeymap = (callbacks: OutlineCallbacks): Record<string,
   if (callbacks.onShiftEnter) {
     map['Shift-Enter'] = tabToOutline(callbacks.onShiftEnter)
   } else {
-    map['Shift-Enter'] = chainCommands(newlineInCode, createParagraphNear, hardBreak())
+    map['Shift-Enter'] = chainCommands(newlineInCode, createParagraphNear, hardBreak(s))
   }
 
   if (callbacks.onOpenFocus) {

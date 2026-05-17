@@ -1,21 +1,8 @@
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
 import { Slice } from 'prosemirror-model'
-import type { Node as PmNode } from 'prosemirror-model'
 import { EditorView } from 'prosemirror-view'
-import {
-  Selection,
-  TextSelection,
-  type Plugin as StatePlugin,
-  Command,
-} from 'prosemirror-state'
+import { Selection, TextSelection, type Plugin as StatePlugin } from 'prosemirror-state'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
-import { keymap } from 'prosemirror-keymap'
-import {
-  chainCommands,
-  toggleMark,
-  newlineInCode,
-  createParagraphNear,
-} from 'prosemirror-commands'
 import 'prosemirror-view/style/prosemirror.css'
 
 import { debugFlags, logPmMount, logPmUnmount, logPmContentSync } from '../debug/debugState'
@@ -31,8 +18,11 @@ import {
 import type { FlatRow, OutlineTheme } from '../design/outline/types'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 import type { OutlineCallbacks } from '../editor/keymap'
-import { createEditorState } from '../editor/createEditorState'
-import { schema } from '../editor/schema'
+import {
+  createLabelEditorState,
+  createContentEditorState,
+  createDebouncedSave,
+} from '../editor/editor-setup'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
@@ -175,24 +165,7 @@ const findFirstChild = (
 }
 
 // ---------------------------------------------------------------------------
-// Content editor extra keymap (for expanded content preview)
-// ---------------------------------------------------------------------------
-
-const hardBreakCmd: Command = (state, dispatch) => {
-  const br = schema.nodes.hard_break!
-  dispatch?.(state.tr.replaceSelectionWith(br.create()).scrollIntoView())
-  return true
-}
-
-const contentEditorKeymap: StatePlugin = keymap({
-  'Shift-Enter': chainCommands(newlineInCode, createParagraphNear, hardBreakCmd),
-  'Mod-b': toggleMark(schema.marks.bold!),
-  'Mod-i': toggleMark(schema.marks.italic!),
-  'Mod-e': toggleMark(schema.marks.code!),
-})
-
-// ---------------------------------------------------------------------------
-// Label editor (ProseMirror with outline keybindings)
+// Label editor (ProseMirror with outline keybindings, single-paragraph schema)
 // ---------------------------------------------------------------------------
 
 type LabelEditorProps = {
@@ -208,35 +181,14 @@ type LabelEditorProps = {
 const LabelEditorInner = (props: LabelEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let pendingDoc: PmNode | undefined
 
-  const saveWithInlineRefs = async (doc: PmNode) => {
-    const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
-    void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(docJson) })
+  const saveHandle = createDebouncedSave((doc) => {
+    const docJson = doc.toJSON() as Record<string, unknown>
+    void refreshCachedTitles(docJson).then((updated) => {
+      void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(updated) })
+    })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
-  }
-
-  const debouncedSave = (doc: PmNode) => {
-    pendingDoc = doc
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      if (pendingDoc !== undefined) {
-        const d = pendingDoc
-        pendingDoc = undefined
-        void saveWithInlineRefs(d)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  const flushSave = () => {
-    clearTimeout(saveTimer)
-    if (pendingDoc !== undefined) {
-      const d = pendingDoc
-      pendingDoc = undefined
-      void saveWithInlineRefs(d)
-    }
-  }
+  }, SAVE_DEBOUNCE_MS)
 
   const handle: EditorHandle = {
     focus: (pos) => {
@@ -253,7 +205,7 @@ const LabelEditorInner = (props: LabelEditorProps) => {
       editorView.dispatch(editorView.state.tr.setSelection(selection))
     },
     getView: () => editorView,
-    flushSave,
+    flushSave: () => saveHandle.flush(),
   }
 
   const mountEditor = (el: HTMLDivElement) => {
@@ -270,16 +222,13 @@ const LabelEditorInner = (props: LabelEditorProps) => {
         onTagSelect: handleTagSelection,
       }),
     ]
-    const state = createEditorState(docJson, props.callbacks, extraPlugins)
+    const state = createLabelEditorState(docJson, props.callbacks, extraPlugins)
 
     const nodeViews: Record<string, ReturnType<typeof nodeViewFactory>> = {
       paragraph: nodeViewFactory({
         component: ParagraphView,
         as: 'div',
         contentAs: 'p',
-      }),
-      heading: nodeViewFactory({
-        component: HeadingView,
       }),
       inlineref: nodeViewFactory({
         component: InlineRefView,
@@ -300,7 +249,7 @@ const LabelEditorInner = (props: LabelEditorProps) => {
         const newState = view.state.apply(tr)
         view.updateState(newState)
         if (tr.docChanged) {
-          debouncedSave(newState.doc)
+          saveHandle.schedule(newState.doc)
         }
       },
     })
@@ -311,7 +260,7 @@ const LabelEditorInner = (props: LabelEditorProps) => {
   }
 
   onCleanup(() => {
-    flushSave()
+    saveHandle.destroy()
     logPmUnmount(props.rowId, props.pageIndex)
     editorView?.destroy()
   })
@@ -367,35 +316,14 @@ type ContentEditorProps = {
 const ContentEditorInner = (props: ContentEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
-  let saveTimer: ReturnType<typeof setTimeout> | undefined
-  let pendingDoc: PmNode | undefined
 
-  const saveWithInlineRefs = async (doc: PmNode) => {
-    const docJson = await refreshCachedTitles(doc.toJSON() as Record<string, unknown>)
-    void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(docJson) })
+  const saveHandle = createDebouncedSave((doc) => {
+    const docJson = doc.toJSON() as Record<string, unknown>
+    void refreshCachedTitles(docJson).then((updated) => {
+      void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(updated) })
+    })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
-  }
-
-  const debouncedSave = (doc: PmNode) => {
-    pendingDoc = doc
-    clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
-      if (pendingDoc !== undefined) {
-        const d = pendingDoc
-        pendingDoc = undefined
-        void saveWithInlineRefs(d)
-      }
-    }, SAVE_DEBOUNCE_MS)
-  }
-
-  const flushSave = () => {
-    clearTimeout(saveTimer)
-    if (pendingDoc !== undefined) {
-      const d = pendingDoc
-      pendingDoc = undefined
-      void saveWithInlineRefs(d)
-    }
-  }
+  }, SAVE_DEBOUNCE_MS)
 
   const handle: ContentEditorHandle = {
     focus: (pos) => {
@@ -408,7 +336,7 @@ const ContentEditorInner = (props: ContentEditorProps) => {
       editorView.dispatch(editorView.state.tr.setSelection(selection))
     },
     getView: () => editorView,
-    flushSave,
+    flushSave: () => saveHandle.flush(),
   }
 
   const mountEditor = (el: HTMLDivElement) => {
@@ -424,9 +352,8 @@ const ContentEditorInner = (props: ContentEditorProps) => {
         searchProvider: createTagSearchProvider(props.matrixId),
         onTagSelect: handleTagSelection,
       }),
-      contentEditorKeymap,
     ]
-    const state = createEditorState(docJson, undefined, extraPlugins)
+    const state = createContentEditorState(docJson, extraPlugins)
 
     const nodeViews: Record<string, ReturnType<typeof nodeViewFactory>> = {
       paragraph: nodeViewFactory({
@@ -456,7 +383,7 @@ const ContentEditorInner = (props: ContentEditorProps) => {
         const newState = view.state.apply(tr)
         view.updateState(newState)
         if (tr.docChanged) {
-          debouncedSave(newState.doc)
+          saveHandle.schedule(newState.doc)
         }
       },
     })
@@ -466,7 +393,7 @@ const ContentEditorInner = (props: ContentEditorProps) => {
   }
 
   onCleanup(() => {
-    flushSave()
+    saveHandle.destroy()
     editorView?.destroy()
   })
 
