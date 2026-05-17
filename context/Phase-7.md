@@ -339,14 +339,14 @@ Two distinct editor configurations are needed for the workspace: single-line (la
 
 ## 8. Initial empty state and welcome content
 
-- [ ] **Welcome row.** On first run (empty workspace matrix), seed one row:
+- [x] **Welcome row.** On first run (empty workspace matrix), seed one row:
   - `label`: `{ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Welcome to Hila' }] }] }`
   - `content`: A PM JSON doc with getting-started text explaining the stream view: how to create rows (Enter), indent (Tab), expand inline content (Shift-Enter), open focus panels (click right-arrow or Cmd/Ctrl+L), and navigate back (Cmd+Left or Escape).
 
-- [ ] **Empty state display.** When the workspace matrix is empty (all rows deleted), the navigation panel shows a centered prompt: "Press Enter to create your first row."
+- [x] **Empty state display.** When the workspace matrix is empty (all rows deleted), the navigation panel shows a centered prompt: "Press Enter to create your first row."
 
-- [ ] Tests (Playwright): fresh app shows welcome row with "Welcome to Hila" label. Deleting all rows shows empty state. Pressing Enter in empty state creates a new row.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
+- [x] Tests (Playwright): fresh app shows welcome row with "Welcome to Hila" label. Deleting all rows shows empty state. Pressing Enter in empty state creates a new row.
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
 ## 9. Update E2E tests
 

@@ -769,7 +769,14 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       if (index === -1) return
       const row = vRows[index]!
 
-      if (index === 0) return
+      if (index === 0) {
+        const doc = view.state.doc
+        const isEmpty = doc.content.size <= 2
+        if (isEmpty && row.has_children !== 1 && vRows.length === 1) {
+          void deleteRow(props.matrixId, row.row_id)
+        }
+        return
+      }
 
       const prevRow = findPrevVisibleRow(vRows, index)
       if (!prevRow) return
@@ -1168,16 +1175,51 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           {focusRootRow() ? extractTextFromPmDoc(focusRootRow()!.label) : ''}
         </div>
       </Show>
-      <div class={outlineThemeClass(theme())} style={{ padding: 0, border: 'none' }}>
-        <ScrollVirtualizer
-          renderWindow={renderWindow}
-          totalWindows={totalWindows()}
-          minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
-          onVisibleRangeChange={(range) => {
-            if (range.size > 0) pageData.setNeededWindows(range)
-          }}
-        />
-      </div>
+      <Show
+        when={visibleRows().length > 0}
+        fallback={
+          <div
+            class="navigation-panel-empty"
+            data-testid="navigation-panel-empty"
+            tabindex="0"
+            style={{
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'center',
+              'min-height': '200px',
+              color: '#999',
+              'font-size': '15px',
+              'font-style': 'italic',
+              outline: 'none',
+              cursor: 'text',
+            }}
+            onKeyDown={(e: KeyboardEvent) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void insertRow(props.matrixId, {
+                  values: { label: EMPTY_LABEL_JSON, content: null },
+                }).then(({ rowId: newRowId }) => {
+                  requestFocus(newRowId, 'start')
+                })
+              }
+            }}
+            ref={(el) => queueMicrotask(() => el.focus())}
+          >
+            Press Enter to create your first row.
+          </div>
+        }
+      >
+        <div class={outlineThemeClass(theme())} style={{ padding: 0, border: 'none' }}>
+          <ScrollVirtualizer
+            renderWindow={renderWindow}
+            totalWindows={totalWindows()}
+            minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
+            onVisibleRangeChange={(range) => {
+              if (range.size > 0) pageData.setNeededWindows(range)
+            }}
+          />
+        </div>
+      </Show>
       <Show when={dropTarget()}>
         {(target) => (
           <div
