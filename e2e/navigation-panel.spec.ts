@@ -258,35 +258,47 @@ test.describe('Navigation panel', () => {
   })
 
   test('Drag-and-drop reorders rows', async ({ page }) => {
+    // Create rows with explicit waits between each to avoid async focus races.
+    // insertRow+requestFocus is async, so we must wait for each new row to appear
+    // and explicitly focus it before typing.
     const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
     await firstEditor.click()
     await firstEditor.press('End')
     await firstEditor.press('Enter')
-    await page.keyboard.type('Second row')
-    await firstEditor.press('End')
-    await firstEditor.press('Enter')
-    await page.keyboard.type('Third row')
 
-    await expect(async () => {
-      const count = await page.locator('.outline-row').count()
-      expect(count).toBeGreaterThanOrEqual(3)
-    }).toPass({ timeout: 5000 })
+    const secondEditor = page.locator('.nav-label-editor .ProseMirror').nth(1)
+    await expect(secondEditor).toBeVisible({ timeout: 5000 })
+    await secondEditor.click()
+    await page.keyboard.type('Second row')
+    await expect(secondEditor).toContainText('Second row')
+
+    await secondEditor.press('End')
+    await secondEditor.press('Enter')
+
+    const thirdEditor = page.locator('.nav-label-editor .ProseMirror').nth(2)
+    await expect(thirdEditor).toBeVisible({ timeout: 5000 })
+    await thirdEditor.click()
+    await page.keyboard.type('Third row')
+    await expect(thirdEditor).toContainText('Third row')
 
     const textsBefore = await getEditorTexts(page)
     const thirdHandle = page.locator('.outline-row').nth(2).locator('.outline-row-handle')
     const firstRow = page.locator('.outline-row').nth(0)
 
-    const srcBox = await thirdHandle.boundingBox()
-    const destBox = await firstRow.boundingBox()
-    if (srcBox && destBox) {
-      await page.mouse.move(srcBox.x + srcBox.width / 2, srcBox.y + srcBox.height / 2)
-      await page.mouse.down()
-      await page.mouse.move(destBox.x + destBox.width / 2, destBox.y, { steps: 10 })
-      await page.mouse.up()
+    // Use hover() for reliable positioning (performs actionability checks)
+    await thirdHandle.hover()
+    await page.mouse.down()
 
-      await page.waitForTimeout(500)
+    const destBox = await firstRow.boundingBox()
+    expect(destBox).toBeTruthy()
+    await page.mouse.move(destBox!.x + destBox!.width / 2, destBox!.y - 5, { steps: 10 })
+    await page.mouse.up()
+
+    // Use retry assertion — reparentRow is async and the reactive update chain
+    // (worker → SQLite → subscription → postMessage → reconcile → DOM) needs time
+    await expect(async () => {
       const textsAfter = await getEditorTexts(page)
       expect(textsAfter).not.toEqual(textsBefore)
-    }
+    }).toPass({ timeout: 5000 })
   })
 })
