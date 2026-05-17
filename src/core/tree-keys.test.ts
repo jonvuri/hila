@@ -11,15 +11,15 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, ensureRootMatrix, insertDataRow, updateRow } from '../core/matrix'
+import { initMatrixSchema, ensureRootMatrix, insertDataRow, updateRow } from './matrix'
 import {
   createTreePosition,
   removeTreePosition,
   reparentRow,
   getChildren,
   getParent,
-} from '../core/tree'
-import { compareKeys } from '../core/lexorank'
+} from './tree'
+import { compareKeys } from './lexorank'
 
 let db: Database
 let matrixId: number

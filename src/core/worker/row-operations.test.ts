@@ -31,7 +31,7 @@ import {
 import { awaitWorkerReady } from '../client/worker-client'
 import type { SqlObserver } from '../sql-types'
 import type { SqlResult } from '../../sql/types'
-import { outlineFaceTypeDefinition, outlinePlugin } from '../../outline/outline-plugin'
+import { workspaceFaceTypeDefinition, workspacePlugin } from '../../workspace/workspace-plugin'
 
 const observeResults = (sql: string) => {
   const pending: ((result: SqlResult) => void)[] = []
@@ -183,25 +183,26 @@ describe('row operations through worker', () => {
   }, 5000)
 })
 
-describe('outline matrix content column defaults', () => {
-  let outlineMatrixId: number
+describe('workspace matrix content column defaults', () => {
+  let workspaceMatrixId: number
 
   beforeAll(async () => {
-    await registerFaceType(outlineFaceTypeDefinition)
-    const { init: _init, ...registration } = outlinePlugin
+    await registerFaceType(workspaceFaceTypeDefinition)
+    const { init: _init, ...registration } = workspacePlugin
     const ctx = await registerPlugin({ ...registration, init: undefined })
-    outlineMatrixId = ctx.matrixIds['root']!
+    workspaceMatrixId = ctx.matrixIds['root']!
   })
 
-  it('insertRow into outline matrix sets empty-doc default when no content provided', async () => {
-    const { rowId } = await insertRow(outlineMatrixId)
+  it('insertRow into workspace matrix sets empty-doc default for content when no values provided', async () => {
+    const { rowId } = await insertRow(workspaceMatrixId)
 
-    const sql = `SELECT content FROM "mx_${outlineMatrixId}_data" WHERE id = ${rowId}`
+    const sql = `SELECT label, content FROM "mx_${workspaceMatrixId}_data" WHERE id = ${rowId}`
     const { nextResult, cleanup } = observeResults(sql)
 
     try {
       const result = await nextResult()
       expect(result).toHaveLength(1)
+      expect(result[0]?.label).toBeNull()
       const content = result[0]?.content as string
       expect(typeof content).toBe('string')
       const parsed = JSON.parse(content) as unknown
@@ -211,38 +212,38 @@ describe('outline matrix content column defaults', () => {
     }
   }, 5000)
 
-  it('insertRow with explicit content stores it instead of default', async () => {
+  it('insertRow with explicit label stores it', async () => {
     const customDoc = JSON.stringify({
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'custom' }] }],
     })
-    const { rowId } = await insertRow(outlineMatrixId, { values: { content: customDoc } })
+    const { rowId } = await insertRow(workspaceMatrixId, { values: { label: customDoc } })
 
-    const sql = `SELECT content FROM "mx_${outlineMatrixId}_data" WHERE id = ${rowId}`
+    const sql = `SELECT label FROM "mx_${workspaceMatrixId}_data" WHERE id = ${rowId}`
     const { nextResult, cleanup } = observeResults(sql)
 
     try {
       const result = await nextResult()
-      expect(result[0]?.content).toBe(customDoc)
+      expect(result[0]?.label).toBe(customDoc)
     } finally {
       cleanup()
     }
   }, 5000)
 
-  it('updateRow on outline matrix content persists JSON round-trip', async () => {
-    const { rowId } = await insertRow(outlineMatrixId)
+  it('updateRow on workspace matrix content persists JSON round-trip', async () => {
+    const { rowId } = await insertRow(workspaceMatrixId)
     const updatedDoc = JSON.stringify({
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'updated' }] }],
     })
 
-    const sql = `SELECT content FROM "mx_${outlineMatrixId}_data" WHERE id = ${rowId}`
+    const sql = `SELECT content FROM "mx_${workspaceMatrixId}_data" WHERE id = ${rowId}`
     const { nextResult, cleanup } = observeResults(sql)
 
     try {
       await nextResult()
 
-      await updateRow(outlineMatrixId, rowId, { content: updatedDoc })
+      await updateRow(workspaceMatrixId, rowId, { content: updatedDoc })
 
       const after = await nextResult()
       expect(after[0]?.content).toBe(updatedDoc)

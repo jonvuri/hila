@@ -57,7 +57,7 @@ test.describe('App shell: workspace-based layout', () => {
     const tableTab = page.locator('.view-tab', { hasText: 'Table' })
     await tableTab.click()
 
-    await expect(page.locator('.table-face')).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
   })
 
   test('Tags tab shows tag browser', async ({ page }) => {
@@ -76,12 +76,20 @@ test.describe('App shell: workspace-based layout', () => {
 
     await openSidebar(page)
 
-    const matrixSection = page.locator('.matrix-browser')
+    const matrixSection = page.getByTestId('matrix-browser')
     await expect(matrixSection).toBeVisible({ timeout: 5000 })
 
     const matrixText = await matrixSection.textContent()
     expect(matrixText).toContain('Workspace')
-    expect(matrixText).toContain('label')
-    expect(matrixText).toContain('content')
+
+    // Click into the Workspace matrix detail and open Schema tab to see columns
+    await page.locator('.mb-matrix-item', { hasText: 'Workspace' }).click()
+    await expect(page.getByTestId('matrix-detail')).toBeVisible({ timeout: 3000 })
+
+    await page.getByRole('button', { name: 'Schema' }).click()
+
+    const detailText = await page.getByTestId('matrix-detail').textContent()
+    expect(detailText).toContain('label')
+    expect(detailText).toContain('content')
   })
 })

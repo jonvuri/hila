@@ -38,7 +38,7 @@ const waitForRows = async (page: Page, minCount = 1) => {
  */
 const addManyRows = async (page: Page, clickCount: number) => {
   await openSidebar(page)
-  await page.locator('.mb-matrix-item', { hasText: 'Outline' }).click()
+  await page.locator('.mb-matrix-item', { hasText: 'Workspace' }).click()
   await expect(page.getByTestId('matrix-detail')).toBeVisible({ timeout: 3000 })
   const btn = page.getByTestId('add-sample-rows')
   for (let i = 0; i < clickCount; i++) {

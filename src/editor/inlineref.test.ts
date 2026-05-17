@@ -12,8 +12,9 @@ import {
 } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
 import { ensureTrait } from '../core/traits'
-import { schema } from '../editor/schema'
-import { extractInlineRefs } from '../editor/inlineref-sync'
+
+import { schema } from './schema'
+import { extractInlineRefs } from './inlineref-sync'
 
 const makeDocWithInlineRef = (
   text: string,

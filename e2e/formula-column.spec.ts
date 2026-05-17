@@ -41,7 +41,7 @@ const addFormulaColumnViaAPI = async (page: Page, name: string, expression: stri
       const matrixClient = await import('/src/core/client/matrix-client.ts')
       // @ts-expect-error -- resolved by Vite dev server at runtime
       const sqlClient = await import('/src/core/client/sql-client.ts')
-      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Outline'")
+      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
       const matrixId = (matrices[0] as { id: number }).id
       await matrixClient.addFormulaColumn(matrixId, name, expression)
     },

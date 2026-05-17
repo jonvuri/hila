@@ -1,4 +1,13 @@
-import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Suspense } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  onMount,
+  Suspense,
+} from 'solid-js'
 
 import { execQuery } from '../core/client/sql-client'
 

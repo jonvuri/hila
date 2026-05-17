@@ -24,13 +24,6 @@ const waitForOutline = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
-const switchToNotes = async (page: Page) => {
-  await page.locator('.view-tab', { hasText: /^Notes$/ }).click()
-  await expect(
-    page.locator('.note-list-face, .note-list-empty, .note-list-items').first(),
-  ).toBeVisible({ timeout: 5000 })
-}
-
 const switchToTags = async (page: Page) => {
   await page.getByTestId('tags-tab').click()
   await expect(page.locator('.tag-browser')).toBeVisible({ timeout: 5000 })
@@ -168,51 +161,6 @@ test.describe('Tag insertion', () => {
     expect(result).toContain('"cnt": 1')
   })
 
-  test('# triggers autocomplete in a note body and tag insertion works', async ({ page }) => {
-    await createTagTypeViaAPI(page, 'review')
-
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'review')
-
-    const tagBadge = editor.locator('.inlineref-own')
-    await expect(tagBadge).toBeVisible({ timeout: 5000 })
-    await expect(tagBadge).toContainText('#review')
-  })
-
-  test('aspect row created from note body tag is linked via join table', async ({ page }) => {
-    const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'topic')
-
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'topic')
-
-    await expect(editor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(1000)
-
-    const rowResult = await runSQL(page, `SELECT COUNT(*) AS cnt FROM "mx_${tagMatrixId}_data"`)
-    expect(rowResult).toContain('"cnt": 1')
-
-    const joinResult = await runSQL(
-      page,
-      `SELECT COUNT(*) AS cnt FROM joins WHERE target_matrix_id = ${tagMatrixId} AND kind = 'own'`,
-    )
-    expect(joinResult).toContain('"cnt": 1')
-  })
 })
 
 // =============================================================================
@@ -287,31 +235,6 @@ test.describe('Tag type creation via autocomplete', () => {
     expect(aspectExists).toBe(true)
   })
 
-  test('tag type creation in a note body works the same as in outline', async ({ page }) => {
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'notetype', true)
-
-    const tagBadge = editor.locator('.inlineref-own')
-    await expect(tagBadge).toBeVisible({ timeout: 5000 })
-    await expect(tagBadge).toContainText('#notetype')
-
-    const tagTypeExists = await page.evaluate(async () => {
-      // @ts-expect-error -- resolved by Vite dev server at runtime
-      const matrixClient = await import('/src/core/client/matrix-client.ts')
-      const tagTypes = await matrixClient.getAllTagTypes()
-      return tagTypes.some((tt: { name: string }) => tt.name.toLowerCase() === 'notetype')
-    })
-
-    expect(tagTypeExists).toBe(true)
-  })
 })
 
 // =============================================================================
@@ -501,7 +424,7 @@ test.describe('Tag property panel', () => {
     await page.keyboard.press('Enter')
     await page.waitForTimeout(500)
 
-    await page.locator('.view-tab', { hasText: /^Outline$/ }).click()
+    await page.locator('.view-tab', { hasText: /^Workspace$/ }).click()
     await waitForOutline(page)
 
     await expect(async () => {
@@ -727,13 +650,13 @@ test.describe('Tag browser', () => {
         const client = await import('/src/core/client/matrix-client.ts')
 
         const matrixResult = await sql.execQuery(
-          "SELECT id FROM matrix WHERE title = 'Outline'",
+          "SELECT id FROM matrix WHERE title = 'Workspace'",
         )
         const outlineMid = (matrixResult[0] as { id: number }).id
 
-        // Ensure enough outline rows exist by inserting two new ones
-        await client.insertRow(outlineMid, { values: { content: '"Row A"' } })
-        await client.insertRow(outlineMid, { values: { content: '"Row B"' } })
+        // Ensure enough workspace rows exist by inserting two new ones
+        await client.insertRow(outlineMid, { values: { label: '"Row A"' } })
+        await client.insertRow(outlineMid, { values: { label: '"Row B"' } })
 
         const outlineRows = await sql.execQuery(
           `SELECT id FROM "mx_${outlineMid}_data" ORDER BY id LIMIT 2`,
@@ -809,7 +732,7 @@ test.describe('Tag browser', () => {
     // Should navigate back to the outline view
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
     // The outline tab should now be active
-    await expect(page.locator('.view-tab[data-active="true"]')).toContainText('Outline', {
+    await expect(page.locator('.view-tab[data-active="true"]')).toContainText('Workspace', {
       timeout: 5000,
     })
   })
@@ -923,191 +846,3 @@ test.describe('Tag browser', () => {
   })
 })
 
-// =============================================================================
-// 6. Cross-plugin interaction tests
-// =============================================================================
-
-test.describe('Cross-plugin interaction (tags + notes)', () => {
-  test.beforeEach(async ({ page }) => {
-    await resetDB(page)
-    await waitForOutline(page)
-  })
-
-  test('create a note with #task in body, verify aspect row is created', async ({ page }) => {
-    await createTagTypeViaAPI(page, 'task')
-
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'task')
-    await expect(editor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(1000)
-
-    // Verify aspect row was created via the join table
-    const joinExists = await page.evaluate(async () => {
-      // @ts-expect-error -- resolved by Vite dev server at runtime
-      const matrixClient = await import('/src/core/client/matrix-client.ts')
-      const tagTypes = await matrixClient.getAllTagTypes()
-      const task = tagTypes.find(
-        (tt: { name: string }) => tt.name.toLowerCase() === 'task',
-      )
-      if (!task) return false
-      // @ts-expect-error -- resolved by Vite dev server at runtime
-      const sql = await import('/src/core/client/sql-client.ts')
-      const rows = await sql.execQuery(
-        `SELECT COUNT(*) AS cnt FROM "mx_${(task as { matrixId: number }).matrixId}_data"`,
-      )
-      return (rows[0] as { cnt: number }).cnt > 0
-    })
-    expect(joinExists).toBe(true)
-  })
-
-  test('tag browser shows the note as a tagged row for the task tag type', async ({ page }) => {
-    await createTagTypeViaAPI(page, 'task')
-
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'task')
-    await expect(editor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(1000)
-
-    // Navigate to tag browser
-    await switchToTags(page)
-    await expect(page.getByTestId('tag-type-list')).toBeVisible({ timeout: 5000 })
-
-    const taskRow = page.locator('.tag-type-row', { hasText: '#task' })
-    await expect(taskRow).toBeVisible({ timeout: 5000 })
-
-    // Verify instance count is 1
-    await expect(async () => {
-      const countText = await taskRow.locator('[data-testid="tag-type-count"]').textContent()
-      expect(countText).toContain('1 instance')
-    }).toPass({ timeout: 5000 })
-
-    // Drill into the task tag type
-    await taskRow.click()
-    await expect(page.getByTestId('tag-instance-list')).toBeVisible({ timeout: 5000 })
-
-    // Should show the note as the source of the tag instance
-    const instanceRow = page.locator('[data-testid="tag-instance-row"]').first()
-    await expect(instanceRow).toBeVisible({ timeout: 5000 })
-
-    // The instance metadata should reference the Notes matrix
-    await expect(async () => {
-      const meta = await instanceRow.locator('.tag-instance-meta').textContent()
-      expect(meta).toContain('Notes')
-    }).toPass({ timeout: 5000 })
-  })
-
-  test('edit tag properties from note inline panel, verify in tag browser', async ({ page }) => {
-    const { matrixId } = await createTagTypeViaAPI(page, 'task')
-
-    // Add a "status" column to the task tag type
-    await page.evaluate(
-      async ({ matrixId }) => {
-        // @ts-expect-error -- resolved by Vite dev server at runtime
-        const client = await import('/src/core/client/matrix-client.ts')
-        await client.addColumn(matrixId, 'status', 'TEXT', 'text')
-      },
-      { matrixId },
-    )
-
-    // Create a tag in a note
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'task')
-    await expect(editor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(500)
-
-    // Click the tag badge to open property panel
-    const tagBadge = editor.locator('.inlineref-own')
-    await tagBadge.click()
-
-    const panel = page.locator('.tag-property-panel')
-    await expect(panel).toBeVisible({ timeout: 5000 })
-
-    // Edit the label field
-    const labelField = panel
-      .locator('.tag-panel-field')
-      .filter({ hasText: 'label' })
-      .locator('.tag-panel-field-input')
-    await expect(labelField).toBeVisible({ timeout: 3000 })
-    await labelField.fill('important-task')
-    await labelField.blur()
-    await page.waitForTimeout(500)
-
-    // Close the panel
-    await page.keyboard.press('Escape')
-    await expect(panel).not.toBeVisible({ timeout: 3000 })
-
-    // Navigate to tag browser and drill into task type
-    await switchToTags(page)
-    const taskRow = page.locator('.tag-type-row', { hasText: '#task' })
-    await expect(taskRow).toBeVisible({ timeout: 5000 })
-    await taskRow.click()
-
-    // Open in table view to verify the property was saved
-    await page.getByTestId('view-all-in-table').click()
-    await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
-
-    await expect(async () => {
-      const cellTexts = await page.locator('table tbody td').allTextContents()
-      expect(cellTexts.some((t) => t.includes('important-task'))).toBe(true)
-    }).toPass({ timeout: 5000 })
-  })
-
-  test('clicking a note-sourced tag instance navigates to the note', async ({ page }) => {
-    await createTagTypeViaAPI(page, 'task')
-
-    await switchToNotes(page)
-    await page.locator('.note-list-item').first().click()
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-
-    const editor = page.locator('.note-body-editor .ProseMirror')
-    await editor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    await typeHashTag(page, 'task')
-    await expect(editor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
-    await page.waitForTimeout(1000)
-
-    // Go to tag browser
-    await switchToTags(page)
-    const taskRow = page.locator('.tag-type-row', { hasText: '#task' })
-    await expect(taskRow).toBeVisible({ timeout: 5000 })
-    await taskRow.click()
-
-    await expect(page.getByTestId('tag-instance-list')).toBeVisible({ timeout: 5000 })
-
-    const instanceRow = page.locator('[data-testid="tag-instance-row"]').first()
-    await instanceRow.click()
-
-    // Should navigate to the notes view and open the note
-    await expect(page.locator('.note-face')).toBeVisible({ timeout: 5000 })
-    // The Notes tab should be active
-    await expect(page.locator('.view-tab[data-active="true"]')).toContainText('Notes', {
-      timeout: 5000,
-    })
-  })
-})

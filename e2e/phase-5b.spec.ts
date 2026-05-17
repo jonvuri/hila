@@ -75,7 +75,7 @@ const renameColumnViaAPI = async (page: Page, currentName: string, newName: stri
       const matrixClient = await import('/src/core/client/matrix-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Outline'",
+        "SELECT id FROM matrix WHERE title = 'Workspace'",
       )
       const matrixId = (matrices[0] as { id: number }).id
       await matrixClient.renameColumn(matrixId, currentName, newName)
@@ -379,7 +379,7 @@ test.describe('Formula column with token input', () => {
       const matrixClient = await import('/src/core/client/matrix-client.ts')
       // @ts-expect-error -- resolved by Vite dev server at runtime
       const sqlClient = await import('/src/core/client/sql-client.ts')
-      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Outline'")
+      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
       const matrixId = (matrices[0] as { id: number }).id
       const cols = await matrixClient.getColumns(matrixId)
       const priceCol = cols.find((c: { name: string }) => c.name === 'price')
@@ -444,7 +444,7 @@ test.describe('Formula column with token input', () => {
       const sqlClient = await import('/src/core/client/sql-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Outline'",
+        "SELECT id FROM matrix WHERE title = 'Workspace'",
       )
       const matrixId = (matrices[0] as { id: number }).id
 
@@ -504,7 +504,7 @@ test.describe('Formula column with token input', () => {
       const sqlClient = await import('/src/core/client/sql-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Outline'",
+        "SELECT id FROM matrix WHERE title = 'Workspace'",
       )
       const matrixId = (matrices[0] as { id: number }).id
 

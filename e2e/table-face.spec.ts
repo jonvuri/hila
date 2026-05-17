@@ -60,7 +60,8 @@ test.describe('Table face', () => {
     await addTextColumn(page)
 
     // The table has 1 data row (the welcome row). Click the cell in the new column.
-    const cell = page.locator('table tbody tr').first().locator('td').nth(2)
+    // Workspace matrix columns: # | label | content | New Column (index 3)
+    const cell = page.locator('table tbody tr').first().locator('td').nth(3)
     await cell.click()
     await cell.dblclick()
 
@@ -125,9 +126,10 @@ test.describe('Table face', () => {
     await page.waitForTimeout(300)
 
     // Enter values in the text column: Banana, Apple, Cherry
+    // Workspace matrix columns: # | label | content | New Column (index 3)
     const values = ['Banana', 'Apple', 'Cherry']
     for (let i = 0; i < 3; i++) {
-      const cell = page.locator('table tbody tr').nth(i).locator('td').nth(2)
+      const cell = page.locator('table tbody tr').nth(i).locator('td').nth(3)
       await cell.dblclick()
       const input = getCellInput(page)
       await expect(input).toBeVisible({ timeout: 3000 })
@@ -141,26 +143,26 @@ test.describe('Table face', () => {
 
     // Verify ascending order: Apple, Banana, Cherry
     await expect(async () => {
-      const firstCell = page.locator('table tbody tr').nth(0).locator('td').nth(2)
+      const firstCell = page.locator('table tbody tr').nth(0).locator('td').nth(3)
       await expect(firstCell).toContainText('Apple')
     }).toPass({ timeout: 5000 })
 
-    const secondCell = page.locator('table tbody tr').nth(1).locator('td').nth(2)
+    const secondCell = page.locator('table tbody tr').nth(1).locator('td').nth(3)
     await expect(secondCell).toContainText('Banana')
-    const thirdCell = page.locator('table tbody tr').nth(2).locator('td').nth(2)
+    const thirdCell = page.locator('table tbody tr').nth(2).locator('td').nth(3)
     await expect(thirdCell).toContainText('Cherry')
 
     // Click again to sort descending
     await page.locator('th', { hasText: 'New Column' }).locator('div').first().click()
 
     await expect(async () => {
-      const firstCell = page.locator('table tbody tr').nth(0).locator('td').nth(2)
+      const firstCell = page.locator('table tbody tr').nth(0).locator('td').nth(3)
       await expect(firstCell).toContainText('Cherry')
     }).toPass({ timeout: 5000 })
 
-    const secondCellDesc = page.locator('table tbody tr').nth(1).locator('td').nth(2)
+    const secondCellDesc = page.locator('table tbody tr').nth(1).locator('td').nth(3)
     await expect(secondCellDesc).toContainText('Banana')
-    const thirdCellDesc = page.locator('table tbody tr').nth(2).locator('td').nth(2)
+    const thirdCellDesc = page.locator('table tbody tr').nth(2).locator('td').nth(3)
     await expect(thirdCellDesc).toContainText('Apple')
   })
 
@@ -174,7 +176,8 @@ test.describe('Table face', () => {
     const tableRoot = page.locator('[tabindex="-1"]').first()
 
     // Double-click cell (0, New Column) to enter edit mode directly
-    const cell01 = page.locator('table tbody tr').nth(0).locator('td').nth(2)
+    // Workspace matrix columns: # | label | content | New Column (index 3)
+    const cell01 = page.locator('table tbody tr').nth(0).locator('td').nth(3)
     await cell01.dblclick()
 
     // Wait for the editor input to appear and receive focus
@@ -186,18 +189,20 @@ test.describe('Table face', () => {
     await input.fill('Alpha')
     await page.keyboard.press('Tab')
 
-    // Tab should commit "Alpha" to cell (0,1) and move selection forward
+    // Tab should commit "Alpha" and move selection forward
     await expect(cell01).toContainText('Alpha', { timeout: 5000 })
 
     // Focus the table container for arrow key navigation
     await tableRoot.focus()
 
-    // Arrow down: move selection from (1,0) down — we should now be at (1,0)
-    // because Tab from (0, last col) wraps to (1, 0)
-    // Press ArrowRight to move to (1,1) = New Column in row 2
+    // Tab from the last data column wraps to # column of next row.
+    // Navigate right to reach "New Column" (index 3) in row 2.
+    // Workspace columns: # | label | content | New Column → need 3 ArrowRight presses
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
     await page.keyboard.press('ArrowRight')
 
-    // Press Enter to start editing cell (1,1)
+    // Press Enter to start editing cell (1, New Column)
     await page.keyboard.press('Enter')
 
     const input2 = getCellInput(page)
@@ -207,7 +212,7 @@ test.describe('Table face', () => {
     await input2.fill('Beta')
     await page.keyboard.press('Enter')
 
-    const cell11 = page.locator('table tbody tr').nth(1).locator('td').nth(2)
+    const cell11 = page.locator('table tbody tr').nth(1).locator('td').nth(3)
     await expect(cell11).toContainText('Beta', { timeout: 5000 })
   })
 })

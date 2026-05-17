@@ -35,18 +35,18 @@ Plugins are peers that interact through shared data. Plugin A queries Plugin B's
 
 ## Pragmatic development path
 
-The plugin system should emerge from real features, not be designed in advance:
+The plugin system emerged from real features, not from upfront design:
 
-1. Build the outline as the first plugin, structured as a module that uses core APIs.
-2. Build the notes plugin as the second plugin. This is where face slots, cross-face data sharing, and the face configuration model get validated.
-3. Build the tags plugin as the third plugin. This is where cross-plugin interaction patterns surface.
-4. Extract the formal plugin API once the patterns are clear from multiple real consumers.
+1. The outline plugin was the first plugin, establishing core matrix/trait patterns.
+2. The notes plugin was the second, validating face slots and cross-face data sharing.
+3. The tags plugin was the third, surfacing cross-plugin interaction patterns.
+4. The workspace plugin unified outline and notes into a single coherent experience. The separate outline and notes plugins were removed.
 
-Don't over-formalize the plugin registration, lifecycle, or inter-plugin communication APIs until the actual needs are understood from building real features.
+The formal plugin API was extracted once patterns were clear from multiple real consumers. Don't over-formalize plugin registration, lifecycle, or inter-plugin communication APIs beyond what the actual consumers need.
 
 ## Plugin lifecycle contract
 
-Based on the four real consumers (outline, notes, inline references, tags), the plugin lifecycle has three phases:
+Based on the real consumers (workspace, inline references, tags), the plugin lifecycle has three phases:
 
 ### Registration (`registerPlugin`)
 
@@ -125,22 +125,17 @@ Face types declare **slots** -- named positions with preferred column types -- t
 
 ### Slot declarations by face type
 
-**Outline face:**
-- Slots: `primary_content` (prefers: rich text) -- the main row text, rendered as the bullet content
+**Workspace face:**
+- Slots: `label` (prefers: rich text, required) -- the row's identifying text; `content` (prefers: rich text) -- the row's body content
 - Trait requirements: rank, closure
-- Overflow behavior: additional columns render as horizontal side-columns alongside the primary content, like a tree-table
-
-**Note face:**
-- Slots: `title` (prefers: text), `body` (prefers: rich text)
-- Trait requirements: rank (for list ordering)
-- Overflow behavior: additional columns render in a property panel (collapsible top section or sidebar, like Notion page properties)
+- Overflow behavior: additional columns render in a property panel
 
 **Table face:**
 - Slots: none (every column is a table column)
 - Trait requirements: none
 - Overflow behavior: N/A (all columns are rendered equally)
 
-**Flashcard face:**
+**Flashcard face (planned):**
 - Slots: `front` (prefers: rich text), `back` (prefers: rich text)
 - Trait requirements: none (or rank for review ordering)
 - Overflow behavior: additional columns render as metadata fields below the card

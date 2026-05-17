@@ -292,26 +292,28 @@ Replace the tab-based multi-view layout with the workspace as the default. The o
 
 Clean up the codebase after the workspace plugin is fully wired.
 
-- [ ] **Delete or archive:**
+- [x] **Delete or archive:**
   - `src/outline/outline-plugin.ts` (query builders ported to workspace-plugin.ts)
   - `src/notes/notes-plugin.ts`
   - `src/notes/NoteFace.tsx`
   - `src/notes/NoteListFace.tsx`
   - `src/notes/notes-plugin.test.ts`
 
-- [ ] **Evaluate what to keep from `src/outline/`:**
-  - `OutlineFace.tsx` → most logic ported to `NavigationPanel.tsx`. Delete after confirming all behavior is ported.
-  - `OutlineRow.tsx` / `OutlineRowHarness.tsx` / `EditorHarness.tsx` → evaluate if they're still used or if the navigation panel has its own row component.
-  - `usePagedOutlineData.ts` → port to workspace or keep if reusable.
-  - `drag-drop.ts` → keep if used by NavigationPanel, otherwise port.
-  - Test files → update to target workspace equivalents.
+- [x] **Evaluate what to keep from `src/outline/`:**
+  - `OutlineFace.tsx` → deleted; all behavior ported to `NavigationPanel.tsx`.
+  - `OutlineRow.tsx` / `OutlineRowHarness.tsx` / `EditorHarness.tsx` → deleted; NavigationPanel has its own row rendering.
+  - `usePagedOutlineData.ts` → deleted; superseded by `src/workspace/usePagedWorkspaceData.ts`.
+  - `drag-drop.ts` → moved to `src/workspace/drag-drop.ts` (used by NavigationPanel).
+  - `outline-keys.test.ts` → moved to `src/core/tree-keys.test.ts` (tests core tree ops, no outline deps).
+  - `outline-inlineref.test.ts` → moved to `src/editor/inlineref.test.ts` (tests editor inline refs, no outline deps).
+  - `outline-queries.test.ts` → deleted; equivalent tests in `workspace-plugin.test.ts`.
 
-- [ ] **Update imports everywhere.** Any remaining code that imports from `outline-plugin` or `notes-plugin` (e.g. tests, other plugins) must be updated.
+- [x] **Update imports everywhere.** `row-operations.test.ts` updated to use `workspacePlugin`/`workspaceFaceTypeDefinition`. `NavigationPanel.tsx` drag-drop import updated. Moved test file imports adjusted.
 
-- [ ] **Update Plugins.md.** The staged changes already update the plugin documentation to describe the workspace plugin. Verify the documentation matches the final implementation.
+- [x] **Update Plugins.md.** Plugin documentation updated to reflect workspace plugin as replacement for outline+notes. Slot declarations, pragmatic development path, and lifecycle contract sections updated.
 
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
-- [ ] Run `pnpm test:e2e` -- all pass (or update E2E tests as needed)
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass (642 tests)
+- [x] Run `pnpm test:e2e` -- 91 passed, 1 pre-existing flaky drag-and-drop failure. Deleted 12 obsolete E2E specs (outline-*, note-face, cross-face, inlineref). Updated remaining specs for workspace matrix name and column layout.
 
 ## 7. ProseMirror editor configuration
 

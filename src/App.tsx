@@ -34,7 +34,9 @@ const App: Component = () => {
   const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
-  const [workspaceNavigateToRowId, setWorkspaceNavigateToRowId] = createSignal<number | null>(null)
+  const [workspaceNavigateToRowId, setWorkspaceNavigateToRowId] = createSignal<number | null>(
+    null,
+  )
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -213,9 +215,7 @@ const App: Component = () => {
                   }}
                   onOpenTableFace={(targetMatrixId) => {
                     void getFaceConfigs(targetMatrixId).then((configs) => {
-                      const tableConfig = configs.find(
-                        (c) => c.faceTypeId === 'hila.table',
-                      )
+                      const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
                       if (tableConfig) {
                         setTableFaceConfig(tableConfig)
                         setActiveView('table')

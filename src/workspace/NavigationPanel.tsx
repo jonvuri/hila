@@ -40,8 +40,8 @@ import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
-import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from '../outline/drag-drop'
 
+import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import { buildBreadcrumbQuery } from './workspace-plugin'
 import {
   usePagedWorkspaceData,
