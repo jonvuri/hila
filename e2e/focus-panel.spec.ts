@@ -226,6 +226,63 @@ test.describe('Focus panel', () => {
     expect(text).toContain('test save')
   })
 
+  test('backlinks section shows rows that reference the focused row', async ({ page }) => {
+    // Create a second row via the API and add a ref-kind join from it to the welcome row.
+    // This avoids the flaky Enter + @-autocomplete flow.
+    const result = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const client = await import('/src/core/client/matrix-client.ts')
+
+      const matrices = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      const mid = (matrices[0] as { id: number }).id
+
+      // Get the welcome row
+      const rows = await sql.execQuery(`SELECT id FROM "mx_${mid}_data" ORDER BY id LIMIT 1`)
+      const welcomeRowId = (rows[0] as { id: number }).id
+
+      // Insert a second row with a label
+      const labelDoc = JSON.stringify({
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Linking row' }] }],
+      })
+      const { rowId: newRowId } = await client.insertRow(mid, { values: { label: labelDoc } })
+
+      // Create a ref join from the new row to the welcome row
+      await client.createRefJoin(mid, newRowId, mid, welcomeRowId)
+
+      return { mid, welcomeRowId, newRowId }
+    })
+
+    expect(result.newRowId).toBeGreaterThan(0)
+
+    // Wait for the new row to appear
+    await expect(async () => {
+      const count = await page.locator('.outline-row').count()
+      expect(count).toBeGreaterThanOrEqual(2)
+    }).toPass({ timeout: 5000 })
+
+    // Open focus panel on the welcome row (the referenced target)
+    await openFocusPanel(page)
+
+    // Backlinks section should be visible because "Linking row" references the welcome row
+    const backlinksSection = page.getByTestId('focus-panel-backlinks')
+    await expect(backlinksSection).toBeVisible({ timeout: 5000 })
+
+    // Expand the backlinks
+    const toggle = page.getByTestId('focus-backlinks-toggle')
+    await toggle.click()
+    const list = page.getByTestId('focus-backlinks-list')
+    await expect(list).toBeVisible({ timeout: 3000 })
+
+    // The backlink item should contain the source row's label text
+    const backlinkItem = list.locator('.focus-backlink-item').first()
+    await expect(backlinkItem).toBeVisible({ timeout: 3000 })
+    const itemText = (await backlinkItem.textContent()) ?? ''
+    expect(itemText).toContain('Linking row')
+  })
+
   test('Escape returns focus to navigation panel', async ({ page }) => {
     await openFocusPanel(page)
 

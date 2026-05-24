@@ -82,7 +82,7 @@ test.describe('Stream view: panel management', () => {
     expect(text).toContain('Welcome to Hila')
   })
 
-  test('click right-arrow on child replaces focus panel', async ({ page }) => {
+  test('click right-arrow on child in nested nav panel appends a new focus column', async ({ page }) => {
     // Create a child row
     const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
     await firstEditor.click()
@@ -133,16 +133,18 @@ test.describe('Stream view: panel management', () => {
     }).toPass({ timeout: 3000 })
     await childFocusBtn.click()
 
-    // The focus panel should now show the child, not the parent
+    // A second focus panel should appear showing the child
     await expect(async () => {
-      const labelEditor = page.getByTestId('focus-label-editor')
-      const text = await labelEditor.textContent()
-      expect(text).toContain('Child item')
+      const focusColumns = page.getByTestId('stream-focus-column')
+      await expect(focusColumns).toHaveCount(2)
     }).toPass({ timeout: 5000 })
 
-    // Still only one focus column (replaced, not added)
-    const focusColumns = page.getByTestId('stream-focus-column')
-    await expect(focusColumns).toHaveCount(1)
+    // The new (rightmost) focus panel shows the child label
+    const focusLabels = page.getByTestId('focus-label-editor')
+    await expect(async () => {
+      const text = await focusLabels.last().textContent()
+      expect(text).toContain('Child item')
+    }).toPass({ timeout: 5000 })
   })
 
   test('Cmd/Ctrl+L opens focus panel for focused row', async ({ page }) => {
@@ -179,14 +181,16 @@ test.describe('Stream view: panel management', () => {
     await expect(page.getByTestId('navigation-panel')).toBeVisible()
   })
 
-  test('navigation panel count stays within limit', async ({ page }) => {
-    // With the current flow, only 1 navigation panel is created in the
-    // state array. Verify the limit is respected by checking the stream
-    // view only has 1 navigation column.
+  test('total column count stays within limit of 4', async ({ page }) => {
+    // Start with 1 nav column
     await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
 
-    // Open a focus panel — still only 1 navigation column
+    // Open a focus panel (2 columns: nav + focus)
     await openFocusPanelOnRow(page, 0)
-    await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+
+    // Total columns = 2 (1 nav + 1 focus)
+    const totalBefore = await page.locator('.stream-nav-column, .stream-focus-column').count()
+    expect(totalBefore).toBe(2)
   })
 })

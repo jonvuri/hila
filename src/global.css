@@ -1689,3 +1689,56 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---- Breadcrumb bar (shared by NavigationPanel and FocusPanel) ---- */
+
+.breadcrumb-bar {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.breadcrumb-root-tag {
+  color: #aaa;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 1px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.breadcrumb-root-tag:hover {
+  color: #888;
+  border-color: #aaa;
+}
+
+.breadcrumb-divider {
+  color: #ccc;
+  flex-shrink: 0;
+}
+
+.breadcrumb-ancestor {
+  color: #666;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb-ancestor:hover {
+  color: #333;
+}
+
+.breadcrumb-current {
+  color: #333;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

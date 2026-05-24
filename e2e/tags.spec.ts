@@ -20,7 +20,7 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-const waitForOutline = async (page: Page) => {
+const waitForRows = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
@@ -55,7 +55,7 @@ const createTagTypeViaAPI = async (
 
 /**
  * Wait for an autocomplete option (item or create) to be visible.
- * Multiple ProseMirror editors (outline rows) create multiple dropdowns on
+ * Multiple ProseMirror editors (workspace rows) create multiple dropdowns on
  * document.body, so we wait for any visible option element instead of the
  * container to avoid Playwright strict-mode violations.
  */
@@ -68,7 +68,7 @@ const waitForAutocompleteOption = async (page: Page) => {
 /**
  * Type `#` + searchText in the currently focused editor, then select from
  * autocomplete. Does NOT press Enter first — caller must position the cursor.
- * For outline rows, focus the target row's editor first.
+ * For workspace rows, focus the target row's editor first.
  * For note bodies, click the editor and optionally press Enter for a new line.
  */
 const typeHashTag = async (page: Page, searchText: string, selectCreate = false) => {
@@ -101,10 +101,10 @@ const typeHashTag = async (page: Page, searchText: string, selectCreate = false)
 }
 
 /**
- * Create a new outline row by pressing Enter at the end of the first row,
+ * Create a new row by pressing Enter at the end of the first row,
  * then return a locator for the newly created row's editor.
  */
-const createNewOutlineRow = async (page: Page) => {
+const createNewRow = async (page: Page) => {
   const firstEditor = page.locator('.outline-row .ProseMirror').first()
   await firstEditor.click()
   await page.keyboard.press('End')
@@ -123,24 +123,24 @@ const createNewOutlineRow = async (page: Page) => {
 test.describe('Tag insertion', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
-  test('# triggers autocomplete in an outline row', async ({ page }) => {
+  test('# triggers autocomplete in a workspace row', async ({ page }) => {
     await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await page.keyboard.type('#')
 
     await waitForAutocompleteOption(page)
   })
 
-  test('select an existing tag type inserts a colored tag badge in outline', async ({
+  test('select an existing tag type inserts a colored tag badge in workspace row', async ({
     page,
   }) => {
     await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
 
     const tagBadge = newEditor.locator('.inlineref-own')
@@ -151,7 +151,7 @@ test.describe('Tag insertion', () => {
   test('tag insertion creates an aspect row in the tag matrix', async ({ page }) => {
     const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
 
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
@@ -170,11 +170,11 @@ test.describe('Tag insertion', () => {
 test.describe('Tag type creation via autocomplete', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('typing a nonexistent tag name shows "Create tag type" option', async ({ page }) => {
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await page.keyboard.type('#')
     await page.keyboard.type('newtype')
     await page.waitForTimeout(500)
@@ -187,7 +187,7 @@ test.describe('Tag type creation via autocomplete', () => {
   test('selecting "Create tag type" creates the tag type and inserts a badge', async ({
     page,
   }) => {
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'newtype', true)
 
     const tagBadge = newEditor.locator('.inlineref-own')
@@ -196,7 +196,7 @@ test.describe('Tag type creation via autocomplete', () => {
   })
 
   test('newly created tag type appears in the tag browser', async ({ page }) => {
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'project', true)
 
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
@@ -210,7 +210,7 @@ test.describe('Tag type creation via autocomplete', () => {
   })
 
   test('inline tag type creation also creates the aspect row', async ({ page }) => {
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'milestone', true)
 
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
@@ -244,7 +244,7 @@ test.describe('Tag type creation via autocomplete', () => {
 test.describe('Tag property panel', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('clicking a tag badge opens the property panel', async ({ page }) => {
@@ -259,7 +259,7 @@ test.describe('Tag property panel', () => {
       { matrixId },
     )
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
 
@@ -283,7 +283,7 @@ test.describe('Tag property panel', () => {
       { matrixId },
     )
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
 
@@ -310,7 +310,7 @@ test.describe('Tag property panel', () => {
   test('pressing Escape closes the panel and returns focus to the editor', async ({ page }) => {
     await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
 
@@ -349,7 +349,7 @@ test.describe('Tag property panel', () => {
       { matrixId },
     )
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
 
@@ -383,7 +383,7 @@ test.describe('Tag property panel', () => {
     }).toPass({ timeout: 5000 })
   })
 
-  test('editing the aspect row in the table face is reflected in the tag badge key props', async ({
+  test('editing the aspect row in the table face is reflected in the tag badge', async ({
     page,
   }) => {
     const { matrixId } = await createTagTypeViaAPI(page, 'task')
@@ -397,7 +397,7 @@ test.describe('Tag property panel', () => {
       { matrixId },
     )
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(500)
@@ -425,7 +425,7 @@ test.describe('Tag property panel', () => {
     await page.waitForTimeout(500)
 
     await page.locator('.view-tab', { hasText: /^Workspace$/ }).click()
-    await waitForOutline(page)
+    await waitForRows(page)
 
     await expect(async () => {
       const badge = page.locator('.inlineref-own').first()
@@ -442,13 +442,13 @@ test.describe('Tag property panel', () => {
 test.describe('Tag lifecycle', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
-  test('deleting a tag badge from text removes the aspect row', async ({ page }) => {
+  test('deleting a tag badge from label text removes the aspect row', async ({ page }) => {
     const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
     // Wait for the debounced save + syncInlineRefs to materialize the join
@@ -462,7 +462,7 @@ test.describe('Tag lifecycle', () => {
     }, tagMatrixId)
     expect(beforeCount).toBe(1)
 
-    // Select all content in the editor and delete it (removing the tag badge)
+    // Select all text in the editor and delete it (removing the tag badge)
     await newEditor.click()
     await page.keyboard.press('Meta+a')
     await page.keyboard.press('Backspace')
@@ -479,11 +479,11 @@ test.describe('Tag lifecycle', () => {
     }).toPass({ timeout: 10000 })
   })
 
-  test('deleting an outline row cascade-deletes both tag aspect rows', async ({ page }) => {
+  test('deleting a workspace row cascade-deletes both tag aspect rows', async ({ page }) => {
     const { matrixId: taskMatrixId } = await createTagTypeViaAPI(page, 'task')
     const { matrixId: reviewMatrixId } = await createTagTypeViaAPI(page, 'review')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own').first()).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(300)
@@ -514,7 +514,7 @@ test.describe('Tag lifecycle', () => {
     expect(beforeCounts.task).toBe(1)
     expect(beforeCounts.review).toBe(1)
 
-    // Find the outline row that has the tags (the one with own-kind join entries)
+    // Find the workspace row that has the tags (the one with own-kind join entries)
     const rowInfo = await page.evaluate(
       async ({ taskMid }) => {
         // @ts-expect-error -- resolved by Vite dev server at runtime
@@ -562,12 +562,12 @@ test.describe('Tag lifecycle', () => {
     }).toPass({ timeout: 10000 })
   })
 
-  test('deleting an aspect row from the table face removes the tag badge from outline text', async ({
+  test('deleting an aspect row from the table face removes the tag badge from label text', async ({
     page,
   }) => {
     const { matrixId: tagMatrixId } = await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
     // Wait for debounced save to persist the document
@@ -604,7 +604,7 @@ test.describe('Tag lifecycle', () => {
       expect(cnt).toBe(0)
     }).toPass({ timeout: 5000 })
 
-    // The reverse lifecycle should remove the inline tag node from the source text
+    // The reverse lifecycle should remove the inline tag node from the label text
     await expect(async () => {
       const tagBadges = await page.locator('.inlineref-own:not(.inlineref-ghost)').count()
       expect(tagBadges).toBe(0)
@@ -619,7 +619,7 @@ test.describe('Tag lifecycle', () => {
 test.describe('Tag browser', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('tag browser lists all registered tag types', async ({ page }) => {
@@ -652,19 +652,19 @@ test.describe('Tag browser', () => {
         const matrixResult = await sql.execQuery(
           "SELECT id FROM matrix WHERE title = 'Workspace'",
         )
-        const outlineMid = (matrixResult[0] as { id: number }).id
+        const workspaceMid = (matrixResult[0] as { id: number }).id
 
-        // Ensure enough workspace rows exist by inserting two new ones
-        await client.insertRow(outlineMid, { values: { label: '"Row A"' } })
-        await client.insertRow(outlineMid, { values: { label: '"Row B"' } })
+        // Ensure enough rows exist by inserting two new ones
+        await client.insertRow(workspaceMid, { values: { label: '"Row A"' } })
+        await client.insertRow(workspaceMid, { values: { label: '"Row B"' } })
 
-        const outlineRows = await sql.execQuery(
-          `SELECT id FROM "mx_${outlineMid}_data" ORDER BY id LIMIT 2`,
+        const workspaceRows = await sql.execQuery(
+          `SELECT id FROM "mx_${workspaceMid}_data" ORDER BY id LIMIT 2`,
         )
-        // Create two aspect rows targeting the tag matrix, joined from outline rows
+        // Create two aspect rows targeting the tag matrix, joined from workspace rows
         for (let i = 0; i < 2; i++) {
-          const sourceRowId = (outlineRows[i] as { id: number }).id
-          await client.createDependentRow(outlineMid, sourceRowId, tagMid, {})
+          const sourceRowId = (workspaceRows[i] as { id: number }).id
+          await client.createDependentRow(workspaceMid, sourceRowId, tagMid, {})
         }
       },
       { tagMid: tagMatrixId },
@@ -685,7 +685,7 @@ test.describe('Tag browser', () => {
   test('selecting a tag type shows its instances with source row context', async ({ page }) => {
     await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await page.keyboard.type('My tagged row ')
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
@@ -710,10 +710,10 @@ test.describe('Tag browser', () => {
     }).toPass({ timeout: 5000 })
   })
 
-  test('clicking a tag instance navigates to the source outline row', async ({ page }) => {
+  test('clicking a tag instance navigates to the source workspace row', async ({ page }) => {
     await createTagTypeViaAPI(page, 'task')
 
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await page.keyboard.type('Navigate target ')
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
@@ -729,9 +729,9 @@ test.describe('Tag browser', () => {
     const instanceRow = page.locator('[data-testid="tag-instance-row"]').first()
     await instanceRow.click()
 
-    // Should navigate back to the outline view
+    // Should navigate back to the workspace view
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
-    // The outline tab should now be active
+    // The workspace tab should now be active
     await expect(page.locator('.view-tab[data-active="true"]')).toContainText('Workspace', {
       timeout: 5000,
     })
@@ -760,7 +760,7 @@ test.describe('Tag browser', () => {
     await createTagTypeViaAPI(page, 'task')
 
     // Create a tag instance so the matrix has data
-    const newEditor = await createNewOutlineRow(page)
+    const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
     await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(1000)

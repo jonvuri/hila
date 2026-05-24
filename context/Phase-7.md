@@ -352,21 +352,21 @@ Two distinct editor configurations are needed for the workspace: single-line (la
 
 Existing Playwright tests reference the outline face, notes face, and tab structure. They need to be updated for the workspace.
 
-- [ ] **Audit existing E2E tests.** Identify all tests that:
+- [x] **Audit existing E2E tests.** Identify all tests that:
   - Click the "Outline" tab or reference outline-specific selectors
   - Click the "Notes" or "Notes Outline" tabs
   - Interact with `NoteListFace` or `NoteFace` components
   - Use `outlineMatrixId` or `notesMatrixId` in helper functions
 
-- [ ] **Update test helpers.** Replace outline/notes-specific helpers with workspace equivalents. The "Add Sample Rows" button in Matrix Debug should target the workspace matrix.
+- [x] **Update test helpers.** Replace outline/notes-specific helpers with workspace equivalents. The "Add Sample Rows" button in Matrix Debug should target the workspace matrix.
 
-- [ ] **Rewrite affected tests.** Focus on:
+- [x] **Rewrite affected tests.** Focus on:
   - Outline interaction tests → target navigation panel within workspace
   - Note editing tests → target focus panel within workspace
   - Cross-face navigation tests → test within stream view panel system
   - Tag insertion tests → verify tags work in label and content columns
 
-- [ ] **Add new E2E tests** for stream view interactions:
+- [x] **Add new E2E tests** for stream view interactions:
   - Open focus panel via right-arrow button
   - Panel chaining (focus → child → second focus)
   - Navigation panel maximum (4 nav panels; 5th removes leftmost column)
@@ -377,7 +377,7 @@ Existing Playwright tests reference the outline face, notes face, and tab struct
   - Backlinks display in focus panel
   - Content preview in navigation panel (clamped to 2 lines)
 
-- [ ] Run `pnpm test:e2e` -- all pass
+- [x] Run `pnpm test:e2e` -- all pass (108 tests)
 
 ---
 

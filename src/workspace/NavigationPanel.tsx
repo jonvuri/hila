@@ -66,6 +66,7 @@ type NavigationPanelProps = {
   rootKey?: Uint8Array
   onOpenFocus: (rowId: number, key: Uint8Array) => void
   focusedRowId?: number
+  showBreadcrumb?: boolean
 }
 
 type BreadcrumbData = {
@@ -272,6 +273,21 @@ const LabelEditorInner = (props: LabelEditorProps) => {
         if (!editorView) return
         const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
         logPmContentSync(props.rowId, currentDoc !== newLabel)
+        if (currentDoc !== newLabel && !editorView.hasFocus()) {
+          let docJson: unknown | undefined
+          if (newLabel) {
+            docJson = JSON.parse(newLabel) as unknown
+          }
+          const newState = createLabelEditorState(docJson, props.callbacks, [
+            createInlinerefPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+              searchProvider: createTagSearchProvider(props.matrixId),
+              onTagSelect: handleTagSelection,
+            }),
+          ])
+          editorView.updateState(newState)
+        }
       },
       { defer: true },
     ),
@@ -396,6 +412,32 @@ const ContentEditorInner = (props: ContentEditorProps) => {
     saveHandle.destroy()
     editorView?.destroy()
   })
+
+  createEffect(
+    on(
+      () => props.content,
+      (newContent) => {
+        if (!editorView) return
+        const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
+        if (currentDoc !== newContent && !editorView.hasFocus()) {
+          let docJson: unknown | undefined
+          if (newContent) {
+            docJson = JSON.parse(newContent) as unknown
+          }
+          const newState = createContentEditorState(docJson, [
+            createInlinerefPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+              searchProvider: createTagSearchProvider(props.matrixId),
+              onTagSelect: handleTagSelection,
+            }),
+          ])
+          editorView.updateState(newState)
+        }
+      },
+      { defer: true },
+    ),
+  )
 
   return (
     <div
@@ -1113,55 +1155,52 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           Query error: {error()?.message}
         </div>
       </Show>
-      <Show when={focusRoot()}>
+      <Show when={props.showBreadcrumb !== false}>
         <div
-          class="outline-breadcrumb-bar"
-          style={{
-            display: 'flex',
-            'align-items': 'center',
-            gap: '4px',
-            padding: '6px 12px',
-            'font-size': '13px',
-            color: '#888',
-            'border-bottom': '1px solid #eee',
-            'flex-wrap': 'wrap',
-          }}
+          class="breadcrumb-bar"
+          data-testid="breadcrumb-bar"
         >
-          <span
-            style={{ cursor: 'pointer', color: '#666' }}
-            onClick={goHome}
-            data-testid="breadcrumb-home"
+          <Show
+            when={focusRoot()}
+            fallback={
+              <span
+                class="breadcrumb-root-tag"
+                data-testid="breadcrumb-root"
+                onClick={goHome}
+              >
+                root
+              </span>
+            }
           >
-            Home
-          </span>
-          <For each={breadcrumbs()}>
-            {(crumb) => (
-              <>
-                <span style={{ color: '#ccc' }}>/</span>
+            <span class="breadcrumb-divider">/</span>
+            <For each={breadcrumbs()}>
+              {(crumb) => (
+                <>
+                  <span
+                    class="breadcrumb-ancestor"
+                    onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
+                    data-testid="breadcrumb-ancestor"
+                  >
+                    {extractTextFromPmDoc(crumb.label)}
+                  </span>
+                  <span class="breadcrumb-divider">/</span>
+                </>
+              )}
+            </For>
+            <Show when={focusRootRow()}>
+              {(rootRow) => (
                 <span
-                  style={{ cursor: 'pointer', color: '#666' }}
-                  onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
-                  data-testid="breadcrumb-ancestor"
-                >
-                  {extractTextFromPmDoc(crumb.label)}
-                </span>
-              </>
-            )}
-          </For>
-          <Show when={focusRootRow()}>
-            {(rootRow) => (
-              <>
-                <span style={{ color: '#ccc' }}>/</span>
-                <span
-                  style={{ color: '#333', 'font-weight': 500 }}
+                  class="breadcrumb-current"
                   data-testid="breadcrumb-current"
                 >
                   {extractTextFromPmDoc(rootRow().label)}
                 </span>
-              </>
-            )}
+              )}
+            </Show>
           </Show>
         </div>
+      </Show>
+      <Show when={focusRoot()}>
         <div
           class="outline-focus-title"
           style={{

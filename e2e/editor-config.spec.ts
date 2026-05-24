@@ -117,9 +117,11 @@ test.describe('Label editor configuration', () => {
       expect(count).toBe(beforeCount + 1)
     }).toPass({ timeout: 5000 })
 
-    // The original row should still have only one paragraph worth of text
-    const originalText = (await firstEditor.textContent()) ?? ''
-    expect(originalText).toContain('Welcome to Hila')
+    // The first row's label should contain at most a single paragraph (no newline)
+    // Enter may split text (cursor not at end) or create an empty sibling;
+    // either way it must not produce a multi-paragraph label.
+    const paragraphCount = await firstEditor.locator('p').count()
+    expect(paragraphCount).toBeLessThanOrEqual(1)
   })
 
   test('Enter in focus panel label editor is a no-op', async ({ page }) => {

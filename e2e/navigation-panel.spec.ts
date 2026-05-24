@@ -245,6 +245,11 @@ test.describe('Navigation panel', () => {
     }).toPass({ timeout: 3000 })
   })
 
+  test('root-level navigation panel shows root breadcrumb tag', async ({ page }) => {
+    await expect(page.getByTestId('breadcrumb-root')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('breadcrumb-root')).toHaveText('root')
+  })
+
   test('Breadcrumbs display in subtree mode (focus view)', async ({ page }) => {
     await addSampleRowsToWorkspace(page)
     await goToWorkspace(page)
@@ -253,8 +258,60 @@ test.describe('Navigation panel', () => {
     const expandableBtn = page.locator('[data-testid="outline-bullet"][aria-label="Collapse"]').first()
     await expandableBtn.dblclick()
 
-    await expect(page.getByTestId('breadcrumb-home')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('breadcrumb-current')).toBeVisible({ timeout: 5000 })
     await expect(page.getByTestId('focus-title')).toBeVisible()
+  })
+
+  test('Focus panel shows row label in breadcrumb header', async ({ page }) => {
+    const firstRow = page.locator('.outline-row').first()
+    const focusBtn = firstRow.locator('.nav-row-open-focus')
+    await firstRow.hover()
+    await focusBtn.click()
+
+    const focusBreadcrumb = page.getByTestId('stream-focus-column').getByTestId('breadcrumb-bar')
+    await expect(focusBreadcrumb).toBeVisible({ timeout: 5000 })
+    await expect(focusBreadcrumb.getByTestId('breadcrumb-current')).toContainText('Welcome to Hila')
+  })
+
+  test('content preview displays below label, clamped to 2 lines', async ({ page }) => {
+    // The welcome row has content set by the seed. Verify the content
+    // preview area is visible and uses CSS line clamping.
+    const firstRow = page.locator('.outline-row').first()
+    const preview = firstRow.getByTestId('content-preview')
+    await expect(preview).toBeVisible({ timeout: 5000 })
+
+    // Verify the text is non-empty (welcome content)
+    const text = (await preview.textContent()) ?? ''
+    expect(text.trim().length).toBeGreaterThan(0)
+
+    // Verify CSS line-clamp is applied (display: -webkit-box, -webkit-line-clamp: 2)
+    const lineClamp = await preview.evaluate(
+      (el) => window.getComputedStyle(el).getPropertyValue('-webkit-line-clamp'),
+    )
+    expect(lineClamp).toBe('2')
+
+    // Clicking the preview should expand it into a full content editor
+    await preview.click()
+    const contentEditor = firstRow.locator('.nav-content-editor')
+    await expect(contentEditor).toBeVisible({ timeout: 3000 })
+  })
+
+  test('rows without content do not show content preview', async ({ page }) => {
+    // Create a new row (it starts with null content)
+    const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
+    await firstEditor.click()
+    await firstEditor.press('End')
+    await firstEditor.press('Enter')
+
+    await expect(async () => {
+      const count = await page.locator('.outline-row').count()
+      expect(count).toBeGreaterThanOrEqual(2)
+    }).toPass({ timeout: 5000 })
+
+    // The new row should not have a content preview
+    const secondRow = page.locator('.outline-row').nth(1)
+    const preview = secondRow.getByTestId('content-preview')
+    await expect(preview).not.toBeVisible()
   })
 
   test('Drag-and-drop reorders rows', async ({ page }) => {

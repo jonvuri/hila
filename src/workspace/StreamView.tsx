@@ -32,7 +32,7 @@ type StreamViewProps = {
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_NAV_PANELS = 4
+const MAX_COLUMNS = 4
 
 // ---------------------------------------------------------------------------
 // StreamView
@@ -41,32 +41,27 @@ const MAX_NAV_PANELS = 4
 const StreamView = (props: StreamViewProps) => {
   const [panels, setPanels] = createSignal<PanelState[]>([{ type: 'navigation' }])
 
-  // Panel opening: called from a panel at `fromIndex` to open a focus panel
-  // for the target row. If the source is a navigation panel, keep it and
-  // replace everything after. If the source is a focus panel, replace it and
-  // everything after with a new focus panel.
-  const handleOpenFocus = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
+  const enforceColumnLimit = (next: PanelState[]): PanelState[] => {
+    while (next.length > MAX_COLUMNS) {
+      next.shift()
+    }
+    return next
+  }
+
+  // Append a new focus panel after the panel at `fromIndex`, removing
+  // everything to the right of it first.
+  const handleAppendAfter = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
     setPanels((prev) => {
-      const source = prev[fromIndex]
-      const keepCount = source?.type === 'navigation' ? fromIndex + 1 : fromIndex
-      const next: PanelState[] = [...prev.slice(0, keepCount), { type: 'focus', rowId, rowKey }]
+      const next: PanelState[] = [...prev.slice(0, fromIndex + 1), { type: 'focus', rowId, rowKey }]
+      return enforceColumnLimit(next)
+    })
+  }
 
-      // Enforce navigation panel limit: at most MAX_NAV_PANELS entries with
-      // type 'navigation'. When exceeded, remove the leftmost navigation
-      // panel and its associated focus panel (if any).
-      let navCount = next.filter((p) => p.type === 'navigation').length
-      while (navCount > MAX_NAV_PANELS) {
-        const idx = next.findIndex((p) => p.type === 'navigation')
-        if (idx === -1) break
-        if (idx + 1 < next.length && next[idx + 1]!.type === 'focus') {
-          next.splice(idx, 2)
-        } else {
-          next.splice(idx, 1)
-        }
-        navCount--
-      }
-
-      return next
+  // Replace the panel at `fromIndex` (and everything after) with a new focus panel.
+  const handleReplaceAt = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
+    setPanels((prev) => {
+      const next: PanelState[] = [...prev.slice(0, fromIndex), { type: 'focus', rowId, rowKey }]
+      return enforceColumnLimit(next)
     })
   }
 
@@ -91,7 +86,7 @@ const StreamView = (props: StreamViewProps) => {
     )
     if (result && result.length > 0) {
       const key = (result[0] as { key: Uint8Array }).key
-      handleOpenFocus(0, rowId, new Uint8Array(key))
+      handleAppendAfter(0, rowId, new Uint8Array(key))
     }
   }
 
@@ -174,9 +169,10 @@ const StreamView = (props: StreamViewProps) => {
                     matrixId={props.matrixId}
                     rootKey={panel.rootKey}
                     onOpenFocus={(rowId, key) =>
-                      handleOpenFocus(i(), rowId, new Uint8Array(key))
+                      handleAppendAfter(i(), rowId, new Uint8Array(key))
                     }
                     focusedRowId={focusedRowForNav().get(i())}
+                    showBreadcrumb={true}
                   />
                 </div>
               )
@@ -196,8 +192,10 @@ const StreamView = (props: StreamViewProps) => {
                   matrixId={props.matrixId}
                   rowId={panel.rowId}
                   rowKey={panel.rowKey}
-                  onOpenFocus={(rowId, key) => handleOpenFocus(i(), rowId, new Uint8Array(key))}
+                  onAppendFocus={(rowId, key) => handleAppendAfter(i(), rowId, new Uint8Array(key))}
+                  onReplaceFocus={(rowId, key) => handleReplaceAt(i(), rowId, new Uint8Array(key))}
                   onClose={() => handleClose(i())}
+                  showBreadcrumb={true}
                 />
               </div>
             )

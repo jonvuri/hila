@@ -18,7 +18,7 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-const waitForOutline = async (page: Page) => {
+const waitForRows = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
@@ -52,7 +52,7 @@ const getCellInput = (page: Page) => page.locator('table tbody td input')
 test.describe('Table face', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
     await applyTableFace(page)
   })
 

@@ -57,8 +57,10 @@ type FocusPanelProps = {
   matrixId: number
   rowId: number
   rowKey: Uint8Array
-  onOpenFocus: (rowId: number, key: Uint8Array) => void
+  onAppendFocus: (rowId: number, key: Uint8Array) => void
+  onReplaceFocus: (rowId: number, key: Uint8Array) => void
   onClose: () => void
+  showBreadcrumb?: boolean
 }
 
 type RowData = Record<string, unknown> & {
@@ -168,6 +170,33 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
     editorView?.destroy()
   })
 
+  createEffect(
+    on(
+      () => props.label,
+      (newLabel) => {
+        if (!editorView) return
+        const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
+        if (currentDoc !== newLabel && !editorView.hasFocus()) {
+          let docJson: unknown | undefined
+          if (newLabel) {
+            docJson = JSON.parse(newLabel) as unknown
+          }
+          const newState = createLabelEditorState(docJson, undefined, [
+            createInlinerefPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+              searchProvider: createTagSearchProvider(props.matrixId),
+              onTagSelect: handleTagSelection,
+            }),
+            buildLabelKeymap(props.onEscape),
+          ])
+          editorView.updateState(newState)
+        }
+      },
+      { defer: true },
+    ),
+  )
+
   return (
     <div
       class="focus-label-editor"
@@ -273,6 +302,33 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
     saveHandle.destroy()
     editorView?.destroy()
   })
+
+  createEffect(
+    on(
+      () => props.content,
+      (newContent) => {
+        if (!editorView) return
+        const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
+        if (currentDoc !== newContent && !editorView.hasFocus()) {
+          let docJson: unknown | undefined
+          if (newContent) {
+            docJson = JSON.parse(newContent) as unknown
+          }
+          const newState = createContentEditorState(docJson, [
+            createInlinerefPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+              searchProvider: createTagSearchProvider(props.matrixId),
+              onTagSelect: handleTagSelection,
+            }),
+            buildContentKeymap(props.onEscape),
+          ])
+          editorView.updateState(newState)
+        }
+      },
+      { defer: true },
+    ),
+  )
 
   return (
     <div
@@ -382,12 +438,30 @@ const FocusPanel = (props: FocusPanelProps) => {
         'flex-direction': 'column',
         height: '100%',
         overflow: 'auto',
-        padding: '16px 24px',
         'border-left': '1px solid #e5e7eb',
         'min-width': '360px',
         'background-color': '#fafafa',
       }}
     >
+      <Show when={props.showBreadcrumb !== false}>
+        <div
+          class="breadcrumb-bar"
+          data-testid="breadcrumb-bar"
+        >
+          <span class="breadcrumb-divider">/</span>
+          <Show when={rowData()}>
+            {(data) => (
+              <span
+                class="breadcrumb-current"
+                data-testid="breadcrumb-current"
+              >
+                {extractTextFromPmDoc(data().label) || 'Untitled'}
+              </span>
+            )}
+          </Show>
+        </div>
+      </Show>
+      <div style={{ padding: '16px 24px', flex: 1, overflow: 'auto' }}>
       <Show
         when={rowData()}
         fallback={<div style={{ padding: '16px', color: '#888' }}>Loading...</div>}
@@ -532,7 +606,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                             'text-align': 'left',
                             width: '100%',
                           }}
-                          onClick={() => props.onOpenFocus(bl.id, new Uint8Array())}
+                          onClick={() => props.onReplaceFocus(bl.id, new Uint8Array())}
                         >
                           <span style={{ color: '#999', 'margin-right': '4px' }}>
                             {bl.kind === 'own' ? '⊙' : '↗'}
@@ -593,7 +667,8 @@ const FocusPanel = (props: FocusPanelProps) => {
                   <NavigationPanel
                     matrixId={props.matrixId}
                     rootKey={props.rowKey}
-                    onOpenFocus={props.onOpenFocus}
+                    onOpenFocus={props.onAppendFocus}
+                    showBreadcrumb={false}
                   />
                 </Suspense>
               </Show>
@@ -601,6 +676,7 @@ const FocusPanel = (props: FocusPanelProps) => {
           </Show>
         )}
       </Show>
+      </div>
     </div>
   )
 }

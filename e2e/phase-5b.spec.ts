@@ -20,7 +20,7 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-const waitForOutline = async (page: Page) => {
+const waitForRows = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
@@ -175,7 +175,7 @@ const runSQL = async (page: Page, sql: string): Promise<string> => {
 test.describe('Column constraint enforcement', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('duplicate tag type name with different casing is rejected', async ({ page }) => {
@@ -258,7 +258,7 @@ test.describe('Column constraint enforcement', () => {
 test.describe('Plugin column ownership', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('renaming a plugin-managed column is rejected with error', async ({ page }) => {
@@ -357,7 +357,7 @@ test.describe('Plugin column ownership', () => {
 test.describe('Formula column with token input', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
     await applyTableFace(page)
   })
 
@@ -545,7 +545,7 @@ test.describe('Formula column with token input', () => {
 test.describe('Sort and filter survive column rename', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
     await applyTableFace(page)
   })
 

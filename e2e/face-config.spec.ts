@@ -18,14 +18,14 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
-const waitForOutline = async (page: Page) => {
+const waitForRows = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
 test.describe('Face configuration UI', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
-    await waitForOutline(page)
+    await waitForRows(page)
   })
 
   test('opens the face config panel via "View as…" button', async ({ page }) => {
