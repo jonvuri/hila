@@ -66,7 +66,6 @@ type NavigationPanelProps = {
   rootKey?: Uint8Array
   onOpenFocus: (rowId: number, key: Uint8Array) => void
   focusedRowId?: number
-  showBreadcrumb?: boolean
 }
 
 type BreadcrumbData = {
@@ -1020,7 +1019,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   opacity:
                     dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated ? 0.25 : 1,
                   transition: 'opacity 0.15s',
-                  background: isFocusTarget() ? 'rgba(37, 99, 235, 0.06)' : undefined,
+                  background: isFocusTarget() ? 'hsla(225, 60%, 50%, 0.08)' : undefined,
                 }}
               >
                 {/* Drag handle */}
@@ -1085,7 +1084,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                             data-testid="content-preview"
                             style={{
                               'font-size': '13px',
-                              color: '#888',
+                              color: 'var(--text-muted)',
                               cursor: 'pointer',
                               display: '-webkit-box',
                               '-webkit-line-clamp': '2',
@@ -1127,7 +1126,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     border: 'none',
                     cursor: 'pointer',
                     'font-size': '14px',
-                    color: '#bbb',
+                    color: 'var(--text-muted)',
                     padding: '2px 4px',
                     'border-radius': '3px',
                     opacity: 0,
@@ -1145,61 +1144,48 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     )
   }
 
-  // Home target for breadcrumb: rootKey or null
   const goHome = () => setFocusRoot(initialRoot)
 
   return (
     <div class="navigation-panel" data-testid="navigation-panel">
       <Show when={error()}>
-        <div style={{ color: 'red', padding: '8px', 'margin-bottom': '8px' }}>
+        <div style={{ color: '#f87171', padding: '8px', 'margin-bottom': '8px' }}>
           Query error: {error()?.message}
         </div>
       </Show>
-      <Show when={props.showBreadcrumb !== false}>
-        <div
-          class="breadcrumb-bar"
-          data-testid="breadcrumb-bar"
+      <div class="breadcrumb-bar" data-testid="breadcrumb-bar">
+        <Show
+          when={focusRoot()}
+          fallback={
+            <span class="breadcrumb-root-tag" data-testid="breadcrumb-root" onClick={goHome}>
+              root
+            </span>
+          }
         >
-          <Show
-            when={focusRoot()}
-            fallback={
-              <span
-                class="breadcrumb-root-tag"
-                data-testid="breadcrumb-root"
-                onClick={goHome}
-              >
-                root
-              </span>
-            }
-          >
-            <span class="breadcrumb-divider">/</span>
-            <For each={breadcrumbs()}>
-              {(crumb) => (
-                <>
-                  <span
-                    class="breadcrumb-ancestor"
-                    onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
-                    data-testid="breadcrumb-ancestor"
-                  >
-                    {extractTextFromPmDoc(crumb.label)}
-                  </span>
-                  <span class="breadcrumb-divider">/</span>
-                </>
-              )}
-            </For>
-            <Show when={focusRootRow()}>
-              {(rootRow) => (
+          <span class="breadcrumb-divider">/</span>
+          <For each={breadcrumbs()}>
+            {(crumb) => (
+              <>
                 <span
-                  class="breadcrumb-current"
-                  data-testid="breadcrumb-current"
+                  class="breadcrumb-ancestor"
+                  onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
+                  data-testid="breadcrumb-ancestor"
                 >
-                  {extractTextFromPmDoc(rootRow().label)}
+                  {extractTextFromPmDoc(crumb.label)}
                 </span>
-              )}
-            </Show>
+                <span class="breadcrumb-divider">/</span>
+              </>
+            )}
+          </For>
+          <Show when={focusRootRow()}>
+            {(rootRow) => (
+              <span class="breadcrumb-current" data-testid="breadcrumb-current">
+                {extractTextFromPmDoc(rootRow().label)}
+              </span>
+            )}
           </Show>
-        </div>
-      </Show>
+        </Show>
+      </div>
       <Show when={focusRoot()}>
         <div
           class="outline-focus-title"
@@ -1207,7 +1193,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
             padding: '8px 12px 4px',
             'font-size': '18px',
             'font-weight': 600,
-            color: '#222',
+            color: 'var(--text-primary)',
           }}
           data-testid="focus-title"
         >
@@ -1226,7 +1212,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
               'align-items': 'center',
               'justify-content': 'center',
               'min-height': '200px',
-              color: '#999',
+              color: 'var(--text-muted)',
               'font-size': '15px',
               'font-style': 'italic',
               outline: 'none',
@@ -1298,7 +1284,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         }
         .outline-row:hover .nav-row-open-focus:hover {
           opacity: 1 !important;
-          color: #2563eb !important;
+          color: var(--accent) !important;
         }
         .outline-row:focus-within .nav-row-open-focus {
           opacity: 0.5 !important;

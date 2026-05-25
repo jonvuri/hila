@@ -60,7 +60,6 @@ type FocusPanelProps = {
   onAppendFocus: (rowId: number, key: Uint8Array) => void
   onReplaceFocus: (rowId: number, key: Uint8Array) => void
   onClose: () => void
-  showBreadcrumb?: boolean
 }
 
 type RowData = Record<string, unknown> & {
@@ -205,7 +204,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
       style={{
         'font-size': '24px',
         'font-weight': 600,
-        color: '#111',
+        color: 'var(--text-primary)',
         'line-height': '1.3',
         'padding-bottom': '4px',
       }}
@@ -337,7 +336,7 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
       ref={(el) => mountEditor(el)}
       style={{
         'font-size': '15px',
-        color: '#333',
+        color: 'var(--text-dim)',
         'line-height': '1.6',
         'min-height': '100px',
       }}
@@ -438,244 +437,234 @@ const FocusPanel = (props: FocusPanelProps) => {
         'flex-direction': 'column',
         height: '100%',
         overflow: 'auto',
-        'border-left': '1px solid #e5e7eb',
         'min-width': '360px',
-        'background-color': '#fafafa',
+        'background-color': 'var(--card-focused-bg)',
       }}
     >
-      <Show when={props.showBreadcrumb !== false}>
-        <div
-          class="breadcrumb-bar"
-          data-testid="breadcrumb-bar"
-        >
-          <span class="breadcrumb-divider">/</span>
-          <Show when={rowData()}>
-            {(data) => (
-              <span
-                class="breadcrumb-current"
-                data-testid="breadcrumb-current"
-              >
-                {extractTextFromPmDoc(data().label) || 'Untitled'}
-              </span>
-            )}
-          </Show>
-        </div>
-      </Show>
       <div style={{ padding: '16px 24px', flex: 1, overflow: 'auto' }}>
-      <Show
-        when={rowData()}
-        fallback={<div style={{ padding: '16px', color: '#888' }}>Loading...</div>}
-      >
-        {(data) => (
-          <Show
-            when={!isChildMatrixRef()}
-            fallback={
-              <div data-testid="focus-child-matrix-ref" style={{ padding: '8px' }}>
-                <div style={{ color: '#888', 'font-size': '13px', 'margin-bottom': '8px' }}>
-                  Child matrix reference (row_kind=1). Table face would render here.
+        <Show
+          when={rowData()}
+          fallback={
+            <div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading...</div>
+          }
+        >
+          {(data) => (
+            <Show
+              when={!isChildMatrixRef()}
+              fallback={
+                <div data-testid="focus-child-matrix-ref" style={{ padding: '8px' }}>
+                  <div
+                    style={{
+                      color: 'var(--text-muted)',
+                      'font-size': '13px',
+                      'margin-bottom': '8px',
+                    }}
+                  >
+                    Child matrix reference (row_kind=1). Table face would render here.
+                  </div>
                 </div>
-              </div>
-            }
-          >
-            {/* Label section */}
-            <div
-              class="focus-panel-label"
-              data-testid="focus-panel-label"
-              style={{ 'margin-bottom': '12px' }}
+              }
             >
-              <FocusLabelEditor
-                rowId={props.rowId}
-                label={data().label ?? ''}
-                matrixId={props.matrixId}
-                onEscape={props.onClose}
-              />
-            </div>
-
-            {/* Content section */}
-            <div
-              class="focus-panel-content"
-              data-testid="focus-panel-content"
-              style={{
-                'margin-bottom': '16px',
-                'border-top': '1px solid #eee',
-                'padding-top': '12px',
-                position: 'relative',
-              }}
-            >
-              <Show
-                when={data().content}
-                fallback={
-                  <ContentPlaceholder
-                    rowId={props.rowId}
-                    matrixId={props.matrixId}
-                    onEscape={props.onClose}
-                  />
-                }
+              {/* Label section */}
+              <div
+                class="focus-panel-label"
+                data-testid="focus-panel-label"
+                style={{ 'margin-bottom': '12px' }}
               >
-                <FocusContentEditor
+                <FocusLabelEditor
                   rowId={props.rowId}
-                  content={data().content!}
+                  label={data().label ?? ''}
                   matrixId={props.matrixId}
                   onEscape={props.onClose}
                 />
-              </Show>
-            </div>
+              </div>
 
-            {/* Overflow columns section */}
-            <Show when={overflowColumns().length > 0}>
+              {/* Content section */}
               <div
-                class="focus-panel-overflow"
-                data-testid="focus-panel-overflow"
+                class="focus-panel-content"
+                data-testid="focus-panel-content"
                 style={{
                   'margin-bottom': '16px',
-                  'border-top': '1px solid #eee',
+                  'border-top': '1px solid hsl(230, 15%, 18%)',
                   'padding-top': '12px',
+                  position: 'relative',
+                }}
+              >
+                <Show
+                  when={data().content}
+                  fallback={
+                    <ContentPlaceholder
+                      rowId={props.rowId}
+                      matrixId={props.matrixId}
+                      onEscape={props.onClose}
+                    />
+                  }
+                >
+                  <FocusContentEditor
+                    rowId={props.rowId}
+                    content={data().content!}
+                    matrixId={props.matrixId}
+                    onEscape={props.onClose}
+                  />
+                </Show>
+              </div>
+
+              {/* Overflow columns section */}
+              <Show when={overflowColumns().length > 0}>
+                <div
+                  class="focus-panel-overflow"
+                  data-testid="focus-panel-overflow"
+                  style={{
+                    'margin-bottom': '16px',
+                    'border-top': '1px solid hsl(230, 15%, 18%)',
+                    'padding-top': '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      'font-size': '12px',
+                      'font-weight': 600,
+                      color: 'var(--text-muted)',
+                      'text-transform': 'uppercase',
+                      'letter-spacing': '0.5px',
+                      'margin-bottom': '8px',
+                    }}
+                  >
+                    Properties
+                  </div>
+                  <For each={overflowColumns()}>
+                    {(col) => (
+                      <FieldEditor
+                        column={col}
+                        value={overflowValues()[col.name] ?? ''}
+                        onSave={(value) => handleOverflowChange(col.name, value)}
+                      />
+                    )}
+                  </For>
+                </div>
+              </Show>
+
+              {/* Backlinks section */}
+              <Show when={backlinks().length > 0}>
+                <div
+                  class="focus-panel-backlinks"
+                  data-testid="focus-panel-backlinks"
+                  style={{
+                    'margin-bottom': '16px',
+                    'border-top': '1px solid hsl(230, 15%, 18%)',
+                    'padding-top': '12px',
+                  }}
+                >
+                  <button
+                    class="focus-backlinks-toggle"
+                    data-testid="focus-backlinks-toggle"
+                    onClick={() => setBacklinksOpen((o) => !o)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      'font-size': '13px',
+                      color: 'var(--text-dim)',
+                      padding: '4px 0',
+                      display: 'flex',
+                      'align-items': 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    {backlinksOpen() ? '▾' : '▸'} Backlinks ({backlinks().length})
+                  </button>
+                  <Show when={backlinksOpen()}>
+                    <div
+                      class="focus-backlinks-list"
+                      data-testid="focus-backlinks-list"
+                      style={{ 'padding-left': '8px', 'margin-top': '4px' }}
+                    >
+                      <For each={backlinks()}>
+                        {(bl) => (
+                          <button
+                            class="focus-backlink-item"
+                            style={{
+                              display: 'block',
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              'font-size': '13px',
+                              color: 'var(--accent)',
+                              padding: '2px 0',
+                              'text-align': 'left',
+                              width: '100%',
+                            }}
+                            onClick={() => props.onReplaceFocus(bl.id, new Uint8Array())}
+                          >
+                            <span style={{ color: 'var(--text-muted)', 'margin-right': '4px' }}>
+                              {bl.kind === 'own' ? '⊙' : '↗'}
+                            </span>
+                            {extractTextFromPmDoc(bl.label) || 'Untitled'}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
+
+              {/* Children section */}
+              <div
+                class="focus-panel-children"
+                data-testid="focus-panel-children"
+                style={{
+                  'border-top': '1px solid hsl(230, 15%, 18%)',
+                  'padding-top': '12px',
+                  flex: 1,
+                  'min-height': '120px',
                 }}
               >
                 <div
                   style={{
                     'font-size': '12px',
                     'font-weight': 600,
-                    color: '#888',
+                    color: 'var(--text-muted)',
                     'text-transform': 'uppercase',
                     'letter-spacing': '0.5px',
                     'margin-bottom': '8px',
                   }}
                 >
-                  Properties
+                  Children
                 </div>
-                <For each={overflowColumns()}>
-                  {(col) => (
-                    <FieldEditor
-                      column={col}
-                      value={overflowValues()[col.name] ?? ''}
-                      onSave={(value) => handleOverflowChange(col.name, value)}
-                    />
-                  )}
-                </For>
-              </div>
-            </Show>
-
-            {/* Backlinks section */}
-            <Show when={backlinks().length > 0}>
-              <div
-                class="focus-panel-backlinks"
-                data-testid="focus-panel-backlinks"
-                style={{
-                  'margin-bottom': '16px',
-                  'border-top': '1px solid #eee',
-                  'padding-top': '12px',
-                }}
-              >
-                <button
-                  class="focus-backlinks-toggle"
-                  data-testid="focus-backlinks-toggle"
-                  onClick={() => setBacklinksOpen((o) => !o)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    'font-size': '13px',
-                    color: '#666',
-                    padding: '4px 0',
-                    display: 'flex',
-                    'align-items': 'center',
-                    gap: '4px',
-                  }}
+                <Show
+                  when={hasChildren()}
+                  fallback={
+                    <div
+                      data-testid="focus-no-children"
+                      style={{
+                        color: 'var(--text-muted)',
+                        'font-size': '13px',
+                        'font-style': 'italic',
+                        padding: '8px 0',
+                      }}
+                    >
+                      No children. Press Enter in the outline to add items.
+                    </div>
+                  }
                 >
-                  {backlinksOpen() ? '▾' : '▸'} Backlinks ({backlinks().length})
-                </button>
-                <Show when={backlinksOpen()}>
-                  <div
-                    class="focus-backlinks-list"
-                    data-testid="focus-backlinks-list"
-                    style={{ 'padding-left': '8px', 'margin-top': '4px' }}
+                  <Suspense
+                    fallback={
+                      <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
+                        Loading children...
+                      </div>
+                    }
                   >
-                    <For each={backlinks()}>
-                      {(bl) => (
-                        <button
-                          class="focus-backlink-item"
-                          style={{
-                            display: 'block',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            'font-size': '13px',
-                            color: '#2563eb',
-                            padding: '2px 0',
-                            'text-align': 'left',
-                            width: '100%',
-                          }}
-                          onClick={() => props.onReplaceFocus(bl.id, new Uint8Array())}
-                        >
-                          <span style={{ color: '#999', 'margin-right': '4px' }}>
-                            {bl.kind === 'own' ? '⊙' : '↗'}
-                          </span>
-                          {extractTextFromPmDoc(bl.label) || 'Untitled'}
-                        </button>
-                      )}
-                    </For>
-                  </div>
+                    <NavigationPanel
+                      matrixId={props.matrixId}
+                      rootKey={props.rowKey}
+                      onOpenFocus={props.onAppendFocus}
+                    />
+                  </Suspense>
                 </Show>
               </div>
             </Show>
-
-            {/* Children section */}
-            <div
-              class="focus-panel-children"
-              data-testid="focus-panel-children"
-              style={{
-                'border-top': '1px solid #eee',
-                'padding-top': '12px',
-                flex: 1,
-                'min-height': '120px',
-              }}
-            >
-              <div
-                style={{
-                  'font-size': '12px',
-                  'font-weight': 600,
-                  color: '#888',
-                  'text-transform': 'uppercase',
-                  'letter-spacing': '0.5px',
-                  'margin-bottom': '8px',
-                }}
-              >
-                Children
-              </div>
-              <Show
-                when={hasChildren()}
-                fallback={
-                  <div
-                    data-testid="focus-no-children"
-                    style={{
-                      color: '#bbb',
-                      'font-size': '13px',
-                      'font-style': 'italic',
-                      padding: '8px 0',
-                    }}
-                  >
-                    No children. Press Enter in the outline to add items.
-                  </div>
-                }
-              >
-                <Suspense
-                  fallback={
-                    <div style={{ color: '#888', padding: '8px' }}>Loading children...</div>
-                  }
-                >
-                  <NavigationPanel
-                    matrixId={props.matrixId}
-                    rootKey={props.rowKey}
-                    onOpenFocus={props.onAppendFocus}
-                    showBreadcrumb={false}
-                  />
-                </Suspense>
-              </Show>
-            </div>
-          </Show>
-        )}
-      </Show>
+          )}
+        </Show>
       </div>
     </div>
   )
@@ -701,7 +690,7 @@ const ContentPlaceholder = (props: ContentPlaceholderProps) => {
         <div
           data-testid="focus-content-placeholder"
           style={{
-            color: '#bbb',
+            color: 'var(--text-muted)',
             'font-size': '15px',
             'font-style': 'italic',
             cursor: 'text',

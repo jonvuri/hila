@@ -190,7 +190,7 @@ test.describe('Stream view: panel management', () => {
     await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
 
     // Total columns = 2 (1 nav + 1 focus)
-    const totalBefore = await page.locator('.stream-nav-column, .stream-focus-column').count()
+    const totalBefore = await page.locator('[data-testid="stream-nav-column"], [data-testid="stream-focus-column"]').count()
     expect(totalBefore).toBe(2)
   })
 })

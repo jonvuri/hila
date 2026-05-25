@@ -1,3 +1,16 @@
+// ---------------------------------------------------------------------------
+// StreamView -- Overlaid cards layout
+//
+// Renders the workspace as a stack of overlapping cards:
+//   - Unfocused ancestor cards: visible only as left/top border strips with
+//     file-folder label tabs, fading into the void background
+//   - Focused cards: full content columns arranged left-to-right, each child
+//     card overlaying the remainder of its parent after the visible column
+//
+// The ancestry tab bar replaces per-panel breadcrumbs, providing full context
+// of the current location in the outline hierarchy.
+// ---------------------------------------------------------------------------
+
 import {
   createEffect,
   createMemo,
@@ -6,13 +19,17 @@ import {
   on,
   onCleanup,
   onMount,
+  Show,
   Suspense,
 } from 'solid-js'
 
 import { execQuery } from '../core/client/sql-client'
+import { useQuery } from '../sql/useQuery'
+import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import NavigationPanel from './NavigationPanel'
 import FocusPanel from './FocusPanel'
+import { buildBreadcrumbQuery } from './workspace-plugin'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,9 +45,68 @@ type StreamViewProps = {
   onNavigated?: () => void
 }
 
+type AncestorData = {
+  key: Uint8Array
+  row_id: number
+  label: string
+  depth: number
+}
+
 // ---------------------------------------------------------------------------
-// Constants
+// Helpers
 // ---------------------------------------------------------------------------
+
+const keyToHex = (key: Uint8Array): string =>
+  Array.from(key)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+
+// ---------------------------------------------------------------------------
+// Card position helpers
+//
+// Unfocused cards form a tight staircase of border strips; focused cards
+// each get a full content column width.
+// ---------------------------------------------------------------------------
+
+/** Compute border color for unfocused card at depth index `i` of `total` ancestors.
+ *  Shallowest (i=0) fades into void (darkest); deepest is most prominent (lightest). */
+const ancestorBorderColor = (i: number, total: number): string => {
+  const darkL = 18 // --card-border-dark-l
+  const lightL = 28 // --card-border-light-l
+  const ratio = total <= 1 ? 1 : i / (total - 1)
+  const l = darkL + ratio * (lightL - darkL)
+  return `hsl(225, 16%, ${l.toFixed(1)}%)`
+}
+
+/** Compute surface color for unfocused card at depth index `i`.
+ *  Progressively lighter from the void. */
+const ancestorSurfaceColor = (i: number): string => {
+  const baseL = 5 // --card-surface-base-l
+  const stepL = 1.5 // --card-surface-step-l
+  const l = baseL + i * stepL
+  return `hsl(230, 18%, ${l.toFixed(1)}%)`
+}
+
+/** Tab text color: more prominent (lighter) for deeper tabs. */
+const ancestorTextColor = (i: number, total: number): string => {
+  const ratio = total <= 1 ? 1 : i / (total - 1)
+  const l = 35 + ratio * 35
+  return `hsl(225, 10%, ${l.toFixed(0)}%)`
+}
+
+// ---------------------------------------------------------------------------
+// Layout constants (read from CSS custom properties at runtime would be ideal,
+// but for positioning math we use the same values as the tokens)
+// ---------------------------------------------------------------------------
+
+const ANCESTOR_LEFT_STEP = 4 // --card-ancestor-left-step
+const ANCESTOR_TOP_STEP = 2 // --card-ancestor-top-step
+const FOCUS_COL_WIDTH = 320 // --card-focus-col-width
+const FOCUS_TOP_STEP = 4 // --card-focus-top-step
+const TAB_HEIGHT = 18 // --card-tab-height
+const BORDER_WIDTH = 0.5 // --card-border-width
+const OUTER_PAD = 6 // --card-outer-pad
+const TAB_AREA = TAB_HEIGHT + 12 // --card-tab-area
 
 const MAX_COLUMNS = 4
 
@@ -48,16 +124,16 @@ const StreamView = (props: StreamViewProps) => {
     return next
   }
 
-  // Append a new focus panel after the panel at `fromIndex`, removing
-  // everything to the right of it first.
   const handleAppendAfter = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
     setPanels((prev) => {
-      const next: PanelState[] = [...prev.slice(0, fromIndex + 1), { type: 'focus', rowId, rowKey }]
+      const next: PanelState[] = [
+        ...prev.slice(0, fromIndex + 1),
+        { type: 'focus', rowId, rowKey },
+      ]
       return enforceColumnLimit(next)
     })
   }
 
-  // Replace the panel at `fromIndex` (and everything after) with a new focus panel.
   const handleReplaceAt = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
     setPanels((prev) => {
       const next: PanelState[] = [...prev.slice(0, fromIndex), { type: 'focus', rowId, rowKey }]
@@ -65,13 +141,10 @@ const StreamView = (props: StreamViewProps) => {
     })
   }
 
-  // Panel closing: remove the panel at `fromIndex` and everything after it.
   const handleClose = (fromIndex: number) => {
     setPanels((prev) => prev.slice(0, fromIndex))
   }
 
-  // Cmd+Left / Meta+Left closes the rightmost panel (navigates back).
-  // Uses capture phase to fire before ProseMirror editors.
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.metaKey && e.key === 'ArrowLeft' && panels().length > 1) {
       e.preventDefault()
@@ -90,7 +163,6 @@ const StreamView = (props: StreamViewProps) => {
     }
   }
 
-  // External navigation via prop (e.g. tag browser → workspace)
   createEffect(
     on(
       () => props.navigateToRowId,
@@ -123,8 +195,44 @@ const StreamView = (props: StreamViewProps) => {
     viewRef?.removeEventListener('inlineref-navigate', handleInlinerefNavigate)
   })
 
-  // Map from navigation-panel index → focused row ID (the rowId of the
-  // adjacent focus panel, if one exists).
+  // -----------------------------------------------------------------------
+  // Full ancestry query for the tab bar
+  //
+  // Fetches all ancestors of the leftmost panel's root key from the closure
+  // table, providing labels for the unfocused ancestor tabs.
+  // -----------------------------------------------------------------------
+
+  const leftmostRootHex = createMemo(() => {
+    const p = panels()
+    if (p.length === 0) return null
+    const first = p[0]!
+    if (first.type === 'navigation' && first.rootKey) {
+      return keyToHex(first.rootKey)
+    }
+    if (first.type === 'focus') {
+      return keyToHex(first.rowKey)
+    }
+    return null
+  })
+
+  const ancestryQuery = createMemo(() => {
+    const hex = leftmostRootHex()
+    if (!hex) return ''
+    return buildBreadcrumbQuery(props.matrixId, hex)
+  })
+
+  const { result: ancestryResult } = useQuery(() => ancestryQuery())
+
+  const ancestors = createMemo((): AncestorData[] => {
+    const data = ancestryResult()
+    if (!data) return []
+    return data as unknown as AncestorData[]
+  })
+
+  // -----------------------------------------------------------------------
+  // Panel → focused row mapping (for highlighting in nav panels)
+  // -----------------------------------------------------------------------
+
   const focusedRowForNav = createMemo(() => {
     const p = panels()
     const map = new Map<number, number>()
@@ -139,68 +247,169 @@ const StreamView = (props: StreamViewProps) => {
     return map
   })
 
+  // -----------------------------------------------------------------------
+  // Tab positioning: measure text widths and space tabs to avoid overlap
+  // -----------------------------------------------------------------------
+
+  let tabLayerRef: HTMLDivElement | undefined
+
+  const positionTabs = () => {
+    if (!tabLayerRef) return
+    const tabs = tabLayerRef.querySelectorAll<HTMLElement>('.card-tab')
+    let cursor = OUTER_PAD + 4
+    tabs.forEach((tab, i) => {
+      const cardLeft = OUTER_PAD + i * ANCESTOR_LEFT_STEP
+      const tabLeft = Math.max(cardLeft + 4, cursor)
+      tab.style.left = tabLeft + 'px'
+      cursor = tabLeft + tab.offsetWidth + 5
+    })
+  }
+
+  createEffect(() => {
+    // Re-position tabs whenever ancestors change
+    ancestors() // track dependency
+    requestAnimationFrame(positionTabs)
+  })
+
   return (
-    <div
-      ref={viewRef}
-      class="stream-view"
-      data-testid="stream-view"
-      style={{
-        display: 'flex',
-        flex: 1,
-        overflow: 'auto',
-        height: '100%',
-      }}
-    >
-      <Suspense fallback={<div style={{ padding: '16px', color: '#888' }}>Loading…</div>}>
+    <div ref={viewRef} class="card-viewport" data-testid="stream-view">
+      <Suspense
+        fallback={<div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading…</div>}
+      >
+        {/* -- Unfocused ancestor cards (border-only layers) -- */}
+        <For each={ancestors()}>
+          {(ancestor, i) => {
+            const uc = () => ancestors().length
+            return (
+              <div
+                class="card"
+                data-testid="card-ancestor"
+                style={{
+                  left: OUTER_PAD + i() * ANCESTOR_LEFT_STEP + 'px',
+                  top: TAB_AREA + i() * ANCESTOR_TOP_STEP + 'px',
+                  'z-index': i() + 1,
+                  background: ancestorSurfaceColor(i()),
+                  'border-left': `${BORDER_WIDTH}px solid ${ancestorBorderColor(i(), uc())}`,
+                  'border-top': `${BORDER_WIDTH}px solid ${ancestorBorderColor(i(), uc())}`,
+                }}
+              />
+            )
+          }}
+        </For>
+
+        {/* -- Focused cards (content panels) -- */}
         <For each={panels()}>
           {(panel, i) => {
+            const uc = () => ancestors().length
+            const fc = () => panels().length
+            const isLast = () => i() === fc() - 1
+
+            const cardLeft = () => OUTER_PAD + uc() * ANCESTOR_LEFT_STEP + i() * FOCUS_COL_WIDTH
+            const cardTop = () => TAB_AREA + uc() * ANCESTOR_TOP_STEP + i() * FOCUS_TOP_STEP
+
             if (panel.type === 'navigation') {
               return (
                 <div
-                  class="stream-nav-column"
+                  class="card"
                   data-testid="stream-nav-column"
                   style={{
-                    flex: 1,
-                    overflow: 'auto',
-                    'min-width': '300px',
+                    left: cardLeft() + 'px',
+                    top: cardTop() + 'px',
+                    'z-index': uc() + i() + 1,
+                    background: 'var(--card-focused-bg)',
+                    'border-left': `${BORDER_WIDTH}px solid var(--card-focused-border)`,
+                    'border-top': `${BORDER_WIDTH}px solid var(--card-focused-border)`,
                   }}
                 >
-                  <NavigationPanel
-                    matrixId={props.matrixId}
-                    rootKey={panel.rootKey}
-                    onOpenFocus={(rowId, key) =>
-                      handleAppendAfter(i(), rowId, new Uint8Array(key))
-                    }
-                    focusedRowId={focusedRowForNav().get(i())}
-                    showBreadcrumb={true}
-                  />
+                  <div
+                    class={`card-inner${isLast() ? ' card-inner-full' : ''}`}
+                    style={isLast() ? undefined : { width: FOCUS_COL_WIDTH + 'px' }}
+                  >
+                    <NavigationPanel
+                      matrixId={props.matrixId}
+                      rootKey={panel.rootKey}
+                      onOpenFocus={(rowId, key) =>
+                        handleAppendAfter(i(), rowId, new Uint8Array(key))
+                      }
+                      focusedRowId={focusedRowForNav().get(i())}
+                    />
+                  </div>
                 </div>
               )
             }
 
             return (
               <div
-                class="stream-focus-column"
+                class="card"
                 data-testid="stream-focus-column"
                 style={{
-                  flex: 1,
-                  overflow: 'auto',
-                  'min-width': '360px',
+                  left: cardLeft() + 'px',
+                  top: cardTop() + 'px',
+                  'z-index': uc() + i() + 1,
+                  background: 'var(--card-focused-bg)',
+                  'border-left': `${BORDER_WIDTH}px solid var(--card-focused-border)`,
+                  'border-top': `${BORDER_WIDTH}px solid var(--card-focused-border)`,
                 }}
               >
-                <FocusPanel
-                  matrixId={props.matrixId}
-                  rowId={panel.rowId}
-                  rowKey={panel.rowKey}
-                  onAppendFocus={(rowId, key) => handleAppendAfter(i(), rowId, new Uint8Array(key))}
-                  onReplaceFocus={(rowId, key) => handleReplaceAt(i(), rowId, new Uint8Array(key))}
-                  onClose={() => handleClose(i())}
-                  showBreadcrumb={true}
-                />
+                <div
+                  class={`card-inner${isLast() ? ' card-inner-full' : ''}`}
+                  style={isLast() ? undefined : { width: FOCUS_COL_WIDTH + 'px' }}
+                >
+                  <FocusPanel
+                    matrixId={props.matrixId}
+                    rowId={panel.rowId}
+                    rowKey={panel.rowKey}
+                    onAppendFocus={(rowId, key) =>
+                      handleAppendAfter(i(), rowId, new Uint8Array(key))
+                    }
+                    onReplaceFocus={(rowId, key) =>
+                      handleReplaceAt(i(), rowId, new Uint8Array(key))
+                    }
+                    onClose={() => handleClose(i())}
+                  />
+                </div>
               </div>
             )
           }}
         </For>
+
+        {/* -- Ancestor tab layer (above all cards) -- */}
+        <Show when={ancestors().length > 0}>
+          <div class="card-tab-layer" ref={tabLayerRef}>
+            <For each={ancestors()}>
+              {(ancestor, i) => {
+                const uc = () => ancestors().length
+                const cardTop = () => TAB_AREA + i() * ANCESTOR_TOP_STEP
+                const color = () => ancestorBorderColor(i(), uc())
+                const surf = () => ancestorSurfaceColor(i())
+                const tabPad = Math.round(TAB_HEIGHT * 0.4)
+                const tabRadius = Math.round(TAB_HEIGHT * 0.2)
+
+                return (
+                  <div
+                    class="card-tab"
+                    data-testid="card-tab"
+                    style={{
+                      '--bw': BORDER_WIDTH + 'px',
+                      top: cardTop() - TAB_HEIGHT + 'px',
+                      height: TAB_HEIGHT + 'px',
+                      padding: `0 ${tabPad}px`,
+                      'border-width': BORDER_WIDTH + 'px',
+                      'border-style': 'solid',
+                      'border-color': color(),
+                      'border-bottom-width': '0',
+                      'border-radius': `${tabRadius}px ${tabRadius}px 0 0`,
+                      background: surf(),
+                      color: ancestorTextColor(i(), uc()),
+                    }}
+                  >
+                    {extractTextFromPmDoc(ancestor.label) || 'Untitled'}
+                  </div>
+                )
+              }}
+            </For>
+          </div>
+        </Show>
       </Suspense>
     </div>
   )

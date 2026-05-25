@@ -2,6 +2,146 @@
   box-sizing: border-box;
 }
 
+/* ====================================================================
+   Overlaid cards design system
+   
+   Visual metaphor: workspace content is rendered as overlapping cards.
+   Unfocused ancestor cards show only left/top border strips and label
+   tabs; focused cards show full content in side-by-side columns. Cards
+   further from focus fade into the void background; cards closer to
+   focus are more visually prominent.
+   
+   All card parameters are exposed as custom properties for easy
+   iteration and future design-token integration.
+   ==================================================================== */
+
+:root {
+  /* -- Void: the deepest background layer, behind all cards -- */
+  --card-void: hsl(230, 20%, 7%);
+
+  /* -- Focused card surface and border -- */
+  --card-focused-bg: hsl(230, 18%, 13%);
+  --card-focused-border: hsl(225, 14%, 26%);
+
+  /* -- Unfocused card offset per ancestor level --
+     Controls how much of each ancestor's left/top border strip is visible */
+  --card-ancestor-left-step: 4px;
+  --card-ancestor-top-step: 2px;
+
+  /* -- Focused card column width --
+     Each focused card gets this much visible horizontal content space
+     before the next child card overlays the remainder */
+  --card-focus-col-width: 320px;
+
+  /* -- Focused card top offset per level -- */
+  --card-focus-top-step: 4px;
+
+  /* -- Card border width (thin, left and top sides only) -- */
+  --card-border-width: 0.5px;
+
+  /* -- Ancestor tab height -- */
+  --card-tab-height: 18px;
+
+  /* -- Border gradient (HSL lightness values) --
+     Shallowest ancestor border fades into the void (dark),
+     deepest ancestor border is most visually prominent (light) */
+  --card-border-dark-l: 18%;
+  --card-border-light-l: 28%;
+
+  /* -- Card surface gradient --
+     Unfocused card surfaces lighten progressively from the void.
+     Base is the lightness of the shallowest ancestor; each level adds step */
+  --card-surface-base-l: 5%;
+  --card-surface-step-l: 1.5%;
+
+  /* -- Text palette (dark mode) -- */
+  --text-primary: #d8d8e4;
+  --text-dim: #8888a0;
+  --text-muted: #5a5a70;
+
+  /* -- Accent color -- */
+  --accent: #7c8cf8;
+
+  /* -- Tab area: reserved vertical space above the first card for tabs -- */
+  --card-tab-area: calc(var(--card-tab-height) + 12px);
+
+  /* -- Outer padding: small margin so outermost card edges are visible -- */
+  --card-outer-pad: 6px;
+}
+
+/* -- Card viewport: the container for the entire card stack -- */
+.card-viewport {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  background: var(--card-void);
+}
+
+/* -- Card: a single layer in the stack --
+   Positioned absolutely within the viewport. Borders only on left and
+   top (right and bottom extend to infinity). z-index set inline. */
+.card {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  border-right: none;
+  border-bottom: none;
+}
+
+/* -- Card inner: content container within a focused card -- */
+.card-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* When this is the rightmost (deepest) focused card, fill all remaining width */
+.card-inner-full {
+  right: 0;
+}
+
+/* -- Tab layer: renders above all cards for correct z-ordering -- */
+.card-tab-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* -- Ancestor tab: file-folder tab extending up from an unfocused card's top border --
+   No bottom border; the tab and card surface form a contiguous opening.
+   The ::after pseudo-element covers the card's top border under the tab. */
+.card-tab {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+  border-bottom: none !important;
+  transition: filter 0.12s;
+}
+
+.card-tab::after {
+  content: '';
+  position: absolute;
+  bottom: calc(-1 * var(--bw));
+  left: 0;
+  right: 0;
+  height: var(--bw);
+  background: inherit;
+}
+
+.card-tab:hover {
+  filter: brightness(1.15);
+}
+
 html,
 body,
 #root {
@@ -11,6 +151,8 @@ body,
   overflow: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--card-void);
+  color: var(--text-primary);
 }
 
 /* ---- App shell ---- */
@@ -35,7 +177,7 @@ body,
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #888;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
@@ -44,10 +186,10 @@ body,
 .app-sidebar {
   width: 420px;
   height: 100%;
-  border-left: 1px solid #e0e0e0;
+  border-left: 1px solid hsl(230, 15%, 18%);
   display: flex;
   flex-direction: column;
-  background: #fafafa;
+  background: hsl(230, 18%, 10%);
   flex-shrink: 0;
 }
 
@@ -56,13 +198,13 @@ body,
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid hsl(230, 15%, 18%);
 }
 
 .sidebar-title {
   font-size: 13px;
   font-weight: 600;
-  color: #444;
+  color: var(--text-dim);
 }
 
 .sidebar-close {
@@ -70,20 +212,20 @@ body,
   border: none;
   font-size: 18px;
   cursor: pointer;
-  color: #888;
+  color: var(--text-muted);
   padding: 2px 6px;
   border-radius: 4px;
   line-height: 1;
 }
 
 .sidebar-close:hover {
-  background: #e8e8e8;
-  color: #333;
+  background: hsl(230, 15%, 18%);
+  color: var(--text-primary);
 }
 
 .sidebar-tabs {
   display: flex;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid hsl(230, 15%, 18%);
 }
 
 .sidebar-tab {
@@ -93,17 +235,17 @@ body,
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted);
   border-bottom: 2px solid transparent;
 }
 
 .sidebar-tab:hover {
-  color: #333;
-  background: #f0f0f0;
+  color: var(--text-dim);
+  background: hsl(230, 15%, 14%);
 }
 
 .sidebar-tab[data-active='true'] {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
   border-bottom-color: #2563eb;
 }
@@ -121,29 +263,29 @@ body,
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: 1px solid #ddd;
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid hsl(230, 15%, 20%);
+  background: hsla(230, 20%, 10%, 0.9);
   cursor: pointer;
   font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--text-muted);
   backdrop-filter: blur(4px);
 }
 
 .sidebar-toggle:hover {
-  background: #f0f0f0;
-  color: #333;
-  border-color: #ccc;
+  background: hsl(230, 15%, 18%);
+  color: var(--text-primary);
+  border-color: hsl(230, 15%, 25%);
 }
 
 /* ---- View switcher ---- */
 
 .view-switcher {
   display: flex;
-  border-bottom: 1px solid #e0e0e0;
-  background: #fafafa;
+  border-bottom: 1px solid hsl(230, 15%, 14%);
+  background: hsl(230, 20%, 5%);
   padding: 0 8px;
 }
 
@@ -153,17 +295,17 @@ body,
   background: transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #666;
+  color: var(--text-muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
 
 .view-tab:hover {
-  color: #333;
+  color: var(--text-dim);
 }
 
 .view-tab[data-active='true'] {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
   border-bottom-color: #2563eb;
 }
@@ -172,7 +314,7 @@ body,
 
 .view-as-btn {
   margin-left: auto;
-  color: #888;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -186,8 +328,8 @@ body,
   display: flex;
   justify-content: center;
   padding: 24px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e0e0;
+  background: hsl(230, 18%, 10%);
+  border-bottom: 1px solid hsl(230, 15%, 18%);
 }
 
 /* ---- Outline face ---- */
@@ -434,13 +576,13 @@ body,
 }
 
 .inlineref-ref {
-  color: #2563eb;
-  background: #eff6ff;
+  color: #93aeed;
+  background: hsla(225, 50%, 50%, 0.12);
   cursor: pointer;
 }
 
 .inlineref-ref:hover {
-  background: #dbeafe;
+  background: hsla(225, 50%, 50%, 0.2);
   text-decoration: underline;
 }
 
@@ -449,8 +591,8 @@ body,
   padding: 1px 8px;
   font-size: 0.9em;
   cursor: pointer;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: #a78bfa;
+  background: hsla(265, 50%, 50%, 0.12);
   transition:
     box-shadow 0.12s,
     background-color 0.12s;
@@ -461,14 +603,14 @@ body,
 }
 
 .inlineref-ghost {
-  color: #9ca3af;
-  background: #f3f4f6;
+  color: var(--text-muted);
+  background: hsla(230, 10%, 20%, 0.3);
   text-decoration: line-through;
   cursor: default;
 }
 
 .inlineref-ghost:hover {
-  background: #f3f4f6;
+  background: hsla(230, 10%, 20%, 0.3);
   text-decoration: line-through;
 }
 
@@ -479,14 +621,14 @@ body,
 }
 
 .inlineref-empty {
-  color: #9ca3af;
+  color: var(--text-muted);
   background: transparent;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed hsl(230, 15%, 25%);
   cursor: pointer;
 }
 
 .inlineref-empty:hover {
-  background: #f9fafb;
+  background: hsla(230, 15%, 20%, 0.3);
 }
 
 /* ---- Inline reference autocomplete dropdown ---- */
@@ -494,10 +636,10 @@ body,
 .inlineref-autocomplete {
   position: fixed;
   z-index: 1000;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: hsl(230, 18%, 12%);
+  border: 1px solid hsl(230, 15%, 22%);
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   max-height: 240px;
   overflow-y: auto;
   min-width: 200px;
@@ -508,7 +650,7 @@ body,
   padding: 6px 12px;
   font-size: 13px;
   cursor: pointer;
-  color: #333;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -516,14 +658,14 @@ body,
 
 .inlineref-autocomplete-item:hover,
 .inlineref-autocomplete-selected {
-  background: #f0f4ff;
-  color: #1d4ed8;
+  background: hsla(225, 50%, 50%, 0.12);
+  color: #93aeed;
 }
 
 .inlineref-autocomplete-create {
-  color: #6b7280;
+  color: var(--text-muted);
   font-style: italic;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid hsl(230, 15%, 18%);
 }
 
 /* ---- Backlinks panel ---- */
@@ -582,8 +724,8 @@ body,
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: hsl(230, 18%, 12%);
+  border: 1px solid hsl(230, 15%, 22%);
   border-radius: 8px;
   max-width: 560px;
   width: 100%;
@@ -599,7 +741,7 @@ body,
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #222;
+  color: var(--text-primary);
 }
 
 .face-config-close {
@@ -607,15 +749,15 @@ body,
   border: none;
   font-size: 20px;
   cursor: pointer;
-  color: #888;
+  color: var(--text-muted);
   padding: 2px 6px;
   border-radius: 4px;
   line-height: 1;
 }
 
 .face-config-close:hover {
-  background: #e8e8e8;
-  color: #333;
+  background: hsl(230, 15%, 18%);
+  color: var(--text-primary);
 }
 
 .face-config-section {
@@ -627,18 +769,18 @@ body,
 .face-config-label {
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
 
 .face-config-select {
   padding: 6px 10px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid hsl(230, 15%, 22%);
   border-radius: 6px;
   font-size: 13px;
-  background: #fff;
-  color: #333;
+  background: hsl(230, 18%, 10%);
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -657,8 +799,8 @@ body,
 .face-config-badge {
   display: inline-block;
   font-size: 11px;
-  color: #555;
-  background: #f0f0f0;
+  color: var(--text-dim);
+  background: hsl(230, 15%, 16%);
   padding: 2px 8px;
   border-radius: 10px;
 }
@@ -666,7 +808,7 @@ body,
 .face-config-bindings {
   display: flex;
   flex-direction: column;
-  border: 1px solid #e8e8e8;
+  border: 1px solid hsl(230, 15%, 20%);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -676,10 +818,10 @@ body,
   grid-template-columns: 1fr 1fr 1.5fr 60px;
   gap: 8px;
   padding: 6px 10px;
-  background: #f5f5f5;
+  background: hsl(230, 15%, 12%);
   font-size: 11px;
   font-weight: 600;
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
@@ -690,13 +832,13 @@ body,
   gap: 8px;
   align-items: center;
   padding: 6px 10px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid hsl(230, 15%, 16%);
   font-size: 13px;
 }
 
 .face-config-slot-name {
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .face-config-required {
@@ -705,16 +847,16 @@ body,
 }
 
 .face-config-slot-type {
-  color: #888;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .face-config-binding-select {
   padding: 4px 6px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid hsl(230, 15%, 22%);
   border-radius: 4px;
   font-size: 12px;
-  background: #fff;
+  background: hsl(230, 18%, 10%);
   cursor: pointer;
   min-width: 0;
 }
@@ -726,7 +868,7 @@ body,
 
 .face-config-resolution {
   font-size: 10px;
-  color: #aaa;
+  color: var(--text-muted);
   text-align: center;
 }
 
@@ -741,23 +883,23 @@ body,
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #555;
-  background: #fafafa;
-  border: 1px solid #e8e8e8;
+  color: var(--text-dim);
+  background: hsl(230, 15%, 12%);
+  border: 1px solid hsl(230, 15%, 20%);
   padding: 3px 8px;
   border-radius: 4px;
 }
 
 .face-config-overflow-type {
   font-size: 10px;
-  color: #aaa;
+  color: var(--text-muted);
 }
 
 .face-config-error {
   font-size: 13px;
-  color: #dc3545;
-  background: #fdf2f2;
-  border: 1px solid #f5c6cb;
+  color: #f87171;
+  background: hsla(0, 60%, 30%, 0.2);
+  border: 1px solid hsla(0, 50%, 40%, 0.3);
   border-radius: 4px;
   padding: 8px 12px;
 }
@@ -783,13 +925,13 @@ body,
 }
 
 .face-config-btn-cancel {
-  background: #fff;
-  border-color: #d0d0d0;
-  color: #555;
+  background: hsl(230, 18%, 12%);
+  border-color: hsl(230, 15%, 25%);
+  color: var(--text-dim);
 }
 
 .face-config-btn-cancel:hover:not(:disabled) {
-  background: #f5f5f5;
+  background: hsl(230, 15%, 16%);
 }
 
 .face-config-btn-apply {
@@ -1699,15 +1841,15 @@ body,
   gap: 4px;
   padding: 0 12px;
   font-size: 13px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid hsl(230, 15%, 16%);
   flex-shrink: 0;
   overflow: hidden;
   white-space: nowrap;
 }
 
 .breadcrumb-root-tag {
-  color: #aaa;
-  border: 1px solid #ccc;
+  color: var(--text-muted);
+  border: 1px solid hsl(230, 15%, 25%);
   border-radius: 4px;
   padding: 1px 8px;
   font-size: 12px;
@@ -1716,28 +1858,28 @@ body,
 }
 
 .breadcrumb-root-tag:hover {
-  color: #888;
-  border-color: #aaa;
+  color: var(--text-dim);
+  border-color: hsl(230, 15%, 30%);
 }
 
 .breadcrumb-divider {
-  color: #ccc;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .breadcrumb-ancestor {
-  color: #666;
+  color: var(--text-dim);
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .breadcrumb-ancestor:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .breadcrumb-current {
-  color: #333;
+  color: var(--text-primary);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;

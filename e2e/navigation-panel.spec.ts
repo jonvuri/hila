@@ -262,15 +262,15 @@ test.describe('Navigation panel', () => {
     await expect(page.getByTestId('focus-title')).toBeVisible()
   })
 
-  test('Focus panel shows row label in breadcrumb header', async ({ page }) => {
+  test('Focus panel shows row label in header', async ({ page }) => {
     const firstRow = page.locator('.outline-row').first()
     const focusBtn = firstRow.locator('.nav-row-open-focus')
     await firstRow.hover()
     await focusBtn.click()
 
-    const focusBreadcrumb = page.getByTestId('stream-focus-column').getByTestId('breadcrumb-bar')
-    await expect(focusBreadcrumb).toBeVisible({ timeout: 5000 })
-    await expect(focusBreadcrumb.getByTestId('breadcrumb-current')).toContainText('Welcome to Hila')
+    const focusLabel = page.getByTestId('focus-label-editor')
+    await expect(focusLabel).toBeVisible({ timeout: 5000 })
+    await expect(focusLabel).toContainText('Welcome to Hila')
   })
 
   test('content preview displays below label, clamped to 2 lines', async ({ page }) => {
