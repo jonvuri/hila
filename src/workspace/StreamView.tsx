@@ -67,6 +67,11 @@ type LayoutAncestor = {
   zIndex: number
   colorIndex: number
   isRunStart: boolean
+  // Panel index this ancestor's gap precedes; clicking truncates the stack to
+  // here and focuses the ancestor. rowId/rowKey are null for the title tab.
+  panelIndex: number
+  rowId: number | null
+  rowKey: Uint8Array | null
 }
 
 type LayoutPanel = {
@@ -162,6 +167,17 @@ const StreamView = (props: StreamViewProps) => {
 
   const handleClose = (fromIndex: number) => {
     setPanels((prev) => prev.slice(0, fromIndex))
+  }
+
+  // Clicking an ancestor tab focuses that ancestor: truncate the stack to the
+  // panel the gap precedes and open a focus panel for the ancestor, mirroring
+  // the right-arrow focus button. The title tab returns to the root nav panel.
+  const handleAncestorClick = (card: LayoutAncestor) => {
+    if (card.rowId == null || card.rowKey == null) {
+      setPanels([{ type: 'navigation' }])
+      return
+    }
+    handleReplaceAt(card.panelIndex, card.rowId, new Uint8Array(card.rowKey))
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -292,12 +308,19 @@ const StreamView = (props: StreamViewProps) => {
         gap = idx >= 0 ? chain.slice(idx + 1) : chain
       }
 
-      const entries: { key: string; label: string }[] = gap.map((a) => ({
+      const entries: {
+        key: string
+        label: string
+        rowId: number | null
+        rowKey: Uint8Array | null
+      }[] = gap.map((a) => ({
         key: `anc-${a.row_id}`,
         label: extractTextFromPmDoc(a.label) || 'Untitled',
+        rowId: a.row_id,
+        rowKey: a.key,
       }))
       if (i === 0 && entries.length > 0) {
-        entries.unshift({ key: 'anc-title', label: title })
+        entries.unshift({ key: 'anc-title', label: title, rowId: null, rowKey: null })
       }
 
       for (let g = 0; g < entries.length; g++) {
@@ -310,6 +333,9 @@ const StreamView = (props: StreamViewProps) => {
           zIndex: ++z,
           colorIndex: ancIdx,
           isRunStart: g === 0,
+          panelIndex: i,
+          rowId: entries[g]!.rowId,
+          rowKey: entries[g]!.rowKey,
         })
         left += ANCESTOR_LEFT_STEP
         top += ANCESTOR_TOP_STEP
@@ -505,11 +531,13 @@ const StreamView = (props: StreamViewProps) => {
                 const tabRadius = Math.round(TAB_HEIGHT * 0.2)
 
                 return (
-                  <div
+                  <button
+                    type="button"
                     class="card-tab"
                     data-testid="card-tab"
                     data-card-left={card.left}
                     data-run-start={card.isRunStart}
+                    onClick={() => handleAncestorClick(card)}
                     style={{
                       '--bw': BORDER_WIDTH + 'px',
                       top: card.top - TAB_HEIGHT + 'px',
@@ -525,7 +553,7 @@ const StreamView = (props: StreamViewProps) => {
                     }}
                   >
                     {card.label}
-                  </div>
+                  </button>
                 )
               }}
             </For>

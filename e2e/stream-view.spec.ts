@@ -22,6 +22,14 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
+const closeSidebar = async (page: Page) => {
+  const sidebar = page.locator('.app-sidebar')
+  if (await sidebar.isVisible()) {
+    await page.getByRole('button', { name: 'Close sidebar' }).click()
+    await expect(sidebar).toBeHidden({ timeout: 3000 })
+  }
+}
+
 const waitForRows = async (page: Page, minCount = 1) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
   await expect(async () => {
@@ -42,6 +50,61 @@ const openFocusPanelOnRow = async (page: Page, rowIndex: number) => {
   }).toPass({ timeout: 3000 })
   await focusBtn.click()
   await expect(page.getByTestId('focus-panel')).toBeVisible({ timeout: 5000 })
+}
+
+const rowEditorAt = (page: Page, i: number) =>
+  page.locator('.outline-row').nth(i).locator('.nav-label-editor .ProseMirror')
+
+// Build a single linear ancestry chain `names[0] > names[1] > ...` in the root
+// navigation panel. Rows are first created flat (deterministic count), then
+// renamed (select-all + retype, split-immune), then indented purely via Tab so
+// each row i ends up at depth i. Mirrors the robust patterns used elsewhere in
+// this spec to avoid caret/focus races.
+const buildLinearChain = async (page: Page, names: string[]) => {
+  for (let i = 1; i < names.length; i++) {
+    await rowEditorAt(page, i - 1).click()
+    await page.keyboard.press('Enter')
+    await expect(async () => {
+      expect(await page.locator('.outline-row').count()).toBeGreaterThanOrEqual(i + 1)
+    }).toPass({ timeout: 5000 })
+  }
+
+  for (let i = 0; i < names.length; i++) {
+    await rowEditorAt(page, i).click()
+    await rowEditorAt(page, i).press('ControlOrMeta+a')
+    await page.keyboard.type(names[i]!)
+    await expect(async () => {
+      expect((await rowEditorAt(page, i).textContent())?.trim()).toBe(names[i])
+    }).toPass({ timeout: 5000 })
+  }
+
+  for (let i = 1; i < names.length; i++) {
+    await rowEditorAt(page, i).click()
+    for (let d = 1; d <= i; d++) {
+      await rowEditorAt(page, i).press('Tab')
+      await expect(async () => {
+        expect(await page.locator('.outline-row').nth(i).getAttribute('data-depth')).toBe(
+          String(d),
+        )
+      }).toPass({ timeout: 5000 })
+    }
+  }
+}
+
+// From the deepest (rightmost) focus panel, open a focus on the named child via
+// its right-arrow button -- the same path the live nav rows use.
+const drillIntoChild = async (page: Page, childText: string) => {
+  const children = page.getByTestId('stream-focus-column').last().getByTestId('focus-panel-children')
+  await expect(children).toBeVisible({ timeout: 5000 })
+  const childRow = children.locator('.outline-row').filter({ hasText: childText }).first()
+  await expect(childRow).toBeVisible({ timeout: 5000 })
+  const btn = childRow.locator('.nav-row-open-focus')
+  await childRow.hover()
+  await expect(async () => {
+    const opacity = await btn.evaluate((el) => window.getComputedStyle(el).opacity)
+    expect(Number(opacity)).toBeGreaterThan(0)
+  }).toPass({ timeout: 3000 })
+  await btn.click()
 }
 
 // ---------------------------------------------------------------------------
@@ -286,5 +349,71 @@ test.describe('Stream view: panel management', () => {
     // Total columns = 2 (1 nav + 1 focus)
     const totalBefore = await page.locator('[data-testid="stream-nav-column"], [data-testid="stream-focus-column"]').count()
     expect(totalBefore).toBe(2)
+  })
+})
+
+test.describe('Stream view: clickable ancestor tabs', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForRows(page, 1)
+    // The dev-tools sidebar overlaps the far-right/deep focus columns these
+    // tests exercise; close it so card-tab and row interactions aren't blocked.
+    await closeSidebar(page)
+  })
+
+  test('clicking an ancestor tab focuses that ancestor and replaces deeper panels', async ({ page }) => {
+    // Chain Alpha > Bravo > Charlie (distinct, non-substring names so tab/label
+    // filters are unambiguous).
+    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie'])
+
+    // Focus Alpha, then drill straight to Charlie (skipping Bravo) so Bravo is
+    // rendered as a gap ancestor tab between the two focus panels.
+    await openFocusPanelOnRow(page, 0)
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await drillIntoChild(page, 'Charlie')
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+
+    const bravoTab = page.getByTestId('card-tab').filter({ hasText: 'Bravo' })
+    await expect(bravoTab).toBeVisible({ timeout: 5000 })
+
+    // Click the Bravo tab -> Bravo becomes the rightmost focused card and the
+    // deeper Charlie panel is replaced.
+    await bravoTab.click()
+
+    await expect(async () => {
+      const text = await page.getByTestId('focus-label-editor').last().textContent()
+      expect(text).toContain('Bravo')
+    }).toPass({ timeout: 5000 })
+
+    // Still two focus columns (Alpha, Bravo); no gap ancestor cards remain.
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    await expect(page.getByTestId('card-ancestor')).toHaveCount(0)
+  })
+
+  test('clicking the workspace-title tab returns to the root navigation panel', async ({ page }) => {
+    // A 5-deep chain so that drilling down past MAX_COLUMNS shifts both the nav
+    // panel and the top-level focus panel off the front. The resulting leftmost
+    // panel (Bravo) has a hidden ancestor (Alpha), which is what makes the
+    // workspace-title tab appear.
+    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
+
+    await openFocusPanelOnRow(page, 0) // focus Alpha
+    await drillIntoChild(page, 'Bravo')
+    await drillIntoChild(page, 'Charlie')
+    await drillIntoChild(page, 'Delta')
+    await drillIntoChild(page, 'Echo')
+
+    // Nav panel has been shifted off; the workspace-title tab is now present.
+    await expect(page.getByTestId('stream-nav-column')).toHaveCount(0)
+    const titleTab = page.getByTestId('card-tab').filter({ hasText: 'Workspace' })
+    await expect(titleTab).toBeVisible({ timeout: 5000 })
+
+    // Clicking it returns to the root navigation panel.
+    await titleTab.click()
+
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(0)
+    await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
+    await expect(page.getByTestId('navigation-panel')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('workspace-title-editor')).toBeVisible({ timeout: 5000 })
   })
 })

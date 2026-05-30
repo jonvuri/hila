@@ -17,12 +17,12 @@ Relevant existing code: [src/workspace/StreamView.tsx](../src/workspace/StreamVi
 
 Make the ancestor tabs (`data-testid="card-tab"`) navigate focus, mirroring the right-arrow focus button in navigation rows.
 
-- [ ] **Decide the navigation semantics** (settle in-session). A tab represents an ancestor row at a known depth in the visible ancestry chain. Clicking it should bring that row into focus while preserving the single-line ancestry constraint (see [Phase 7 - Ancestry constraint](Phase-7.md)). Recommended: truncate the panel stack to the point at/above that ancestor and open a focus panel for the ancestor row (analogous to `handleReplaceAt` / `handleAppendAfter` in `StreamView.tsx`), so the clicked ancestor becomes the rightmost focused card. The workspace-title tab navigates to the root navigation panel.
-- [ ] **Thread row identity through the layout.** The tab layout entries currently carry only a label; carry the ancestor's `row_id` (already available from the ancestry query) so a click handler can act on it.
-- [ ] **Wire the click handler** in `StreamView.tsx`. Reuse the existing focus-open path so behavior matches the right-arrow button (same panel-stack mutation, same `MAX_COLUMNS` enforcement).
-- [ ] **Affordance + a11y.** Tabs should read as buttons (cursor, hover state already exists), be keyboard-activatable, and have an accessible label. Keep the existing `card-tab` test id.
-- [ ] Tests (Playwright): clicking an ancestor tab focuses that ancestor row (a focus panel for it appears; deeper panels are replaced). Clicking the workspace-title tab returns to the root navigation panel.
-- [ ] Run `npm run format && npm run lint && npm run typecheck && npm run test:run`, then `pnpm test:e2e`.
+- [x] **Decide the navigation semantics** (settle in-session). A tab represents an ancestor row at a known depth in the visible ancestry chain. Clicking it should bring that row into focus while preserving the single-line ancestry constraint (see [Phase 7 - Ancestry constraint](Phase-7.md)). Recommended: truncate the panel stack to the point at/above that ancestor and open a focus panel for the ancestor row (analogous to `handleReplaceAt` / `handleAppendAfter` in `StreamView.tsx`), so the clicked ancestor becomes the rightmost focused card. The workspace-title tab navigates to the root navigation panel.
+- [x] **Thread row identity through the layout.** The tab layout entries currently carry only a label; carry the ancestor's `row_id` (already available from the ancestry query) so a click handler can act on it.
+- [x] **Wire the click handler** in `StreamView.tsx`. Reuse the existing focus-open path so behavior matches the right-arrow button (same panel-stack mutation, same `MAX_COLUMNS` enforcement).
+- [x] **Affordance + a11y.** Tabs should read as buttons (cursor, hover state already exists), be keyboard-activatable, and have an accessible label. Keep the existing `card-tab` test id.
+- [x] Tests (Playwright): clicking an ancestor tab focuses that ancestor row (a focus panel for it appears; deeper panels are replaced). Clicking the workspace-title tab returns to the root navigation panel.
+- [x] Run `npm run format && npm run lint && npm run typecheck && npm run test:run`, then `pnpm test:e2e`.
 
 ## 2. Slim navigation panel header
 
