@@ -8,7 +8,13 @@ import 'prosemirror-view/style/prosemirror.css'
 import { debugFlags, logPmMount, logPmUnmount, logPmContentSync } from '../debug/debugState'
 import MutationLogOverlay from '../debug/MutationLogOverlay'
 import PageBoundaryOverlay from '../debug/PageBoundaryOverlay'
-import { insertRow, deleteRow, reparentRow, updateRow } from '../core/client/matrix-client'
+import {
+  insertRow,
+  deleteRow,
+  reparentRow,
+  updateRow,
+  renameMatrix,
+} from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
 import {
   OutlineRow as DesignOutlineRow,
@@ -32,7 +38,7 @@ import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
-import { buildBreadcrumbQuery } from './workspace-plugin'
+import { buildBreadcrumbQuery, buildMatrixTitleQuery } from './workspace-plugin'
 import {
   usePagedWorkspaceData,
   ROWS_PER_WINDOW,
@@ -513,6 +519,16 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   })
 
   const focusRootRow = () => pageData.focusRootRow()
+
+  // Matrix title query (for the root-level editable workspace name)
+  const isRootPanel = !props.rootKey // eslint-disable-line solid/reactivity -- stable for component lifetime
+  const matrixTitleQuery = createMemo(() =>
+    isRootPanel ? buildMatrixTitleQuery(props.matrixId) : '',
+  )
+  const { result: matrixTitleResult } = useQuery(() => matrixTitleQuery())
+  const matrixTitle = createMemo(
+    () => (matrixTitleResult()?.[0] as { title: string } | undefined)?.title ?? '',
+  )
 
   const focusDepthOffset = createMemo(() => {
     const rootRow = focusRootRow()
@@ -1153,51 +1169,89 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           Query error: {error()?.message}
         </div>
       </Show>
-      <div class="breadcrumb-bar" data-testid="breadcrumb-bar">
-        <Show
-          when={focusRoot()}
-          fallback={
-            <span class="breadcrumb-root-tag" data-testid="breadcrumb-root" onClick={goHome}>
-              root
-            </span>
-          }
-        >
-          <span class="breadcrumb-divider">/</span>
-          <For each={breadcrumbs()}>
-            {(crumb) => (
-              <>
+      <Show
+        when={!focusRoot() && isRootPanel}
+        fallback={
+          <>
+            <div class="breadcrumb-bar" data-testid="breadcrumb-bar">
+              <Show when={isRootPanel}>
                 <span
-                  class="breadcrumb-ancestor"
-                  onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
-                  data-testid="breadcrumb-ancestor"
+                  class="breadcrumb-root-tag"
+                  data-testid="breadcrumb-root"
+                  onClick={goHome}
                 >
-                  {extractTextFromPmDoc(crumb.label)}
+                  {matrixTitle() || 'Workspace'}
                 </span>
-                <span class="breadcrumb-divider">/</span>
-              </>
-            )}
-          </For>
-          <Show when={focusRootRow()}>
-            {(rootRow) => (
-              <span class="breadcrumb-current" data-testid="breadcrumb-current">
-                {extractTextFromPmDoc(rootRow().label)}
-              </span>
-            )}
-          </Show>
-        </Show>
-      </div>
-      <Show when={focusRoot()}>
+              </Show>
+              <span class="breadcrumb-divider">/</span>
+              <For each={breadcrumbs()}>
+                {(crumb) => (
+                  <>
+                    <span
+                      class="breadcrumb-ancestor"
+                      onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
+                      data-testid="breadcrumb-ancestor"
+                    >
+                      {extractTextFromPmDoc(crumb.label)}
+                    </span>
+                    <span class="breadcrumb-divider">/</span>
+                  </>
+                )}
+              </For>
+              <Show when={focusRootRow()}>
+                {(rootRow) => (
+                  <span class="breadcrumb-current" data-testid="breadcrumb-current">
+                    {extractTextFromPmDoc(rootRow().label)}
+                  </span>
+                )}
+              </Show>
+            </div>
+            <Show when={focusRoot()}>
+              <div
+                class="outline-focus-title"
+                style={{
+                  padding: '8px 12px 4px',
+                  'font-size': '18px',
+                  'font-weight': 600,
+                  color: 'var(--text-primary)',
+                }}
+                data-testid="focus-title"
+              >
+                {focusRootRow() ? extractTextFromPmDoc(focusRootRow()!.label) : ''}
+              </div>
+            </Show>
+          </>
+        }
+      >
         <div
-          class="outline-focus-title"
-          style={{
-            padding: '8px 12px 4px',
-            'font-size': '18px',
-            'font-weight': 600,
-            color: 'var(--text-primary)',
-          }}
-          data-testid="focus-title"
+          class="workspace-title-header"
+          style={{ padding: '8px 12px 4px' }}
+          data-testid="workspace-title"
         >
-          {focusRootRow() ? extractTextFromPmDoc(focusRootRow()!.label) : ''}
+          <span
+            class="label-heading workspace-title-editor"
+            contentEditable={true}
+            data-testid="workspace-title-editor"
+            onBlur={(e) => {
+              const newTitle = (e.currentTarget as HTMLSpanElement).textContent?.trim() ?? ''
+              if (newTitle && newTitle !== matrixTitle()) {
+                void renameMatrix(props.matrixId, newTitle)
+              } else if (!newTitle) {
+                ;(e.currentTarget as HTMLSpanElement).textContent = matrixTitle() || 'Workspace'
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                ;(e.currentTarget as HTMLSpanElement).blur()
+              } else if (e.key === 'Escape') {
+                ;(e.currentTarget as HTMLSpanElement).textContent = matrixTitle() || 'Workspace'
+                ;(e.currentTarget as HTMLSpanElement).blur()
+              }
+            }}
+          >
+            {matrixTitle() || 'Workspace'}
+          </span>
         </div>
       </Show>
       <Show

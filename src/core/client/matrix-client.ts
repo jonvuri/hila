@@ -28,6 +28,9 @@ export const workerCall = <K extends MatrixOperationType>(
 
 export const createMatrix = (title: string) => workerCall('createMatrix', { title })
 
+export const renameMatrix = (matrixId: number, title: string): Promise<void> =>
+  workerCall('renameMatrix', { matrixId, title })
+
 export const addSampleRows = (matrixId: number) => workerCall('addSampleRows', { matrixId })
 
 export const resetDatabase = () => workerCall('resetDatabase', {})

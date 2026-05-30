@@ -27,6 +27,7 @@ import {
   renameColumn,
   reorderColumns,
   updateColumnRole,
+  renameMatrix,
   getOrCreateDeviceId,
   resetDeviceIdCache,
   ConstraintViolationError,
@@ -250,6 +251,52 @@ describe('Matrix Operations', () => {
     const hierarchicalCount = (closureStmt.get({}) as { count: number }).count
     expect(hierarchicalCount).toBeGreaterThan(0) // Should have some parent-child relationships
     closureStmt.finalize()
+  })
+})
+
+describe('renameMatrix', () => {
+  let db: Database
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+  })
+
+  test('updates the matrix title', () => {
+    const matrixId = createMatrix(db, 'Original Title')
+    renameMatrix(db, matrixId, 'New Title')
+
+    const stmt = db.prepare('SELECT title FROM matrix WHERE id = ?')
+    stmt.bind([matrixId])
+    expect(stmt.step()).toBe(true)
+    expect((stmt.get({}) as { title: string }).title).toBe('New Title')
+    stmt.finalize()
+  })
+
+  test('title is queryable after rename', () => {
+    const matrixId = createMatrix(db, 'Before')
+    renameMatrix(db, matrixId, 'After')
+
+    const stmt = db.prepare('SELECT title FROM matrix WHERE id = ?')
+    stmt.bind([matrixId])
+    stmt.step()
+    const row = stmt.get({}) as { title: string }
+    stmt.finalize()
+    expect(row.title).toBe('After')
+  })
+
+  test('does not affect other matrixes', () => {
+    const id1 = createMatrix(db, 'Matrix A')
+    const id2 = createMatrix(db, 'Matrix B')
+    renameMatrix(db, id1, 'Renamed A')
+
+    const stmt = db.prepare('SELECT title FROM matrix WHERE id = ?')
+    stmt.bind([id2])
+    stmt.step()
+    const row = stmt.get({}) as { title: string }
+    stmt.finalize()
+    expect(row.title).toBe('Matrix B')
   })
 })
 

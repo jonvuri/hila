@@ -29,7 +29,7 @@ import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import NavigationPanel from './NavigationPanel'
 import FocusPanel from './FocusPanel'
-import { buildBreadcrumbQuery } from './workspace-plugin'
+import { buildBreadcrumbQuery, buildMatrixTitleQuery } from './workspace-plugin'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -229,6 +229,23 @@ const StreamView = (props: StreamViewProps) => {
     return data as unknown as AncestorData[]
   })
 
+  // Matrix title query (for root ancestor tab and UI)
+  const matrixTitleQuery = createMemo(() => buildMatrixTitleQuery(props.matrixId))
+  const { result: matrixTitleResult } = useQuery(() => matrixTitleQuery())
+  const matrixTitle = createMemo(
+    () => (matrixTitleResult()?.[0] as { title: string } | undefined)?.title ?? '',
+  )
+
+  // Combined tab entries: workspace title (when ancestors exist) + row ancestors.
+  // Each entry is a label string. This drives both the unfocused card layers and
+  // the tab labels, keeping the positioning math consistent.
+  const tabLabels = createMemo((): string[] => {
+    const rowAncestors = ancestors()
+    if (rowAncestors.length === 0) return []
+    const title = matrixTitle() || 'Workspace'
+    return [title, ...rowAncestors.map((a) => extractTextFromPmDoc(a.label) || 'Untitled')]
+  })
+
   // -----------------------------------------------------------------------
   // Panel → focused row mapping (for highlighting in nav panels)
   // -----------------------------------------------------------------------
@@ -266,8 +283,8 @@ const StreamView = (props: StreamViewProps) => {
   }
 
   createEffect(() => {
-    // Re-position tabs whenever ancestors change
-    ancestors() // track dependency
+    // Re-position tabs whenever tab labels change
+    tabLabels() // track dependency
     requestAnimationFrame(positionTabs)
   })
 
@@ -277,9 +294,9 @@ const StreamView = (props: StreamViewProps) => {
         fallback={<div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading…</div>}
       >
         {/* -- Unfocused ancestor cards (border-only layers) -- */}
-        <For each={ancestors()}>
-          {(ancestor, i) => {
-            const uc = () => ancestors().length
+        <For each={tabLabels()}>
+          {(_label, i) => {
+            const uc = () => tabLabels().length
             return (
               <div
                 class="card"
@@ -300,7 +317,7 @@ const StreamView = (props: StreamViewProps) => {
         {/* -- Focused cards (content panels) -- */}
         <For each={panels()}>
           {(panel, i) => {
-            const uc = () => ancestors().length
+            const uc = () => tabLabels().length
             const fc = () => panels().length
             const isLast = () => i() === fc() - 1
 
@@ -374,11 +391,11 @@ const StreamView = (props: StreamViewProps) => {
         </For>
 
         {/* -- Ancestor tab layer (above all cards) -- */}
-        <Show when={ancestors().length > 0}>
+        <Show when={tabLabels().length > 0}>
           <div class="card-tab-layer" ref={tabLayerRef}>
-            <For each={ancestors()}>
-              {(ancestor, i) => {
-                const uc = () => ancestors().length
+            <For each={tabLabels()}>
+              {(label, i) => {
+                const uc = () => tabLabels().length
                 const cardTop = () => TAB_AREA + i() * ANCESTOR_TOP_STEP
                 const color = () => ancestorBorderColor(i(), uc())
                 const surf = () => ancestorSurfaceColor(i())
@@ -403,7 +420,7 @@ const StreamView = (props: StreamViewProps) => {
                       color: ancestorTextColor(i(), uc()),
                     }}
                   >
-                    {extractTextFromPmDoc(ancestor.label) || 'Untitled'}
+                    {label}
                   </div>
                 )
               }}

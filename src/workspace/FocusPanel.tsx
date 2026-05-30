@@ -198,16 +198,9 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
 
   return (
     <div
-      class="focus-label-editor"
+      class="focus-label-editor label-heading"
       data-testid="focus-label-editor"
       ref={(el) => mountEditor(el)}
-      style={{
-        'font-size': '24px',
-        'font-weight': 600,
-        color: 'var(--text-primary)',
-        'line-height': '1.3',
-        'padding-bottom': '4px',
-      }}
     />
   )
 }

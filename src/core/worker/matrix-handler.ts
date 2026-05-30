@@ -6,6 +6,7 @@ import {
   getOrCreateDeviceId,
   resetDeviceIdCache,
   createMatrix as createMatrixImpl,
+  renameMatrix as renameMatrixImpl,
   addSampleRowsToMatrix,
   insertRow as insertRowImpl,
   deleteRow as deleteRowImpl,
@@ -85,6 +86,19 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'createMatrixSuccess', id, result: matrixId })
       } catch (err: unknown) {
         postMessage({ type: 'createMatrixError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'renameMatrix': {
+      const { matrixId, title, id } = message
+      try {
+        const { db } = await sqliteWasm
+        renameMatrixImpl(db, matrixId, title)
+        postMessage({ type: 'renameMatrixSuccess', id, result: undefined })
+        triggerSubscribedQueries('matrix')
+      } catch (err: unknown) {
+        postMessage({ type: 'renameMatrixError', id, error: toError(err) })
       }
       break
     }

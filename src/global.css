@@ -1832,6 +1832,41 @@ body,
   text-overflow: ellipsis;
 }
 
+/* ---- Shared label heading (FocusPanel header, workspace root title) ---- */
+
+.label-heading {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  padding-bottom: 4px;
+}
+
+/* ---- Workspace title editor (root NavigationPanel heading) ---- */
+
+.workspace-title-editor {
+  display: block;
+  outline: none;
+  border: none;
+  background: transparent;
+  cursor: text;
+  border-radius: 4px;
+  transition: background 0.15s;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-title-editor:hover {
+  background: hsl(230, 15%, 12%);
+}
+
+.workspace-title-editor:focus {
+  background: hsl(230, 15%, 14%);
+}
+
 /* ---- Breadcrumb bar (shared by NavigationPanel and FocusPanel) ---- */
 
 .breadcrumb-bar {

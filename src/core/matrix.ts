@@ -831,6 +831,11 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
   })
 }
 
+/** Update a matrix's user-visible title. */
+export const renameMatrix = (db: Database, matrixId: number, title: string): void => {
+  db.exec('UPDATE matrix SET title = ? WHERE id = ?', { bind: [title, matrixId] })
+}
+
 // Get all matrices for the debug UI
 export const getAllMatrices = (db: Database) => {
   const stmt = db.prepare('SELECT id, title FROM matrix ORDER BY id')

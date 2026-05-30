@@ -245,9 +245,9 @@ test.describe('Navigation panel', () => {
     }).toPass({ timeout: 3000 })
   })
 
-  test('root-level navigation panel shows root breadcrumb tag', async ({ page }) => {
-    await expect(page.getByTestId('breadcrumb-root')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByTestId('breadcrumb-root')).toHaveText('root')
+  test('root-level navigation panel shows editable workspace title', async ({ page }) => {
+    await expect(page.getByTestId('workspace-title-editor')).toBeVisible({ timeout: 5000 })
+    await expect(page.getByTestId('workspace-title-editor')).toHaveText('Workspace')
   })
 
   test('Breadcrumbs display in subtree mode (focus view)', async ({ page }) => {

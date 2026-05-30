@@ -13,6 +13,10 @@ export type MatrixOperationMap = {
     params: { title: string }
     result: number
   }
+  renameMatrix: {
+    params: { matrixId: number; title: string }
+    result: void
+  }
   addSampleRows: {
     params: { matrixId: number }
     result: void

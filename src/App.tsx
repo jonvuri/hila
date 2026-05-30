@@ -1,4 +1,5 @@
 import {
+  createMemo,
   createSignal,
   lazy,
   onCleanup,
@@ -12,10 +13,11 @@ import type { FaceConfig } from './core/face-types'
 import { registerFaceComponent } from './core/FaceRenderer'
 import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
+import { useQuery } from './sql/useQuery'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
 import { tagsPlugin } from './tags/tags-plugin'
-import { workspacePlugin } from './workspace/workspace-plugin'
+import { workspacePlugin, buildMatrixTitleQuery } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
@@ -49,6 +51,16 @@ const App: Component = () => {
     tagTypeColor: string | null
     anchorRect: DOMRect
   } | null>(null)
+
+  // Reactive workspace title for the tab label
+  const wsTitleQuery = createMemo(() => {
+    const wsId = workspaceMatrixId()
+    return wsId ? buildMatrixTitleQuery(wsId) : ''
+  })
+  const { result: wsTitleResult } = useQuery(() => wsTitleQuery())
+  const workspaceTabLabel = createMemo(
+    () => (wsTitleResult()?.[0] as { title: string } | undefined)?.title || 'Workspace',
+  )
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
@@ -135,7 +147,7 @@ const App: Component = () => {
               data-testid="workspace-tab"
               onClick={() => setActiveView('workspace')}
             >
-              Workspace
+              {workspaceTabLabel()}
             </button>
             <button
               class="view-tab"

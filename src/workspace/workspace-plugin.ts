@@ -162,6 +162,9 @@ export const buildSingleRowQuery = (matrixId: number, rowId: number): string => 
 SELECT d.* FROM "mx_${matrixId}_data" d WHERE d.id = ${rowId}
 `
 
+export const buildMatrixTitleQuery = (matrixId: number): string =>
+  `SELECT title FROM matrix WHERE id = ${matrixId}`
+
 export const buildBacklinksQuery = (matrixId: number, rowId: number): string => `
 SELECT j.source_row_id AS id, j.kind, d.label
 FROM joins j
