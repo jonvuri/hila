@@ -379,6 +379,43 @@ Existing Playwright tests reference the outline face, notes face, and tab struct
 
 - [x] Run `pnpm test:e2e` -- all pass (108 tests)
 
+## 10. Overlaid cards stream view
+
+The stream view renders panels as a stack of overlapping cards instead of a flat
+flex row. The visual metaphor: workspace content is layered cards, with focused
+cards showing full content columns and unfocused ancestor cards reduced to thin
+left/top border strips topped by file-folder label tabs that fade into the void
+background (shallower = darker, deeper = more prominent). Card parameters live as
+`:root` custom properties in `src/global.css`; the positioning math mirrors them
+in `StreamView.tsx`.
+
+- [x] **Unfocused ancestor cards + tab bar.** Ancestors above the leftmost
+  panel's root render as minimal border-strip cards with label tabs in a separate
+  z-index layer (`buildBreadcrumbQuery` originally supplied the labels).
+
+- [x] **Inter-panel gap cards.** When a focus panel's row is a deeper descendant
+  of the panel to its left (skipping breadcrumb levels -- e.g. opening a
+  grandchild from a focus panel's embedded outline, or jumping via a backlink),
+  the missing ancestor levels render as the same minimal cards/tabs in the *gap*
+  between the two content columns. Implementation:
+  - `buildAncestryForRowsQuery(matrixId, rowIds)` fetches the ancestor chain for
+    every focus panel's row in one query, keyed by `row_id` (robust to panels
+    opened with an empty `rowKey`).
+  - A single cumulative `layout` memo walks the panels left-to-right, emitting an
+    ordered list of ancestor cards and panel cards with computed `left`/`top`/
+    `zIndex`. The "gap before panel i" is panel i's ancestor chain sliced to
+    exclude everything at or above the previous panel's node (full chain when the
+    previous node is not an ancestor; the workspace title leads panel 0's gap
+    when non-empty). This makes the original leftmost-ancestry rendering the
+    `i == 0` case of one unified model.
+  - The panel `<For>` still iterates the stable `panels()` array (preserving
+    editor state / component identity) and reads positions from the layout by
+    panel index. Tab positions are measured per contiguous run so runs separated
+    by content columns don't push each other.
+
+- [x] Run `npm run typecheck && npm run lint && npm run test:run` and
+  `pnpm test:e2e` -- all pass.
+
 ---
 
 ## Design decisions

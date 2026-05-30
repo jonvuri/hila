@@ -158,6 +158,24 @@ WHERE c.descendant_key = X'${focusRootHex}' AND c.depth > 0
 ORDER BY c.depth DESC
 `
 
+// Ancestor chains for a set of descendant row ids, returned in a single query.
+// Keying by row_id (rather than rank key) sidesteps panels opened with an empty
+// rowKey (e.g. backlink navigation). Each row carries the descendant it belongs
+// to (for_row_id) plus the ancestor's key/depth/label/row_id. Rows are ordered
+// per descendant from shallowest (root) to deepest (parent) via depth DESC.
+export const buildAncestryForRowsQuery = (matrixId: number, rowIds: number[]): string => {
+  const idList = rowIds.join(', ')
+  return `
+SELECT d0.row_id AS for_row_id, c.ancestor_key AS key, c.depth, dt.label, ar.row_id AS row_id
+FROM rank d0
+JOIN "mx_${matrixId}_closure" c ON c.descendant_key = d0.key
+JOIN rank ar ON ar.key = c.ancestor_key AND ar.matrix_id = ${matrixId}
+JOIN "mx_${matrixId}_data" dt ON ar.row_id = dt.id
+WHERE d0.matrix_id = ${matrixId} AND d0.row_id IN (${idList}) AND c.depth > 0
+ORDER BY d0.row_id, c.depth DESC
+`
+}
+
 export const buildSingleRowQuery = (matrixId: number, rowId: number): string => `
 SELECT d.* FROM "mx_${matrixId}_data" d WHERE d.id = ${rowId}
 `

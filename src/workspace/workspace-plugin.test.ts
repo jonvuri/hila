@@ -22,6 +22,7 @@ import {
   buildPaginatedOutlineQuery,
   buildOutlineCountQuery,
   buildBreadcrumbQuery,
+  buildAncestryForRowsQuery,
   buildSingleRowQuery,
   buildBacklinksQuery,
 } from './workspace-plugin'
@@ -312,6 +313,82 @@ describe('Workspace breadcrumb query', () => {
     expect(results[0]!.label).toContain('A')
     expect(results[1]!.row_id).toBe(b)
     expect(results[1]!.label).toContain('B')
+  })
+})
+
+// -- Ancestry-for-rows query --------------------------------------------------
+
+describe('Workspace ancestry-for-rows query', () => {
+  let db: Database
+  let matrixId: number
+
+  const makeLabel = (text: string) =>
+    JSON.stringify({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+    })
+
+  type AncestorRow = { for_row_id: number; row_id: number; label: string; depth: number }
+
+  const runQuery = (sql: string): AncestorRow[] => {
+    const stmt = db.prepare(sql)
+    const result: AncestorRow[] = []
+    while (stmt.step()) {
+      result.push(stmt.get({}) as unknown as AncestorRow)
+    }
+    stmt.finalize()
+    return result
+  }
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Workspace', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+      { name: 'content', type: 'TEXT', role: 'content' },
+    ])
+    ensureTrait(db, 'rank', matrixId)
+    ensureTrait(db, 'closure', matrixId)
+  })
+
+  test('returns top-down ancestor chains keyed by descendant row id', () => {
+    const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
+    const aKey = createTreePosition(db, matrixId, a)
+    const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
+    const bKey = createTreePosition(db, matrixId, b, { parentKey: aKey })
+    const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
+    createTreePosition(db, matrixId, c, { parentKey: bKey })
+
+    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [c]))
+    // C's chain is [A (depth 2), B (depth 1)] ordered shallowest-first.
+    expect(rows.map((r) => r.row_id)).toEqual([a, b])
+    expect(rows.every((r) => r.for_row_id === c)).toBe(true)
+    expect(rows[0]!.label).toContain('A')
+    expect(rows[1]!.label).toContain('B')
+  })
+
+  test('returns chains for multiple descendants in one query', () => {
+    const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
+    const aKey = createTreePosition(db, matrixId, a)
+    const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
+    const bKey = createTreePosition(db, matrixId, b, { parentKey: aKey })
+    const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
+    createTreePosition(db, matrixId, c, { parentKey: bKey })
+
+    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [b, c]))
+    const forB = rows.filter((r) => r.for_row_id === b).map((r) => r.row_id)
+    const forC = rows.filter((r) => r.for_row_id === c).map((r) => r.row_id)
+    expect(forB).toEqual([a])
+    expect(forC).toEqual([a, b])
+  })
+
+  test('returns no rows for a top-level descendant', () => {
+    const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
+    createTreePosition(db, matrixId, a)
+
+    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [a]))
+    expect(rows).toHaveLength(0)
   })
 })
 
