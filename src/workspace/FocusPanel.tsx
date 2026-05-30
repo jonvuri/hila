@@ -60,6 +60,13 @@ type FocusPanelProps = {
   onAppendFocus: (rowId: number, key: Uint8Array) => void
   onReplaceFocus: (rowId: number, key: Uint8Array) => void
   onClose: () => void
+  // Every focus panel shows a prominent header. On the active (rightmost) panel
+  // the header is an editable title; on non-active panels the whole header is a
+  // clickable collapse target (with an integrated chevron) that closes deeper
+  // panels and makes this one active. Defaults to active when omitted.
+  active?: boolean
+  // Collapse everything to the right of this panel, making it the active one.
+  onCollapse?: () => void
 }
 
 type RowData = Record<string, unknown> & {
@@ -458,19 +465,39 @@ const FocusPanel = (props: FocusPanelProps) => {
                 </div>
               }
             >
-              {/* Label section */}
-              <div
-                class="focus-panel-label"
-                data-testid="focus-panel-label"
-                style={{ 'margin-bottom': '12px' }}
+              {/* Label header. Active (rightmost) panel: an editable title.
+                  Non-active panels: the same-looking header is a clickable
+                  collapse target (with an integrated chevron) that closes deeper
+                  panels and makes this one active. The collapse click does not
+                  start editing; a later click (once active) does. */}
+              <Show
+                when={props.active !== false}
+                fallback={
+                  <button
+                    type="button"
+                    class="focus-panel-label focus-panel-label-collapse"
+                    data-testid="focus-panel-label"
+                    aria-label="Collapse to this panel"
+                    onClick={() => props.onCollapse?.()}
+                  >
+                    <span class="label-heading focus-panel-collapse-title">
+                      {extractTextFromPmDoc(data().label) || 'Untitled'}
+                    </span>
+                    <span class="focus-panel-collapse-chevron" aria-hidden="true">
+                      ‹
+                    </span>
+                  </button>
+                }
               >
-                <FocusLabelEditor
-                  rowId={props.rowId}
-                  label={data().label ?? ''}
-                  matrixId={props.matrixId}
-                  onEscape={props.onClose}
-                />
-              </div>
+                <div class="focus-panel-label" data-testid="focus-panel-label">
+                  <FocusLabelEditor
+                    rowId={props.rowId}
+                    label={data().label ?? ''}
+                    matrixId={props.matrixId}
+                    onEscape={props.onClose}
+                  />
+                </div>
+              </Show>
 
               {/* Content section */}
               <div

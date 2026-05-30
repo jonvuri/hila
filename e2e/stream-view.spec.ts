@@ -390,7 +390,7 @@ test.describe('Stream view: clickable ancestor tabs', () => {
     await expect(page.getByTestId('card-ancestor')).toHaveCount(0)
   })
 
-  test('clicking the workspace-title tab returns to the root navigation panel', async ({ page }) => {
+  test('clicking the workspace-title tab returns to the root navigation panel (nav shifted off)', async ({ page }) => {
     // A 5-deep chain so that drilling down past MAX_COLUMNS shifts both the nav
     // panel and the top-level focus panel off the front. The resulting leftmost
     // panel (Bravo) has a hidden ancestor (Alpha), which is what makes the
@@ -415,5 +415,80 @@ test.describe('Stream view: clickable ancestor tabs', () => {
     await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
     await expect(page.getByTestId('navigation-panel')).toBeVisible({ timeout: 5000 })
     await expect(page.getByTestId('workspace-title-editor')).toBeVisible({ timeout: 5000 })
+  })
+})
+
+test.describe('Stream view: focus panel headers + collapse', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForRows(page, 1)
+    await closeSidebar(page)
+  })
+
+  // Build Alpha > Bravo > Charlie and focus down level by level so the panel
+  // stack is [nav, Alpha, Bravo, Charlie] (Charlie active). No ancestor gaps.
+  const buildChainAndDrill = async (page: Page) => {
+    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie'])
+    await openFocusPanelOnRow(page, 0) // focus Alpha
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await drillIntoChild(page, 'Bravo')
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    await drillIntoChild(page, 'Charlie')
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(3)
+  }
+
+  test('every focus panel shows a header; only the active one is editable', async ({ page }) => {
+    await buildChainAndDrill(page)
+
+    // All three focus panels (Alpha, Bravo, Charlie) carry a header.
+    await expect(page.getByTestId('focus-panel-label')).toHaveCount(3)
+
+    // Exactly one editable header -- the active (rightmost) Charlie panel.
+    await expect(page.getByTestId('focus-label-editor')).toHaveCount(1)
+    await expect(async () => {
+      const text = await page.getByTestId('focus-label-editor').textContent()
+      expect(text).toContain('Charlie')
+    }).toPass({ timeout: 5000 })
+
+    // The two non-active panels render their header as a clickable collapse
+    // target (a button, not an editor) titled with their own label.
+    const collapseHeaders = page.locator('.focus-panel-label-collapse')
+    await expect(collapseHeaders).toHaveCount(2)
+    const texts = await collapseHeaders.allTextContents()
+    expect(texts.join(' | ')).toContain('Alpha')
+    expect(texts.join(' | ')).toContain('Bravo')
+  })
+
+  test('clicking a non-active panel header collapses deeper panels and makes it active', async ({ page }) => {
+    await buildChainAndDrill(page)
+
+    // Click Alpha's (non-active) header -> collapse everything to its right.
+    await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Alpha' }).click()
+
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    // Alpha is now active: its header is the editable editor and no collapse
+    // targets remain. (The collapse click itself does not enter edit mode --
+    // the non-active header has no editor to focus.)
+    await expect(page.locator('.focus-panel-label-collapse')).toHaveCount(0)
+    await expect(page.getByTestId('focus-label-editor')).toHaveCount(1)
+    await expect(async () => {
+      const text = await page.getByTestId('focus-label-editor').textContent()
+      expect(text).toContain('Alpha')
+    }).toPass({ timeout: 5000 })
+  })
+
+  test('collapsing to a middle panel keeps the panels at and left of it', async ({ page }) => {
+    await buildChainAndDrill(page)
+
+    // Click Bravo's (non-active, middle) header -> collapse only Charlie.
+    await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Bravo' }).click()
+
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    // Bravo is now active and editable; Alpha remains a collapse target.
+    await expect(page.locator('.focus-panel-label-collapse')).toHaveCount(1)
+    await expect(async () => {
+      const text = await page.getByTestId('focus-label-editor').textContent()
+      expect(text).toContain('Bravo')
+    }).toPass({ timeout: 5000 })
   })
 })

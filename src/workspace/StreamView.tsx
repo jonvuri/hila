@@ -507,12 +507,14 @@ const StreamView = (props: StreamViewProps) => {
                     matrixId={props.matrixId}
                     rowId={panel.rowId}
                     rowKey={panel.rowKey}
+                    active={isLast()}
                     onAppendFocus={(rowId, key) =>
                       handleAppendAfter(i(), rowId, new Uint8Array(key))
                     }
                     onReplaceFocus={(rowId, key) =>
                       handleReplaceAt(i(), rowId, new Uint8Array(key))
                     }
+                    onCollapse={() => handleClose(i() + 1)}
                     onClose={() => handleClose(i())}
                   />
                 </div>

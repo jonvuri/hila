@@ -1845,6 +1845,77 @@ body,
   padding-bottom: 4px;
 }
 
+/* ---- Focus panel header ----
+   Every focus panel carries a prominent title header of identical size and
+   styling. The active (rightmost) panel's header is the editable label editor;
+   non-active panels render the same-looking header as a clickable collapse
+   target. A slimmer top header: same font size, tightened vertical footprint. */
+
+.focus-panel-label {
+  margin-bottom: 10px;
+}
+
+.focus-panel-label .label-heading {
+  line-height: 1.2;
+  padding-bottom: 0;
+}
+
+/* Reset the editable header paragraph's user-agent vertical margins so the
+   active header matches the non-active headers' height exactly. */
+.focus-label-editor .ProseMirror p {
+  margin: 0;
+}
+
+/* Non-active header: a clickable collapse target filling the whole top header
+   block -- the full visible column width (edge to edge) and the full height from
+   the panel top down to the content divider. Negative margins recover the
+   content wrapper's top/left padding so the hover shade reaches the column's top
+   and left edges; matching padding keeps the title in its normal position. The
+   width is pinned to the visible column (not the focus panel's wider min-width)
+   so the right-edge chevron stays inside the column instead of being clipped
+   under the next panel. Click closes deeper panels and makes this panel active
+   (a second click then edits). */
+.focus-panel-label-collapse {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: var(--card-focus-col-width);
+  margin: -16px 0 0 -24px;
+  padding: 16px 10px 10px 24px;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.focus-panel-label-collapse:hover {
+  background: hsl(230, 18%, 17%);
+}
+
+.focus-panel-collapse-chevron {
+  flex-shrink: 0;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--text-muted);
+  transition: color 0.15s;
+}
+
+.focus-panel-label-collapse:hover .focus-panel-collapse-chevron {
+  color: var(--accent);
+}
+
+.focus-panel-collapse-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* ---- Workspace title editor (root NavigationPanel heading) ---- */
 
 .workspace-title-editor {
