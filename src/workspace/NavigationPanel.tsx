@@ -38,7 +38,7 @@ import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
-import { buildBreadcrumbQuery, buildMatrixTitleQuery } from './workspace-plugin'
+import { buildMatrixTitleQuery } from './workspace-plugin'
 import {
   usePagedWorkspaceData,
   ROWS_PER_WINDOW,
@@ -72,13 +72,6 @@ type NavigationPanelProps = {
   rootKey?: Uint8Array
   onOpenFocus: (rowId: number, key: Uint8Array) => void
   focusedRowId?: number
-}
-
-type BreadcrumbData = {
-  key: Uint8Array
-  row_id: number
-  label: string
-  depth: number
 }
 
 type DragState = {
@@ -479,14 +472,12 @@ const ContentInlineEditor = (props: ContentEditorProps) => (
 const NavigationPanel = (props: NavigationPanelProps) => {
   const [theme] = createSignal<OutlineTheme>('workflowy-clone')
 
-  // Focus view state: rank key of the subtree root
-  const initialRoot = props.rootKey ? new Uint8Array(props.rootKey) : null // eslint-disable-line solid/reactivity -- stable for component lifetime
-  const [focusRoot, setFocusRoot] = createSignal<Uint8Array | null>(initialRoot)
-
-  const focusRootHex = createMemo(() => {
-    const root = focusRoot()
-    return root ? keyToHex(root) : null
-  })
+  // Panel data root: rank key of the subtree this panel renders. Fixed for the
+  // component's lifetime -- the root panel has no root (null); embedded panels
+  // are locked to their focus panel's row. Intra-panel zoom was removed; all
+  // outline navigation goes through top-level focus + ancestry interactions.
+  const focusRoot = props.rootKey ? new Uint8Array(props.rootKey) : null // eslint-disable-line solid/reactivity -- stable for component lifetime
+  const focusRootHex = focusRoot ? keyToHex(focusRoot) : null
 
   const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
 
@@ -496,27 +487,12 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   const matrixId = props.matrixId // eslint-disable-line solid/reactivity -- stable for component lifetime
   const pageData = usePagedWorkspaceData({
     matrixId,
-    focusRootHex,
+    focusRootHex: () => focusRootHex,
     collapsedKeyHexes: () => Array.from(collapsedKeys()),
   })
 
   const error = pageData.error
   const rows = pageData.rows
-
-  // Breadcrumb query
-  const breadcrumbQuery = createMemo(() => {
-    const hex = focusRootHex()
-    if (!hex) return ''
-    return buildBreadcrumbQuery(props.matrixId, hex)
-  })
-
-  const { result: breadcrumbResult } = useQuery(() => breadcrumbQuery())
-
-  const breadcrumbs = createMemo((): BreadcrumbData[] => {
-    const data = breadcrumbResult()
-    if (!data) return []
-    return data as unknown as BreadcrumbData[]
-  })
 
   const focusRootRow = () => pageData.focusRootRow()
 
@@ -689,7 +665,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       nonDragged,
       rowEls,
       focusDepthOffset(),
-      focusRoot(),
+      focusRoot,
     )
     if (
       target &&
@@ -749,8 +725,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       activated: false,
       originDepth: row.depth,
       originParentKey:
-        copyKey(originParentRow?.key) ??
-        (focusRoot() ? new Uint8Array(focusRoot()!) : undefined),
+        copyKey(originParentRow?.key) ?? (focusRoot ? new Uint8Array(focusRoot) : undefined),
       originPrevSiblingKey: copyKey(originPrevSib?.key),
     })
 
@@ -775,8 +750,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   ): Uint8Array | undefined => {
     const parentRow = findParentRow(vRows, index)
     if (parentRow) return copyKey(parentRow.key)
-    const root = focusRoot()
-    return root ? new Uint8Array(root) : undefined
+    return focusRoot ? new Uint8Array(focusRoot) : undefined
   }
 
   const makeCallbacks = (rowId: number): OutlineCallbacks => ({
@@ -947,26 +921,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       if (row.has_children === 1) toggleCollapse(row.key)
     },
 
-    onZoomIn: () => {
-      const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
-      if (index === -1) return
-      const row = vRows[index]!
-      setFocusRoot(new Uint8Array(row.key))
-    },
-
-    onZoomOut: () => {
-      const root = focusRoot()
-      if (!root) return
-      const crumbs = breadcrumbs()
-      if (crumbs.length === 0) {
-        setFocusRoot(initialRoot)
-        return
-      }
-      const parent = crumbs[crumbs.length - 1]!
-      setFocusRoot(new Uint8Array(parent.key))
-    },
-
     onShiftEnter: () => {
       expandAndFocusContent(rowId)
     },
@@ -978,15 +932,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const row = vRows[index]!
       props.onOpenFocus(row.row_id, new Uint8Array(row.key))
     },
-  })
-
-  // Build a lookup from hex key → row for zoom-in from the design row
-  const hexToRow = createMemo(() => {
-    const map = new Map<string, WorkspaceRowData>()
-    for (const row of visibleRows()) {
-      map.set(keyToHex(row.key), row)
-    }
-    return map
   })
 
   const depthOffset = focusDepthOffset
@@ -1067,10 +1012,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     row={flatRows()[globalIdx()]!}
                     decoration={decorations()[globalIdx()]!}
                     onToggle={toggleCollapseByHex}
-                    onZoomIn={(hexKey) => {
-                      const r = hexToRow().get(hexKey)
-                      if (r) setFocusRoot(new Uint8Array(r.key))
-                    }}
                     renderContent={() => (
                       <LabelEditor
                         rowId={rowId}
@@ -1160,8 +1101,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     )
   }
 
-  const goHome = () => setFocusRoot(initialRoot)
-
   return (
     <div class="navigation-panel" data-testid="navigation-panel">
       <Show when={error()}>
@@ -1169,60 +1108,10 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           Query error: {error()?.message}
         </div>
       </Show>
-      <Show
-        when={!focusRoot() && isRootPanel}
-        fallback={
-          <>
-            <div class="breadcrumb-bar" data-testid="breadcrumb-bar">
-              <Show when={isRootPanel}>
-                <span
-                  class="breadcrumb-root-tag"
-                  data-testid="breadcrumb-root"
-                  onClick={goHome}
-                >
-                  {matrixTitle() || 'Workspace'}
-                </span>
-              </Show>
-              <span class="breadcrumb-divider">/</span>
-              <For each={breadcrumbs()}>
-                {(crumb) => (
-                  <>
-                    <span
-                      class="breadcrumb-ancestor"
-                      onClick={() => setFocusRoot(new Uint8Array(crumb.key))}
-                      data-testid="breadcrumb-ancestor"
-                    >
-                      {extractTextFromPmDoc(crumb.label)}
-                    </span>
-                    <span class="breadcrumb-divider">/</span>
-                  </>
-                )}
-              </For>
-              <Show when={focusRootRow()}>
-                {(rootRow) => (
-                  <span class="breadcrumb-current" data-testid="breadcrumb-current">
-                    {extractTextFromPmDoc(rootRow().label)}
-                  </span>
-                )}
-              </Show>
-            </div>
-            <Show when={focusRoot()}>
-              <div
-                class="outline-focus-title"
-                style={{
-                  padding: '8px 12px 4px',
-                  'font-size': '18px',
-                  'font-weight': 600,
-                  color: 'var(--text-primary)',
-                }}
-                data-testid="focus-title"
-              >
-                {focusRootRow() ? extractTextFromPmDoc(focusRootRow()!.label) : ''}
-              </div>
-            </Show>
-          </>
-        }
-      >
+      {/* Only the root panel carries a header (the editable workspace title).
+          Embedded panels are locked to their focus panel's children and rely on
+          the FocusPanel header + ancestry tabs for their title/context. */}
+      <Show when={isRootPanel}>
         <div
           class="workspace-title-header"
           style={{ padding: '8px 12px 4px' }}

@@ -44,12 +44,14 @@ The settled design (call it **Resolution B**): the tab is a card's title, so a f
 
 The breadcrumb bar is now redundant with the ancestor tab bar, and the focus panel above a navigation panel already shows the same title. Remove the duplicated chrome.
 
-- [ ] **Remove the breadcrumb bar** from `NavigationPanel.tsx` (the `breadcrumb-bar` block and associated `breadcrumbs()` rendering). Evaluate whether the breadcrumb query is still needed for `onZoomOut`; keep only what the zoom logic requires.
-- [ ] **Remove the redundant focus title.** The `outline-focus-title` heading duplicates the focus panel header; remove it where a focus panel already shows the title. Keep the root workspace-title editor (it has no card above it).
-- [ ] **Remove the "Children" label header** in the focus panel's children section (`FocusPanel.tsx`, `focus-panel-children`), keeping the embedded navigation panel itself.
-- [ ] **Reconcile remaining empty-state and spacing.** Ensure the slimmed header still handles the empty state ("Press Enter to create your first row.") and that vertical spacing reads cleanly without the removed elements.
-- [ ] **Update affected tests.** Remove/adjust assertions tied to the deleted elements (e.g. breadcrumb tests in `e2e/navigation-panel.spec.ts`), preserving coverage for the behaviors that remain.
-- [ ] Run static checks and tests as above.
+**Design change (settled this session):** intra-panel zoom was removed entirely. Nested navigation panels are now locked to representing the children of their associated focus panel (`focusRoot` is immutable -- `null` for the root panel, `props.rootKey` for embedded panels). All outline navigation goes through top-level focus drilling (`Mod+L` / right-arrow) and ancestry interactions (ancestor tabs, collapse chevron, title tab); back-out is `Mod+ArrowLeft` (panel pop). This removed the need to keep the breadcrumb query, and made the `outline-focus-title` fully redundant (the root never zooms, so it always shows the workspace-title header; the embedded case duplicates the `FocusPanel` header).
+
+- [x] **Remove the breadcrumb bar** from `NavigationPanel.tsx` (the `breadcrumb-bar` block and associated `breadcrumbs()` rendering). ~~Evaluate whether the breadcrumb query is still needed for `onZoomOut`; keep only what the zoom logic requires.~~ With zoom removed there is no `onZoomOut` consumer, so the breadcrumb query (`buildBreadcrumbQuery`, the `breadcrumbs()` memo, `BreadcrumbData`, and the unit test) was deleted outright.
+- [x] **Remove the redundant focus title.** The `outline-focus-title` heading was removed entirely (root never zooms; embedded duplicates the `FocusPanel` header). The root workspace-title editor is kept.
+- [x] **Remove the "Children" label header** in the focus panel's children section (`FocusPanel.tsx`, `focus-panel-children`), keeping the embedded navigation panel itself.
+- [x] **Reconcile remaining empty-state and spacing.** The empty state ("Press Enter to create your first row.") is unchanged; with the header gone, embedded panels render straight into the outline under the children section's padding, and the root panel keeps its `workspace-title-header`.
+- [x] **Update affected tests.** Removed the obsolete zoom/breadcrumb tests (`e2e/navigation-panel.spec.ts` "Breadcrumbs display in subtree mode", `e2e/workspace-title.spec.ts` "breadcrumb shows workspace title…"); focus-panel-header coverage remains via the existing "Focus panel shows row label in header" test. Dropped the `Mod-ArrowDown`/`Mod-ArrowUp` zoom keybindings and the `onZoomIn`/`onZoomOut` `OutlineCallbacks` members.
+- [x] Run static checks and tests as above.
 
 ## 4. Storybook story + visual iteration
 

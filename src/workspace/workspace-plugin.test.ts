@@ -21,7 +21,6 @@ import {
   workspacePlugin,
   buildPaginatedOutlineQuery,
   buildOutlineCountQuery,
-  buildBreadcrumbQuery,
   buildAncestryForRowsQuery,
   buildSingleRowQuery,
   buildBacklinksQuery,
@@ -258,61 +257,6 @@ describe('Workspace paginated outline query', () => {
     const dataRows = runQuery(buildPaginatedOutlineQuery(matrixId, opts))
     const count = runCount(buildOutlineCountQuery(matrixId, opts))
     expect(count).toBe(dataRows.length)
-  })
-})
-
-// -- Breadcrumb query ---------------------------------------------------------
-
-describe('Workspace breadcrumb query', () => {
-  let db: Database
-  let matrixId: number
-
-  const keyToHex = (key: Uint8Array): string =>
-    Array.from(key)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('')
-
-  const makeLabel = (text: string) =>
-    JSON.stringify({
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
-    })
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrix(db, 'Workspace', [
-      { name: 'label', type: 'TEXT', role: 'label' },
-      { name: 'content', type: 'TEXT', role: 'content' },
-    ])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
-  })
-
-  test('returns ancestor chain with label column', () => {
-    const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
-    const aKey = createTreePosition(db, matrixId, a)
-
-    const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
-    const bKey = createTreePosition(db, matrixId, b, { parentKey: aKey })
-
-    const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
-    const cKey = createTreePosition(db, matrixId, c, { parentKey: bKey })
-
-    const sql = buildBreadcrumbQuery(matrixId, keyToHex(cKey))
-    const stmt = db.prepare(sql)
-    const results: { label: string; row_id: number; depth: number }[] = []
-    while (stmt.step()) {
-      results.push(stmt.get({}) as unknown as { label: string; row_id: number; depth: number })
-    }
-    stmt.finalize()
-
-    expect(results).toHaveLength(2)
-    expect(results[0]!.row_id).toBe(a)
-    expect(results[0]!.label).toContain('A')
-    expect(results[1]!.row_id).toBe(b)
-    expect(results[1]!.label).toContain('B')
   })
 })
 

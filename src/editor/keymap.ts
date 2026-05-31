@@ -19,8 +19,6 @@ export type OutlineCallbacks = {
   onArrowDown: () => void
   onInsertLink: () => void
   onToggleCollapse: () => void
-  onZoomIn: () => void
-  onZoomOut: () => void
   onShiftEnter?: () => void
   onOpenFocus?: () => void
 }
@@ -110,8 +108,6 @@ export const createOutlineKeymap = (
     'Mod-e': toggleMark(s.marks.code!),
     'Mod-k': modKToOutline(callbacks.onInsertLink),
     'Mod-Enter': tabToOutline(callbacks.onToggleCollapse),
-    'Mod-ArrowDown': tabToOutline(callbacks.onZoomIn),
-    'Mod-ArrowUp': tabToOutline(callbacks.onZoomOut),
   }
 
   if (callbacks.onShiftEnter) {

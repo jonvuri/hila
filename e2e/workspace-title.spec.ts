@@ -113,36 +113,4 @@ test.describe('Workspace title', () => {
     // Tab label should update reactively
     await expect(tab).toContainText('Custom Tab Name', { timeout: 5000 })
   })
-
-  test('breadcrumb shows workspace title when focused into subtree', async ({ page }) => {
-    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
-
-    // Add a child row by indenting
-    const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
-    await firstEditor.click()
-    await page.keyboard.press('End')
-    await page.keyboard.press('Enter')
-
-    // Wait for the new row
-    await expect(async () => {
-      const count = await page.locator('.outline-row').count()
-      expect(count).toBeGreaterThanOrEqual(2)
-    }).toPass({ timeout: 5000 })
-
-    // Indent the second row to make it a child
-    const secondEditor = page.locator('.nav-label-editor .ProseMirror').nth(1)
-    await secondEditor.click()
-    await page.keyboard.press('Tab')
-    await page.waitForTimeout(300)
-
-    // Zoom into the first row using Cmd+Down
-    await firstEditor.click()
-    await page.keyboard.press(`${modifier}+ArrowDown`)
-    await page.waitForTimeout(300)
-
-    // The breadcrumb should show the workspace title
-    const breadcrumbRoot = page.getByTestId('breadcrumb-root')
-    await expect(breadcrumbRoot).toBeVisible({ timeout: 5000 })
-    await expect(breadcrumbRoot).toContainText('Workspace')
-  })
 })

@@ -149,15 +149,6 @@ ${filterClauses}
 `
 }
 
-export const buildBreadcrumbQuery = (matrixId: number, focusRootHex: string): string => `
-SELECT c.ancestor_key as key, c.depth, d.label, r.row_id
-FROM "mx_${matrixId}_closure" c
-JOIN rank r ON r.key = c.ancestor_key AND r.matrix_id = ${matrixId}
-JOIN "mx_${matrixId}_data" d ON r.row_id = d.id
-WHERE c.descendant_key = X'${focusRootHex}' AND c.depth > 0
-ORDER BY c.depth DESC
-`
-
 // Ancestor chains for a set of descendant row ids, returned in a single query.
 // Keying by row_id (rather than rank key) sidesteps panels opened with an empty
 // rowKey (e.g. backlink navigation). Each row carries the descendant it belongs
@@ -216,7 +207,6 @@ export const workspacePlugin: PluginDefinition = {
   namedQueries: {
     outlinePage: 'buildPaginatedOutlineQuery(matrixId, opts)',
     outlineCount: 'buildOutlineCountQuery(matrixId, opts)',
-    breadcrumbs: 'buildBreadcrumbQuery(matrixId, focusRootHex)',
     singleRow: 'buildSingleRowQuery(matrixId, rowId)',
     backlinks: 'buildBacklinksQuery(matrixId, rowId)',
   },

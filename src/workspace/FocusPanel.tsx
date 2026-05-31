@@ -639,18 +639,6 @@ const FocusPanel = (props: FocusPanelProps) => {
                   'min-height': '120px',
                 }}
               >
-                <div
-                  style={{
-                    'font-size': '12px',
-                    'font-weight': 600,
-                    color: 'var(--text-muted)',
-                    'text-transform': 'uppercase',
-                    'letter-spacing': '0.5px',
-                    'margin-bottom': '8px',
-                  }}
-                >
-                  Children
-                </div>
                 <Show
                   when={hasChildren()}
                   fallback={

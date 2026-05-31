@@ -250,18 +250,6 @@ test.describe('Navigation panel', () => {
     await expect(page.getByTestId('workspace-title-editor')).toHaveText('Workspace')
   })
 
-  test('Breadcrumbs display in subtree mode (focus view)', async ({ page }) => {
-    await addSampleRowsToWorkspace(page)
-    await goToWorkspace(page)
-    await waitForRows(page, 3)
-
-    const expandableBtn = page.locator('[data-testid="outline-bullet"][aria-label="Collapse"]').first()
-    await expandableBtn.dblclick()
-
-    await expect(page.getByTestId('breadcrumb-current')).toBeVisible({ timeout: 5000 })
-    await expect(page.getByTestId('focus-title')).toBeVisible()
-  })
-
   test('Focus panel shows row label in header', async ({ page }) => {
     const firstRow = page.locator('.outline-row').first()
     const focusBtn = firstRow.locator('.nav-row-open-focus')
