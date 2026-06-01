@@ -57,12 +57,12 @@ The breadcrumb bar is now redundant with the ancestor tab bar, and the focus pan
 
 Stand up the overlaid cards in Storybook with stubbed data so the design can be iterated independently of the live app and the worker/SQLite stack.
 
-- [ ] **Extract a presentational component.** Factor the card-stack rendering out of `StreamView.tsx` into a pure component (e.g. `OverlaidCards`) that takes a stub-friendly data contract -- an ordered set of panels (focused content columns) and the ancestor chains/gaps between them -- and emits the cards + tab layer. `StreamView` composes it with live data; Storybook renders it with static fixtures. Mirror the split between `Outline` (presentational) and `NavigationPanel` (wired).
-- [ ] **Define the stub data contract.** Panels carry placeholder title/content; ancestors carry label + depth/color index. Include fixtures covering: root-level ancestors only, inter-panel gaps, deep multi-gap chains, and the `MAX_COLUMNS` case.
-- [ ] **Write `OverlaidCards.stories.tsx`** under the `Design/` title prefix, following [Outline.stories.tsx](../src/design/outline/Outline.stories.tsx): per-scenario stories plus an "all scenarios" overview.
-- [ ] **Iterate the visual design** toward more pleasing, minimal, bold, and futuristic. Tune surfaces, borders, fades, tab shape, and depth cues. Note the tension with the established design language ([Design.md](Design.md): sharp geometry, monochrome + violet accent) -- exploration may diverge here; reconciliation into the token system is [Phase 7c](Phase-7c.md) scope. Capture chosen parameters as named tokens/props rather than scattered literals.
-- [ ] **Port the refined parameters back to the live app** once settled, keeping the live behavior unchanged.
-- [ ] Run static checks and tests; verify Storybook builds (`pnpm storybook`).
+- [x] **Extract a presentational component.** Factor the card-stack rendering out of `StreamView.tsx` into a pure component (e.g. `OverlaidCards`) that takes a stub-friendly data contract -- an ordered set of panels (focused content columns) and the ancestor chains/gaps between them -- and emits the cards + tab layer. `StreamView` composes it with live data; Storybook renders it with static fixtures. Mirror the split between `Outline` (presentational) and `NavigationPanel` (wired).
+- [x] **Define the stub data contract.** Panels carry placeholder title/content; ancestors carry label + depth/color index. Include fixtures covering: root-level ancestors only, inter-panel gaps, deep multi-gap chains, and the `MAX_COLUMNS` case.
+- [x] **Write `OverlaidCards.stories.tsx`** under the `Design/` title prefix, following [Outline.stories.tsx](../src/design/outline/Outline.stories.tsx): per-scenario stories plus an "all scenarios" overview.
+- [x] **Iterate the visual design** toward more pleasing, minimal, bold, and futuristic. Tune surfaces, borders, fades, tab shape, and depth cues. Note the tension with the established design language ([Design.md](Design.md): sharp geometry, monochrome + violet accent) -- exploration may diverge here; reconciliation into the token system is [Phase 7c](Phase-7c.md) scope. Capture chosen parameters as named tokens/props rather than scattered literals.
+- [x] **Port the refined parameters back to the live app** once settled, keeping the live behavior unchanged.
+- [x] Run static checks and tests; verify Storybook builds (`pnpm storybook`).
 
 ## 5. Collapsed breadcrumb theme (Storybook concept)
 

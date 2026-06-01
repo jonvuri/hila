@@ -3,56 +3,18 @@
 }
 
 /* ====================================================================
-   Overlaid cards design system
-   
-   Visual metaphor: workspace content is rendered as overlapping cards.
-   Unfocused ancestor cards show only left/top border strips and label
-   tabs; focused cards show full content in side-by-side columns. Cards
-   further from focus fade into the void background; cards closer to
-   focus are more visually prominent.
-   
-   All card parameters are exposed as custom properties for easy
-   iteration and future design-token integration.
+   App-wide tokens
+
+   The overlaid-cards design system (its --card-* tokens and .card* classes)
+   lives in src/design/overlaid-cards/OverlaidCards.css, imported by the
+   OverlaidCards component so it is available both in the app and Storybook.
    ==================================================================== */
 
 :root {
-  /* -- Void: the deepest background layer, behind all cards -- */
+  /* -- Void: the app's base background. Also defined (with the rest of the
+     --card-* system) in OverlaidCards.css; kept here too so the body/#root
+     background resolves before the lazy-loaded stream view chunk arrives. -- */
   --card-void: hsl(230, 20%, 7%);
-
-  /* -- Focused card surface and border -- */
-  --card-focused-bg: hsl(230, 18%, 13%);
-  --card-focused-border: hsl(225, 14%, 26%);
-
-  /* -- Unfocused card offset per ancestor level --
-     Controls how much of each ancestor's left/top border strip is visible */
-  --card-ancestor-left-step: 4px;
-  --card-ancestor-top-step: 2px;
-
-  /* -- Focused card column width --
-     Each focused card gets this much visible horizontal content space
-     before the next child card overlays the remainder */
-  --card-focus-col-width: 320px;
-
-  /* -- Focused card top offset per level -- */
-  --card-focus-top-step: 4px;
-
-  /* -- Card border width (thin, left and top sides only) -- */
-  --card-border-width: 0.5px;
-
-  /* -- Ancestor tab height -- */
-  --card-tab-height: 18px;
-
-  /* -- Border gradient (HSL lightness values) --
-     Shallowest ancestor border fades into the void (dark),
-     deepest ancestor border is most visually prominent (light) */
-  --card-border-dark-l: 18%;
-  --card-border-light-l: 28%;
-
-  /* -- Card surface gradient --
-     Unfocused card surfaces lighten progressively from the void.
-     Base is the lightness of the shallowest ancestor; each level adds step */
-  --card-surface-base-l: 5%;
-  --card-surface-step-l: 1.5%;
 
   /* -- Text palette (dark mode) -- */
   --text-primary: #d8d8e4;
@@ -61,88 +23,6 @@
 
   /* -- Accent color -- */
   --accent: #7c8cf8;
-
-  /* -- Tab area: reserved vertical space above the first card for tabs -- */
-  --card-tab-area: calc(var(--card-tab-height) + 12px);
-
-  /* -- Outer padding: small margin so outermost card edges are visible -- */
-  --card-outer-pad: 6px;
-}
-
-/* -- Card viewport: the container for the entire card stack -- */
-.card-viewport {
-  position: relative;
-  overflow: hidden;
-  flex: 1;
-  background: var(--card-void);
-}
-
-/* -- Card: a single layer in the stack --
-   Positioned absolutely within the viewport. Borders only on left and
-   top (right and bottom extend to infinity). z-index set inline. */
-.card {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  border-right: none;
-  border-bottom: none;
-}
-
-/* -- Card inner: content container within a focused card -- */
-.card-inner {
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-/* When this is the rightmost (deepest) focused card, fill all remaining width */
-.card-inner-full {
-  right: 0;
-}
-
-/* -- Tab layer: renders above all cards for correct z-ordering -- */
-.card-tab-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 100;
-}
-
-/* -- Ancestor tab: file-folder tab extending up from an unfocused card's top border --
-   No bottom border; the tab and card surface form a contiguous opening.
-   The ::after pseudo-element covers the card's top border under the tab. */
-.card-tab {
-  position: absolute;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  user-select: none;
-  appearance: none;
-  -webkit-appearance: none;
-  border-bottom: none !important;
-  transition: filter 0.12s;
-}
-
-.card-tab::after {
-  content: '';
-  position: absolute;
-  bottom: calc(-1 * var(--bw));
-  left: 0;
-  right: 0;
-  height: var(--bw);
-  background: inherit;
-}
-
-.card-tab:hover {
-  filter: brightness(1.15);
 }
 
 html,
