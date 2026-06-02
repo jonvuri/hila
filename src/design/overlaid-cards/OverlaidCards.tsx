@@ -7,21 +7,35 @@
 //   - Focused/navigation cards: full content columns arranged left-to-right,
 //     each child card overlaying the remainder of its parent
 //
-// Every card's left/top edge lines extend a depth-scaled distance toward the
-// right/bottom edges and then fade (or hard-cut) to nothing -- a "staircase"
-// mirroring the tab labels, tuned by `staircase` (see types.ts).
+// Two swappable renderers share this one data contract (mirroring the
+// `OutlineTheme` model -- see types.ts):
+//   - `expanded-staircase`  : the live look. One unfocused card + label tab per
+//     ancestor, fanned into a depth staircase of edge lines.
+//   - `collapsed-breadcrumb`: a space-saving concept. Each gap collapses to a
+//     single card whose tab renders its ancestors as an inline `a / b / c`
+//     breadcrumb trail; each segment is individually clickable (reusing the
+//     same ancestor-click navigation).
 //
 // Pure/presentational: fed by a stub-friendly contract (panels + index-aligned
 // ancestor gaps + a `renderPanel` slot). The wired `StreamView` composes it
 // with live data; Storybook renders it with static fixtures.
 // ---------------------------------------------------------------------------
 
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js'
 
 import './OverlaidCards.css'
 import type { OverlaidAncestor, OverlaidCardsProps } from './types'
 
-export type { OverlaidAncestor, OverlaidCardsProps } from './types'
+export type { OverlaidAncestor, OverlaidCardsProps, OverlaidCardsTheme } from './types'
 
 // ---------------------------------------------------------------------------
 // Layout model (internal)
@@ -41,6 +55,22 @@ type LayoutAncestor = {
   ancestor: OverlaidAncestor
 }
 
+// A single card standing in for a whole gap of ancestors in the collapsed
+// theme. Its tab renders the ancestors as an inline breadcrumb trail.
+type BreadcrumbSegment = { ancestor: OverlaidAncestor; colorIndex: number }
+
+type LayoutBreadcrumb = {
+  kind: 'breadcrumb'
+  key: string
+  panelIndex: number
+  segments: BreadcrumbSegment[]
+  colorIndex: number
+  left: number
+  top: number
+  zIndex: number
+  stairIndex: number
+}
+
 type LayoutPanel = {
   kind: 'panel'
   panelIndex: number
@@ -50,8 +80,6 @@ type LayoutPanel = {
   stairIndex: number
   isLast: boolean
 }
-
-type LayoutCard = LayoutAncestor | LayoutPanel
 
 // ---------------------------------------------------------------------------
 // Staircase edge-line tuning (Phase 7b stage 4)
@@ -131,25 +159,112 @@ const OUTER_PAD = 6 // --card-outer-pad
 const TAB_AREA = TAB_HEIGHT + 12 // --card-tab-area
 
 // ---------------------------------------------------------------------------
-// OverlaidCards
+// Tab positioning + line continuity floor (shared by both themes).
+//
+// Position each tab just above its own card, pushing right only to avoid
+// overlapping the previous tab within the same contiguous run (a `runStart`
+// tab resets the cursor). While here, record each card's tab far edge (+
+// buffer) so its top line is floored to always reach -- and slightly pass --
+// its tab, regardless of the extent params.
 // ---------------------------------------------------------------------------
 
-const OverlaidCards = <P,>(props: OverlaidCardsProps<P>) => {
-  // -----------------------------------------------------------------------
+const positionTabs = (tabLayer: HTMLDivElement): Map<string, number> => {
+  const tabs = tabLayer.querySelectorAll<HTMLElement>('.card-tab')
+  let cursor = 0
+  const floors = new Map<string, number>()
+  tabs.forEach((tab) => {
+    const cardLeft = Number(tab.dataset.cardLeft ?? '0')
+    if (tab.dataset.runStart === 'true') cursor = 0
+    const tabLeft = Math.max(cardLeft + 4, cursor)
+    tab.style.left = tabLeft + 'px'
+    const width = tab.offsetWidth
+    cursor = tabLeft + width + 5
+    const key = tab.dataset.cardKey
+    if (key) floors.set(key, Math.max(0, tabLeft + width + TAB_LINE_BUFFER - cardLeft))
+  })
+  return floors
+}
+
+// ---------------------------------------------------------------------------
+// PanelColumns -- the focused/navigation content columns.
+//
+// Identical across themes: iterate the stable panels array (preserving
+// component identity and editor state) and read positions from the active
+// theme's layout by panel index.
+// ---------------------------------------------------------------------------
+
+type PanelColumnsProps<P> = {
+  panels: readonly P[]
+  panelKind: (panel: P, index: number) => 'navigation' | 'focus'
+  renderPanel: (panel: P, index: number) => JSX.Element
+  position: (index: number) => LayoutPanel | undefined
+  stairRatio: (stairIndex: number) => number
+}
+
+const PanelColumns = <P,>(props: PanelColumnsProps<P>): JSX.Element => (
+  <For each={props.panels}>
+    {(panel, i) => {
+      const pos = () => props.position(i())
+      const left = () => pos()?.left ?? OUTER_PAD
+      const top = () => pos()?.top ?? TAB_AREA
+      const zIndex = () => pos()?.zIndex ?? 1
+      const isLast = () => pos()?.isLast ?? i() === props.panels.length - 1
+      const kind = () => props.panelKind(panel, i())
+      const stops = () => {
+        const p = pos()
+        return extentStops(p ? props.stairRatio(p.stairIndex) : 1, true)
+      }
+
+      return (
+        <div
+          class="card"
+          data-testid={kind() === 'navigation' ? 'stream-nav-column' : 'stream-focus-column'}
+          style={{
+            left: left() + 'px',
+            top: top() + 'px',
+            'z-index': zIndex(),
+            background: 'var(--card-focused-bg)',
+            '--line-color': 'var(--card-focused-border)',
+            '--ext-solid': stops().solid,
+            '--ext-end': stops().end,
+            '--tab-floor': '0px',
+          }}
+        >
+          <div
+            class={`card-inner${isLast() ? ' card-inner-full' : ''}`}
+            style={isLast() ? undefined : { width: FOCUS_COL_WIDTH + 'px' }}
+          >
+            {props.renderPanel(panel, i())}
+          </div>
+          <div class="card-line card-line-top" />
+          <div class="card-line card-line-left" />
+        </div>
+      )
+    }}
+  </For>
+)
+
+// ---------------------------------------------------------------------------
+// ExpandedStaircase -- one unfocused card + label tab per ancestor.
+// ---------------------------------------------------------------------------
+
+const ExpandedStaircase = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
   // Unified layout: a single cumulative left-to-right pass over the panels.
   // For each panel we render its gap of missing ancestors as minimal edge-line
   // cards, then the panel's content column. The workspace title leads panel
   // 0's gap when non-empty. `stairIndex` is a global order across all cards
   // (ancestors + panels) so the staircase can flow continuously across them.
-  // -----------------------------------------------------------------------
-
   const layout = createMemo(
-    (): { cards: LayoutCard[]; totalAncestors: number; stairTotal: number } => {
+    (): {
+      cards: (LayoutAncestor | LayoutPanel)[]
+      totalAncestors: number
+      stairTotal: number
+    } => {
       const panels = props.panels
       const gaps = props.gaps
       const title = props.title || 'Workspace'
 
-      const cards: LayoutCard[] = []
+      const cards: (LayoutAncestor | LayoutPanel)[] = []
       let left = OUTER_PAD
       let top = TAB_AREA
       let ancIdx = 0
@@ -213,9 +328,6 @@ const OverlaidCards = <P,>(props: OverlaidCardsProps<P>) => {
     () => layout().cards.filter((c) => c.kind === 'ancestor') as LayoutAncestor[],
   )
 
-  // Panel positions keyed by panel index, so the panel <For> can iterate the
-  // stable panels array (preserving component identity) while reading reactive
-  // positions by index.
   const panelPositions = createMemo(() => {
     const m = new Map<number, LayoutPanel>()
     for (const c of layout().cards) {
@@ -224,40 +336,14 @@ const OverlaidCards = <P,>(props: OverlaidCardsProps<P>) => {
     return m
   })
 
-  // -----------------------------------------------------------------------
-  // Tab positioning + line continuity floor.
-  //
-  // Position each tab just above its own card, pushing right only to avoid
-  // overlapping the previous tab within the same contiguous ancestor run (a
-  // focus panel intervening resets the cursor). While here, record each
-  // ancestor's tab far edge (+ buffer) so its top line is floored to always
-  // reach -- and slightly pass -- its tab, regardless of the extent params.
-  // -----------------------------------------------------------------------
-
   let tabLayerRef: HTMLDivElement | undefined
   const [tabFloors, setTabFloors] = createSignal<Map<string, number>>(new Map())
 
-  const positionTabs = () => {
-    if (!tabLayerRef) return
-    const tabs = tabLayerRef.querySelectorAll<HTMLElement>('.card-tab')
-    let cursor = 0
-    const floors = new Map<string, number>()
-    tabs.forEach((tab) => {
-      const cardLeft = Number(tab.dataset.cardLeft ?? '0')
-      if (tab.dataset.runStart === 'true') cursor = 0
-      const tabLeft = Math.max(cardLeft + 4, cursor)
-      tab.style.left = tabLeft + 'px'
-      const width = tab.offsetWidth
-      cursor = tabLeft + width + 5
-      const key = tab.dataset.cardKey
-      if (key) floors.set(key, Math.max(0, tabLeft + width + TAB_LINE_BUFFER - cardLeft))
-    })
-    setTabFloors(floors)
-  }
-
   createEffect(() => {
     layout() // track dependency
-    requestAnimationFrame(positionTabs)
+    requestAnimationFrame(() => {
+      if (tabLayerRef) setTabFloors(positionTabs(tabLayerRef))
+    })
   })
 
   return (
@@ -289,51 +375,14 @@ const OverlaidCards = <P,>(props: OverlaidCardsProps<P>) => {
         }}
       </For>
 
-      {/* -- Focused / navigation cards (content panels) --
-          Iterate the stable panels array (preserving component identity and
-          editor state) and read positions from the layout by panel index. */}
-      <For each={props.panels}>
-        {(panel, i) => {
-          const pos = () => panelPositions().get(i())
-          const left = () => pos()?.left ?? OUTER_PAD
-          const top = () => pos()?.top ?? TAB_AREA
-          const zIndex = () => pos()?.zIndex ?? 1
-          const isLast = () => pos()?.isLast ?? i() === props.panels.length - 1
-          const kind = () => props.panelKind(panel, i())
-          const stops = () => {
-            const p = pos()
-            return extentStops(p ? stairRatio(p.stairIndex) : 1, true)
-          }
-
-          return (
-            <div
-              class="card"
-              data-testid={
-                kind() === 'navigation' ? 'stream-nav-column' : 'stream-focus-column'
-              }
-              style={{
-                left: left() + 'px',
-                top: top() + 'px',
-                'z-index': zIndex(),
-                background: 'var(--card-focused-bg)',
-                '--line-color': 'var(--card-focused-border)',
-                '--ext-solid': stops().solid,
-                '--ext-end': stops().end,
-                '--tab-floor': '0px',
-              }}
-            >
-              <div
-                class={`card-inner${isLast() ? ' card-inner-full' : ''}`}
-                style={isLast() ? undefined : { width: FOCUS_COL_WIDTH + 'px' }}
-              >
-                {props.renderPanel(panel, i())}
-              </div>
-              <div class="card-line card-line-top" />
-              <div class="card-line card-line-left" />
-            </div>
-          )
-        }}
-      </For>
+      {/* -- Focused / navigation cards (content panels) -- */}
+      <PanelColumns
+        panels={props.panels}
+        panelKind={props.panelKind}
+        renderPanel={props.renderPanel}
+        position={(i) => panelPositions().get(i)}
+        stairRatio={stairRatio}
+      />
 
       {/* -- Ancestor tab layer (above all cards) -- */}
       <Show when={ancestorCards().length > 0}>
@@ -375,6 +424,217 @@ const OverlaidCards = <P,>(props: OverlaidCardsProps<P>) => {
         </div>
       </Show>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CollapsedBreadcrumb -- each gap is a single card with a breadcrumb tab.
+// ---------------------------------------------------------------------------
+
+const CollapsedBreadcrumb = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
+  // Same cumulative left-to-right pass, but each non-empty gap collapses to a
+  // single breadcrumb card (one edge-line layer + one multi-segment tab) rather
+  // than one card per ancestor. Segment colors still scale with global ancestor
+  // depth so the two themes read consistently.
+  const layout = createMemo(
+    (): {
+      cards: (LayoutBreadcrumb | LayoutPanel)[]
+      totalAncestors: number
+      stairTotal: number
+    } => {
+      const panels = props.panels
+      const gaps = props.gaps
+      const title = props.title || 'Workspace'
+
+      const cards: (LayoutBreadcrumb | LayoutPanel)[] = []
+      let left = OUTER_PAD
+      let top = TAB_AREA
+      let ancIdx = 0
+      let stair = 0
+      let z = 0
+
+      for (let i = 0; i < panels.length; i++) {
+        const gap = gaps[i] ?? []
+
+        const entries: OverlaidAncestor[] = gap.map((a) => ({
+          key: a.key,
+          label: a.label || 'Untitled',
+          rowId: a.rowId,
+        }))
+        if (i === 0 && entries.length > 0) {
+          entries.unshift({ key: 'anc-title', label: title, rowId: null })
+        }
+
+        if (entries.length > 0) {
+          const segments: BreadcrumbSegment[] = entries.map((a) => ({
+            ancestor: a,
+            colorIndex: ancIdx++,
+          }))
+          cards.push({
+            kind: 'breadcrumb',
+            key: `bc-${i}`,
+            panelIndex: i,
+            segments,
+            colorIndex: segments[segments.length - 1]!.colorIndex,
+            left,
+            top,
+            zIndex: ++z,
+            stairIndex: stair++,
+          })
+          left += ANCESTOR_LEFT_STEP
+          top += ANCESTOR_TOP_STEP
+        }
+
+        cards.push({
+          kind: 'panel',
+          panelIndex: i,
+          left,
+          top,
+          zIndex: ++z,
+          stairIndex: stair++,
+          isLast: i === panels.length - 1,
+        })
+        left += FOCUS_COL_WIDTH
+        top += FOCUS_TOP_STEP
+      }
+
+      return { cards, totalAncestors: ancIdx, stairTotal: stair }
+    },
+  )
+
+  const stairRatio = (stairIndex: number): number => {
+    const total = layout().stairTotal
+    return total <= 1 ? 1 : stairIndex / (total - 1)
+  }
+
+  const breadcrumbCards = createMemo(
+    () => layout().cards.filter((c) => c.kind === 'breadcrumb') as LayoutBreadcrumb[],
+  )
+
+  const panelPositions = createMemo(() => {
+    const m = new Map<number, LayoutPanel>()
+    for (const c of layout().cards) {
+      if (c.kind === 'panel') m.set(c.panelIndex, c)
+    }
+    return m
+  })
+
+  let tabLayerRef: HTMLDivElement | undefined
+  const [tabFloors, setTabFloors] = createSignal<Map<string, number>>(new Map())
+
+  createEffect(() => {
+    layout() // track dependency
+    requestAnimationFrame(() => {
+      if (tabLayerRef) setTabFloors(positionTabs(tabLayerRef))
+    })
+  })
+
+  return (
+    <div class="card-viewport" data-testid="stream-view">
+      {/* -- Collapsed gap cards (one edge-line layer per gap) -- */}
+      <For each={breadcrumbCards()}>
+        {(card) => {
+          const total = () => layout().totalAncestors
+          const stops = () => extentStops(stairRatio(card.stairIndex), false)
+          return (
+            <div
+              class="card"
+              data-testid="card-ancestor"
+              style={{
+                left: card.left + 'px',
+                top: card.top + 'px',
+                'z-index': card.zIndex,
+                background: 'var(--card-ancestor-bg)',
+                '--line-color': ancestorBorderColor(card.colorIndex, total()),
+                '--ext-solid': stops().solid,
+                '--ext-end': stops().end,
+                '--tab-floor': (tabFloors().get(card.key) ?? 0) + 'px',
+              }}
+            >
+              <div class="card-line card-line-top" />
+              <div class="card-line card-line-left" />
+            </div>
+          )
+        }}
+      </For>
+
+      {/* -- Focused / navigation cards (content panels) -- */}
+      <PanelColumns
+        panels={props.panels}
+        panelKind={props.panelKind}
+        renderPanel={props.renderPanel}
+        position={(i) => panelPositions().get(i)}
+        stairRatio={stairRatio}
+      />
+
+      {/* -- Breadcrumb tab layer (above all cards) -- */}
+      <Show when={breadcrumbCards().length > 0}>
+        <div class="card-tab-layer" ref={tabLayerRef}>
+          <For each={breadcrumbCards()}>
+            {(card) => {
+              const total = () => layout().totalAncestors
+              const tabRadius = Math.round(TAB_HEIGHT * 0.2)
+              return (
+                <div
+                  class="card-tab card-breadcrumb-tab"
+                  data-testid="card-tab"
+                  data-card-left={card.left}
+                  data-card-key={card.key}
+                  data-run-start="true"
+                  style={{
+                    '--bw': BORDER_WIDTH + 'px',
+                    top: card.top - TAB_HEIGHT + 'px',
+                    height: TAB_HEIGHT + 'px',
+                    'border-width': BORDER_WIDTH + 'px',
+                    'border-style': 'solid',
+                    'border-color': ancestorBorderColor(card.colorIndex, total()),
+                    'border-bottom-width': '0',
+                    'border-radius': `${tabRadius}px ${tabRadius}px 0 0`,
+                    background: 'var(--card-tab-bg)',
+                  }}
+                >
+                  <For each={card.segments}>
+                    {(seg, si) => (
+                      <>
+                        <Show when={si() > 0}>
+                          <span class="breadcrumb-sep" aria-hidden="true">
+                            /
+                          </span>
+                        </Show>
+                        <button
+                          type="button"
+                          class="breadcrumb-seg"
+                          data-testid="breadcrumb-segment"
+                          onClick={() => props.onAncestorClick?.(card.panelIndex, seg.ancestor)}
+                          style={{ color: ancestorTextColor(seg.colorIndex, total()) }}
+                        >
+                          {seg.ancestor.label}
+                        </button>
+                      </>
+                    )}
+                  </For>
+                </div>
+              )
+            }}
+          </For>
+        </div>
+      </Show>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// OverlaidCards -- thin theme switch over the shared data contract.
+// ---------------------------------------------------------------------------
+
+const OverlaidCards = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
+  const theme = () => props.theme ?? 'expanded-staircase'
+  return (
+    <Switch fallback={<ExpandedStaircase {...props} />}>
+      <Match when={theme() === 'collapsed-breadcrumb'}>
+        <CollapsedBreadcrumb {...props} />
+      </Match>
+    </Switch>
   )
 }
 

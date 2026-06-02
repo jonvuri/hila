@@ -68,11 +68,11 @@ Stand up the overlaid cards in Storybook with stubbed data so the design can be 
 
 A more space-saving rendering of the same concept: instead of a staircase of one card per ancestor, a single unfocused card at each level shows multiple ancestors as a traditional inline breadcrumb (`a / b / c`).
 
-- [ ] **Introduce a theme/variant prop** on `OverlaidCards` (e.g. `'expanded-staircase' | 'collapsed-breadcrumb'`), following the `OutlineTheme` renderer pattern. Same data contract and outward interface, swappable in place.
-- [ ] **Implement the collapsed renderer.** Each gap (and the root-level ancestry) collapses to a single card whose tab/strip renders the ancestors as a breadcrumb trail; breadcrumb segments remain individually clickable (reusing stage 1's navigation).
-- [ ] **Add it to Storybook** as a swappable argType on the existing stories, so both themes can be compared on identical fixtures.
-- [ ] **Do not wire it into the live app.** This remains a concept for now; the live `StreamView` keeps the staircase theme. Note the swap path for a future decision.
-- [ ] Run static checks; verify Storybook builds.
+- [x] **Introduce a theme/variant prop** on `OverlaidCards` (`theme?: OverlaidCardsTheme = 'expanded-staircase' | 'collapsed-breadcrumb'`, defaulting to the staircase), following the `OutlineTheme` renderer pattern. `OverlaidCards` is now a thin `<Switch>` over two internal renderers (`ExpandedStaircase`, `CollapsedBreadcrumb`) sharing the data contract, the layout constants/color/extent helpers, a `positionTabs` helper, and a `PanelColumns` component (the focus/nav columns are identical across themes).
+- [x] **Implement the collapsed renderer.** Each non-empty gap (including the root-level ancestry, led by the workspace title) collapses to a single edge-line card whose tab renders the ancestors as an inline `a / b / c` breadcrumb; each segment is an individually clickable `<button data-testid="breadcrumb-segment">` reusing `onAncestorClick`. Segment/border colors still scale with global ancestor depth so the two themes read consistently.
+- [x] **Add it to Storybook** as a swappable `theme` argType (inline-radio) on the existing stories, so both themes compare on identical fixtures (including the "all scenarios" overview).
+- [x] **Do not wire it into the live app.** `StreamView` omits `theme`, so it stays on the default `expanded-staircase`. A comment there notes the one-line swap path (`theme="collapsed-breadcrumb"`) for a future decision.
+- [x] Run static checks; verify Storybook builds. (format/lint/typecheck/`test:run` all green -- 668 tests; `build-storybook` succeeds; both themes spot-checked across all four fixtures in a live Storybook.)
 
 ---
 

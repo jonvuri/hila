@@ -298,6 +298,10 @@ const StreamView = (props: StreamViewProps) => {
         </div>
       }
     >
+      {/* The live app stays on the default `expanded-staircase` theme. A second
+          `collapsed-breadcrumb` renderer exists as a Storybook concept (Phase
+          7b stage 5); to adopt it here later, pass `theme="collapsed-breadcrumb"`
+          -- the data contract and `onAncestorClick` wiring are unchanged. */}
       <OverlaidCards
         panels={panels()}
         panelKind={(panel) => (panel.type === 'navigation' ? 'navigation' : 'focus')}

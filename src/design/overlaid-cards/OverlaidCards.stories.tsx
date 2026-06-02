@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { For, type JSX } from 'solid-js'
 
 import OverlaidCards from './OverlaidCards'
-import type { OverlaidAncestor } from './types'
+import type { OverlaidAncestor, OverlaidCardsTheme } from './types'
 
 // ---------------------------------------------------------------------------
 // Stub data + panel renderer
@@ -143,7 +143,7 @@ const scenarios: Scenario[] = [rootAncestors, interPanelGap, deepChain, maxColum
 // Meta
 // ---------------------------------------------------------------------------
 
-const renderScenario = (scenario: Scenario): JSX.Element => {
+const renderScenario = (scenario: Scenario, theme: OverlaidCardsTheme): JSX.Element => {
   const lastIndex = scenario.panels.length - 1
   return (
     <OverlaidCards<StubPanel>
@@ -151,6 +151,7 @@ const renderScenario = (scenario: Scenario): JSX.Element => {
       panelKind={(p) => p.kind}
       gaps={scenario.gaps}
       title={scenario.title}
+      theme={theme}
       renderPanel={(panel, index) => (
         <StubPanelBody panel={panel} active={index === lastIndex} />
       )}
@@ -164,34 +165,47 @@ const Frame = (props: { height?: string; children: JSX.Element }): JSX.Element =
   </div>
 )
 
-const meta: Meta = {
+// `theme` is a swappable argType so both renderers can be compared on the
+// identical fixtures below (Storybook controls toolbar).
+type StoryArgs = { theme: OverlaidCardsTheme }
+
+const meta: Meta<StoryArgs> = {
   title: 'Design/OverlaidCards',
   parameters: { layout: 'fullscreen' },
+  argTypes: {
+    theme: {
+      control: 'inline-radio',
+      options: ['expanded-staircase', 'collapsed-breadcrumb'] satisfies OverlaidCardsTheme[],
+      description: 'Which OverlaidCards renderer to use.',
+    },
+  },
+  args: { theme: 'expanded-staircase' },
 }
 
 export default meta
 
-type Story = StoryObj
+type Story = StoryObj<StoryArgs>
 
 export const RootAncestorsOnly: Story = {
-  render: () => <Frame>{renderScenario(rootAncestors)}</Frame>,
+  render: (args) => <Frame>{renderScenario(rootAncestors, args.theme)}</Frame>,
 }
 
 export const InterPanelGap: Story = {
-  render: () => <Frame>{renderScenario(interPanelGap)}</Frame>,
+  render: (args) => <Frame>{renderScenario(interPanelGap, args.theme)}</Frame>,
 }
 
 export const DeepMultiGapChain: Story = {
-  render: () => <Frame>{renderScenario(deepChain)}</Frame>,
+  render: (args) => <Frame>{renderScenario(deepChain, args.theme)}</Frame>,
 }
 
 export const MaxColumns: Story = {
-  render: () => <Frame>{renderScenario(maxColumns)}</Frame>,
+  render: (args) => <Frame>{renderScenario(maxColumns, args.theme)}</Frame>,
 }
 
-// All scenarios stacked for comparison on the committed staircase look.
+// All scenarios stacked for comparison; the `theme` control swaps both
+// renderers across every fixture at once.
 export const AllScenarios: Story = {
-  render: () => (
+  render: (args) => (
     <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-32)' }}>
       <For each={scenarios}>
         {(scenario) => (
@@ -209,7 +223,7 @@ export const AllScenarios: Story = {
             >
               {scenario.label}
             </div>
-            <Frame height="360px">{renderScenario(scenario)}</Frame>
+            <Frame height="360px">{renderScenario(scenario, args.theme)}</Frame>
           </div>
         )}
       </For>

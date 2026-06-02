@@ -9,6 +9,16 @@ import type { JSX } from 'solid-js'
 // `NavigationPanel` (wired) split.
 // ---------------------------------------------------------------------------
 
+/**
+ * Swappable renderer over one data contract (mirrors the `OutlineTheme` model).
+ *   - `expanded-staircase`  : the live look -- one unfocused card + label tab
+ *     per ancestor, fanned into a depth staircase of edge lines.
+ *   - `collapsed-breadcrumb`: space-saving concept -- each gap collapses to a
+ *     single card whose tab renders its ancestors as an inline `a / b / c`
+ *     breadcrumb trail (segments individually clickable).
+ */
+export type OverlaidCardsTheme = 'expanded-staircase' | 'collapsed-breadcrumb'
+
 /** A single unfocused ancestor in the gap before a panel. `rowId === null`
  *  marks the workspace-title tab (leads panel 0's gap). */
 export type OverlaidAncestor = {
@@ -37,4 +47,6 @@ export type OverlaidCardsProps<P> = {
   renderPanel: (panel: P, index: number) => JSX.Element
   /** Clicking an ancestor tab. `panelIndex` is the panel the gap precedes. */
   onAncestorClick?: (panelIndex: number, ancestor: OverlaidAncestor) => void
+  /** Which renderer to use. Defaults to `'expanded-staircase'` (the live look). */
+  theme?: OverlaidCardsTheme
 }
