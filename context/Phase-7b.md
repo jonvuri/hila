@@ -60,7 +60,7 @@ Stand up the overlaid cards in Storybook with stubbed data so the design can be 
 - [x] **Extract a presentational component.** Factor the card-stack rendering out of `StreamView.tsx` into a pure component (e.g. `OverlaidCards`) that takes a stub-friendly data contract -- an ordered set of panels (focused content columns) and the ancestor chains/gaps between them -- and emits the cards + tab layer. `StreamView` composes it with live data; Storybook renders it with static fixtures. Mirror the split between `Outline` (presentational) and `NavigationPanel` (wired).
 - [x] **Define the stub data contract.** Panels carry placeholder title/content; ancestors carry label + depth/color index. Include fixtures covering: root-level ancestors only, inter-panel gaps, deep multi-gap chains, and the `MAX_COLUMNS` case.
 - [x] **Write `OverlaidCards.stories.tsx`** under the `Design/` title prefix, following [Outline.stories.tsx](../src/design/outline/Outline.stories.tsx): per-scenario stories plus an "all scenarios" overview.
-- [x] **Iterate the visual design** toward more pleasing, minimal, bold, and futuristic. Tune surfaces, borders, fades, tab shape, and depth cues. Note the tension with the established design language ([Design.md](Design.md): sharp geometry, monochrome + violet accent) -- exploration may diverge here; reconciliation into the token system is [Phase 7c](Phase-7c.md) scope. Capture chosen parameters as named tokens/props rather than scattered literals.
+- [x] **Iterate the visual design** toward more pleasing, minimal, bold, and futuristic. Tune surfaces, borders, fades, tab shape, and depth cues. Note the tension with the established design language ([Design.md](Design.md): sharp geometry, monochrome + violet accent) -- exploration may diverge here; reconciliation into the token system is [Phase 10](Phase-10.md) scope. Capture chosen parameters as named tokens/props rather than scattered literals.
 - [x] **Port the refined parameters back to the live app** once settled, keeping the live behavior unchanged.
 - [x] Run static checks and tests; verify Storybook builds (`pnpm storybook`).
 
@@ -80,7 +80,7 @@ A more space-saving rendering of the same concept: instead of a staircase of one
 
 - **Presentational/wired split.** The overlaid cards become a presentational component fed by a stub-friendly contract, matching the `Outline` vs `NavigationPanel` separation. This is what makes both Storybook iteration and the theme swap tractable, and keeps `StreamView` focused on data + panel-stack state.
 - **Themes are swappable renderers over one contract.** The collapsed breadcrumb is a second renderer over the same panel/ancestry data, not a fork. This mirrors the outline face theme model ([Design-Faces.md](Design-Faces.md)).
-- **Exploration may diverge from the token system.** 7b prioritizes a compelling visual direction in Storybook; aligning it with the canonical design tokens/theming is deferred to 7c.
+- **Exploration may diverge from the token system.** 7b prioritizes a compelling visual direction in Storybook; aligning it with the canonical design tokens/theming is deferred to the design-system pass ([Phase 10](Phase-10.md)).
 
 ## Dependency notes
 

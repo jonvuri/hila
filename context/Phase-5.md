@@ -404,7 +404,7 @@ With four real plugin consumers (outline, notes, inline references, tags), extra
 
 - [x] **Formalize the table face type as core infrastructure.** Document that the table face type is always registered first during app init, before any plugins. It is a core dependency, not a plugin. Add a comment in `App.tsx` and document in `Plugins.md`.
 
-- [x] **Document `PluginContext` as-is (no expansion needed).** After reviewing all four consumers: no plugin needs direct `db` access in `init` (they all use the async client layer); no plugin uses event handlers (cross-plugin interaction is through SQL over shared tables); `matrixIds: Record<string, number>` is sufficient. Add doc comments to the `PluginContext` type explaining the minimal shape. Future extensions (e.g. `schedule()` for Phase 9) will be added when motivated by real consumers.
+- [x] **Document `PluginContext` as-is (no expansion needed).** After reviewing all four consumers: no plugin needs direct `db` access in `init` (they all use the async client layer); no plugin uses event handlers (cross-plugin interaction is through SQL over shared tables); `matrixIds: Record<string, number>` is sufficient. Add doc comments to the `PluginContext` type explaining the minimal shape. Future extensions (e.g. `schedule()` for Phase 12) will be added when motivated by real consumers.
 
 - [x] **Document the plugin lifecycle contract** in `Plugins.md`, based on the four real consumers:
   - What happens during `registerPlugin` (table creation, trait provisioning, face config creation).
@@ -550,7 +550,7 @@ Tasks 1 (tag type registry) and 2 (wire inline refs into outline) are independen
 
 - **No labeled joins.** The join table carries `kind` (`ref`/`own`) but no role label (e.g. "author", "assignee"). Labeled joins are deferred per Plan.md. For Phase 5, the tag type name (from the target matrix's `tag_types` entry) provides sufficient context for display and filtering. If labeled joins are needed later, they would be an additive schema change.
 
-- **Default columns for new tag types.** When a user creates a tag type inline (typing `#newtype`), the matrix gets a single default `label` TEXT column. The user can add more columns later via the identity face. Predefined tag types with specific columns (like `#task` with status/due_date/priority) are Phase 8 scope — Phase 5 provides only the generic tag type creation.
+- **Default columns for new tag types.** When a user creates a tag type inline (typing `#newtype`), the matrix gets a single default `label` TEXT column. The user can add more columns later via the identity face. Predefined tag types with specific columns (like `#task` with status/due_date/priority) are Phase 11 scope — Phase 5 provides only the generic tag type creation.
 
 - **Tag type color is cosmetic.** The `color` column in `tag_types` drives badge rendering. If null, a deterministic color is derived from the tag type name (e.g. hash the name into an HSL value). No per-instance colors.
 

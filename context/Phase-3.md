@@ -2,7 +2,7 @@
 
 Concrete tasks for Phase 3. See [Plan.md](Plan.md) for context and objectives, and [Sync.md](Sync.md) for the full specification.
 
-This phase puts in place the core infrastructure that all subsequent phases build on top of: globally unique IDs, device identity, change tracking triggers, the changeset abstraction, conflict detection, and closure rebuild. No live sync, no file storage, no Dropbox -- those come in [Phase 12](Phase-12.md). The goal here is to ensure that from this point forward, every data mutation is tracked and the schema is sync-safe.
+This phase puts in place the core infrastructure that all subsequent phases build on top of: globally unique IDs, device identity, change tracking triggers, the changeset abstraction, conflict detection, and closure rebuild. No live sync, no file storage, no Dropbox -- those come in [Phase 15](Phase-15.md). The goal here is to ensure that from this point forward, every data mutation is tracked and the schema is sync-safe.
 
 Ordered by dependency: unique IDs first (prerequisite for everything), then device identity and change tracking, then the changeset and conflict layers on top.
 
@@ -171,7 +171,7 @@ The changelog doubles as per-row version history and should not grow unbounded.
   - Per-row cap: always keep the last M versions per `(table_name, row_id)` pair (configurable, default 10).
   - Only compact entries that all known devices have acknowledged (check per-device high-water marks in `_sync_state`).
   - Delete entries that are older than the retention window, exceed the per-row cap, and are below all devices' acknowledged seq.
-- [x] Wire into a periodic maintenance path: for now, expose `compactChangelog` as a worker message so it can be called on demand or on a timer. The sync engine (Phase 12) will call it automatically.
+- [x] Wire into a periodic maintenance path: for now, expose `compactChangelog` as a worker message so it can be called on demand or on a timer. The sync engine (Phase 15) will call it automatically.
 - [x] Tests: create a matrix, insert and update a row many times (exceeding the per-row cap), run compaction, verify only the last M entries per row remain. Verify entries within the retention window are preserved regardless of count. Verify entries above a device's high-water mark are preserved (not compacted away before the device has seen them).
 - [x] Run `npm run typecheck && npm run lint && npm run test:run` -- all pass
 
@@ -205,8 +205,8 @@ Tasks are strictly sequential: each builds on the previous. Task 7 (changelog re
 - **Trigger-based change tracking, not cr-sqlite:** The `ChangeTracker` abstraction means we can swap in cr-sqlite later if needed. For now, SQLite triggers are simpler, require no alternative WASM build, and are fully under our control. See [Sync.md - Research context](Sync.md#research-context).
 - **LWW conflict resolution:** Row-level last-write-wins by timestamp. Acceptable for a single-user-multiple-devices scenario. Field-level merge is a future enhancement that the full-row-data format supports without schema changes.
 - **Closure tables not change-tracked:** Derived from rank. Rebuilt after remote rank changes. Avoids tracking a high-volume table with BLOB keys.
-- **No live sync in this phase.** File storage, Dropbox integration, the sync engine, and sync UI are deferred to [Phase 12](Phase-12.md). This phase establishes the infrastructure so that all data mutations from Phase 4 onward are tracked and sync-safe.
-- **No file storage in this phase.** The `files` and `file_attachments` tables, OPFS file I/O, and attachment UI are deferred to Phase 12.
+- **No live sync in this phase.** File storage, Dropbox integration, the sync engine, and sync UI are deferred to [Phase 15](Phase-15.md). This phase establishes the infrastructure so that all data mutations from Phase 4 onward are tracked and sync-safe.
+- **No file storage in this phase.** The `files` and `file_attachments` tables, OPFS file I/O, and attachment UI are deferred to Phase 15.
 
 ---
 

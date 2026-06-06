@@ -1,488 +1,162 @@
-# Phase 8 -- Tasks and movie reviews (tag aspects in practice)
+# Phase 8 -- Data layer: the ownership spine
 
-Concrete tasks for Phase 8. See [Plan.md](Plan.md) for context and objectives, [Plugins.md](Plugins.md) for the tags plugin design, and [Traits.md](Traits.md) for join kind semantics.
+> The implementation phase that reintegrates the **ownership-centric data-layer resolution** reached in the Phase 7c iteration (recorded in the root working docs `PHASE-7C-PRIMER.md` and `Phase 7c data layer resolution.md`). Phase 7c was a design exploration ([Phase 7c](Phase-7c.md)); this phase is its data-layer realization. The view-layer surfaces it unlocks are [Phase 9](Phase-9.md); the design-system pass over the final surface set is [Phase 10](Phase-10.md).
 
-This phase uses two tag types — tasks and movie reviews — as prototypes to build and prove out general-purpose infrastructure: default values on row creation, a custom cell renderer registry, and richer column types. The tag types themselves are user-level constructs (created through the normal `#`-tag mechanism from Phase 5), not built-in system features. The infrastructure they motivate — default values, renderer registry, date pickers, select widgets — is general and benefits all matrixes and faces.
+This is the largest structural change since the foundation. It touches the most load-bearing tables in the system (`rank`, the per-matrix `closure` tables, `joins`, `matrix`), every structural op (`insertRow`, `deleteRow`, `reparentRow`, `createTreePosition`), the workspace plugin's queries, and the tags plugin. Because of that scope it is **split into three sequential parts**, each scoped to a focused, self-contained agent session:
 
-Tasks are likely universal enough that a "task" template (predefined columns and a task-oriented face) could ship as a built-in convenience, but that's a follow-up concern, not a Phase 8 deliverable.
+- **Phase 8 (this doc) -- the own-edge foundation.** Promote the `own`-join from "a cross-matrix lifecycle link" to **the universal tree edge**. Move the sibling-local order key onto the edge, introduce the root sentinel, and rewrite the structural ops on top of edges. The standalone per-matrix `rank` trait dissolves.
+- **[Phase 8b](Phase-8b.md) -- derived projections and unified cascade.** Rebuild `closure` as a single global cache derived from `own`-edges, build the global pre-order **scroll index** that drives windowed scrolling, and unify cascade deletion over `own`-descendants (intra- and cross-matrix identically).
+- **[Phase 8c](Phase-8c.md) -- matrix ownership and tags-as-nodes.** Add the thin `matrix.owner` fact, realize own-matrix (a node owning a dedicated matrix), dissolve the tag registry into named type-nodes, and split "tag" into label (`ref`) vs type (`own`). The promotion taxonomy falls out.
 
-### Current implementation state (prerequisites from Phase 5 / 5b)
-
-What exists and Phase 8 builds on:
-- **Tag type registry** as a matrix (`hila.tags` plugin, `registry` key). `createTagType` creates a new matrix with custom columns, registers it, provisions rank trait, and creates a table face.
-- **`#` autocomplete** in both outline rows and note body text. `#` triggers tag type search; selecting creates an `own`-kind aspect row via `createDependentRow`. Typing an unrecognized name offers inline tag type creation.
-- **Tag property panel** opens on tag badge click, showing editable fields hydrated from the aspect row. Uses `FieldEditor` (extracted to `src/shared/FieldEditor.tsx`).
-- **Tag badge rendering** via `InlineRefView`: colored pill badges with tag type name, optional key property chips, ghost/empty states.
-- **Tag browser face** (`hila.tag-browser`): lists tag types with instance counts, drill-down to instances with source row context, cross-face navigation.
-- **Owned join lifecycle**: remove tag from text → aspect row deleted; delete source row → cascade; delete aspect row from identity face → inline node removed from source text.
-- **Column identity and schema integrity** (Phase 5b): stable column IDs, column constraints (NOT NULL, UNIQUE, CHECK), plugin column ownership (`managed_by`), formula `{{columnId}}` references, normalized face config column references with FK cascades.
-- **Table face column types**: text, number, date, boolean, select, reference. Cell display and editing handled by `CellDisplay` and `CellEditor` in `TableFace.tsx`, plus `ReferenceCellDisplay` for reference columns.
-- **`FieldEditor`** in `src/shared/FieldEditor.tsx`: per-column-type editors used by the tag property panel. Supports text, number, date, boolean, select, reference.
-
-What Phase 8 must account for — gaps and limitations:
-- **No default/computed values on row creation.** `insertRow` and `createDependentRow` accept explicit `columnValues` but have no mechanism for column-level defaults. Every field is null unless explicitly provided.
-- **No custom cell renderers.** The table face has one hardcoded `CellDisplay` component that formats values by display type (text, number, date, etc.) and one `CellEditor` component. There is no registry for plugging in alternative display or edit components for a column. Star ratings, status toggles, and date pickers with affordances all require this.
-- **`createTagType` accepts `{ name, type }[]` columns only.** No way to specify constraints, display type, options, or default values when creating a tag type. Predefined tag types with rich column schemas need an extended column spec.
-- **Tag types are always created with a single default `label` TEXT column** (unless columns are passed explicitly). No template mechanism for creating tag types with predefined schemas.
-
-After this phase, the system has:
-- Column-level default values applied automatically on row creation (literal values or SQL expressions)
-- A cell renderer registry that maps (displayType, optional config) to custom display and edit components
-- A task tag type template with status, due date, priority, and notes columns — demonstrating structured task management through tags
-- A movie review tag type template with movie name, star rating, and auto-filled entry date — demonstrating custom renderers and default values
-- Inline status toggling and date picking from tag badges in the outline
-- A star rating widget as a custom cell renderer
-- Extended `createTagType` accepting rich column specs (constraints, display type, options, defaults)
+The one-line thesis carried across all three parts: **`own` = structure + lifecycle; `ref` = association; rank = order (now on the edge); closure = reachability (a derived cache).**
 
 ---
 
-## 1. Default values on row creation
-
-Core support for column-level defaults — literal values or SQL expressions — applied automatically when a new row is created. This is the first piece of general infrastructure motivated by the movie review use case (auto-filled `entry_date`), but applicable to any matrix.
-
-- [ ] **Add `default_value` column to `matrix_columns`.** TEXT, nullable. Stores either a literal value (e.g. `'todo'`) or a SQL expression (e.g. `date('now')`). The expression is evaluated by SQLite at insert time.
-  ```sql
-  ALTER TABLE matrix_columns ADD COLUMN default_value TEXT;
-  ```
-
-- [ ] **Update `ColumnDefinition` type** to include `defaultValue: string | null`.
-
-- [ ] **Update `getColumns`** to return the `defaultValue` field.
-
-- [ ] **Extend `MatrixSpec` column declarations** with optional `defaultValue`:
-  ```typescript
-  type MatrixSpec = {
-    key: string
-    title: string
-    columns: {
-      name: string
-      type: string
-      constraints?: string
-      displayType?: string
-      options?: string
-      defaultValue?: string
-    }[]
-  }
-  ```
-
-- [ ] **Update `createMatrix`** to store `default_value` in `matrix_columns` when provided. Do NOT compile defaults into the data table DDL (`DEFAULT` clauses) — the default mechanism is application-level, not SQLite-level, because some defaults are SQL expressions that need to be evaluated at insert time with full context (e.g. `date('now')`) rather than at table creation time.
-
-- [ ] **Update `addColumn`** to accept an optional `defaultValue` parameter and store it in `matrix_columns`.
-
-- [ ] **Update `insertRow`** to apply defaults. Before inserting, query `matrix_columns` for columns with non-null `default_value` where the caller did not provide an explicit value. For each:
-  1. If the default looks like a SQL expression (contains parentheses or function calls), evaluate it: `SELECT {expression} AS val`.
-  2. If it's a plain literal, use it directly.
-  3. Merge the resolved defaults into the column values before the INSERT.
-
-  This runs inside the same transaction as the INSERT, so expression evaluation and insertion are atomic.
-
-- [ ] **Update `createDependentRow`** — it calls `insertRow` internally, so defaults are applied automatically when creating tag aspect rows. No additional work needed beyond the `insertRow` change, but verify the flow end-to-end.
-
-- [ ] **Update worker message types** in `matrix-types.ts`: `addColumn` params gain `defaultValue?: string`. `getColumns` result type gains `defaultValue`.
-
-- [ ] **Update `registerPlugin`** to pass `defaultValue` through when creating columns from `MatrixSpec`.
-
-- [ ] Tests: create a matrix with a column that has `defaultValue: "'draft'"` (literal). Insert a row without specifying that column. Verify the value is `'draft'`. Create a column with `defaultValue: "date('now')"` (expression). Insert a row. Verify the value is today's date. Insert a row with an explicit value for a column that has a default. Verify the explicit value wins. Verify `createDependentRow` applies defaults to the aspect row. Verify `addColumn` with `defaultValue` stores the default. Verify `getColumns` returns `defaultValue`. Verify columns without defaults continue to be null when not specified.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 2. Cell renderer registry
-
-A general mechanism for plugging in custom display and edit components for table cells, tag property panel fields, and any future surface that renders column values. Motivated by star ratings and status toggles, but designed as open infrastructure.
-
-- [ ] **Define the renderer interface** in `src/table/cell-renderers.ts`:
-  ```typescript
-  type CellRendererProps = {
-    value: unknown
-    columnDef: ColumnDefinition
-    rowId: number
-    matrixId: number
-    selected: boolean
-    isEditing: boolean
-    onSave: (value: unknown) => void
-    onStartEdit: () => void
-    onCancelEdit: () => void
-  }
-
-  type CellRendererRegistration = {
-    displayType: string
-    variant?: string
-    displayComponent: Component<CellRendererProps>
-    editorComponent?: Component<CellRendererProps>
-    inlineToggle?: boolean
-  }
-  ```
-  - `displayType`: the column display type this renderer handles (e.g. `'select'`, `'number'`, `'date'`).
-  - `variant`: optional sub-variant (e.g. `'star-rating'` for a number column, `'status-toggle'` for a select column). Stored in the column's `options` JSON under a `renderer` key.
-  - `displayComponent`: the Solid component for display mode.
-  - `editorComponent`: optional override for edit mode (if absent, the default `CellEditor` is used).
-  - `inlineToggle`: if true, clicking the display component directly toggles/cycles the value without entering a separate edit mode (used for booleans, status toggles, star ratings).
-
-- [ ] **Implement the registry** in `src/table/cell-renderers.ts`:
-  ```typescript
-  const registerCellRenderer = (reg: CellRendererRegistration): void
-  const getCellRenderer = (displayType: string, options: string | null): CellRendererRegistration | null
-  ```
-  `getCellRenderer` checks `options` JSON for a `renderer` key to select a variant, falls back to a base registration for the display type, then falls back to null (use the default `CellDisplay`/`CellEditor`).
-
-- [ ] **Register built-in renderers.** Move the existing `CellDisplay` and `CellEditor` logic for each display type into registered renderers. This is a structural refactor — no behavioral change. The existing boolean checkbox, select dropdown, date input, and number input become registered renderers rather than hardcoded switch cases.
-
-- [ ] **Update `TableFace.tsx`** to resolve renderers from the registry. Replace the inline `CellDisplay` / `CellEditor` / `ReferenceCellDisplay` dispatch with:
-  ```typescript
-  const renderer = getCellRenderer(col.displayType, col.options)
-  ```
-  If a renderer is found, render its `displayComponent` / `editorComponent`. Otherwise fall back to the existing default components (backward compatible).
-
-- [ ] **Update `FieldEditor`** (`src/shared/FieldEditor.tsx`) to also use the renderer registry for consistency. The tag property panel, which uses `FieldEditor`, should automatically gain custom renderers for columns that have them.
-
-- [ ] Tests: register a custom renderer for display type `'number'` with variant `'star-rating'`. Verify `getCellRenderer('number', '{"renderer":"star-rating"}')` returns it. Verify `getCellRenderer('number', null)` returns the base number renderer. Verify `getCellRenderer('text', null)` returns the base text renderer. Verify existing table face behavior is unchanged after the refactor (all built-in types still render correctly).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 3. Extended `createTagType` column spec
-
-Extend `createTagType` to accept rich column specifications so that predefined tag types can declare constraints, display types, options, and default values. This is the bridge between the general infrastructure (stages 1–2) and the concrete tag types (stages 4–5).
-
-- [ ] **Extend the `createTagType` column parameter type:**
-  ```typescript
-  type TagTypeColumnSpec = {
-    name: string
-    type: string
-    constraints?: string
-    displayType?: string
-    options?: string
-    defaultValue?: string
-  }
-
-  const createTagType = (
-    db: Database,
-    name: string,
-    columns?: TagTypeColumnSpec[],
-  ): TagType
-  ```
-
-- [ ] **Update `createTagType` implementation.** When creating the matrix via `createMatrix`, pass through `constraints` from the column spec. After matrix creation, update `matrix_columns` rows to set `display_type`, `options`, and `default_value` for columns that specify them. (Alternatively, extend `createMatrix` to accept these fields — evaluate which is cleaner.)
-
-- [ ] **Extend `createMatrix`** to accept optional `displayType`, `options`, and `defaultValue` on column specs. This is a natural extension: `createMatrix` already writes `matrix_columns` rows, so it can write these fields at the same time rather than requiring a post-hoc update. The extended column spec type:
-  ```typescript
-  type MatrixColumnSpec = {
-    name: string
-    type: string
-    constraints?: string
-    displayType?: string
-    options?: string
-    defaultValue?: string
-  }
-  ```
-  This also benefits `registerPlugin` → `MatrixSpec` — plugin-declared matrixes can specify full column metadata.
-
-- [ ] **Update worker message types** for `createTagType` to accept the extended column spec.
-
-- [ ] Tests: create a tag type with columns specifying constraints, display types, options, and defaults. Verify `matrix_columns` rows have the correct values. Verify `getColumns` returns all specified metadata. Verify `insertRow` into the tag matrix applies defaults. Verify constraint violations are correctly reported.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 4. Star rating renderer
-
-A custom cell renderer for number columns that displays and edits values as clickable stars. This is the first custom renderer and validates the renderer registry from stage 2.
-
-- [ ] **Create `src/table/renderers/StarRatingRenderer.tsx`:**
-  - Display component: renders 1–5 stars (filled/empty) based on the numeric cell value. Null or 0 shows all empty stars.
-  - The star count is configurable via the column's `options` JSON: `{ "renderer": "star-rating", "maxStars": 5 }`. Defaults to 5 if not specified.
-  - Clicking a star sets the value to that star's position (1-indexed). Clicking the currently-active star clears the value (sets to null). This is an `inlineToggle` renderer — no separate edit mode.
-  - Stars are rendered as Unicode characters or SVG, styled with gold fill for active and gray outline for inactive. Hover state previews the rating that would be set.
-  - The component calls `onSave` immediately on click (no blur/Enter save flow).
-
-- [ ] **Register the star rating renderer** in `src/table/cell-renderers.ts`:
-  ```typescript
-  registerCellRenderer({
-    displayType: 'number',
-    variant: 'star-rating',
-    displayComponent: StarRatingDisplay,
-    inlineToggle: true,
-  })
-  ```
-
-- [ ] **Add CSS styles** for star rating display: inline flex layout, clickable stars with hover preview, appropriate sizing for both table cells and the tag property panel.
-
-- [ ] Tests: render a star rating cell with value 3, verify 3 filled and 2 empty stars. Click star 4, verify `onSave` called with 4. Click star 3 when value is 3 (active star), verify `onSave` called with null. Render with null value, verify all stars empty. Verify the renderer is resolved via `getCellRenderer('number', '{"renderer":"star-rating"}')`. Verify it renders correctly in both `TableFace` and `FieldEditor` contexts.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 5. Status toggle renderer
-
-A custom cell renderer for select columns that provides a compact inline toggle, cycling through status options on click. This is the second custom renderer, proving the registry works for multiple types.
-
-- [ ] **Create `src/table/renderers/StatusToggleRenderer.tsx`:**
-  - Display component: renders the current select value as a colored badge/chip. The color is derived from the option index or specified in column options.
-  - Clicking the badge cycles to the next option in the select's option list. Shift-clicking cycles backward. This is an `inlineToggle` renderer.
-  - Option list is read from `columnDef.options` (same JSON format as the existing select type: `{ "options": ["todo", "in-progress", "done"], "renderer": "status-toggle" }`).
-  - Each status option has a visual treatment: "todo" = gray, "in-progress" = blue, "done" = green (colors configurable via options or derived from position).
-  - Null/empty renders as the first option ("todo") or a placeholder.
-
-- [ ] **Register the status toggle renderer:**
-  ```typescript
-  registerCellRenderer({
-    displayType: 'select',
-    variant: 'status-toggle',
-    displayComponent: StatusToggleDisplay,
-    inlineToggle: true,
-  })
-  ```
-
-- [ ] **Add CSS styles** for status badges: colored pill shapes matching the tag badge aesthetic, compact sizing for inline display in tag badges.
-
-- [ ] Tests: render a status toggle with value "in-progress" and options ["todo", "in-progress", "done"]. Verify the badge shows "in-progress" in blue. Click to cycle to "done". Click again to cycle to "todo". Verify shift-click cycles backward. Verify null value renders as first option. Verify the renderer is resolved correctly from the registry.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 6. Date picker enhancement
-
-Enhance the existing date column editor with a proper date picker affordance, replacing the plain `<input type="date">` with a more usable component. This benefits all date columns, not just task due dates.
-
-- [ ] **Create `src/table/renderers/DatePickerRenderer.tsx`:**
-  - Display component: renders the date value as a formatted string (e.g. "May 9, 2026" or relative like "Tomorrow", "Next Friday" for near-future dates). Falls back to the raw ISO string if invalid.
-  - Editor component: a dropdown calendar picker that opens below/above the cell. Uses a simple month grid with clickable day cells. Navigation arrows for month/year. "Today" shortcut button. "Clear" button to null the value.
-  - The picker positions itself relative to the cell using the same floating UI approach as existing popovers (tag property panel pattern).
-  - Keyboard navigation: arrow keys to move between days, Enter to select, Escape to cancel.
-
-- [ ] **Register the date picker** as the default renderer for `'date'` display type (no variant — it replaces the built-in date behavior):
-  ```typescript
-  registerCellRenderer({
-    displayType: 'date',
-    displayComponent: DatePickerDisplay,
-    editorComponent: DatePickerEditor,
-  })
-  ```
-
-- [ ] Tests: open the date picker on a date cell. Select a date. Verify the value is saved as an ISO date string. Verify "Today" button sets today's date. Verify "Clear" nulls the value. Verify keyboard navigation. Verify display formatting (relative dates for near future, absolute for distant dates).
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 7. Task tag type template
-
-Define the task tag type as a predefined template that users can instantiate via the tag browser or inline via `#task`. The template specifies the full column schema with constraints, display types, options, defaults, and renderer variants.
-
-- [ ] **Create `src/tags/templates/task-template.ts`:**
-  ```typescript
-  const taskTagTypeTemplate: TagTypeColumnSpec[] = [
-    {
-      name: 'status',
-      type: 'TEXT',
-      constraints: "NOT NULL DEFAULT 'todo'",
-      displayType: 'select',
-      options: JSON.stringify({
-        options: ['todo', 'in-progress', 'done'],
-        renderer: 'status-toggle',
-      }),
-      defaultValue: "'todo'",
-    },
-    {
-      name: 'due_date',
-      type: 'TEXT',
-      displayType: 'date',
-    },
-    {
-      name: 'priority',
-      type: 'TEXT',
-      displayType: 'select',
-      options: JSON.stringify({
-        options: ['low', 'medium', 'high', 'urgent'],
-      }),
-    },
-    {
-      name: 'notes',
-      type: 'TEXT',
-      displayType: 'text',
-    },
-  ]
-  ```
-
-- [ ] **Create a template registry** in `src/tags/templates/index.ts`:
-  ```typescript
-  type TagTypeTemplate = {
-    name: string
-    columns: TagTypeColumnSpec[]
-    color?: string
-    icon?: string
-  }
-
-  const TAG_TYPE_TEMPLATES: Map<string, TagTypeTemplate>
-
-  const getTemplate = (name: string): TagTypeTemplate | null
-  const getAllTemplates = (): TagTypeTemplate[]
-  ```
-  Register the task template. Templates are matched by name (case-insensitive) — when a user types `#task` and the tag type doesn't exist yet, the system checks if a template matches the name and uses its column spec instead of the default single `label` column.
-
-- [ ] **Wire templates into tag type creation.** Update the `#` autocomplete creation flow (in `tag-search-provider.ts` or equivalent): when creating a new tag type, check `getTemplate(name)`. If a template matches, pass its columns and metadata to `createTagType`. If no template matches, use the default `[{ name: 'label', type: 'TEXT' }]` as before.
-
-- [ ] **Update the tag browser "New tag type" UI** to offer templates. The creation dialog shows a list of available templates alongside the custom option. Selecting a template pre-fills the name and column spec.
-
-- [ ] **Task-specific face configuration.** After creating a task tag type from the template, configure its identity face (table face) with default sort (by due date) and optional grouping by status. This may be a manual step or encoded in the template.
-
-- [ ] Tests: type `#task` in the outline (no existing "task" tag type). Verify the template is detected. Verify the created tag matrix has status, due_date, priority, and notes columns with correct types, display types, options, and defaults. Verify inserting a task aspect row gets `status = 'todo'` by default. Verify the task table face shows status toggle and date picker renderers. Verify typing `#custom` (no template match) creates a tag type with the default `label` column.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 8. Movie review tag type template
-
-Define the movie review tag type template, primarily to prove auto-fill default values and the star rating renderer in practice.
-
-- [ ] **Create `src/tags/templates/movie-review-template.ts`:**
-  ```typescript
-  const movieReviewTagTypeTemplate: TagTypeColumnSpec[] = [
-    {
-      name: 'movie_name',
-      type: 'TEXT',
-      displayType: 'text',
-    },
-    {
-      name: 'star_rating',
-      type: 'REAL',
-      displayType: 'number',
-      options: JSON.stringify({
-        renderer: 'star-rating',
-        maxStars: 5,
-      }),
-    },
-    {
-      name: 'entry_date',
-      type: 'TEXT',
-      displayType: 'date',
-      defaultValue: "date('now')",
-    },
-  ]
-  ```
-
-- [ ] **Register the template** in the template registry alongside the task template.
-
-- [ ] Tests: type `#movie-review` in the outline. Verify the template is detected and the matrix is created with movie_name, star_rating, and entry_date columns. Verify creating a movie review aspect row auto-fills `entry_date` with today's date. Verify the star_rating column renders with the star rating widget. Verify clicking stars sets the rating value. Verify the tag property panel shows the star rating renderer for the star_rating field and a date picker for entry_date.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 9. Inline tag affordances
-
-Wire the custom renderers into the inline tag badge and tag property panel so that key property chips on tag badges are interactive — status toggles and date pickers work directly from the outline without opening the full property panel.
-
-- [ ] **Update tag badge key property chips** (in `InlineRefView.tsx`): when rendering key property chips on a tag badge, use the renderer registry to determine how each chip renders. A status column with `renderer: 'status-toggle'` renders as a clickable status badge chip. A date column renders as a compact date string. A star_rating column renders as mini stars.
-
-- [ ] **Wire inline chip clicks to value updates.** Clicking a status chip on a tag badge in the outline toggles the status directly (cycles to next value), saving via `updateRow` to the aspect row. Clicking a date chip opens the date picker anchored to the chip. This avoids the overhead of opening the full property panel for quick single-field edits.
-
-- [ ] **Ensure property panel uses renderers.** The `TagPropertyPanel` (via `FieldEditor`) should render the star rating widget for number columns with the star-rating renderer, the status toggle for select columns with the status-toggle renderer, and the date picker for date columns. Verify this works end-to-end.
-
-- [ ] Tests: create a `#task` tag on an outline row. Verify the tag badge shows a status chip. Click the status chip. Verify the status cycles from "todo" to "in-progress" without opening the property panel. Verify the change persists in the task matrix. Open the property panel for the same tag. Verify the updated status is reflected. Verify the star rating renderer works in the property panel for a movie review tag.
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all pass
-
-## 10. Playwright E2E
-
-Comprehensive E2E coverage for all Phase 8 features. Split into three test groups that can begin as their dependencies land.
-
-### 10a. Default values and custom renderers
-
-- [ ] **Default value tests:**
-  - Create a tag type with a column that has a default value. Insert a row (via `#` tag). Verify the default is applied.
-  - Create a movie review tag. Verify `entry_date` is auto-filled with today's date.
-  - Create a task tag. Verify `status` defaults to "todo".
-  - Insert a row with an explicit value for a column that has a default. Verify the explicit value wins.
-
-- [ ] **Star rating tests:**
-  - Open a movie review tag's identity face (table view). Verify the star_rating column shows star widgets.
-  - Click on the 4th star. Verify the value updates to 4.
-  - Click on the 4th star again (active). Verify the value clears.
-
-- [ ] **Status toggle tests:**
-  - Open a task tag's identity face. Verify the status column shows toggle badges.
-  - Click the status badge on a "todo" task. Verify it cycles to "in-progress".
-  - Click again. Verify it cycles to "done".
-  - Click again. Verify it cycles back to "todo".
-
-- [ ] Run `pnpm test:e2e` — all pass
-
-### 10b. Tag type templates and property panel
-
-- [ ] **Template creation tests:**
-  - Type `#task` in the outline (no existing task tag type). Verify the tag type is created with status, due_date, priority, and notes columns.
-  - Verify the tag browser shows the new "task" tag type.
-  - Type `#movie-review` in the outline. Verify it creates with movie_name, star_rating, and entry_date columns.
-  - Type `#custom-thing` (no template). Verify it creates with the default `label` column.
-
-- [ ] **Property panel tests:**
-  - Click a `#task` badge. Verify the property panel shows status (as toggle), due_date (as date picker), priority (as dropdown), and notes (as text).
-  - Edit the status via the toggle in the property panel. Verify persistence.
-  - Set a due date via the date picker. Verify persistence.
-  - Click a `#movie-review` badge. Verify the property panel shows star_rating as clickable stars. Set a rating. Verify persistence.
-
-- [ ] Run `pnpm test:e2e` — all pass
-
-### 10c. Inline tag affordances
-
-- [ ] **Inline status toggle tests:**
-  - Create a `#task` tag on an outline row. Verify the tag badge shows a status chip.
-  - Click the status chip directly in the outline. Verify the status toggles without opening the property panel.
-  - Verify the updated status is visible both on the badge and in the task matrix's table face.
-
-- [ ] **Inline date interaction tests:**
-  - Create a `#task` tag. Click the due date chip on the badge. Verify a date picker opens.
-  - Select a date. Verify it persists and the chip updates.
-
-- [ ] **Cross-surface consistency tests:**
-  - Edit a task's status from the table face. Return to the outline. Verify the tag badge's status chip reflects the change.
-  - Edit a movie review's star rating from the property panel. Open the table face. Verify the star rating column shows the updated value.
-
-- [ ] Run `pnpm test:e2e` — all pass
-- [ ] Run `npm run typecheck && npm run lint && npm run test:run` — all Vitest tests still pass
+## 0. Foundational decisions (settled, do not relitigate without cause)
+
+These were settled in the Phase 7c ownership iteration. The app is **pre-alpha with no live user data**, which is what makes a structural rewrite of this depth acceptable; treat the OPFS database as disposable (reset rather than data-migrate).
+
+1. **`own`-join = a tree edge.** Structure **and** lifecycle. The old "single-ownership invariant" (each target row has ≤1 `own` join) **is** the single-parent property of a tree. `own`-edges work intra-matrix (outline nesting) and cross-matrix (tags, collections, sub-matrices) identically. There is **one own-forest** spanning all matrixes.
+2. **`ref`-join = a graph edge.** Association only, no lifecycle, unordered. `@`-mentions, wiki-links, backlinks, and tag-as-label are all `ref`-edges.
+3. **rank dissolves onto the edge.** A node's children are now **heterogeneous** (a node can own child bullets *plus* `#task` rows *plus* a `#note`, interleaved in one user-chosen order) and that order is **per-parent and spans matrixes**, so it cannot live in a per-matrix partition. Each `own`-edge carries a **sibling-local lexorank key** ordering the child among its siblings (the rows sharing that `own`-parent). This is the intrinsic, stable fact -- moving a subtree leaves descendants' sibling keys untouched.
+4. **A root sentinel is required.** Every row -- including top-level workspace bullets -- has exactly one `own`-edge carrying its order. The forest roots attach to a single global root sentinel.
+5. **closure and the scroll index are derived projections** of the edge truth, not independent truth (→ Phase 8b).
+6. **Cascade is one mechanism:** delete a row → sever its `own`-edges → recurse over `own`-descendants (→ Phase 8b).
+7. **own-matrix = `own`-edges to the matrix's root rows + a thin `matrix.owner` fact** (→ Phase 8c).
+
+What is **not** changing: the two-layer framing (data-stored vs view-seen), hydration (column-lineage), column roles (`label`/`content`), column identity/constraints (Phase 5b), and the identity-face authority model. `ref`-edges remain unordered and keep the existing backlinks mechanism.
 
 ---
 
-## Task dependency order
+## Simplifications and removals (consequences of the spine)
 
-```
-1. Default values on row creation
-   │
-   ├──────────────────────────────────┐
-   │                                  │
-   ▼                                  ▼
-2. Cell renderer registry     3. Extended createTagType column spec ◄── 1
-   │                                  │
-   ├─► 4. Star rating renderer        │
-   │                                  │
-   ├─► 5. Status toggle renderer      │
-   │                                  │
-   └─► 6. Date picker enhancement     │
-          │                           │
-          ├───────────────────────────┘
-          ▼
-   7. Task tag type template ◄── 2, 3, 5, 6
-   │
-   ▼
-   8. Movie review tag type template ◄── 2, 3, 4, 6
-   │
-   ▼
-   9. Inline tag affordances ◄── 4, 5, 6, 7, 8
+A guiding lens for this phase: it is **net-subtractive at the core**. Replacing several parallel structural mechanisms (per-matrix rank, per-matrix closure, join-based ownership, and the trait layer that coordinated them) with **one** (`own`-edges + derived caches) removes abstractions that existed only to manage per-matrix structure. This section consolidates the consequent removals so the subtractive intent is explicit; the numbered stages above and in [8b](Phase-8b.md)/[8c](Phase-8c.md) implement them.
 
-10a. E2E: defaults + renderers ◄── 1, 4, 5
-10b. E2E: templates + property panel ◄── 7, 8
-10c. E2E: inline affordances ◄── 9
+**Collapses and removals:**
+
+- **The trait system, in full.** `rank` and `closure` were the only two traits, and both stop being per-matrix opt-ins (rank dissolves onto the edge; closure becomes a global derived cache). The provisioning abstraction therefore has no remaining members. Delete the `matrix_traits` table and its `trait_type` CHECK, the `TraitType`/`TraitHandle`/`TraitRow` types, `ensureTrait`/`hasTrait`/`requireTraits` and all call sites, and face-triggered provisioning. This supersedes the softer "decide whether `matrix_traits` survives" phrasing in §6 / 8b §1 -- the end state is **full removal**. (A per-matrix closure *projection* may survive as a perf optimization, but that is a derived index keyed by matrix, not a provisioned trait.)
+- **Face trait-requirement declarations.** Faces that declare required traits (e.g. the workspace face's `requires: rank + closure`) lose their meaning -- every row is in the forest unconditionally. Remove the declarations and the resolution logic that consumed them in the face registry / face application.
+- **`insertRow` and `createDependentRow` converge.** They differ today only because intra-matrix tree position (rank/closure) and cross-matrix ownership (an `own` join) were *different mechanisms*. With a single `own`-edge, both become "insert a row + attach an `own`-edge to a parent" -- where the parent may be the sentinel (root), a sibling bullet, or a host in another matrix. Unify them into one op (or one with a thin convenience wrapper). (Relates to §3.)
+- **`matrixId` de-threading.** Tree ops and queries (`createTreePosition`, `reparentRow`, `getChildren`, `getParent`, `getDepth`, ancestry) stop being matrix-scoped; they operate on `(matrix_id, row_id)` identities against the global edge/closure tables. The `mx_{id}_closure` naming disappears entirely. (Relates to §3-§5, 8b §1.)
+- Already noted in the stages, listed here for completeness: the `reparentRow` prefix-splice + triple closure-rewrite machinery (§4), lexorank's hierarchy prefix-encoding (§1), per-matrix closure tables → one global cache (8b §1), `row_kind` as a data concept (§5), the tag registry matrix (8c §4), the `rank` change-tracking triggers (§6), and the two cascade paths collapsing into one own-descendant walk (8b §3).
+
+**Reconcile, don't blindly delete:**
+
+- **Root matrix (`id = 1`) vs root sentinel vs the workspace/"everything" matrix** now overlap conceptually. Decide in §2 whether the sentinel subsumes the root matrix or they remain distinct; this is a deliberate reconciliation, not an automatic removal.
+
+**Deliberately preserved (do not over-simplify):**
+
+- **Matrixes remain separate schema containers**; the per-matrix `mx_{id}_data` tables stay. Tag-type matrixes are **not** absorbed into the everything matrix -- the *forest of `own`-edges* spans matrixes, but the *schema* stays per-matrix (column-locality is load-bearing, resolution §2.7). The reason traits can go is "rank/closure became universal," not "everything became one matrix."
+- **`ref`-joins, backlinks, hydration (column-lineage), the identity face, and lexorank itself** (now ordering siblings rather than encoding hierarchy) all stay.
+
+---
+
+## Performance testing strategy (shared across Parts A/B/C)
+
+This phase puts the <50ms / single-frame goal at real risk because it makes the hottest structural caches (closure, scroll index, the `joins` edge table) **global**. Rather than only "build with performance in mind," this phase **tests for performance in a principled, deterministic way**. The guards assert on **work and query plans**, not wall-clock time -- wall-clock is environment-dependent and noisy, whereas the things that actually break the budget (an accidental full-table scan, an O(n²) op, an over-broad reactive invalidation) show up deterministically in plans and work counts and can be caught at their root.
+
+**The four guard types** (all run in Vitest against the worker SQLite db, fully deterministic):
+
+1. **Query-plan guards (`EXPLAIN QUERY PLAN`).** For each hot-path query, assert the plan uses the intended index, contains no full-table `SCAN` of a large table, and contains no `USING AUTOMATIC` index (an automatic index in the plan is the planner papering over a *missing* real index -- treat it as a failure). Run against a representative-scale fixture with `ANALYZE` so the planner sees realistic statistics; set `PRAGMA automatic_index = OFF` in the test db so a missing index surfaces as an error instead of a silent auto-index. Helper shape: `assertQueryPlan(db, sql, params, { usesIndex, noScanOf: [...], noAutoIndex: true })`.
+2. **Work-count complexity guards.** Instrument the data layer with test-only counters (statements executed, rows written, closure/scroll-index rows touched, data-table queries issued per hydration gather) that reset per test. Assert exact bounds independent of SQLite internals -- e.g. "a reparent re-points exactly 1 edge and writes 0 descendant edge keys," "a window hydration issues ≤ (#distinct matrixes in the window) queries." This is the most robust class because it does not depend on the planner or stats.
+3. **Scaling-ratio tests.** Run an op at sizes N and kN against seeded fixtures and assert the *work counter* grows at the expected order (≈constant per op, or linear -- never super-linear). Catches accidental O(n²) without any timing. Assert on counts with tolerance, not milliseconds.
+4. **Invalidation fan-out guards.** Instrument the subscription layer to record which subscriptions recompute per applied edit, then assert an edit confined to subtree A does not recompute a subscription scoped to a disjoint subtree B (i.e. table-grained over-invalidation has not crept back). These guard the range-aware invalidation work in [8b §4](Phase-8b.md).
+
+**Optional, non-gating:** a coarse wall-clock smoke benchmark with generous thresholds, run locally / in a dedicated bench, **never** a CI gate -- purely a backstop for gross constant-factor surprises the deterministic guards miss.
+
+Tooling notes: `EXPLAIN QUERY PLAN` via `db.exec('EXPLAIN QUERY PLAN ' + sql)`; optionally SQLite's `sqlite3_stmt_status(SQLITE_STMTSTATUS_FULLSCAN_STEP | _SORT | _AUTOINDEX)` via `sqlite3.capi` if sqlite-wasm exposes it (a non-zero `FULLSCAN_STEP` on a hot query is an instant fail and complements EQP).
+
+### Stage P0 -- Bootstrap the perf-test harness (do this before §1)
+
+- [ ] Build the shared harness so every later guard stage only adds assertions: `assertQueryPlan` (EQP parser + index/scan/auto-index assertions), the test-only **work-counter instrumentation** (a counter sink the data layer increments under a test flag, reset per test), a **seeded deterministic forest generator** (controlled N, depth, breadth, and matrix-mix so windows can be made homogeneous or worst-case heterogeneous on demand), the **scaling-ratio helper**, and the **subscription-recompute recorder**.
+- [ ] Wire `ANALYZE` + `PRAGMA automatic_index = OFF` into the perf-test db setup.
+- [ ] Land a couple of guards against the *current* (pre-Phase-8) hot paths as a baseline, so the harness is proven and regressions are measured against a known-good starting point.
+
+## 1. Schema: add the order key to the join/edge
+
+The `joins` table becomes the carrier of the own-forest. Today (`src/core/matrix.ts`, `initMatrixSchema`):
+
+```sql
+CREATE TABLE joins (
+  source_matrix_id  INTEGER NOT NULL,
+  source_row_id     INTEGER NOT NULL,
+  target_matrix_id  INTEGER NOT NULL,
+  target_row_id     INTEGER NOT NULL,
+  kind              TEXT NOT NULL DEFAULT 'ref',
+  PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
+);
 ```
 
-Stage 1 (default values) is a prerequisite for stages 3 and 8 (extended column specs need defaults; movie review needs auto-fill). Stage 2 (renderer registry) is a prerequisite for stages 4–6 (each is a custom renderer). Stage 3 (extended `createTagType`) depends on stage 1 and is needed before stages 7–8 (templates use rich column specs). Stages 4, 5, and 6 are independent of each other and can proceed in parallel after stage 2. Stages 7 and 8 depend on the renderers and extended column specs. Stage 9 (inline affordances) depends on the renderers and templates being in place. E2E tests can begin incrementally as dependencies land.
+Semantics today: `source` references/owns `target`. As a tree edge, the **parent is the source** and the **child is the target** (an `own`-edge points parent → child). The child's sibling order lives on the edge.
+
+- [ ] **Add `edge_key BLOB` to `joins`.** Non-null for `kind = 'own'` (the sibling-local lexorank key), null for `kind = 'ref'`. Add a migration `ALTER TABLE joins ADD COLUMN edge_key BLOB` mirroring the existing migration pattern. The key validity CHECK from the old `rank` table (`length(key) > 0 AND last byte = x'00'`) moves here, conditioned on `kind = 'own'`.
+- [ ] **Decide and document the sibling key space.** A child's order key is unique **among siblings of the same `own`-parent**, not globally. Add an index that makes "ordered children of parent P" a fast range/sort: `CREATE INDEX joins_own_children ON joins(source_matrix_id, source_row_id, edge_key) WHERE kind = 'own'`. (A partial index on `kind = 'own'` keeps `ref`-edges out of it.)
+- [ ] **Single-parent enforcement.** A target row may have at most one inbound `own`-edge. Today this is enforced procedurally in `createDependentRow`. Add a partial unique index: `CREATE UNIQUE INDEX joins_single_owner ON joins(target_matrix_id, target_row_id) WHERE kind = 'own'`. This is the schema-level statement of the single-parent tree property.
+- [ ] **Reuse `lexorank.ts` unchanged.** Sibling keys are ordinary lexorank keys; `between`/`makeKey`/`compareKeys` apply directly. The crucial simplification vs today: there is **no prefix encoding of hierarchy** in the key anymore -- hierarchy is the edge, the key only orders siblings. Document this prominently (it removes the most error-prone part of `tree.ts`).
+- [ ] Verification: `npm run typecheck && npm run lint && npm run test:run` (tests will be updated alongside the ops below; expect red until §3-§5 land -- sequence within the session).
+
+## 2. The root sentinel
+
+Every row needs exactly one `own`-edge carrying its order, so the forest roots need a parent.
+
+- [ ] **Choose the sentinel representation.** Recommended: a reserved sentinel identity `(ROOT_MATRIX_ID, ROOT_ROW_ID)` (e.g. the existing root matrix `id = 1` plus a reserved sentinel row id, or a dedicated `(0, 0)` pair). It is never rendered as a row; it exists only to be the `source` of the top-level `own`-edges. Document the exact constants in `src/core/matrix.ts`.
+- [ ] **Top-level workspace bullets attach to the sentinel.** Where `createTreePosition` currently appends a root-level rank key, the new path inserts an `own`-edge `(sentinel) → (matrix_id, row_id)` with a sibling key among the sentinel's children.
+- [ ] **`ensureRootMatrix` provisions the sentinel** once, idempotently, alongside the root matrix.
+- [ ] **Carried-forward flag (resolution §5):** this commits us to the root-sentinel variant (a). The documented fallback (b) -- relocating today's prefix-encoded global key onto the edge with no separate scroll index -- is **not** taken; record that decision here so a future reader knows the sentinel is load-bearing.
+- [ ] Verification: a fresh DB has exactly one sentinel; every top-level bullet has one `own`-edge from it.
+
+## 3. Rewrite `createTreePosition` / `insertRow` onto edges
+
+`src/core/tree.ts` `createTreePosition` currently computes a prefix-encoded global rank key from `parentKey`/`prevKey`/`nextKey` and writes the `rank` row (plus closure). The new version computes a **sibling-local** key and writes an `own`-edge.
+
+- [ ] **New positioning inputs.** Replace key-based positioning (`parentKey`, `prevKey`, `nextKey` as opaque global keys) with **edge-based** positioning: the parent identity `(parentMatrixId, parentRowId)` (defaulting to the sentinel) plus optional `prevSiblingKey` / `nextSiblingKey` (the *edge keys* of the surrounding siblings under that parent). The new sibling key is `between(prev, next)` scoped to that parent's children -- a simple `between`, with **none** of the cross-partition global-bound gymnastics the old code needed (the old `globalLowerBound`/`globalNextStmt` logic disappears).
+- [ ] **`insertRow` signature update** (`src/core/matrix.ts`). It currently takes `{ values, parentKey, prevKey, nextKey }` and calls `createTreePosition` when the matrix has the rank trait. Now: every row insert also creates its `own`-edge (to the given parent or the sentinel). The "has rank trait" gate is removed -- **all rows live in the own-forest** (see §6 on the trait dissolution).
+- [ ] **`createDependentRow`** (the `#`-tag / aspect-row path) becomes: insert the target row, then create an `own`-edge from the host to it with a sibling key. This already creates an `own` join today; the only addition is the `edge_key`. A hosted aspect row is just a cross-matrix child -- identical machinery.
+- [ ] Tests: inserting siblings yields strictly ordered edge keys under the same parent; inserting under different parents reuses the sibling key space independently (cross-parent keys may collide -- that is fine, they're scoped); a hosted aspect row appears as an ordered child of its host.
+
+## 4. Rewrite `reparentRow` onto edges (the big simplification)
+
+This is where the payoff is largest. Today `reparentRow` (`src/core/tree.ts`) rewrites the rank keys of the **entire moved subtree** (prefix splice via `UNHEX(HEX(?)||...)`) and performs three closure-rewrite statements. With hierarchy on the edge, a move is **O(1) at the truth**.
+
+- [ ] **A move is a single edge rewrite.** Re-point the moved node's inbound `own`-edge to the new parent and assign a new sibling key via `between(prevSibling, nextSibling)` under the new parent. **Descendants are untouched** -- their `own`-edges and sibling keys are unchanged because hierarchy is no longer encoded in their keys. This deletes the entire prefix-splice `UPDATE rank ... substr(...)` machinery.
+- [ ] **Cross-matrix reparent is the same operation.** Outdenting a `#task` from a host bullet to the sentinel, or moving a bullet under a task, are all "re-point the inbound own-edge." Note this explicitly -- it is the resolution's "ancestry is a uniform `own`-chain across boundaries."
+- [ ] **Cycle check moves to the edge graph.** The old cycle guard queried the per-matrix closure (`ancestor_key = ? AND descendant_key = ?`). The new guard walks `own`-edges (or consults the global closure cache from Phase 8b) to reject re-pointing a node under one of its own `own`-descendants. If Phase 8b lands after this, use a bounded recursive CTE over `joins WHERE kind='own'` as the interim check.
+- [ ] **Closure/scroll-index maintenance on move** is deferred to Phase 8b (the truth update here is trivial; the derived caches refresh from it). For this part, either rebuild the affected caches eagerly with a simple walk, or land §4 with closure temporarily rebuilt wholesale and optimize in 8b. Pick one and note it.
+- [ ] Tests: reparent leaves descendant edge keys byte-identical; reparent across matrixes works; reparent under own descendant is rejected; sibling order after the move matches `prev`/`next` inputs.
+
+## 5. Rewrite `removeTreePosition` / `deleteSubtree` onto edges
+
+- [ ] **Remove a single node, reparent its children** (today's `removeTreePosition` behavior): on delete, the node's `own`-children are re-pointed to the node's `own`-parent (preserving order), then the node's inbound and outbound `own`-edges are severed. No per-matrix closure rewrite -- just edge re-points (+ a Phase 8b cache refresh).
+- [ ] **Delete a subtree** (today's `deleteSubtree`): walk `own`-descendants from the node and delete them. This converges with cascade (Phase 8b §cascade) -- ideally there is **one** descendant walk used by both subtree-delete and cascade-delete. Note the convergence; the unified implementation lands in 8b.
+- [ ] **`row_kind` on the old `rank` table is gone here.** Today `rank.row_kind` distinguishes `0=row` / `1=child_matrix_ref`. Ownership of a child matrix is expressed differently now (Phase 8c: `own`-edges to the matrix's roots + `matrix.owner`). The `row_kind = 1` concept is **reinterpreted as a view-layer positioning marker** and is settled in [Phase 9 §dedicated sub-tables](Phase-9.md) -- it carries **position, not ownership**. Do **not** carry `row_kind` onto the join/edge.
+- [ ] Tests: deleting a node promotes its children to the grandparent in order; deleting a subtree removes all `own`-descendants; no orphaned edges remain.
+
+## 6. Dissolve the standalone `rank` trait
+
+With order on the edge, the per-matrix `rank` table and its `matrix_traits` bookkeeping no longer represent truth.
+
+- [ ] **Drop the `rank` table** from `initMatrixSchema` (and the `rank`-related CHECK). Its role (ordering) is now `joins.edge_key`.
+- [ ] **Update `matrix_traits`.** The `trait_type IN ('rank', 'closure')` CHECK and `ensureTrait`/`hasTrait`/`requireTraits` usages: `rank` is no longer a provisionable trait (the own-forest is universal infrastructure, not a per-matrix opt-in). `closure` becomes global (Phase 8b) rather than per-matrix, so the trait registry's role shrinks further -- decide in 8b whether `matrix_traits` survives at all or collapses entirely. For this part: stop provisioning/requiring `rank`; leave `closure` provisioning in place until 8b reworks it.
+- [ ] **Update `src/core/sync.ts` triggers.** Change tracking currently installs triggers on `rank` (and `joins`, `matrix`, `matrix_columns`). Remove the `rank` triggers; ensure `joins` triggers capture `edge_key`. (Closure remains untracked/derived -- unchanged principle.)
+- [ ] **Sweep callers of the old key-based API.** `addSampleRowsToMatrix`, the workspace plugin's queries (children/ancestry/scroll), `NavigationPanel`, and any tests that read `rank` or pass `parentKey`/`prevKey`/`nextKey` must move to the edge API. Catalog them at the start of the session (grep `FROM rank`, `createTreePosition`, `parentKey`, `parseKey`) and convert each. The workspace read queries are substantial -- they may partly defer to Phase 8b's scroll index, so coordinate: this part can leave reads on a temporary "recursive CTE over edges" path and let 8b install the fast scroll index.
+- [ ] Verification: `npm run format && npm run lint && npm run typecheck && npm run test:run`, then `pnpm test:e2e`. Outline create/indent/outdent/reorder/delete and drag-drop must pass end-to-end on the edge model before moving to Phase 8b.
+
+## 7. Performance guards -- Part A (edge ops)
+
+Uses the Stage P0 harness. These assert the edge ops stay cheap before the global caches (8b) raise the stakes.
+
+- [ ] **Reparent is O(1) at the truth (work-count):** a reparent re-points exactly **1** edge and writes **0** descendant edge keys; assert descendant edge keys are byte-identical before/after (the core payoff of moving hierarchy off the key).
+- [ ] **Children-of-parent query is index-covered (EQP):** "ordered children of P" uses the `joins_own_children` partial index, with no `SCAN` of `joins` and no `USING AUTOMATIC`.
+- [ ] **Single-owner check is index-covered (EQP):** the insert-time "does this target already have an owner?" check uses the `joins_single_owner` partial unique index.
+- [ ] **No super-linear edge ops (scaling-ratio):** per-op work for insert / reparent / single-node delete stays ≈constant as the forest grows N → 10N (it must not scan the forest).
+- [ ] **Sibling-key generation is local:** computing a new sibling key reads only the immediate neighbors under one parent (work-count), confirming the old cross-partition global-bound scans are gone.
 
 ---
 
-## Decisions and scope boundaries
+## Done criteria (Phase 8 / Part A)
 
-- **Tag types are prototypes, not built-ins.** The task and movie review tag types are user-level constructs created through `#`-tagging, not special-cased system features. They demonstrate general infrastructure (defaults, renderers, templates). The system does not hard-code knowledge of "tasks" or "movie reviews" — it only knows about templates that happen to match those names.
+The `own`-join is the universal tree edge: it carries a sibling-local `edge_key`, single-parent is enforced by a partial unique index, and a root sentinel gives every row exactly one inbound `own`-edge. `insertRow`, `createDependentRow`, `reparentRow`, and node/subtree deletion are rewritten onto edges -- a reparent is an O(1) edge re-point with descendants untouched, intra- and cross-matrix alike. The standalone `rank` table and trait are gone; ordering lives on the edge. The perf-test harness (Stage P0) exists and the Part A edge-op guards (§7) pass. The full static-analysis suite and the existing outline E2E suite pass on the new model (reads may run on an interim recursive-CTE path pending the Phase 8b scroll index).
 
-- **Templates are a convenience, not a requirement.** When `#task` is typed and no tag type exists, the template provides predefined columns. But the user could also create a "task" tag type manually through the tag browser with whatever columns they want. Templates are suggestions, not constraints.
+## Dependency notes
 
-- **Task template could become a system template.** Tasks are common enough that a built-in "task" template is reasonable, possibly evolving into a first-class feature with a dedicated face (kanban board, filtered task list). But for Phase 8, it's just a template in the registry — nothing is hard-coded beyond the column spec.
-
-- **Default values are application-level, not SQLite DEFAULT.** Column defaults are stored in `matrix_columns.default_value` and applied by `insertRow`, not compiled into the data table DDL. This keeps the mechanism flexible (expressions can reference runtime context) and avoids complications with `ALTER TABLE ADD COLUMN DEFAULT` on existing tables.
-
-- **Expression defaults are evaluated per-insert.** A default like `date('now')` is evaluated by running `SELECT date('now')` at insert time, not once at table creation. This is correct for time-based defaults but means expression evaluation happens on every insert for columns with expression defaults.
-
-- **Renderer registry is in-memory.** Custom renderers are registered at app startup via `registerCellRenderer()`. There is no persistent renderer storage — the registry is rebuilt from code on each app load. This is appropriate because renderers are code artifacts (Solid components), not user data.
-
-- **No task-specific face type.** Tasks are viewed through the table face (the tag matrix's identity face) with appropriate sort/filter configuration. A dedicated task face (kanban, Gantt, calendar) is future work (Plan.md Phase 9+ or a separate plugin). Phase 8 proves tasks work through the existing face infrastructure.
-
-- **Inline affordances are optional enhancement.** The inline status toggle and date picker on tag badges are a UX polish step. If they add too much complexity to the initial implementation, they can be deferred — the tag property panel (click badge → open panel) is the primary editing surface.
-
-- **Star rating is the only fully custom renderer.** The status toggle and date picker are enhancements to existing display types (select, date). The star rating is genuinely new — a number displayed and edited as clickable stars. This proves the renderer registry works for renderers that are substantially different from the default.
-
----
-
-## Done criteria
-
-All ten stage groups complete (1, 2, 3, 4, 5, 6, 7, 8, 9, 10a–c). Column-level default values are applied automatically on row creation — both literal values and SQL expressions. The cell renderer registry maps (displayType, variant) to custom display/edit components, and the existing built-in types are refactored through it. The star rating renderer displays and edits numeric values as clickable stars. The status toggle renderer cycles through select options on click. The date picker provides a calendar dropdown for date columns. `createTagType` accepts rich column specs (constraints, display type, options, defaults). Tag type templates provide predefined column schemas for "task" and "movie-review", detected by name on inline creation. Inline tag affordances allow quick status toggling and date picking directly from tag badges in the outline. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.
+Gates [Phase 8b](Phase-8b.md) (derived projections build on the edge truth) and [Phase 8c](Phase-8c.md) (matrix ownership and tags-as-nodes build on edges + sentinel). Builds on Phase 5b (column identity, constraints) and Phase 7 (workspace plugin / stream view). Largely independent of [Phase 11](Phase-11.md) (tasks/movie reviews) except that 8c reshapes how tag types are stored -- sequence 8c before any further tag work. The view-layer surfaces this unlocks are [Phase 9](Phase-9.md); the design-system pass over them is [Phase 10](Phase-10.md).

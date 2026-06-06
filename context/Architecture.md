@@ -291,7 +291,7 @@ On write, the system parses Markdown back to ProseMirror JSON and runs the stand
 
 The primary external interface. An MCP server exposes the op registry as MCP tools, with tool schemas generated from the op type definitions. The MCP server also exposes the SQL read sandbox as a query tool and provides Markdown-formatted content for rich text columns.
 
-See [Plan - Phase 13](#phase-13----op-system-batch-ops-and-mcp-server) for the implementation plan.
+See [Plan - Phase 16](Plan.md#phase-16----op-system-batch-ops-and-mcp-server) for the implementation plan.
 
 ## Core concepts
 
