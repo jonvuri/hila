@@ -69,17 +69,12 @@ Closure is a single global cache keyed by row identity, derived from `own`-edges
 
 ## Follow-up: Replace `node-sql-parser` with `sqlite3-parser`
 
-The `inferScope` function (§4) now uses `sqlite3-parser` — a pure-JS port of SQLite's own LALR(1) grammar — for robust AST-based SQL analysis. The remaining two `node-sql-parser` usages are purely for `tableList()` (extracting tables a query reads):
+**✅ Complete.** The `inferScope` function (§4) now uses `sqlite3-parser` — a pure-JS port of SQLite's own LALR(1) grammar — for robust AST-based SQL analysis. The table extraction (`tablesVisitedBySql`) has been unified into a single `sqlite3-parser`-based implementation in `src/core/worker/invalidation.ts`:
 
-1. **`src/core/worker/sql-handler.ts`** — `tablesVisitedBySql(sql)`: used at subscription time to build the `subscribersByTable` index.
-2. **`src/perf/invalidation.ts`** — same helper for the test recorder.
-
-**Migration plan (single focused session):**
-- Replace both with a `sqlite3-parser` `traverse` that collects `TableSelectTable` nodes (table names + aliases from FROM/JOIN).
-- Handle quoted table names (`"mx_42_data"`) via the parser's `Name.text` (already unquoted).
-- Remove `node-sql-parser` from `package.json`.
-- Verify: the table extraction must handle the full query repertoire (CTEs, subqueries, correlated subqueries like `has_children`). Write tests against the workspace queries.
-- Benefit: ~10x parse speedup for the subscription hot path, one fewer 700KB dependency, and a single parser for all SQL reflection needs.
+- [x] Replace both usages with a `sqlite3-parser` `traverse` that collects `TableSelectTable` nodes (table names from FROM/JOIN), filtering out CTE-defined names.
+- [x] Handle quoted table names (`"mx_42_data"`) via the parser's `Name.text` (already unquoted).
+- [x] Remove `node-sql-parser` from `package.json`.
+- [x] Verify: the table extraction handles the full query repertoire (CTEs, subqueries, correlated subqueries like `has_children`). Tests in `src/core/worker/tables-visited.test.ts` cover all shapes.
 
 ## Dependency notes
 

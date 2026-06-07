@@ -15,6 +15,47 @@ import { parseStmt, traverse } from 'sqlite3-parser'
 
 export const STRUCTURAL_TABLES = new Set(['scroll_index', 'closure', 'joins'])
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AstNode = any
+
+/**
+ * Extract the set of table names read by a SQL statement via AST traversal.
+ * Handles JOINs, subqueries, CTEs, and correlated subqueries by collecting
+ * all `TableSelectTable` nodes (the sqlite3-parser AST node for table
+ * references in FROM/JOIN clauses), then excluding CTE-defined names.
+ */
+export const tablesVisitedBySql = (sql: string): Set<string> => {
+  const result = parseStmt(sql, { allowTrailing: true })
+  if (result.status !== 'ok') return new Set()
+
+  const cteNames = new Set<string>()
+  const tables = new Set<string>()
+
+  traverse(result.root as AstNode, {
+    nodes: {
+      CommonTableExpr(node: AstNode) {
+        const name: string | undefined = node.tblName?.text
+        if (name) {
+          cteNames.add(name.toLowerCase())
+        }
+      },
+      TableSelectTable(node: AstNode) {
+        const tableName: string | undefined = node.tblName?.objName?.text
+        if (tableName) {
+          tables.add(tableName.toLowerCase())
+        }
+        return 'skip'
+      },
+    },
+  })
+
+  for (const cte of cteNames) {
+    tables.delete(cte)
+  }
+
+  return tables
+}
+
 // -- Types --------------------------------------------------------------------
 
 export type KeyRange = {
@@ -43,9 +84,6 @@ export type SubscriptionScope = {
   structuralTables: Set<string>
   structural?: StructuralScope
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type N = any
 
 /**
  * Infer the subscription's scope from its SQL and the tables it reads.
@@ -88,9 +126,9 @@ const extractStructuralScope = (
 
   // Build alias → table mapping from the FROM/JOIN clauses.
   const aliasToTable = new Map<string, string>()
-  traverse(result.root as N, {
+  traverse(result.root as AstNode, {
     nodes: {
-      TableSelectTable(node: N) {
+      TableSelectTable(node: AstNode) {
         const tableName: string | undefined = node.tblName?.objName?.text
         const aliasName: string | undefined = node.alias?.name?.text
 
@@ -123,12 +161,12 @@ const extractStructuralScope = (
     return table !== undefined && STRUCTURAL_TABLES.has(table)
   }
 
-  traverse(result.root as N, {
+  traverse(result.root as AstNode, {
     nodes: {
-      BinaryExpr(node: N) {
+      BinaryExpr(node: AstNode) {
         const op: string = node.op
-        const left: N = node.left
-        const right: N = node.right
+        const left: AstNode = node.left
+        const right: AstNode = node.right
 
         if (!left || !right) return
 
@@ -160,9 +198,9 @@ const extractStructuralScope = (
         }
       },
 
-      InListExpr(node: N) {
-        const lhs: N = node.lhs
-        const rhs: N[] | undefined = node.rhs
+      InListExpr(node: AstNode) {
+        const lhs: AstNode = node.lhs
+        const rhs: AstNode[] | undefined = node.rhs
 
         if (lhs?.type === 'QualifiedExpr') {
           const tableAlias: string = lhs.table.text.toLowerCase()

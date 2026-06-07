@@ -1,7 +1,6 @@
 // Handles SQL messages, and also manages subscriptions to SQL statements.
 
 import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
-import { Parser } from 'node-sql-parser/build/sqlite'
 
 import type { SqlClientMessage, SqlWorkerMessage } from '../sql-types'
 
@@ -11,36 +10,13 @@ import {
   setPendingFlushCallback,
   shouldRecompute,
   STRUCTURAL_TABLES,
+  tablesVisitedBySql,
   type SubscriptionScope,
 } from './invalidation'
 import { sqliteWasm } from './worker-db'
 
-const parser = new Parser()
-
 const postMessage = (message: SqlWorkerMessage) => {
   self.postMessage(message)
-}
-
-// Table specifiers from parser.tableList have this format:
-// "{type}::{dbName}::{tableName}"
-// We normalize them to just the table name.
-const normalizeTableName = (tableSpecifier: string) => {
-  const tableName = tableSpecifier.split('::').pop()
-
-  if (!tableName) {
-    throw new Error(`Invalid table specifier: ${tableSpecifier}`)
-  }
-
-  return tableName.toLowerCase()
-}
-
-const tablesVisitedBySql = (sql: string): string[] => {
-  try {
-    const list = parser.tableList(sql)
-    return list.map(normalizeTableName)
-  } catch (_err) {
-    return []
-  }
 }
 
 const trimSql = (sql: string) => {
@@ -72,7 +48,7 @@ const subscribe = async (sql: Sql) => {
     preparedStatementsBySql.set(sql, preparedStatement)
 
     // Track tables read by this SQL for selective invalidation
-    const visited = new Set(tablesVisitedBySql(sql))
+    const visited = tablesVisitedBySql(sql)
     tablesBySql.set(sql, visited)
     for (const table of visited) {
       const set = subscribersByTable.get(table)

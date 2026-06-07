@@ -8,32 +8,17 @@
 // to simulate the handler's dirty-set emission and verify that only overlapping
 // subscriptions recompute.
 
-import { Parser } from 'node-sql-parser/build/sqlite'
-
 import {
   inferScope,
   shouldRecompute,
+  tablesVisitedBySql,
   type DirtySet,
   type SubscriptionScope,
 } from '../core/worker/invalidation'
 
 import type { WriteHook } from './work-counter'
 
-const parser = new Parser()
-
-const normalizeSpecifier = (specifier: string): string => {
-  const name = specifier.split('::').pop()
-  return (name ?? '').toLowerCase()
-}
-
-/** Tables a SQL statement reads, by the same logic the worker uses. */
-export const tablesVisitedBySql = (sql: string): Set<string> => {
-  try {
-    return new Set(parser.tableList(sql).map(normalizeSpecifier))
-  } catch {
-    return new Set()
-  }
-}
+export { tablesVisitedBySql }
 
 export type RecordedEdit = {
   /** Tables that received at least one row write during the edit. */
