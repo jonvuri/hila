@@ -13,7 +13,6 @@ const makeDefinition = (overrides: Partial<PluginDefinition> = {}): PluginDefini
   name: 'Test Plugin',
   version: '1.0.0',
   matrixes: [],
-  traits: [],
   namedQueries: {},
   namedMutations: {},
   faceBindings: [],
@@ -275,7 +274,6 @@ describe('Plugin system', () => {
       id: 'test.custom-face',
       name: 'Custom Face',
       slots: [{ name: 'content', preferredType: 'richtext', required: true }],
-      traitRequirements: [],
       overflowBehavior: 'none',
     }
 
@@ -298,7 +296,6 @@ describe('Plugin system', () => {
       id: 'test.idempotent-face',
       name: 'Idempotent Face',
       slots: [],
-      traitRequirements: [],
       overflowBehavior: 'none',
     }
 

@@ -6,11 +6,6 @@ export type MatrixSpec = {
   columns: { name: string; type: string; constraints?: string; role?: 'label' | 'content' }[]
 }
 
-export type TraitRequest = {
-  type: 'rank' | 'closure'
-  matrixKey: string // references MatrixSpec.key
-}
-
 export type FaceBinding = {
   key: string
   faceTypeId: string
@@ -48,7 +43,6 @@ export type PluginDefinition = {
   version: string
   faceTypes?: FaceTypeDefinition[]
   matrixes: MatrixSpec[]
-  traits: TraitRequest[]
   namedQueries: Record<string, string>
   namedMutations: Record<string, string>
   faceBindings: FaceBinding[]

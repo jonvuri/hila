@@ -11,7 +11,6 @@ export const tagBrowserFaceTypeDefinition: FaceTypeDefinition = {
   id: 'hila.tag-browser',
   name: 'Tag Browser',
   slots: [],
-  traitRequirements: [],
   overflowBehavior: 'none',
 }
 
@@ -37,7 +36,6 @@ export const tagsPlugin: PluginDefinition = {
       ],
     },
   ],
-  traits: [],
   namedQueries: {
     tagsForRow: 'buildTagsForRowQuery(sourceMatrixId, sourceRowId)',
     taggedRows: 'buildTaggedRowsQuery(tagMatrixId, sourceMatrixId)',

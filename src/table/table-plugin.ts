@@ -6,7 +6,6 @@ export const tableFaceTypeDefinition: FaceTypeDefinition = {
   id: 'hila.table',
   name: 'Table',
   slots: [],
-  traitRequirements: [],
   overflowBehavior: 'none',
 }
 

@@ -6,7 +6,6 @@ import { initMatrixSchema, getColumns } from '../core/matrix'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, getFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
-import { getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import { tagsPlugin, tagBrowserFaceTypeDefinition } from './tags-plugin'
@@ -33,10 +32,6 @@ describe('Tag browser face type definition', () => {
 
   test('has no slots (cross-matrix view)', () => {
     expect(tagBrowserFaceTypeDefinition.slots).toEqual([])
-  })
-
-  test('has no trait requirements', () => {
-    expect(tagBrowserFaceTypeDefinition.traitRequirements).toEqual([])
   })
 
   test('has overflow behavior none', () => {
@@ -132,17 +127,6 @@ describe('Tag type registry', () => {
     expect(colNames).toContain('priority')
     expect(colNames).toContain('due_date')
     expect(colNames).not.toContain('label')
-  })
-
-  test('createTagType does not provision a rank trait (aspect rows live in the own-forest)', () => {
-    const tagType = createTagType(db, 'task')
-
-    // rank dissolved onto the own-edge in Phase 8: a hosted aspect row gets its
-    // order from the own-edge createDependentRow attaches, so the tag matrix
-    // needs no per-matrix rank provisioning.
-    const traits = getTraits(db, tagType.matrixId)
-    const traitTypes = traits.map((t) => t.trait_type)
-    expect(traitTypes).not.toContain('rank')
   })
 
   test('createTagType sets source_plugin_id to hila.tags on the matrix', () => {

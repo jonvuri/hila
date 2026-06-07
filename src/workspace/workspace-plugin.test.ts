@@ -13,7 +13,6 @@ import { createTreePosition, type NodeRef } from '../core/tree'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
-import { getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import {
@@ -45,7 +44,7 @@ describe('Workspace plugin registration', () => {
     registerFaceType(workspaceFaceTypeDefinition)
   })
 
-  test('registers the workspace plugin and creates the matrix with the closure trait', async () => {
+  test('registers the workspace plugin and creates the matrix', async () => {
     const ctx = await registerPlugin(db, testWorkspacePlugin)
     const matrixId = ctx.matrixIds['root']!
 
@@ -54,12 +53,6 @@ describe('Workspace plugin registration', () => {
     const plugin = getPlugin(db, 'hila.workspace')
     expect(plugin).not.toBeNull()
     expect(plugin!.name).toBe('Workspace')
-
-    // rank dissolved onto the own-edge; closure remains a provisioned cache.
-    const traits = getTraits(db, matrixId)
-    const traitTypes = traits.map((t) => t.trait_type)
-    expect(traitTypes).not.toContain('rank')
-    expect(traitTypes).toContain('closure')
   })
 
   test('matrix has label and content columns with correct roles', async () => {

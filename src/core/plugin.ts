@@ -4,7 +4,6 @@ import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
 import { applyFaceToMatrix } from './face-config'
 import { getFaceType, registerFaceType as registerFaceTypeLocal } from './face-registry'
 import { createMatrix } from './matrix'
-import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
 
 const TABLE_FACE_TYPE_ID = 'hila.table'
@@ -90,16 +89,6 @@ export const registerPlugin = async (
     db.exec('UPDATE plugins SET metadata = ? WHERE id = ?', {
       bind: [metadata, definition.id],
     })
-
-    for (const trait of definition.traits) {
-      const traitMatrixId = matrixIds[trait.matrixKey]
-      if (traitMatrixId === undefined) {
-        throw new Error(
-          `Trait references unknown matrix key "${trait.matrixKey}" in plugin "${definition.id}"`,
-        )
-      }
-      ensureTrait(db, trait.type, traitMatrixId)
-    }
 
     // TODO: Store named queries/mutations (in-memory, future task)
 

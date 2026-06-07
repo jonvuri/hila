@@ -19,7 +19,6 @@ import { addObserver, removeObserver } from '../client/sql-client'
 import {
   addColumn,
   createMatrix,
-  ensureTrait,
   getColumns,
   insertRow,
   registerFaceType,
@@ -70,8 +69,6 @@ describe('row operations through worker', () => {
   beforeAll(async () => {
     await awaitWorkerReady()
     matrixId = await createMatrix('row-ops-test')
-    await ensureTrait('rank', matrixId)
-    await ensureTrait('closure', matrixId)
   })
 
   it('insertRow returns key and rowId', async () => {
@@ -259,8 +256,6 @@ describe('column management through worker', () => {
 
   beforeAll(async () => {
     matrixId = await createMatrix('col-ops-test')
-    await ensureTrait('rank', matrixId)
-    await ensureTrait('closure', matrixId)
   })
 
   it('getColumns returns initial columns', async () => {

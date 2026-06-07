@@ -11,7 +11,6 @@ import {
   getColumns,
 } from '../core/matrix'
 import { registerPlugin, getAllPlugins } from '../core/plugin'
-import { ensureTrait, getTraits } from '../core/traits'
 import { applyFaceToMatrix, getFaceConfigsForMatrix } from '../core/face-config'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import type { PluginDefinition } from '../core/plugin-types'
@@ -25,7 +24,6 @@ const makePlugin = (overrides: Partial<PluginDefinition> = {}): PluginDefinition
   name: 'Test Plugin',
   version: '1.0.0',
   matrixes: [],
-  traits: [],
   namedQueries: {},
   namedMutations: {},
   faceBindings: [],
@@ -114,21 +112,6 @@ describe('Matrix browser data queries', () => {
     expect(plugins.map((p) => p.name)).toEqual(['Alpha Plugin', 'Beta Plugin'])
   })
 
-  // -- Trait state display after provisioning ----------------------------------
-
-  test('trait state is visible after provisioning', () => {
-    const matrixId = createMatrix(db, 'Trait Test')
-
-    expect(getTraits(db, matrixId)).toHaveLength(0)
-
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
-
-    const traits = getTraits(db, matrixId)
-    expect(traits).toHaveLength(2)
-    expect(traits.map((t) => t.trait_type).sort()).toEqual(['closure', 'rank'])
-  })
-
   test('own-forest edges show data after adding sample rows', () => {
     const matrixId = createMatrix(db, 'Sample Test')
 
@@ -181,7 +164,6 @@ describe('Matrix browser data queries', () => {
       id: 'hila.table',
       name: 'Table',
       slots: [],
-      traitRequirements: [],
       overflowBehavior: 'none',
     })
 

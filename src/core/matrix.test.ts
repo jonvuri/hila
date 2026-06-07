@@ -42,18 +42,13 @@ import {
   getOwnEdge,
   type NodeRef,
 } from './tree'
-import { ensureTrait } from './traits'
-
-/** Create a matrix with default rank + closure traits provisioned. */
+/** Create a matrix (traits are no longer needed -- own-forest is universal). */
 const createMatrixWithTraits = (
   db: Database,
   title: string,
   columns?: { name: string; type: string }[],
 ): number => {
-  const matrixId = createMatrix(db, title, columns)
-  ensureTrait(db, 'rank', matrixId)
-  ensureTrait(db, 'closure', matrixId)
-  return matrixId
+  return createMatrix(db, title, columns)
 }
 
 describe('Root Matrix Initialization', () => {
@@ -111,14 +106,13 @@ describe('Root Matrix Initialization', () => {
     expect(columns[1]).toEqual({ name: 'content', type: 'TEXT' })
   })
 
-  test('ensureRootMatrix should create closure table', () => {
+  test('ensureRootMatrix does not create a per-matrix closure table (closure is global)', () => {
     ensureRootMatrix(db)
 
-    // Verify closure table exists
     const closureTableExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_1_closure'`,
     )
-    expect(closureTableExists.step()).toBe(true)
+    expect(closureTableExists.step()).toBe(false)
     closureTableExists.finalize()
   })
 
@@ -180,7 +174,7 @@ describe('Matrix Operations', () => {
     expect(dataTableExists.step()).toBe(true)
     dataTableExists.finalize()
 
-    // Closure table is NOT created by createMatrix -- it's created on demand via ensureTrait
+    // Closure table is NOT created by createMatrix
     const closureTableExists = db.prepare(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_${matrixId}_closure'`,
     )

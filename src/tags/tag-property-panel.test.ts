@@ -11,7 +11,6 @@ import {
   createDependentRow,
 } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
-import { ensureTrait } from '../core/traits'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
@@ -57,8 +56,6 @@ describe('Tag property panel data layer', () => {
     ])
 
     const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
     const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
     createTreePosition(db, outlineMatrixId, sourceRowId)
 
@@ -80,8 +77,6 @@ describe('Tag property panel data layer', () => {
     ])
 
     const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
     const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
     createTreePosition(db, outlineMatrixId, sourceRowId)
 
@@ -106,8 +101,6 @@ describe('Tag property panel data layer', () => {
     const tagType = createTagType(db, 'task', [{ name: 'priority', type: 'TEXT' }])
 
     const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
     const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
     createTreePosition(db, outlineMatrixId, sourceRowId)
 
@@ -132,8 +125,6 @@ describe('Tag property panel data layer', () => {
     const tagType = createTagType(db, 'task', [{ name: 'status', type: 'TEXT' }])
 
     const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
     const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
     createTreePosition(db, outlineMatrixId, sourceRowId)
 
@@ -208,8 +199,6 @@ describe('Tag property panel data layer', () => {
     ])
 
     const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
     const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
     createTreePosition(db, outlineMatrixId, sourceRowId)
 

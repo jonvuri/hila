@@ -10,7 +10,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { createMatrix, insertRow } from '../core/matrix'
-import { ensureTrait } from '../core/traits'
 
 import {
   assertQueryPlan,
@@ -24,10 +23,7 @@ import {
 } from './index'
 
 const createMatrixWithTraits = (harness: PerfHarness, title: string): number => {
-  const matrixId = createMatrix(harness.rawDb, title, [{ name: 'label', type: 'TEXT' }])
-  ensureTrait(harness.rawDb, 'rank', matrixId)
-  ensureTrait(harness.rawDb, 'closure', matrixId)
-  return matrixId
+  return createMatrix(harness.rawDb, title, [{ name: 'label', type: 'TEXT' }])
 }
 
 // -- Table categorization -----------------------------------------------------
@@ -42,12 +38,12 @@ describe('table categorization', () => {
 
   test('extracts referenced tables from SQL without throwing', () => {
     const cats = categorizeTables(`
-      SELECT r.key FROM rank r
-      JOIN "mx_3_data" d ON r.row_id = d.id
-      LEFT JOIN "mx_3_closure" c ON r.key = c.descendant_key
-      WHERE r.matrix_id = 3
+      SELECT j.edge_key FROM joins j
+      JOIN "mx_3_data" d ON j.target_row_id = d.id
+      LEFT JOIN closure c ON j.target_matrix_id = c.descendant_matrix_id
+      WHERE j.source_matrix_id = 3
     `)
-    expect(cats).toEqual(new Set(['rank', 'data', 'closure']))
+    expect(cats).toEqual(new Set(['joins', 'data', 'closure']))
   })
 
   test('does not confuse matrix with matrix_columns', () => {

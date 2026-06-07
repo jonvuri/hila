@@ -4,7 +4,6 @@ import type { FaceConfig, FaceConfigRow } from './face-types'
 import { getFaceType } from './face-registry'
 import { resolveSlotBindings } from './slot-binding'
 import { getColumns } from './matrix'
-import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -76,14 +75,6 @@ export const applyFaceToMatrix = (
   }
 
   return withTransaction(db, () => {
-    // Provision any traits the face still declares (closure remains a
-    // provisioned-but-derived cache in Part A; rank has dissolved onto the
-    // own-edge and is no longer a trait). The own-forest is universal
-    // infrastructure, so there is nothing to build here on first provision.
-    for (const req of faceType.traitRequirements) {
-      ensureTrait(db, req.type, matrixId)
-    }
-
     const columns = getColumns(db, matrixId)
     const { bindings } = resolveSlotBindings(faceType, columns)
 

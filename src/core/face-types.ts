@@ -8,7 +8,6 @@ export type FaceTypeDefinition = {
   id: string
   name: string
   slots: SlotDeclaration[]
-  traitRequirements: { type: 'rank' | 'closure' }[]
   overflowBehavior: 'side-columns' | 'property-panel' | 'none'
 }
 

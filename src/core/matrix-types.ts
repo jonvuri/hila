@@ -3,7 +3,6 @@ import type { TagType } from '../tags/tag-types'
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
-import type { TraitHandle, TraitRow, TraitType } from './traits'
 
 // Matrix operation registry: maps operation names to request params and response results.
 // All message types and the protocol shape are derived from this single declaration.
@@ -68,14 +67,6 @@ export type MatrixOperationMap = {
   getPlugins: {
     params: Record<string, never>
     result: PluginRow[]
-  }
-  ensureTrait: {
-    params: { traitType: TraitType; matrixId: number }
-    result: TraitHandle
-  }
-  getTraits: {
-    params: { matrixId: number }
-    result: TraitRow[]
   }
   applyFaceToMatrix: {
     params: { faceTypeId: string; matrixId: number; pluginId?: string }

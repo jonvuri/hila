@@ -10,7 +10,6 @@ import {
   createDependentRow,
 } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
-import { ensureTrait } from '../core/traits'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
@@ -85,8 +84,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
     test('selecting a tag type creates an aspect row via createDependentRow', () => {
       const tagType = createTagType(db, 'task')
       const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-      ensureTrait(db, 'rank', outlineMatrixId)
-      ensureTrait(db, 'closure', outlineMatrixId)
 
       const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
       createTreePosition(db, outlineMatrixId, sourceRowId)
@@ -142,8 +139,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
 
     test('inline tag type creation then creates aspect row', () => {
       const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-      ensureTrait(db, 'rank', outlineMatrixId)
-      ensureTrait(db, 'closure', outlineMatrixId)
 
       const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
       createTreePosition(db, outlineMatrixId, sourceRowId)
@@ -238,8 +233,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
     test('syncInlineRefs logic: own-kind join created for tag refs', () => {
       const tagType = createTagType(db, 'task')
       const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-      ensureTrait(db, 'rank', outlineMatrixId)
-      ensureTrait(db, 'closure', outlineMatrixId)
 
       const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
       createTreePosition(db, outlineMatrixId, sourceRowId)

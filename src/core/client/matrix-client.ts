@@ -6,7 +6,6 @@ import type {
   MatrixClientMessage,
 } from '../matrix-types'
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
-import type { TraitHandle, TraitRow, TraitType } from '../traits'
 import type { TagType } from '../../tags/tag-types'
 import {
   registerFaceType as registerFaceTypeLocal,
@@ -85,12 +84,6 @@ export const registerPlugin = async (definition: PluginDefinition): Promise<Plug
 }
 
 export const getPlugins = (): Promise<PluginRow[]> => workerCall('getPlugins', {})
-
-export const ensureTrait = (traitType: TraitType, matrixId: number): Promise<TraitHandle> =>
-  workerCall('ensureTrait', { traitType, matrixId })
-
-export const getTraits = (matrixId: number): Promise<TraitRow[]> =>
-  workerCall('getTraits', { matrixId })
 
 export const applyFaceToMatrix = (
   faceTypeId: string,

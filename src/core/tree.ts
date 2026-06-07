@@ -1,7 +1,19 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import {
+  maintainClosureOnDelete,
+  maintainClosureOnInsert,
+  maintainClosureOnReparent,
+  removeNodeFromClosure,
+} from './closure'
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
 import { between, makeKey, parseKey } from './lexorank'
+import {
+  addToScrollIndex,
+  getGlobalKey,
+  rebuildScrollIndex,
+  removeFromScrollIndex,
+} from './scroll-index'
 import { withTransaction } from './transaction'
 
 // -- The own-forest -----------------------------------------------------------
@@ -228,6 +240,27 @@ export const createTreePosition = (
     { bind: [parent.matrixId, parent.rowId, matrixId, rowId, edgeKey] },
   )
 
+  // Maintain global closure cache.
+  const node: NodeRef = { matrixId, rowId }
+  maintainClosureOnInsert(db, node, parent)
+
+  // Maintain scroll index: compute the global key and insert.
+  let parentGlobalKey: Uint8Array | null = null
+  let depth = 0
+  if (parent.matrixId !== ROOT_MATRIX_ID || parent.rowId !== ROOT_ROW_ID) {
+    parentGlobalKey = getGlobalKey(db, parent.matrixId, parent.rowId)
+    // Depth = parent's depth + 1 (looked up from scroll index)
+    const parentDepthStmt = db.prepare(
+      'SELECT depth FROM scroll_index WHERE matrix_id = ? AND row_id = ?',
+    )
+    parentDepthStmt.bind([parent.matrixId, parent.rowId])
+    if (parentDepthStmt.step()) {
+      depth = (parentDepthStmt.get({}) as { depth: number }).depth + 1
+    }
+    parentDepthStmt.finalize()
+  }
+  addToScrollIndex(db, node, parentGlobalKey, edgeKey, depth)
+
   return edgeKey
 }
 
@@ -278,6 +311,14 @@ export const reparentRow = (
       { bind: [parent.matrixId, parent.rowId, edgeKey, matrixId, rowId] },
     )
 
+    // Maintain closure: re-link the subtree's ancestor relationships.
+    maintainClosureOnReparent(db, node, parent)
+
+    // Maintain scroll index: a move changes the global_lexkey of the moved
+    // node and all its descendants (their prefix changes). Full rebuild is
+    // simplest and correct; the affected run is O(subtree).
+    rebuildScrollIndex(db)
+
     return edgeKey
   })
 }
@@ -311,6 +352,13 @@ export const removeTreePosition = (db: Database, matrixId: number, rowId: number
       prevSiblingKey,
     })
   }
+
+  // Remove this node from the closure cache (children have already been
+  // reparented, so their closure was updated in the reparentRow calls above).
+  removeNodeFromClosure(db, node)
+
+  // Remove from scroll index.
+  removeFromScrollIndex(db, matrixId, rowId)
 
   // Sever the node's own-edges (inbound + any remaining outbound).
   db.exec(
@@ -358,7 +406,13 @@ export const deleteSubtree = (
   withTransaction(db, () => {
     const nodes = collectOwnSubtree(db, matrixId, rowId)
 
+    // Remove closure entries for the entire subtree first.
+    maintainClosureOnDelete(db, { matrixId, rowId })
+
     for (const node of nodes) {
+      // Remove from scroll index.
+      removeFromScrollIndex(db, node.matrixId, node.rowId)
+
       db.exec(`DELETE FROM "mx_${node.matrixId}_data" WHERE id = ?`, { bind: [node.rowId] })
       db.exec(
         `DELETE FROM joins

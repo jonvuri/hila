@@ -11,7 +11,6 @@ import {
   getTargets,
 } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
-import { ensureTrait } from '../core/traits'
 
 import { schema } from './schema'
 import { extractInlineRefs } from './inlineref-sync'
@@ -54,8 +53,6 @@ describe('Inline references in outline rows', () => {
 
   test('outline content with inlineref node roundtrips through JSON', () => {
     const matrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
 
     const targetRow = insertDataRow(db, matrixId, { content: EMPTY_DOC })
     createTreePosition(db, matrixId, targetRow)
@@ -81,8 +78,6 @@ describe('Inline references in outline rows', () => {
 
   test('extractInlineRefs extracts refs from outline-style doc content', () => {
     const matrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
 
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [
@@ -104,8 +99,6 @@ describe('Inline references in outline rows', () => {
 
   test('syncInlineRefs creates join entries for outline row refs (direct DB)', () => {
     const matrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
 
     const srcRow = insertDataRow(db, matrixId, { content: EMPTY_DOC })
     createTreePosition(db, matrixId, srcRow)
@@ -119,10 +112,8 @@ describe('Inline references in outline rows', () => {
   })
 
   test('own-kind inlineref in outline content is extracted correctly', () => {
-    const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+    const _outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
     const tagMatrixId = createMatrix(db, 'Tags', [{ name: 'label', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
 
     const doc = schema.node('doc', null, [
       schema.node('paragraph', null, [

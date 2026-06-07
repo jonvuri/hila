@@ -16,7 +16,6 @@ import {
   updateColumnRole,
 } from './matrix'
 import { createTreePosition, removeTreePosition } from './tree'
-import { ensureTrait } from './traits'
 import {
   installCoreTableTriggers,
   getLocalChanges,
@@ -33,10 +32,7 @@ const createMatrixWithTraits = (
   title: string,
   columns?: { name: string; type: string }[],
 ): number => {
-  const matrixId = createMatrix(db, title, columns)
-  ensureTrait(db, 'rank', matrixId)
-  ensureTrait(db, 'closure', matrixId)
-  return matrixId
+  return createMatrix(db, title, columns)
 }
 
 type ChangelogEntry = {

@@ -15,7 +15,6 @@ import {
   removeTreePosition,
   type NodeRef,
 } from './tree'
-import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -82,13 +81,41 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     -- ------------------------------------------------------------
-    -- Trait provisioning registry
+    -- Global closure table (transitive closure of own-edges)
+    --
+    -- A derived cache keyed by row identity. Every (ancestor, descendant)
+    -- pair reachable via own-edges is stored with its depth. Maintained
+    -- incrementally on structural edits; rebuildable from own-edges.
     -- ------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS matrix_traits (
-      matrix_id  INTEGER NOT NULL REFERENCES matrix(id),
-      trait_type TEXT NOT NULL CHECK (trait_type IN ('rank', 'closure')),
-      PRIMARY KEY (matrix_id, trait_type)
+    CREATE TABLE IF NOT EXISTS closure (
+      ancestor_matrix_id    INTEGER NOT NULL,
+      ancestor_row_id       INTEGER NOT NULL,
+      descendant_matrix_id  INTEGER NOT NULL,
+      descendant_row_id     INTEGER NOT NULL,
+      depth                 INTEGER NOT NULL CHECK (depth > 0),
+      PRIMARY KEY (ancestor_matrix_id, ancestor_row_id, descendant_matrix_id, descendant_row_id)
     ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS closure_by_descendant
+      ON closure(descendant_matrix_id, descendant_row_id);
+
+    -- ------------------------------------------------------------
+    -- Global pre-order scroll index (materialized pre-order keys)
+    --
+    -- The global_lexkey is the concatenation of sibling edge_keys from
+    -- the root sentinel down to the node. Pre-order = parent immediately
+    -- precedes its first child; a subtree is a contiguous range.
+    -- Drives windowed scrolling as a single keyset range scan.
+    -- ------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS scroll_index (
+      global_lexkey  BLOB NOT NULL PRIMARY KEY,
+      matrix_id      INTEGER NOT NULL,
+      row_id         INTEGER NOT NULL,
+      depth          INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS scroll_index_identity
+      ON scroll_index(matrix_id, row_id);
 
     -- ------------------------------------------------------------
     -- Global join table (cross-matrix row references + the own-forest)
@@ -451,7 +478,6 @@ export const ensureRootMatrix = (db: Database): number => {
     const deviceId = getOrCreateDeviceId(db)
     const columns = getColumns(db, 1)
     installDataTableTriggers(db, 1, deviceId, columns)
-    ensureTrait(db, 'closure', 1)
     return 1
   }
 
@@ -479,8 +505,6 @@ export const ensureRootMatrix = (db: Database): number => {
 
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
-
-    ensureTrait(db, 'closure', matrixId)
 
     return matrixId
   })

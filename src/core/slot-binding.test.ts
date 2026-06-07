@@ -7,7 +7,6 @@ const makeFaceType = (overrides: Partial<FaceTypeDefinition> = {}): FaceTypeDefi
   id: 'test-face',
   name: 'Test Face',
   slots: [],
-  traitRequirements: [],
   overflowBehavior: 'none',
   ...overrides,
 })

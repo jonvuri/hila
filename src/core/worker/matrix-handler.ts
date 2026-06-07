@@ -53,7 +53,8 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
-import { ensureTrait as ensureTraitImpl, getTraits as getTraitsImpl } from '../traits'
+import { rebuildClosure } from '../closure'
+import { rebuildScrollIndex } from '../scroll-index'
 
 import { triggerSubscribedQueries } from './sql-handler'
 import { sqliteWasm } from './worker-db'
@@ -80,6 +81,25 @@ export const initMatrixHandler = (db: Database) => {
   initMatrixSchema(db)
   const deviceId = getOrCreateDeviceId(db)
   installCoreTableTriggers(db, deviceId)
+
+  // Populate derived caches if they're empty (handles migration from pre-8b
+  // databases that have own-edges but no scroll_index/closure rows yet).
+  const scrollCount = db.prepare('SELECT COUNT(*) AS c FROM scroll_index')
+  scrollCount.step()
+  const hasScrollEntries = (scrollCount.get({}) as { c: number }).c > 0
+  scrollCount.finalize()
+
+  if (!hasScrollEntries) {
+    const edgeCount = db.prepare("SELECT COUNT(*) AS c FROM joins WHERE kind = 'own'")
+    edgeCount.step()
+    const hasEdges = (edgeCount.get({}) as { c: number }).c > 0
+    edgeCount.finalize()
+
+    if (hasEdges) {
+      rebuildClosure(db)
+      rebuildScrollIndex(db)
+    }
+  }
 }
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
@@ -282,30 +302,6 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getPluginsSuccess', id, result: plugins })
       } catch (err: unknown) {
         postMessage({ type: 'getPluginsError', id, error: toError(err) })
-      }
-      break
-    }
-
-    case 'ensureTrait': {
-      const { id, traitType, matrixId } = message
-      try {
-        const { db } = await sqliteWasm
-        const handle = ensureTraitImpl(db, traitType, matrixId)
-        postMessage({ type: 'ensureTraitSuccess', id, result: handle })
-      } catch (err: unknown) {
-        postMessage({ type: 'ensureTraitError', id, error: toError(err) })
-      }
-      break
-    }
-
-    case 'getTraits': {
-      const { id, matrixId } = message
-      try {
-        const { db } = await sqliteWasm
-        const traits = getTraitsImpl(db, matrixId)
-        postMessage({ type: 'getTraitsSuccess', id, result: traits })
-      } catch (err: unknown) {
-        postMessage({ type: 'getTraitsError', id, error: toError(err) })
       }
       break
     }

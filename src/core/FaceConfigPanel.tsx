@@ -138,14 +138,6 @@ const FaceConfigPanel: Component<FaceConfigPanelProps> = (props) => {
             {/* Face type info */}
             <div class="face-config-section">
               <div class="face-config-meta">
-                <Show when={faceType().traitRequirements.length > 0}>
-                  <span class="face-config-badge">
-                    Traits:{' '}
-                    {faceType()
-                      .traitRequirements.map((r) => r.type)
-                      .join(', ')}
-                  </span>
-                </Show>
                 <span class="face-config-badge">Overflow: {faceType().overflowBehavior}</span>
               </div>
             </div>

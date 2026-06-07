@@ -25,10 +25,10 @@ export const normalizeTable = (table: string): string => {
 // belt-and-suspenders).
 const STANDALONE_TABLES = [
   'matrix_columns',
-  'matrix_traits',
   'matrix',
   'joins',
-  'rank',
+  'closure',
+  'scroll_index',
   'plugins',
   'face_configs',
   'formula_column_deps',

@@ -106,10 +106,6 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'managed_by', type: 'TEXT' },
     { name: 'role', type: 'TEXT' },
   ],
-  matrix_traits: [
-    { name: 'matrix_id', type: 'INTEGER' },
-    { name: 'trait_type', type: 'TEXT' },
-  ],
   joins: [
     { name: 'source_matrix_id', type: 'INTEGER' },
     { name: 'source_row_id', type: 'INTEGER' },

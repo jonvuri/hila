@@ -11,7 +11,6 @@ import {
 } from './face-config'
 import { registerFaceType, clearFaceTypeRegistry } from './face-registry'
 import { initMatrixSchema, createMatrix, getColumns } from './matrix'
-import { getTraits } from './traits'
 
 afterEach(() => {
   clearFaceTypeRegistry()
@@ -140,7 +139,6 @@ describe('Face config', () => {
         { name: 'title', preferredType: 'text', required: true },
         { name: 'body', preferredType: 'richtext', required: true },
       ],
-      traitRequirements: [],
       overflowBehavior: 'property-panel',
     })
 
@@ -166,28 +164,6 @@ describe('Face config', () => {
     expect(loaded!.slotBindings).toEqual({ title: titleColId, body: bodyColId })
   })
 
-  test('applyFaceToMatrix provisions required traits', () => {
-    registerFaceType({
-      id: 'hila.outline',
-      name: 'Outline',
-      slots: [{ name: 'primary_content', preferredType: 'richtext', required: true }],
-      traitRequirements: [{ type: 'rank' }, { type: 'closure' }],
-      overflowBehavior: 'side-columns',
-    })
-
-    const matrixId = createMatrix(db, 'Data', [{ name: 'content', type: 'TEXT' }])
-
-    // Before: no traits
-    expect(getTraits(db, matrixId)).toHaveLength(0)
-
-    applyFaceToMatrix(db, 'hila.outline', matrixId)
-
-    // After: rank and closure provisioned
-    const traits = getTraits(db, matrixId)
-    expect(traits).toHaveLength(2)
-    expect(traits.map((t) => t.trait_type).sort()).toEqual(['closure', 'rank'])
-  })
-
   test('applyFaceToMatrix throws for unknown face type', () => {
     const matrixId = createMatrix(db, 'Data', [{ name: 'val', type: 'TEXT' }])
 
@@ -201,7 +177,6 @@ describe('Face config', () => {
       id: 'hila.table',
       name: 'Table',
       slots: [],
-      traitRequirements: [],
       overflowBehavior: 'none',
     })
 

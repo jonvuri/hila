@@ -10,7 +10,6 @@ import {
   createDependentRow,
 } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
-import { ensureTrait } from '../core/traits'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
@@ -52,8 +51,6 @@ describe('Tag lookup queries', () => {
     registryMatrixId = ctx.matrixIds['registry']!
 
     outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
-    ensureTrait(db, 'rank', outlineMatrixId)
-    ensureTrait(db, 'closure', outlineMatrixId)
   })
 
   afterEach(() => {
@@ -170,7 +167,6 @@ describe('Tag lookup queries', () => {
         { name: 'title', type: 'TEXT' },
         { name: 'body', type: 'TEXT' },
       ])
-      ensureTrait(db, 'rank', notesMatrixId)
 
       const outlineRow = createSourceRow('outline row')
       createDependentRow(db, outlineMatrixId, outlineRow, taskTag.matrixId)
@@ -359,7 +355,6 @@ describe('Tag lookup queries', () => {
         { name: 'title', type: 'TEXT' },
         { name: 'body', type: 'TEXT' },
       ])
-      ensureTrait(db, 'rank', notesMatrixId)
 
       const outlineRow = createSourceRow('outline content')
       createDependentRow(db, outlineMatrixId, outlineRow, taskTag.matrixId)
