@@ -44,6 +44,9 @@ importers:
       solid-js:
         specifier: ^1.9.7
         version: 1.9.7
+      sqlite3-parser:
+        specifier: ^0.7.1
+        version: 0.7.1
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.2.1)(jsdom@26.1.0)(sugarss@4.0.1(postcss@8.5.6))
@@ -60,6 +63,9 @@ importers:
       '@storybook/addon-docs':
         specifier: ^10.2.19
         version: 10.2.19(@types/react@19.2.14)(esbuild@0.25.5)(rollup@4.44.0)(storybook@10.2.19(@testing-library/dom@10.4.1)(prettier@3.5.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(vite@6.3.5(@types/node@24.2.1)(sugarss@4.0.1(postcss@8.5.6)))
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
       '@types/node':
         specifier: ^24.2.1
         version: 24.2.1
@@ -2026,6 +2032,10 @@ packages:
   source-map@0.6.1:
     resolution: {integrity: sha512-UjgapumWlbMhkBgzT7Ykc5YXUT46F0iKu8SGXq0bcwP5dz/h0Plj6enJqjz1Zbq2l5WaqYnrVbwWOWMyF3F47g==}
     engines: {node: '>=0.10.0'}
+
+  sqlite3-parser@0.7.1:
+    resolution: {integrity: sha512-+KcAIcmD9xk4Sz3hNsEI7QEGAMGl3s5PyigIf6ri/u1DzAuAmi5YZInjtnXKqHvx9ySl5e0RYILfCVhTdAeKJg==}
+    hasBin: true
 
   stable-hash-x@0.1.1:
     resolution: {integrity: sha512-l0x1D6vhnsNUGPFVDx45eif0y6eedVC8nm5uACTrVFJFtl2mLRW17aWtVyxFCpn5t94VUPkjU8vSLwIuwwqtJQ==}
@@ -4202,6 +4212,8 @@ snapshots:
   source-map@0.5.7: {}
 
   source-map@0.6.1: {}
+
+  sqlite3-parser@0.7.1: {}
 
   stable-hash-x@0.1.1: {}
 

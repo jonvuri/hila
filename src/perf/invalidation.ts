@@ -1,25 +1,26 @@
 // Invalidation fan-out recorder.
 //
-// Mirrors the worker's table-grained subscription invalidation
-// (`src/core/worker/sql-handler.ts`): each subscribed SQL is mapped to the set
-// of tables it reads (via the same `node-sql-parser`), and an applied edit
-// recomputes every subscription that reads a table the edit wrote.
+// Supports both the old table-grained path and the new range-aware path
+// (Phase 8b §4). Each subscribed SQL has both a table set (for table-grained)
+// and a SubscriptionScope (for range-aware matching against a DirtySet).
 //
-// The recorder observes *real writes* through the shared write hook, so it
-// tests the actual write -> subscription fan-out deterministically. Today's
-// mapping is table-grained, so an edit confined to subtree A *will* recompute a
-// subscription scoped to disjoint subtree B when both read the same table -- a
-// guard documents this as the baseline. Phase 8b §4 makes invalidation
-// range-aware; this recorder is the unit those guards tighten against.
+// When testing range-aware invalidation, pass a DirtySet to `recordWithDirty`
+// to simulate the handler's dirty-set emission and verify that only overlapping
+// subscriptions recompute.
 
 import { Parser } from 'node-sql-parser/build/sqlite'
+
+import {
+  inferScope,
+  shouldRecompute,
+  type DirtySet,
+  type SubscriptionScope,
+} from '../core/worker/invalidation'
 
 import type { WriteHook } from './work-counter'
 
 const parser = new Parser()
 
-// Parser table specifiers look like "{type}::{db}::{table}"; reduce to the
-// lower-cased table name, matching the worker's normalization.
 const normalizeSpecifier = (specifier: string): string => {
   const name = specifier.split('::').pop()
   return (name ?? '').toLowerCase()
@@ -41,14 +42,31 @@ export type RecordedEdit = {
   recomputed: Set<string>
 }
 
+export type RecordedEditRangeAware = {
+  writtenTables: Set<string>
+  recomputed: Set<string>
+}
+
 export type InvalidationTracker = {
   subscribe: (sql: string) => void
   unsubscribe: (sql: string) => void
   tablesFor: (sql: string) => Set<string>
-  /** Run an edit and report the written tables and the resulting recomputes. */
+  scopeFor: (sql: string) => SubscriptionScope | undefined
+  /** Run an edit and report the written tables and the resulting recomputes (table-grained). */
   record: (edit: () => void) => RecordedEdit
-  /** Compute recomputes for a hypothetical write set (no edit run). */
+  /** Compute recomputes for a hypothetical write set (no edit run, table-grained). */
   recomputedFor: (writtenTables: Iterable<string>) => Set<string>
+  /**
+   * Run an edit WITH a dirty set and report recomputes using range-aware
+   * invalidation (Phase 8b §4). This simulates what the worker does: the
+   * edit writes to tables (captured via the write hook), and a structural
+   * dirty set narrows which subscriptions actually fire.
+   */
+  recordWithDirty: (edit: () => void, dirty: DirtySet) => RecordedEditRangeAware
+  /**
+   * Compute recomputes given a write set + dirty set (range-aware).
+   */
+  recomputedForRangeAware: (writtenTables: Iterable<string>, dirty: DirtySet) => Set<string>
 }
 
 /**
@@ -57,6 +75,7 @@ export type InvalidationTracker = {
  */
 export const createInvalidationTracker = (writeHook: WriteHook): InvalidationTracker => {
   const tablesBySql = new Map<string, Set<string>>()
+  const scopesBySql = new Map<string, SubscriptionScope>()
 
   const recomputedFor = (writtenTables: Iterable<string>): Set<string> => {
     const written = new Set([...writtenTables].map((t) => t.toLowerCase()))
@@ -72,15 +91,34 @@ export const createInvalidationTracker = (writeHook: WriteHook): InvalidationTra
     return recomputed
   }
 
+  const recomputedForRangeAware = (
+    writtenTables: Iterable<string>,
+    dirty: DirtySet,
+  ): Set<string> => {
+    const written = new Set([...writtenTables].map((t) => t.toLowerCase()))
+    const recomputed = new Set<string>()
+    for (const [sql, scope] of scopesBySql) {
+      if (shouldRecompute(scope, written, dirty)) {
+        recomputed.add(sql)
+      }
+    }
+    return recomputed
+  }
+
   return {
     subscribe: (sql) => {
-      tablesBySql.set(sql, tablesVisitedBySql(sql))
+      const tables = tablesVisitedBySql(sql)
+      tablesBySql.set(sql, tables)
+      scopesBySql.set(sql, inferScope(sql, tables))
     },
     unsubscribe: (sql) => {
       tablesBySql.delete(sql)
+      scopesBySql.delete(sql)
     },
     tablesFor: (sql) => tablesBySql.get(sql) ?? tablesVisitedBySql(sql),
+    scopeFor: (sql) => scopesBySql.get(sql),
     recomputedFor,
+    recomputedForRangeAware,
     record: (edit) => {
       const writtenTables = new Set<string>()
       const unsubscribe = writeHook.onWrite((event) => {
@@ -92,6 +130,18 @@ export const createInvalidationTracker = (writeHook: WriteHook): InvalidationTra
         unsubscribe()
       }
       return { writtenTables, recomputed: recomputedFor(writtenTables) }
+    },
+    recordWithDirty: (edit, dirty) => {
+      const writtenTables = new Set<string>()
+      const unsubscribe = writeHook.onWrite((event) => {
+        writtenTables.add(event.table.toLowerCase())
+      })
+      try {
+        edit()
+      } finally {
+        unsubscribe()
+      }
+      return { writtenTables, recomputed: recomputedForRangeAware(writtenTables, dirty) }
     },
   }
 }
@@ -105,6 +155,21 @@ export const assertNoCrossInvalidation = (edit: RecordedEdit, isolatedSql: strin
   if (edit.recomputed.has(isolatedSql)) {
     throw new Error(
       `Invalidation guard failed: edit writing [${[...edit.writtenTables].join(', ')}] ` +
+        `recomputed a subscription expected to be isolated:\n  ${isolatedSql.trim().replace(/\s+/g, ' ')}`,
+    )
+  }
+}
+
+/**
+ * Assert that a range-aware edit does not recompute an isolated subscription.
+ */
+export const assertNoCrossInvalidationRangeAware = (
+  edit: RecordedEditRangeAware,
+  isolatedSql: string,
+): void => {
+  if (edit.recomputed.has(isolatedSql)) {
+    throw new Error(
+      `Range-aware invalidation guard failed: edit writing [${[...edit.writtenTables].join(', ')}] ` +
         `recomputed a subscription expected to be isolated:\n  ${isolatedSql.trim().replace(/\s+/g, ' ')}`,
     )
   }

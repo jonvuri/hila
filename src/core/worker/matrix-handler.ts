@@ -42,6 +42,8 @@ import {
   edgeKeyOfGlobalKey,
   concatKeys,
 } from '../tree'
+import { getGlobalKey as getGlobalKeyFromIndex, rebuildScrollIndex } from '../scroll-index'
+import { getAncestors as getClosureAncestors, rebuildClosure } from '../closure'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
   saveFaceConfig as saveFaceConfigImpl,
@@ -53,13 +55,56 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
-import { rebuildClosure } from '../closure'
-import { rebuildScrollIndex } from '../scroll-index'
 
+import { emitStructuralDirty, type DirtySet, type NodeId } from './invalidation'
 import { triggerSubscribedQueries } from './sql-handler'
 import { sqliteWasm } from './worker-db'
 
 const EMPTY_DOC_JSON = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
+
+/**
+ * Build a dirty set for a freshly inserted node.
+ * The affected scroll range is the single new key. Closure ancestors are
+ * included so ancestry-scoped subscriptions fire.
+ */
+const buildInsertDirtySet = (
+  db: import('@sqlite.org/sqlite-wasm').Database,
+  matrixId: number,
+  rowId: number,
+  parentMatrixId: number,
+  parentRowId: number,
+): DirtySet => {
+  const nodeKey = getGlobalKeyFromIndex(db, matrixId, rowId)
+  const closureNodes: NodeId[] = [{ matrixId, rowId }]
+
+  // Ancestors of the new node (from closure) are also affected (they gained
+  // a new descendant).
+  const ancestors = getClosureAncestors(db, { matrixId, rowId })
+  for (const a of ancestors) {
+    closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+  }
+
+  // The parent is affected too (has_children may flip).
+  if (parentMatrixId !== 0 || parentRowId !== 0) {
+    const parentKey = getGlobalKeyFromIndex(db, parentMatrixId, parentRowId)
+    if (parentKey) {
+      return {
+        scrollRanges: [
+          // The new node itself
+          ...(nodeKey ? [{ matrixId, low: nodeKey, high: nodeKey }] : []),
+          // The parent row (has_children may change)
+          { matrixId: parentMatrixId, low: parentKey, high: parentKey },
+        ],
+        closureNodes,
+      }
+    }
+  }
+
+  return {
+    scrollRanges: nodeKey ? [{ matrixId, low: nodeKey, high: nodeKey }] : [],
+    closureNodes,
+  }
+}
 
 const postMessage = (message: MatrixWorkerMessage) => {
   self.postMessage(message)
@@ -198,6 +243,19 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           nextSiblingKey,
         })
         const key = concatKeys(parentKey ?? new Uint8Array(0), edgeKey)
+
+        // Emit range-aware dirty set for this insertion.
+        const resolvedParent = parent ?? { matrixId: 0, rowId: 0 }
+        emitStructuralDirty(
+          buildInsertDirtySet(
+            db,
+            matrixId,
+            rowId,
+            resolvedParent.matrixId,
+            resolvedParent.rowId,
+          ),
+        )
+
         postMessage({ type: 'insertRowSuccess', id, result: { rowId, key } })
       } catch (err: unknown) {
         postMessage({ type: 'insertRowError', id, error: toError(err) })
@@ -221,7 +279,23 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       const { matrixId, id, rowId } = message
       try {
         const { db } = await sqliteWasm
+
+        // Capture the node's scroll key + ancestors before deletion.
+        const nodeKey = getGlobalKeyFromIndex(db, matrixId, rowId)
+        const closureNodes: NodeId[] = [{ matrixId, rowId }]
+        const ancestors = getClosureAncestors(db, { matrixId, rowId })
+        for (const a of ancestors) {
+          closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+        }
+
         deleteRowImpl(db, matrixId, rowId)
+
+        // Emit dirty set: the deleted node's key + parent (has_children change).
+        emitStructuralDirty({
+          scrollRanges: nodeKey ? [{ matrixId, low: nodeKey, high: nodeKey }] : [],
+          closureNodes,
+        })
+
         postMessage({ type: 'deleteRowSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteRowError', id, error: toError(err) })
@@ -236,6 +310,9 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         const node = resolveNodeByGlobalKey(db, nodeKey)
         if (!node) throw new Error('reparentRow: node not found for the given key')
 
+        // Capture old scroll key before the reparent for dirty-set computation.
+        const oldNodeKey = getGlobalKeyFromIndex(db, node.matrixId, node.rowId)
+
         const newParent =
           newParentKey ? (resolveNodeByGlobalKey(db, newParentKey) ?? undefined) : undefined
         const prevSib = prevSiblingKey ? edgeKeyOfGlobalKey(prevSiblingKey) : undefined
@@ -249,6 +326,31 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           nextSiblingKey: nextSib,
         })
         const newKey = concatKeys(newParentKey ?? new Uint8Array(0), newEdgeKey)
+
+        // Emit dirty set covering the old and new positions.
+        const newNodeKey = getGlobalKeyFromIndex(db, node.matrixId, node.rowId)
+        const closureNodes: NodeId[] = [{ matrixId: node.matrixId, rowId: node.rowId }]
+        const ancestors = getClosureAncestors(db, {
+          matrixId: node.matrixId,
+          rowId: node.rowId,
+        })
+        for (const a of ancestors) {
+          closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+        }
+        emitStructuralDirty({
+          scrollRanges: [
+            // Conservative: mark the entire matrix as affected for reparent.
+            // Old position range + new position range.
+            ...(oldNodeKey ?
+              [{ matrixId: node.matrixId, low: oldNodeKey, high: oldNodeKey }]
+            : []),
+            ...(newNodeKey ?
+              [{ matrixId: node.matrixId, low: newNodeKey, high: newNodeKey }]
+            : []),
+          ],
+          closureNodes,
+        })
+
         postMessage({ type: 'reparentRowSuccess', id, result: newKey })
       } catch (err: unknown) {
         postMessage({ type: 'reparentRowError', id, error: toError(err) })
@@ -262,7 +364,27 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         const { db } = await sqliteWasm
         const node = resolveNodeByGlobalKey(db, key)
         if (!node) throw new Error('deleteSubtree: node not found for the given key')
+
+        // Capture dirty-set info before deletion.
+        const nodeKey = getGlobalKeyFromIndex(db, node.matrixId, node.rowId)
+        const closureNodes: NodeId[] = [{ matrixId: node.matrixId, rowId: node.rowId }]
+        const ancestors = getClosureAncestors(db, {
+          matrixId: node.matrixId,
+          rowId: node.rowId,
+        })
+        for (const a of ancestors) {
+          closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+        }
+
         deleteSubtreeImpl(db, { matrixId: node.matrixId, rowId: node.rowId })
+
+        // Dirty set covers the subtree's key range (contiguous in pre-order).
+        emitStructuralDirty({
+          scrollRanges:
+            nodeKey ? [{ matrixId: node.matrixId, low: nodeKey, high: nodeKey }] : [],
+          closureNodes,
+        })
+
         postMessage({ type: 'deleteSubtreeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteSubtreeError', id, error: toError(err) })

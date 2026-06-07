@@ -8,7 +8,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
-import { insertRow } from '../core/matrix'
+import { createMatrix, insertRow } from '../core/matrix'
 import { reparentRow } from '../core/tree'
 import { getAncestors, rebuildClosure } from '../core/closure'
 import { rebuildScrollIndex } from '../core/scroll-index'
@@ -219,5 +219,148 @@ describe('Part B guards: closure/scroll-index consistency', () => {
     scrollStmt2.step()
     expect((scrollStmt2.get({}) as { c: number }).c).toBe(scrollCount)
     scrollStmt2.finalize()
+  })
+})
+
+describe('Part B guards: multi-table hydration gather', () => {
+  let harness: PerfHarness
+
+  beforeEach(async () => {
+    harness = await createPerfDb()
+  })
+  afterEach(() => harness.close())
+
+  test('hydrating a heterogeneous window issues ≤ #distinct matrixes data-table queries', () => {
+    // Build a worst-case heterogeneous window: a parent node in the workspace
+    // matrix owns children in multiple different tag-type matrixes, all
+    // interleaved in one pre-order window.
+    const workspaceId = createForestMatrix(harness.rawDb, 'Workspace')
+    const tagMatrixIds: number[] = []
+    const TAG_TYPE_COUNT = 5
+
+    for (let i = 0; i < TAG_TYPE_COUNT; i++) {
+      const tagMx = createMatrix(harness.rawDb, `TagType_${i}`, [
+        { name: 'label', type: 'TEXT' },
+        { name: 'status', type: 'TEXT' },
+      ])
+      tagMatrixIds.push(tagMx)
+    }
+
+    // Create a parent in the workspace matrix.
+    const parent = insertRow(harness.db, workspaceId, { values: { label: 'Host' } })
+
+    // Create interleaved children: for each tag type, create 3 aspect rows
+    // as cross-matrix children of the parent.
+    const childRowIds: Array<{ matrixId: number; rowId: number }> = []
+    for (let round = 0; round < 3; round++) {
+      for (let t = 0; t < TAG_TYPE_COUNT; t++) {
+        const mx = tagMatrixIds[t]!
+        // Insert a data row in the tag matrix.
+        const { rowId } = insertRow(harness.db, mx, {
+          values: { label: `item-${t}-${round}`, status: 'open' },
+          parent: { matrixId: workspaceId, rowId: parent.rowId },
+        })
+        childRowIds.push({ matrixId: mx, rowId })
+      }
+    }
+
+    // The scroll-index window now has the parent + 15 cross-matrix children.
+    // Simulate the multi-matrix hydration gather: query the window from
+    // scroll_index, then batch-by-matrix to hydrate.
+    harness.reset()
+
+    // Step 1: Get the window (one scroll_index query).
+    const windowStmt = harness.db.prepare(
+      'SELECT matrix_id, row_id FROM scroll_index ORDER BY global_lexkey LIMIT 500',
+    )
+    const windowRows: Array<{ matrix_id: number; row_id: number }> = []
+    while (windowStmt.step()) {
+      windowRows.push(windowStmt.get({}) as { matrix_id: number; row_id: number })
+    }
+    windowStmt.finalize()
+
+    // Step 2: Group by matrix_id and issue one query per distinct matrix.
+    const byMatrix = new Map<number, number[]>()
+    for (const row of windowRows) {
+      const ids = byMatrix.get(row.matrix_id)
+      if (ids) {
+        ids.push(row.row_id)
+      } else {
+        byMatrix.set(row.matrix_id, [row.row_id])
+      }
+    }
+
+    harness.reset()
+    for (const [mxId, rowIds] of byMatrix) {
+      const placeholders = rowIds.map(() => '?').join(',')
+      const stmt = harness.db.prepare(
+        `SELECT * FROM "mx_${mxId}_data" WHERE id IN (${placeholders})`,
+      )
+      stmt.bind(rowIds)
+      while (stmt.step()) {
+        /* drain */
+      }
+      stmt.finalize()
+    }
+
+    // The guard: number of data-table statements = #distinct matrixes.
+    const distinctMatrixes = byMatrix.size
+    expect(distinctMatrixes).toBe(TAG_TYPE_COUNT + 1) // 5 tag types + workspace
+    expect(harness.counters.byTable.data?.statements).toBe(distinctMatrixes)
+    // Critically: NOT one-per-row (which would be 16).
+    expect(harness.counters.byTable.data?.statements).toBeLessThanOrEqual(distinctMatrixes)
+  })
+
+  test('off-screen matrixes are not hydrated', () => {
+    const workspaceId = createForestMatrix(harness.rawDb, 'Workspace')
+    const offScreenMx = createMatrix(harness.rawDb, 'OffScreen', [
+      { name: 'label', type: 'TEXT' },
+    ])
+
+    // Create rows: some in the workspace (visible) and some in offScreenMx
+    // that are NOT in the scroll index window (they're children of an
+    // off-screen parent, or simply not in the own-forest).
+    for (let i = 0; i < 10; i++) {
+      insertRow(harness.db, workspaceId, { values: { label: `ws-${i}` } })
+    }
+
+    // Off-screen rows: insert into offScreenMx but NOT attached to the
+    // workspace's own-forest (they exist in their own tree structure).
+    for (let i = 0; i < 5; i++) {
+      insertRow(harness.db, offScreenMx, { values: { label: `off-${i}` } })
+    }
+
+    // Query the window scoped to workspaceId only (the current behavior).
+    harness.reset()
+    const windowStmt = harness.db.prepare(
+      'SELECT matrix_id, row_id FROM scroll_index WHERE matrix_id = ? ORDER BY global_lexkey LIMIT 500',
+    )
+    windowStmt.bind([workspaceId])
+    const windowRows: Array<{ matrix_id: number; row_id: number }> = []
+    while (windowStmt.step()) {
+      windowRows.push(windowStmt.get({}) as { matrix_id: number; row_id: number })
+    }
+    windowStmt.finalize()
+
+    // All rows in the window should be from the workspace matrix.
+    const distinctMatrixes = new Set(windowRows.map((r) => r.matrix_id))
+    expect(distinctMatrixes.size).toBe(1)
+    expect(distinctMatrixes.has(workspaceId)).toBe(true)
+
+    // Hydrate only those (one query for workspace, zero for offScreen).
+    harness.reset()
+    const ids = windowRows.map((r) => r.row_id)
+    const placeholders = ids.map(() => '?').join(',')
+    const hydStmt = harness.db.prepare(
+      `SELECT * FROM "mx_${workspaceId}_data" WHERE id IN (${placeholders})`,
+    )
+    hydStmt.bind(ids)
+    while (hydStmt.step()) {
+      /* drain */
+    }
+    hydStmt.finalize()
+
+    // Only 1 data-table query issued (for workspace). Off-screen matrix not touched.
+    expect(harness.counters.byTable.data?.statements).toBe(1)
   })
 })

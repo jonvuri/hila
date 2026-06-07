@@ -184,6 +184,67 @@ export const getParentGlobalKey = (
   return key
 }
 
+/**
+ * Move a subtree's entries from their current position to a new position.
+ * Used by reparent to avoid a full O(forest) rebuild.
+ *
+ * Returns the old and new key ranges for dirty-set computation.
+ */
+export const moveSubtreeInScrollIndex = (
+  db: Database,
+  node: { matrixId: number; rowId: number },
+  newParentGlobalKey: Uint8Array | null,
+  newEdgeKey: Uint8Array,
+  newParentDepth: number,
+): {
+  oldRange: [Uint8Array, Uint8Array | null]
+  newRange: [Uint8Array, Uint8Array | null]
+} | null => {
+  // 1. Look up old global_lexkey
+  const oldKey = getGlobalKey(db, node.matrixId, node.rowId)
+  if (!oldKey) return null
+
+  // 2. Delete old subtree entries
+  const oldNext = incrementPrefix(oldKey)
+  if (oldNext) {
+    db.exec('DELETE FROM scroll_index WHERE global_lexkey >= ? AND global_lexkey < ?', {
+      bind: [oldKey, oldNext],
+    })
+  } else {
+    db.exec('DELETE FROM scroll_index WHERE global_lexkey >= ?', { bind: [oldKey] })
+  }
+
+  // 3. Compute new root key
+  const newRootKey =
+    newParentGlobalKey ? concatBytes(newParentGlobalKey, newEdgeKey) : newEdgeKey
+  const newDepth = newParentDepth + 1
+
+  // 4. Re-insert the subtree via recursive CTE
+  db.exec(
+    `INSERT OR REPLACE INTO scroll_index (global_lexkey, matrix_id, row_id, depth)
+     WITH RECURSIVE sub(mx, row, gkey, depth) AS (
+       SELECT ?, ?, ?, ?
+       UNION ALL
+       SELECT j.target_matrix_id, j.target_row_id,
+              unhex(hex(sub.gkey) || hex(j.edge_key)),
+              sub.depth + 1
+       FROM joins j
+       JOIN sub ON j.source_matrix_id = sub.mx AND j.source_row_id = sub.row
+       WHERE j.kind = 'own'
+     )
+     SELECT gkey, mx, row, depth FROM sub`,
+    { bind: [node.matrixId, node.rowId, newRootKey, newDepth] },
+  )
+
+  // Compute the new upper bound
+  const newNext = incrementPrefix(newRootKey)
+
+  return {
+    oldRange: [oldKey, oldNext ?? null],
+    newRange: [newRootKey, newNext ?? null],
+  }
+}
+
 // -- Helpers ------------------------------------------------------------------
 
 const concatBytes = (a: Uint8Array, b: Uint8Array): Uint8Array => {

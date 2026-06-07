@@ -36,9 +36,10 @@ export type { ScalingOrder, ScalingMeasurement, AssertScalingOptions } from './s
 export {
   createInvalidationTracker,
   assertNoCrossInvalidation,
+  assertNoCrossInvalidationRangeAware,
   tablesVisitedBySql,
 } from './invalidation'
-export type { InvalidationTracker, RecordedEdit } from './invalidation'
+export type { InvalidationTracker, RecordedEdit, RecordedEditRangeAware } from './invalidation'
 
 export { generateForest, createForestMatrix } from './forest'
 export type { Forest, ForestNode, GenerateForestOptions } from './forest'

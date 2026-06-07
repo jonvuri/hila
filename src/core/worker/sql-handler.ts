@@ -5,6 +5,14 @@ import { Parser } from 'node-sql-parser/build/sqlite'
 
 import type { SqlClientMessage, SqlWorkerMessage } from '../sql-types'
 
+import {
+  consumePendingDirtySet,
+  inferScope,
+  setPendingFlushCallback,
+  shouldRecompute,
+  STRUCTURAL_TABLES,
+  type SubscriptionScope,
+} from './invalidation'
 import { sqliteWasm } from './worker-db'
 
 const parser = new Parser()
@@ -46,6 +54,7 @@ type Sql = string
 const preparedStatementsBySql: Map<Sql, PreparedStatement> = new Map()
 const tablesBySql: Map<Sql, Set<string>> = new Map()
 const subscribersByTable: Map<string, Set<Sql>> = new Map()
+const scopesBySql: Map<Sql, SubscriptionScope> = new Map()
 
 const subscribe = async (sql: Sql) => {
   const existing = preparedStatementsBySql.get(sql)
@@ -74,6 +83,10 @@ const subscribe = async (sql: Sql) => {
       }
     }
 
+    // Infer structural scope for range-aware invalidation.
+    const scope = inferScope(sql, visited)
+    scopesBySql.set(sql, scope)
+
     console.log(`Prepared SQL for subscription: ${trimSql(sql)}`)
   } catch (err: unknown) {
     const error = new Error(`Error preparing SQL: ${trimSql(sql)}`, { cause: err })
@@ -94,6 +107,7 @@ const unsubscribe = (sql: Sql) => {
 
   preparedStatement.finalize()
   preparedStatementsBySql.delete(sql)
+  scopesBySql.delete(sql)
 
   // Remove from table indexes
   const tables = tablesBySql.get(sql)
@@ -146,27 +160,52 @@ const flushPendingTriggers = () => {
   triggerScheduled = false
   const tables = pendingTables
   pendingTables = new Set()
+
+  // Consume any structural dirty set emitted during this batch.
+  const dirty = consumePendingDirtySet()
+
   const firedSqls = new Set<Sql>()
-  for (const table of tables) {
-    const sqls = subscribersByTable.get(table)
-    if (sqls) {
-      for (const sql of sqls) {
-        if (!firedSqls.has(sql)) {
-          firedSqls.add(sql)
-          runSubscribedSql(sql)
+
+  // If a dirty set was emitted, use range-aware matching for all subscriptions.
+  // Otherwise, fall back to pure table-grained (the pre-8b behavior for
+  // non-structural ops like ref-join creation).
+  if (dirty) {
+    for (const [sql, scope] of scopesBySql) {
+      if (!firedSqls.has(sql) && shouldRecompute(scope, tables, dirty)) {
+        firedSqls.add(sql)
+        runSubscribedSql(sql)
+      }
+    }
+  } else {
+    for (const table of tables) {
+      const sqls = subscribersByTable.get(table)
+      if (sqls) {
+        for (const sql of sqls) {
+          if (!firedSqls.has(sql)) {
+            firedSqls.add(sql)
+            runSubscribedSql(sql)
+          }
         }
       }
     }
   }
 }
 
-export const triggerSubscribedQueries = (tableName: string) => {
-  pendingTables.add(tableName.toLowerCase())
+const scheduleTriggerFlush = () => {
   if (!triggerScheduled) {
     triggerScheduled = true
     queueMicrotask(flushPendingTriggers)
   }
 }
+
+export const triggerSubscribedQueries = (tableName: string) => {
+  pendingTables.add(tableName.toLowerCase())
+  scheduleTriggerFlush()
+}
+
+// Wire the dirty-set emitter to schedule a flush (so dirty sets emitted
+// after the update_hook but before the microtask fires are included).
+setPendingFlushCallback(scheduleTriggerFlush)
 
 type SqliteWasm = Awaited<typeof sqliteWasm>
 
@@ -220,3 +259,7 @@ export const handleSqlClientMessage = async (message: SqlClientMessage) => {
     }
   }
 }
+
+// Exported for the perf harness invalidation recorder (it mirrors this
+// module's table mapping logic to test invalidation deterministically).
+export { STRUCTURAL_TABLES as structuralTables }

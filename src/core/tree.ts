@@ -11,6 +11,7 @@ import { between, makeKey, parseKey } from './lexorank'
 import {
   addToScrollIndex,
   getGlobalKey,
+  moveSubtreeInScrollIndex,
   rebuildScrollIndex,
   removeFromScrollIndex,
 } from './scroll-index'
@@ -271,7 +272,8 @@ export const createTreePosition = (
  * hierarchy is not encoded in the key). Intra- and cross-matrix moves are
  * identical.
  *
- * Returns the node's new edge_key.
+ * Returns the node's new edge_key (plus the affected scroll-index key ranges
+ * for range-aware invalidation).
  */
 export const reparentRow = (
   db: Database,
@@ -314,10 +316,34 @@ export const reparentRow = (
     // Maintain closure: re-link the subtree's ancestor relationships.
     maintainClosureOnReparent(db, node, parent)
 
-    // Maintain scroll index: a move changes the global_lexkey of the moved
-    // node and all its descendants (their prefix changes). Full rebuild is
-    // simplest and correct; the affected run is O(subtree).
-    rebuildScrollIndex(db)
+    // Maintain scroll index: O(subtree) partial rebuild instead of O(forest).
+    let newParentGlobalKey: Uint8Array | null = null
+    let newParentDepth = -1
+    if (parent.matrixId !== ROOT_MATRIX_ID || parent.rowId !== ROOT_ROW_ID) {
+      newParentGlobalKey = getGlobalKey(db, parent.matrixId, parent.rowId)
+      const depthStmt = db.prepare(
+        'SELECT depth FROM scroll_index WHERE matrix_id = ? AND row_id = ?',
+      )
+      depthStmt.bind([parent.matrixId, parent.rowId])
+      if (depthStmt.step()) {
+        newParentDepth = (depthStmt.get({}) as { depth: number }).depth
+      }
+      depthStmt.finalize()
+    }
+
+    const moveResult = moveSubtreeInScrollIndex(
+      db,
+      node,
+      newParentGlobalKey,
+      edgeKey,
+      newParentDepth,
+    )
+
+    if (!moveResult) {
+      // Fallback: if the node wasn't in the scroll index (shouldn't happen in
+      // normal operation), do a full rebuild.
+      rebuildScrollIndex(db)
+    }
 
     return edgeKey
   })
