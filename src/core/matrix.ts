@@ -2,14 +2,20 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { compileFormula, parseFormulaRefs } from '../table/formula'
 
-import { parseKey } from './lexorank'
+import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
 import {
   dropChangeTrackingTriggers,
   installDataTableTriggers,
   reinstallDataTableTriggers,
 } from './sync'
-import { createTreePosition, removeTreePosition } from './tree'
-import { ensureTrait, hasTrait } from './traits'
+import {
+  computeSiblingKey,
+  createTreePosition,
+  getOwnChildren,
+  removeTreePosition,
+  type NodeRef,
+} from './tree'
+import { ensureTrait } from './traits'
 import { withTransaction } from './transaction'
 
 /**
@@ -24,6 +30,10 @@ import { withTransaction } from './transaction'
  * Use as a SQL value expression (e.g. in INSERT) or as a column DEFAULT.
  */
 export const SQL_RANDOM_ID = '(abs(random()) >> 10) + 1'
+
+// Re-exported from the dependency-free `ids` module (avoids a matrix<->tree
+// import cycle while keeping the documented home of these constants here).
+export { ROOT_MATRIX_ID, ROOT_ROW_ID }
 
 // Initialize database with the core tables required for matrixes
 export const initMatrixSchema = (db: Database) => {
@@ -72,19 +82,6 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     -- ------------------------------------------------------------
-    -- Global rank table
-    -- ------------------------------------------------------------
-    CREATE TABLE IF NOT EXISTS rank (
-      key           BLOB PRIMARY KEY,  -- global sort key, or position id
-      matrix_id     INTEGER NOT NULL REFERENCES matrix(id) ON DELETE CASCADE,
-      row_kind      INTEGER NOT NULL CHECK (row_kind IN (0,1)),  -- 0=row, 1=child_matrix_ref
-      row_id        INTEGER NOT NULL,  -- rowid in the matrix data table, or matrix id of the child matrix
-
-      -- minimal key validity: must end with a single terminator
-      CHECK (length(key) > 0 AND substr(key, length(key), 1) = x'00')
-    ) STRICT;
-
-    -- ------------------------------------------------------------
     -- Trait provisioning registry
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS matrix_traits (
@@ -94,7 +91,12 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     -- ------------------------------------------------------------
-    -- Global join table (cross-matrix row references)
+    -- Global join table (cross-matrix row references + the own-forest)
+    --
+    -- An own-edge is the universal tree edge: source = parent, target =
+    -- child, and edge_key is the child's sibling-local lexorank order key
+    -- (unique among the siblings sharing that own-parent, NOT global). A
+    -- ref-edge is an unordered association and carries no edge_key.
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS joins (
       source_matrix_id  INTEGER NOT NULL,
@@ -102,7 +104,18 @@ export const initMatrixSchema = (db: Database) => {
       target_matrix_id  INTEGER NOT NULL,
       target_row_id     INTEGER NOT NULL,
       kind              TEXT NOT NULL DEFAULT 'ref',
-      PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id)
+      edge_key          BLOB,
+      PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id),
+
+      -- own-edges carry a valid sibling key (non-empty, single 0x00 terminator);
+      -- non-own edges carry none.
+      CHECK (
+        (kind = 'own'  AND edge_key IS NOT NULL
+                        AND length(edge_key) > 0
+                        AND substr(edge_key, length(edge_key), 1) = x'00')
+        OR
+        (kind != 'own' AND edge_key IS NULL)
+      )
     ) STRICT;
 
     CREATE INDEX IF NOT EXISTS joins_by_target
@@ -189,6 +202,15 @@ export const initMatrixSchema = (db: Database) => {
     // Column already exists (new database or previously migrated)
   }
 
+  // Migration: add edge_key column to joins table. The validity CHECK lives in
+  // the fresh-DB CREATE TABLE only (SQLite cannot add a CHECK via ADD COLUMN);
+  // existing databases are disposable/reset rather than data-migrated.
+  try {
+    db.exec('ALTER TABLE joins ADD COLUMN edge_key BLOB')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+
   // Migration: add constraints column to matrix_columns
   try {
     db.exec('ALTER TABLE matrix_columns ADD COLUMN constraints TEXT')
@@ -219,6 +241,23 @@ export const initMatrixSchema = (db: Database) => {
     CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique
       ON matrix_columns (matrix_id, role)
       WHERE role IS NOT NULL;
+  `)
+
+  // Own-forest indexes (created after the edge_key migration so the column
+  // exists on previously-created databases too).
+  //
+  //  - joins_own_children: makes "ordered children of parent P" a fast index
+  //    range/sort (sibling keys are scoped per own-parent).
+  //  - joins_single_owner: the schema-level single-parent tree property -- a
+  //    target row may have at most one inbound own-edge.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS joins_own_children
+      ON joins (source_matrix_id, source_row_id, edge_key)
+      WHERE kind = 'own';
+
+    CREATE UNIQUE INDEX IF NOT EXISTS joins_single_owner
+      ON joins (target_matrix_id, target_row_id)
+      WHERE kind = 'own';
   `)
 
   // -- Formula column dependency tracking -------------------------------------
@@ -412,7 +451,6 @@ export const ensureRootMatrix = (db: Database): number => {
     const deviceId = getOrCreateDeviceId(db)
     const columns = getColumns(db, 1)
     installDataTableTriggers(db, 1, deviceId, columns)
-    ensureTrait(db, 'rank', 1)
     ensureTrait(db, 'closure', 1)
     return 1
   }
@@ -442,7 +480,6 @@ export const ensureRootMatrix = (db: Database): number => {
     const deviceId = getOrCreateDeviceId(db)
     installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
 
-    ensureTrait(db, 'rank', matrixId)
     ensureTrait(db, 'closure', matrixId)
 
     return matrixId
@@ -535,40 +572,35 @@ export const updateRow = (
 }
 
 /**
- * Unified row insert: creates a data row and auto-handles provisioned traits.
+ * Unified row insert: creates a data row and attaches it to the own-forest.
  *
- * If the matrix has the rank trait, a rank entry is created. Pass positioning
- * params (parentKey, prevKey, nextKey) for explicit tree placement; if omitted,
- * the row is appended at root level.
+ * Every row lives in the forest unconditionally -- an inbound own-edge is
+ * created to `parent` (defaulting to the root sentinel) with a sibling-local
+ * order key derived from the surrounding siblings. Pass `prevSiblingKey` /
+ * `nextSiblingKey` (the edge keys of the neighbors under that parent) for
+ * explicit placement; if omitted, the row is appended at the end of the
+ * parent's children.
  *
- * If the matrix has the closure trait, closure entries are created based on the
- * parentKey (or as a root-level row if no parentKey).
- *
- * @returns The new row's data ID and rank key (null if no rank trait).
+ * @returns The new row's data ID and its sibling-local edge key.
  */
 export const insertRow = (
   db: Database,
   matrixId: number,
   opts?: {
     values?: Record<string, unknown>
-    parentKey?: Uint8Array
-    prevKey?: Uint8Array
-    nextKey?: Uint8Array
+    parent?: NodeRef
+    prevSiblingKey?: Uint8Array
+    nextSiblingKey?: Uint8Array
   },
-): { rowId: number; key: Uint8Array | null } => {
+): { rowId: number; edgeKey: Uint8Array } => {
   return withTransaction(db, () => {
     const rowId = insertDataRow(db, matrixId, opts?.values)
-    let key: Uint8Array | null = null
-
-    if (hasTrait(db, matrixId, 'rank')) {
-      key = createTreePosition(db, matrixId, rowId, {
-        parentKey: opts?.parentKey,
-        prevKey: opts?.prevKey,
-        nextKey: opts?.nextKey,
-      })
-    }
-
-    return { rowId, key }
+    const edgeKey = createTreePosition(db, matrixId, rowId, {
+      parent: opts?.parent,
+      prevSiblingKey: opts?.prevSiblingKey,
+      nextSiblingKey: opts?.nextSiblingKey,
+    })
+    return { rowId, edgeKey }
   })
 }
 
@@ -673,14 +705,17 @@ export const removeInlineRefFromDoc = (
 const MAX_CASCADE_DEPTH = 100
 
 /**
- * Unified row delete: removes a data row and auto-cleans provisioned traits.
+ * Unified row delete: removes a single node from the own-forest.
  *
- * If the matrix has rank+closure traits, children are reparented to the deleted
- * row's parent (or promoted to root) before the rank and closure entries are
- * removed. Join references involving the row are also cleaned up.
+ * Same-matrix own-children (outline bullets nested under this row) are promoted
+ * to this row's own-parent, preserving order. Cross-matrix owned children (tag
+ * aspect rows and other dedicated/hosted aspects) are cascade-deleted
+ * recursively. The row's own-/ref-edges are then severed and its data row
+ * removed.
  *
- * Owned targets (joins with kind='own' where this row is the source) are
- * cascade-deleted recursively before the row itself is removed.
+ * (The promote-vs-cascade split preserves today's behavior -- bullets promote,
+ * owned aspects cascade -- and converges into one own-descendant walk in
+ * Phase 8b.)
  */
 export const deleteRow = (db: Database, matrixId: number, rowId: number): void => {
   withTransaction(db, () => {
@@ -698,32 +733,25 @@ const deleteRowCascade = (
     throw new Error(`Cascade deletion depth exceeded ${MAX_CASCADE_DEPTH} — possible cycle`)
   }
 
-  const ownedStmt = db.prepare(
-    `SELECT target_matrix_id, target_row_id FROM joins
-     WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'`,
+  // Cascade-delete cross-matrix owned children (e.g. tag aspect rows). Same-
+  // matrix own-children are promoted by removeTreePosition below, not deleted.
+  const crossMatrixChildren = getOwnChildren(db, { matrixId, rowId }).filter(
+    (c) => c.matrixId !== matrixId,
   )
-  ownedStmt.bind([matrixId, rowId])
-  const ownedTargets: { matrixId: number; rowId: number }[] = []
-  while (ownedStmt.step()) {
-    const row = ownedStmt.get({}) as {
-      target_matrix_id: number
-      target_row_id: number
-    }
-    ownedTargets.push({ matrixId: row.target_matrix_id, rowId: row.target_row_id })
-  }
-  ownedStmt.finalize()
-
-  for (const target of ownedTargets) {
-    deleteRowCascade(db, target.matrixId, target.rowId, depth + 1)
+  for (const child of crossMatrixChildren) {
+    deleteRowCascade(db, child.matrixId, child.rowId, depth + 1)
   }
 
-  // Reverse cleanup: if this row is an own-kind target, remove the inlineref
-  // node from each source row's rich text content.
+  // Reverse cleanup: if a cross-matrix source owns this row via an own-edge,
+  // remove the inlineref node from that source's rich text content. Excludes
+  // the root sentinel (which is never a real matrix) and same-matrix parents.
   const sourceStmt = db.prepare(
     `SELECT source_matrix_id, source_row_id FROM joins
-     WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,
+     WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'
+       AND source_matrix_id != ?
+       AND NOT (source_matrix_id = ${ROOT_MATRIX_ID} AND source_row_id = ${ROOT_ROW_ID})`,
   )
-  sourceStmt.bind([matrixId, rowId])
+  sourceStmt.bind([matrixId, rowId, matrixId])
   const ownSources: { sourceMatrixId: number; sourceRowId: number }[] = []
   while (sourceStmt.step()) {
     const src = sourceStmt.get({}) as {
@@ -738,9 +766,9 @@ const deleteRowCascade = (
     removeInlineRefFromDoc(db, src.sourceMatrixId, src.sourceRowId, matrixId, rowId)
   }
 
-  if (hasTrait(db, matrixId, 'rank')) {
-    removeTreePosition(db, matrixId, rowId)
-  }
+  // Promote same-matrix own-children to the grandparent and sever this node's
+  // own-edges.
+  removeTreePosition(db, matrixId, rowId)
 
   db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
     bind: [rowId],
@@ -756,14 +784,15 @@ const deleteRowCascade = (
 
 export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
   withTransaction(db, () => {
-    // Get existing rank keys to determine parent candidates and insertion points
+    // Existing rows already in the own-forest (candidates to nest under).
     const existingStmt = db.prepare(
-      'SELECT key FROM rank WHERE matrix_id = ? AND row_kind = 0 ORDER BY key',
+      `SELECT target_row_id AS row_id FROM joins
+       WHERE target_matrix_id = ? AND kind = 'own'`,
     )
     existingStmt.bind([matrixId])
-    const existingKeys: Uint8Array[] = []
+    const existingRowIds: number[] = []
     while (existingStmt.step()) {
-      existingKeys.push(new Uint8Array((existingStmt.get({}) as { key: Uint8Array }).key))
+      existingRowIds.push((existingStmt.get({}) as { row_id: number }).row_id)
     }
     existingStmt.finalize()
 
@@ -803,29 +832,21 @@ export const addSampleRowsToMatrix = (db: Database, matrixId: number) => {
       return values
     }
 
-    // Root-level keys have exactly one segment (no parent in the closure table).
-    // Using a child key as prevKey for root-level insertion would place the new
-    // key inside a subtree's key range, breaking SQL-side collapse filtering.
-    const rootKeys = existingKeys.filter((k) => parseKey(k).length === 1)
-
     const rowsToAdd = Math.floor(Math.random() * 2) + 2 // 2-3 rows
-    let lastInsertedRootKey: Uint8Array | undefined
 
     for (let i = 0; i < rowsToAdd; i++) {
-      const dataRowId = insertDataRow(db, matrixId, makeSampleValues())
-
-      if (existingKeys.length > 0 && i === rowsToAdd - 1) {
-        // Make the last row a child of a random existing row
-        const parentKey = existingKeys[Math.floor(Math.random() * existingKeys.length)]!
-        const key = createTreePosition(db, matrixId, dataRowId, { parentKey })
-        existingKeys.push(key)
+      if (existingRowIds.length > 0 && i === rowsToAdd - 1) {
+        // Make the last row a child of a random existing row.
+        const parentRowId = existingRowIds[Math.floor(Math.random() * existingRowIds.length)]!
+        const { rowId } = insertRow(db, matrixId, {
+          values: makeSampleValues(),
+          parent: { matrixId, rowId: parentRowId },
+        })
+        existingRowIds.push(rowId)
       } else {
-        // Append as a root-level row after the last root-level key
-        const prevKey = lastInsertedRootKey ?? rootKeys[rootKeys.length - 1]
-        const key = createTreePosition(db, matrixId, dataRowId, { prevKey })
-        existingKeys.push(key)
-        rootKeys.push(key)
-        lastInsertedRootKey = key
+        // Append as a top-level row (child of the root sentinel).
+        const { rowId } = insertRow(db, matrixId, { values: makeSampleValues() })
+        existingRowIds.push(rowId)
       }
     }
   })
@@ -1218,6 +1239,20 @@ export const insertJoin = (
   targetRowId: number,
   kind: JoinKind = 'ref',
 ): void => {
+  if (kind === 'own') {
+    // An own-edge carries a sibling-local order key; append the target as the
+    // last child of the source. Single-ownership is enforced by the partial
+    // unique index (a conflicting own-edge is a silent no-op under OR IGNORE).
+    const edgeKey = computeSiblingKey(db, { matrixId: sourceMatrixId, rowId: sourceRowId })
+    db.exec(
+      `INSERT OR IGNORE INTO joins
+         (source_matrix_id, source_row_id, target_matrix_id, target_row_id, kind, edge_key)
+       VALUES (?, ?, ?, ?, 'own', ?)`,
+      { bind: [sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, edgeKey] },
+    )
+    return
+  }
+
   db.exec(
     `INSERT OR IGNORE INTO joins (source_matrix_id, source_row_id, target_matrix_id, target_row_id, kind)
      VALUES (?, ?, ?, ?, ?)`,
@@ -1240,11 +1275,13 @@ export const createDependentRow = (
   columnValues: Record<string, unknown> = {},
 ): number => {
   return withTransaction(db, () => {
+    // The target is created as an own-child of the host: a single own-edge
+    // (host -> target) carrying a sibling key. A hosted aspect row is just a
+    // cross-matrix child -- identical machinery to an outline bullet.
     const { rowId: targetRowId } = insertRow(db, targetMatrixId, {
       values: columnValues,
+      parent: { matrixId: sourceMatrixId, rowId: sourceRowId },
     })
-
-    insertJoin(db, sourceMatrixId, sourceRowId, targetMatrixId, targetRowId, 'own')
 
     return targetRowId
   })

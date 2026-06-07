@@ -1,8 +1,6 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { between } from './lexorank'
 import type { ApplyResult, ChangeEntry, Changeset, ConflictRecord } from './sync-types'
-import { rebuildClosure } from './tree'
 import { withTransaction } from './transaction'
 
 type TrackedColumn = {
@@ -32,6 +30,7 @@ export const installChangeTrackingTriggers = (
   tableName: string,
   deviceId: string,
   columns: TrackedColumn[],
+  options: { recordOldOnDelete?: boolean } = {},
 ): void => {
   const quotedTable = quoteIdent(tableName)
   const escapedDeviceId = deviceId.replace(/'/g, "''")
@@ -39,6 +38,10 @@ export const installChangeTrackingTriggers = (
 
   const insertJson = buildJsonObjectExpr(columns, 'NEW')
   const updateJson = buildJsonObjectExpr(columns, 'NEW')
+  // For composite-key tables (e.g. `joins`), record the OLD row on delete so a
+  // remote apply can locate the row by its logical key rather than the local
+  // (replica-unstable) SQLite rowid.
+  const deleteData = options.recordOldOnDelete ? buildJsonObjectExpr(columns, 'OLD') : 'NULL'
 
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS "_sync_track_${tableName}_INSERT"
@@ -66,7 +69,7 @@ export const installChangeTrackingTriggers = (
     WHEN NOT EXISTS (SELECT 1 FROM _sync_applying)
     BEGIN
       INSERT INTO _sync_changelog (device_id, table_name, row_id, operation, data)
-      VALUES ('${escapedDeviceId}', '${escapedTableName}', OLD.rowid, 'DELETE', NULL);
+      VALUES ('${escapedDeviceId}', '${escapedTableName}', OLD.rowid, 'DELETE', ${deleteData});
     END;
   `)
 }
@@ -107,18 +110,13 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
     { name: 'matrix_id', type: 'INTEGER' },
     { name: 'trait_type', type: 'TEXT' },
   ],
-  rank: [
-    { name: 'key', type: 'BLOB' },
-    { name: 'matrix_id', type: 'INTEGER' },
-    { name: 'row_kind', type: 'INTEGER' },
-    { name: 'row_id', type: 'INTEGER' },
-  ],
   joins: [
     { name: 'source_matrix_id', type: 'INTEGER' },
     { name: 'source_row_id', type: 'INTEGER' },
     { name: 'target_matrix_id', type: 'INTEGER' },
     { name: 'target_row_id', type: 'INTEGER' },
     { name: 'kind', type: 'TEXT' },
+    { name: 'edge_key', type: 'BLOB' },
   ],
   face_configs: [
     { name: 'id', type: 'TEXT' },
@@ -152,7 +150,12 @@ const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
 export const installCoreTableTriggers = (db: Database, deviceId: string): void => {
   for (const [tableName, columns] of Object.entries(CORE_TABLE_COLUMNS)) {
     dropChangeTrackingTriggers(db, tableName)
-    installChangeTrackingTriggers(db, tableName, deviceId, columns)
+    // `joins` is a composite-key table carrying the own-forest structure; its
+    // deletes must record the old row so remote applies key off the logical
+    // (source/target) identity, not the replica-unstable rowid.
+    installChangeTrackingTriggers(db, tableName, deviceId, columns, {
+      recordOldOnDelete: tableName === 'joins',
+    })
   }
 }
 
@@ -360,75 +363,16 @@ const hexToBytes = (hex: string): Uint8Array => {
 
 /**
  * Convert data record values for SQL binding.
- * Rank table keys are hex-encoded BLOBs that need conversion back to Uint8Array.
+ * `joins.edge_key` is a hex-encoded BLOB that needs conversion to Uint8Array.
  */
 const prepareDataForTable = (
   tableName: string,
   data: Record<string, unknown>,
 ): Record<string, unknown> => {
-  if (tableName === 'rank' && typeof data.key === 'string') {
-    return { ...data, key: hexToBytes(data.key as string) }
+  if (tableName === 'joins' && typeof data.edge_key === 'string') {
+    return { ...data, edge_key: hexToBytes(data.edge_key as string) }
   }
   return data
-}
-
-/**
- * Check for duplicate rank key collision when applying a remote rank change.
- * If a collision is found (same key, different row_id), re-rank one of the rows.
- * Deterministic tie-break: the row from the lower device_id keeps its key.
- */
-const handleRankKeyCollision = (
-  db: Database,
-  data: Record<string, unknown>,
-  remoteDeviceId: string,
-  localDeviceId: string,
-): void => {
-  const incomingKey = data.key as Uint8Array
-  const incomingRowId = data.row_id as number
-
-  // Check if this key already exists for a different row
-  const stmt = db.prepare('SELECT row_id, matrix_id FROM rank WHERE key = ?')
-  stmt.bind([incomingKey])
-
-  if (stmt.step()) {
-    const existing = stmt.get({}) as { row_id: number; matrix_id: number }
-    stmt.finalize()
-
-    if (existing.row_id !== incomingRowId) {
-      // Collision found! Determine who keeps the key.
-      // Lower device_id keeps the key; the other gets re-ranked.
-      const localKeepsKey = localDeviceId < remoteDeviceId
-
-      // Find neighbors for re-ranking
-      const matrixId = existing.matrix_id
-
-      // Get the next key after the colliding key
-      const nextStmt = db.prepare(
-        'SELECT key FROM rank WHERE matrix_id = ? AND key > ? ORDER BY key ASC LIMIT 1',
-      )
-      nextStmt.bind([matrixId, incomingKey])
-      let nextKey = new Uint8Array(0)
-      if (nextStmt.step()) {
-        nextKey = new Uint8Array((nextStmt.get({}) as { key: Uint8Array }).key)
-      }
-      nextStmt.finalize()
-
-      const newKey = between(incomingKey, nextKey)
-
-      if (localKeepsKey) {
-        // Remote row gets re-ranked. We haven't inserted it yet, so just modify the data.
-        data.key = newKey
-      } else {
-        // Local row gets re-ranked. Update the existing row's key.
-        db.exec('UPDATE rank SET key = ? WHERE key = ?', { bind: [newKey, incomingKey] })
-        // The incoming data keeps the original key (already set).
-      }
-    } else {
-      stmt.finalize()
-    }
-  } else {
-    stmt.finalize()
-  }
 }
 
 /**
@@ -438,20 +382,16 @@ const handleRankKeyCollision = (
  * - Checks for local conflicts (same row modified since last sync with remote device)
  * - Resolves conflicts via LWW (last-write-wins by timestamp)
  * - Saves conflict records with both versions
- * - Handles duplicate rank key collisions
  * - Suppresses change-tracking triggers during apply
  *
- * Returns the set of matrix IDs whose rank entries were modified (for closure rebuild).
+ * (The own-forest's derived caches -- closure, scroll index -- refresh from the
+ * applied `joins` edges; that rebuild lands in Phase 8b.)
  */
-export const applyRemoteChanges = (
-  db: Database,
-  changeset: Changeset,
-): ApplyResult & { affectedRankMatrixIds: Set<number> } => {
+export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyResult => {
   const localDeviceId = getLocalDeviceId(db)
   const lastAckedSeq = getDeviceHighWaterMark(db, changeset.deviceId)
   const conflicts: ConflictRecord[] = []
   let applied = 0
-  const affectedRankMatrixIds = new Set<number>()
 
   withTransaction(db, () => {
     // Suppress change-tracking triggers
@@ -520,23 +460,17 @@ export const applyRemoteChanges = (
       // Apply the change
       const preparedData = entry.data ? prepareDataForTable(entry.table, entry.data) : null
 
-      if (entry.table === 'rank' && preparedData) {
-        // Track affected matrix IDs for closure rebuild
-        affectedRankMatrixIds.add(preparedData.matrix_id as number)
-      }
-
       if (entry.operation === 'INSERT' && preparedData) {
-        // Handle rank key collisions
-        if (entry.table === 'rank') {
-          handleRankKeyCollision(db, preparedData, changeset.deviceId, localDeviceId)
-        }
         const { sql, values } = buildInsertSql(entry.table, preparedData)
         db.exec(sql, { bind: values })
         applied++
       } else if (entry.operation === 'UPDATE' && preparedData) {
-        if (entry.table === 'rank') {
-          handleRankKeyCollision(db, preparedData, changeset.deviceId, localDeviceId)
-          // For rank updates, use INSERT OR REPLACE since key is the PK
+        if (entry.table === 'joins') {
+          // `joins` has a composite key, and a reparent changes the own-edge's
+          // source (part of that key). Apply as an upsert keyed by the row data
+          // rather than the replica-unstable rowid: INSERT OR REPLACE replaces
+          // both the PK row and the conflicting single-owner edge (its
+          // partial-unique index), re-homing the own-edge to its new parent.
           const { sql, values } = buildInsertSql(entry.table, preparedData)
           db.exec(sql, { bind: values })
         } else {
@@ -545,18 +479,27 @@ export const applyRemoteChanges = (
         }
         applied++
       } else if (entry.operation === 'DELETE') {
-        if (entry.table === 'rank') {
-          // Need to find the matrix_id before deleting for closure rebuild tracking
-          const rankStmt = db.prepare('SELECT matrix_id FROM rank WHERE rowid = ?')
-          rankStmt.bind([entry.rowId])
-          if (rankStmt.step()) {
-            affectedRankMatrixIds.add((rankStmt.get({}) as { matrix_id: number }).matrix_id)
-          }
-          rankStmt.finalize()
+        if (entry.table === 'joins' && preparedData) {
+          // Delete by the logical composite key carried in the changelog (the
+          // DELETE trigger records the OLD row for `joins`), not the rowid.
+          db.exec(
+            `DELETE FROM joins
+             WHERE source_matrix_id = ? AND source_row_id = ?
+               AND target_matrix_id = ? AND target_row_id = ?`,
+            {
+              bind: [
+                preparedData.source_matrix_id as number,
+                preparedData.source_row_id as number,
+                preparedData.target_matrix_id as number,
+                preparedData.target_row_id as number,
+              ],
+            },
+          )
+        } else {
+          db.exec(`DELETE FROM ${quoteIdent(entry.table)} WHERE rowid = ?`, {
+            bind: [entry.rowId],
+          })
         }
-        db.exec(`DELETE FROM ${quoteIdent(entry.table)} WHERE rowid = ?`, {
-          bind: [entry.rowId],
-        })
         applied++
       }
     }
@@ -564,16 +507,11 @@ export const applyRemoteChanges = (
     // Re-enable change-tracking triggers
     db.exec('DELETE FROM _sync_applying')
 
-    // Rebuild closure tables for matrixes whose rank entries were modified
-    for (const matrixId of affectedRankMatrixIds) {
-      rebuildClosure(db, matrixId)
-    }
-
     // Update per-device high-water mark
     setDeviceHighWaterMark(db, changeset.deviceId, changeset.toSeq)
   })
 
-  return { applied, conflicts, affectedRankMatrixIds }
+  return { applied, conflicts }
 }
 
 export type CompactChangelogOptions = {

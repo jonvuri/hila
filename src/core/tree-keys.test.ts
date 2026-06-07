@@ -4,20 +4,29 @@
  * These exercise the core matrix operations that back Enter, Tab, Shift-Tab,
  * and Backspace. ProseMirror state is not involved — we test the structural
  * operations (insert-after, split content, reparent, delete/merge) directly
- * against an in-memory SQLite database.
+ * against an in-memory SQLite database, now expressed over the own-forest of
+ * `own`-edges (hierarchy is the edge; the edge_key only orders siblings).
  */
 
 import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, ensureRootMatrix, insertDataRow, updateRow } from './matrix'
+import {
+  initMatrixSchema,
+  ensureRootMatrix,
+  insertDataRow,
+  updateRow,
+  ROOT_MATRIX_ID,
+  ROOT_ROW_ID,
+} from './matrix'
 import {
   createTreePosition,
   removeTreePosition,
   reparentRow,
-  getChildren,
-  getParent,
+  getOwnChildren,
+  getOwnEdge,
+  type NodeRef,
 } from './tree'
 import { compareKeys } from './lexorank'
 
@@ -32,17 +41,21 @@ const makeDoc = (text: string) =>
     content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
   })
 
+const SENTINEL: NodeRef = { matrixId: ROOT_MATRIX_ID, rowId: ROOT_ROW_ID }
+
+type Inserted = { rowId: number; edgeKey: Uint8Array; ref: NodeRef }
+
 const insertContentRow = (
   text: string,
-  opts?: { parentKey?: Uint8Array; prevKey?: Uint8Array },
-) => {
+  opts?: { parent?: NodeRef; prevSiblingKey?: Uint8Array },
+): Inserted => {
   const content = text ? makeDoc(text) : EMPTY_DOC
   const rowId = insertDataRow(db, matrixId, { content })
-  const key = createTreePosition(db, matrixId, rowId, {
-    parentKey: opts?.parentKey,
-    prevKey: opts?.prevKey,
+  const edgeKey = createTreePosition(db, matrixId, rowId, {
+    parent: opts?.parent,
+    prevSiblingKey: opts?.prevSiblingKey,
   })
-  return { key, rowId }
+  return { rowId, edgeKey, ref: { matrixId, rowId } }
 }
 
 const getRowContent = (rowId: number): string => {
@@ -54,16 +67,30 @@ const getRowContent = (rowId: number): string => {
   return row.content
 }
 
-const allRankKeys = (): Uint8Array[] => {
-  const stmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? ORDER BY key')
+/** Row ids of a parent's own-children, in sibling order. */
+const childRowIds = (parent: NodeRef): number[] =>
+  getOwnChildren(db, parent).map((c) => c.rowId)
+
+/** The own-parent of a row, or null if it is a forest root (sentinel-parented). */
+const parentRefOf = (rowId: number): NodeRef | null => {
+  const edge = getOwnEdge(db, matrixId, rowId)
+  if (!edge) return null
+  if (edge.parent.matrixId === ROOT_MATRIX_ID && edge.parent.rowId === ROOT_ROW_ID) return null
+  return edge.parent
+}
+
+const edgeKeyOf = (rowId: number): Uint8Array => getOwnEdge(db, matrixId, rowId)!.edgeKey
+
+/** Total rows of this matrix attached to the own-forest. */
+const forestRowCount = (): number => {
+  const stmt = db.prepare(
+    `SELECT COUNT(*) AS n FROM joins WHERE target_matrix_id = ? AND kind = 'own'`,
+  )
   stmt.bind([matrixId])
-  const keys: Uint8Array[] = []
-  while (stmt.step()) {
-    const row = stmt.get({}) as { key: Uint8Array }
-    keys.push(new Uint8Array(row.key))
-  }
+  stmt.step()
+  const n = (stmt.get({}) as { n: number }).n
   stmt.finalize()
-  return keys
+  return n
 }
 
 beforeEach(async () => {
@@ -80,52 +107,39 @@ beforeEach(async () => {
 describe('Enter — insert sibling after current row', () => {
   test('insert at root level after a single row', () => {
     const a = insertContentRow('Row A')
+    const b = insertContentRow('', { prevSiblingKey: a.edgeKey })
 
-    // Simulate Enter at end of Row A: insert empty row after it
-    const b = insertContentRow('', { prevKey: a.key })
-
-    expect(compareKeys(a.key, b.key)).toBe(-1)
-    const content = getRowContent(b.rowId)
-    expect(content).toBe(EMPTY_DOC)
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, b.rowId])
+    expect(getRowContent(b.rowId)).toBe(EMPTY_DOC)
   })
 
   test('insert between two root rows', () => {
     const a = insertContentRow('Row A')
-    const c = insertContentRow('Row C', { prevKey: a.key })
+    const c = insertContentRow('Row C', { prevSiblingKey: a.edgeKey })
+    const b = insertContentRow('Row B', { prevSiblingKey: a.edgeKey })
 
-    // Insert after A (before C)
-    const b = insertContentRow('Row B', { prevKey: a.key })
-
-    expect(compareKeys(a.key, b.key)).toBe(-1)
-    expect(compareKeys(b.key, c.key)).toBe(-1)
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, b.rowId, c.rowId])
   })
 
   test('insert after a row that has children preserves subtree', () => {
     const parent = insertContentRow('Parent')
-    const child = insertContentRow('Child', { parentKey: parent.key })
+    const child = insertContentRow('Child', { parent: parent.ref })
+    const sibling = insertContentRow('Sibling', { prevSiblingKey: parent.edgeKey })
 
-    // Insert sibling after parent (should appear after parent's subtree)
-    const sibling = insertContentRow('Sibling', { prevKey: parent.key })
-
-    expect(compareKeys(parent.key, child.key)).toBe(-1)
-    expect(compareKeys(child.key, sibling.key)).toBe(-1)
-    expect(getParent(db, matrixId, child.key)).not.toBeNull()
-    expect(getParent(db, matrixId, sibling.key)).toBeNull()
+    expect(parentRefOf(child.rowId)).toEqual(parent.ref)
+    expect(parentRefOf(sibling.rowId)).toBeNull()
+    expect(childRowIds(SENTINEL)).toEqual([parent.rowId, sibling.rowId])
   })
 
   test('insert child row after existing children', () => {
     const parent = insertContentRow('Parent')
-    const child1 = insertContentRow('Child 1', { parentKey: parent.key })
-
-    // Insert second child after child1 under same parent
-    const _child2 = insertContentRow('Child 2', {
-      parentKey: parent.key,
-      prevKey: child1.key,
+    const child1 = insertContentRow('Child 1', { parent: parent.ref })
+    const child2 = insertContentRow('Child 2', {
+      parent: parent.ref,
+      prevSiblingKey: child1.edgeKey,
     })
 
-    const children = getChildren(db, matrixId, parent.key)
-    expect(children).toHaveLength(2)
-    expect(compareKeys(children[0]!, children[1]!)).toBe(-1)
+    expect(childRowIds(parent.ref)).toEqual([child1.rowId, child2.rowId])
   })
 })
 
@@ -137,33 +151,32 @@ describe('Enter — split content into two rows', () => {
   test('split produces two rows with correct content', () => {
     const original = insertContentRow('HelloWorld')
 
-    // Simulate split: update original to "Hello", insert new row with "World"
     updateRow(db, {
       matrixId,
       rowId: original.rowId,
       values: { content: makeDoc('Hello') },
     })
-    const newRow = insertContentRow('World', { prevKey: original.key })
+    const newRow = insertContentRow('World', { prevSiblingKey: original.edgeKey })
 
     expect(getRowContent(original.rowId)).toBe(makeDoc('Hello'))
     expect(getRowContent(newRow.rowId)).toBe(makeDoc('World'))
-    expect(compareKeys(original.key, newRow.key)).toBe(-1)
+    expect(childRowIds(SENTINEL)).toEqual([original.rowId, newRow.rowId])
   })
 
   test('split row with children: new sibling appears after subtree', () => {
     const parent = insertContentRow('ParentText')
-    const child = insertContentRow('Child', { parentKey: parent.key })
+    const child = insertContentRow('Child', { parent: parent.ref })
 
     updateRow(db, {
       matrixId,
       rowId: parent.rowId,
       values: { content: makeDoc('Parent') },
     })
-    const splitRow = insertContentRow('Text', { prevKey: parent.key })
+    const splitRow = insertContentRow('Text', { prevSiblingKey: parent.edgeKey })
 
-    // splitRow should be after the child
-    expect(compareKeys(child.key, splitRow.key)).toBe(-1)
-    expect(getParent(db, matrixId, splitRow.key)).toBeNull()
+    expect(parentRefOf(child.rowId)).toEqual(parent.ref)
+    expect(parentRefOf(splitRow.rowId)).toBeNull()
+    expect(childRowIds(SENTINEL)).toEqual([parent.rowId, splitRow.rowId])
   })
 })
 
@@ -174,52 +187,49 @@ describe('Enter — split content into two rows', () => {
 describe('Tab — indent (reparent under previous sibling)', () => {
   test('reparent as first child of previous sibling', () => {
     const a = insertContentRow('Row A')
-    const b = insertContentRow('Row B', { prevKey: a.key })
+    const b = insertContentRow('Row B', { prevSiblingKey: a.edgeKey })
 
-    // Tab on B: make it a child of A
-    reparentRow(db, { matrixId, nodeKey: b.key, newParentKey: a.key })
+    reparentRow(db, { matrixId, rowId: b.rowId, newParent: a.ref })
 
-    const children = getChildren(db, matrixId, a.key)
-    expect(children).toHaveLength(1)
-
-    // The reparented row should have a new key, but same row_id
-    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? AND key = ?')
-    stmt.bind([matrixId, children[0]!])
-    stmt.step()
-    const result = stmt.get({}) as { row_id: number }
-    stmt.finalize()
-    expect(result.row_id).toBe(b.rowId)
+    expect(childRowIds(a.ref)).toEqual([b.rowId])
   })
 
   test('reparent as last child when previous sibling already has children', () => {
     const a = insertContentRow('Row A')
-    const a1 = insertContentRow('A child', { parentKey: a.key })
-    const b = insertContentRow('Row B', { prevKey: a.key })
+    const a1 = insertContentRow('A child', { parent: a.ref })
+    const b = insertContentRow('Row B', { prevSiblingKey: a.edgeKey })
 
-    // Tab on B with prevSiblingKey = a1 (last child of A)
     reparentRow(db, {
       matrixId,
-      nodeKey: b.key,
-      newParentKey: a.key,
-      prevSiblingKey: a1.key,
+      rowId: b.rowId,
+      newParent: a.ref,
+      prevSiblingKey: a1.edgeKey,
     })
 
-    const children = getChildren(db, matrixId, a.key)
-    expect(children).toHaveLength(2)
-    // a1 should still be first, reparented B should be second
-    expect(compareKeys(children[0]!, children[1]!)).toBe(-1)
+    expect(childRowIds(a.ref)).toEqual([a1.rowId, b.rowId])
   })
 
-  test('indent moves subtree with the row', () => {
+  test('indent leaves the subtree attached to the moved row', () => {
     const a = insertContentRow('Row A')
-    const b = insertContentRow('Row B', { prevKey: a.key })
-    insertContentRow('B child', { parentKey: b.key })
+    const b = insertContentRow('Row B', { prevSiblingKey: a.edgeKey })
+    const bChild = insertContentRow('B child', { parent: b.ref })
 
-    reparentRow(db, { matrixId, nodeKey: b.key, newParentKey: a.key })
+    reparentRow(db, { matrixId, rowId: b.rowId, newParent: a.ref })
 
-    const bNewKey = getChildren(db, matrixId, a.key)[0]!
-    const bChildren = getChildren(db, matrixId, bNewKey)
-    expect(bChildren).toHaveLength(1)
+    expect(childRowIds(a.ref)).toEqual([b.rowId])
+    expect(childRowIds(b.ref)).toEqual([bChild.rowId])
+  })
+
+  test('indent leaves descendant edge keys byte-identical (O(1) re-point)', () => {
+    const a = insertContentRow('Row A')
+    const b = insertContentRow('Row B', { prevSiblingKey: a.edgeKey })
+    const bChild = insertContentRow('B child', { parent: b.ref })
+
+    const childKeyBefore = edgeKeyOf(bChild.rowId)
+    reparentRow(db, { matrixId, rowId: b.rowId, newParent: a.ref })
+    const childKeyAfter = edgeKeyOf(bChild.rowId)
+
+    expect(compareKeys(childKeyBefore, childKeyAfter)).toBe(0)
   })
 })
 
@@ -230,69 +240,56 @@ describe('Tab — indent (reparent under previous sibling)', () => {
 describe('Shift-Tab — outdent (reparent to parent level)', () => {
   test('outdent to root level', () => {
     const a = insertContentRow('Row A')
-    const a1 = insertContentRow('A child', { parentKey: a.key })
+    const a1 = insertContentRow('A child', { parent: a.ref })
 
-    // Shift-Tab on a1: move to root, after A
     reparentRow(db, {
       matrixId,
-      nodeKey: a1.key,
-      prevSiblingKey: a.key,
+      rowId: a1.rowId,
+      prevSiblingKey: a.edgeKey,
     })
 
-    const parent = getParent(db, matrixId, a1.key)
-    expect(parent).toBeNull()
-
-    const keys = allRankKeys()
-    expect(keys.length).toBe(2)
-    expect(compareKeys(keys[0]!, keys[1]!)).toBe(-1)
+    expect(parentRefOf(a1.rowId)).toBeNull()
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, a1.rowId])
   })
 
   test('outdent nested child to parent level', () => {
     const a = insertContentRow('Row A')
-    const a1 = insertContentRow('A child', { parentKey: a.key })
-    const a1a = insertContentRow('Grandchild', { parentKey: a1.key })
+    const a1 = insertContentRow('A child', { parent: a.ref })
+    const a1a = insertContentRow('Grandchild', { parent: a1.ref })
 
-    // Shift-Tab on a1a: move to A's children, after a1
     reparentRow(db, {
       matrixId,
-      nodeKey: a1a.key,
-      newParentKey: a.key,
-      prevSiblingKey: a1.key,
+      rowId: a1a.rowId,
+      newParent: a.ref,
+      prevSiblingKey: a1.edgeKey,
     })
 
-    const aChildren = getChildren(db, matrixId, a.key)
-    expect(aChildren).toHaveLength(2)
-
-    const a1Children = getChildren(db, matrixId, a1.key)
-    expect(a1Children).toHaveLength(0)
+    expect(childRowIds(a.ref)).toEqual([a1.rowId, a1a.rowId])
+    expect(childRowIds(a1.ref)).toEqual([])
   })
 
-  test('outdent moves subtree with the row', () => {
+  test('outdent leaves the moved row’s subtree attached', () => {
     const a = insertContentRow('Row A')
-    const a1 = insertContentRow('A child', { parentKey: a.key })
-    const a1a = insertContentRow('Grandchild', { parentKey: a1.key })
-    insertContentRow('Great-grandchild', { parentKey: a1a.key })
+    const a1 = insertContentRow('A child', { parent: a.ref })
+    const a1a = insertContentRow('Grandchild', { parent: a1.ref })
+    const a1aChild = insertContentRow('Great-grandchild', { parent: a1a.ref })
 
-    // Outdent a1a to A's level (after a1)
     reparentRow(db, {
       matrixId,
-      nodeKey: a1a.key,
-      newParentKey: a.key,
-      prevSiblingKey: a1.key,
+      rowId: a1a.rowId,
+      newParent: a.ref,
+      prevSiblingKey: a1.edgeKey,
     })
 
-    // a1a's child should still be under it
-    const a1aNewKey = getChildren(db, matrixId, a.key).find((k) => {
-      const stmt = db.prepare('SELECT row_id FROM rank WHERE key = ?')
-      stmt.bind([k])
-      stmt.step()
-      const r = stmt.get({}) as { row_id: number }
-      stmt.finalize()
-      return r.row_id === a1a.rowId
-    })
-    expect(a1aNewKey).toBeDefined()
-    const subChildren = getChildren(db, matrixId, a1aNewKey!)
-    expect(subChildren).toHaveLength(1)
+    expect(childRowIds(a.ref)).toEqual([a1.rowId, a1a.rowId])
+    expect(childRowIds(a1a.ref)).toEqual([a1aChild.rowId])
+  })
+
+  test('reparent under one’s own descendant is rejected', () => {
+    const a = insertContentRow('Row A')
+    const a1 = insertContentRow('A child', { parent: a.ref })
+
+    expect(() => reparentRow(db, { matrixId, rowId: a.rowId, newParent: a1.ref })).toThrow()
   })
 })
 
@@ -305,41 +302,42 @@ describe('Backspace — delete empty row', () => {
     insertContentRow('Row A')
     const b = insertContentRow('')
 
-    const keysBefore = allRankKeys()
-    expect(keysBefore).toHaveLength(2)
+    expect(forestRowCount()).toBe(2)
 
     removeTreePosition(db, matrixId, b.rowId)
     db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
-    const keysAfter = allRankKeys()
-    expect(keysAfter).toHaveLength(1)
+    expect(forestRowCount()).toBe(1)
   })
 
-  test('delete empty row with children reparents them', () => {
-    insertContentRow('Row A')
+  test('delete empty row with children promotes them', () => {
+    const a = insertContentRow('Row A')
     const b = insertContentRow('')
-    const b1 = insertContentRow('B child', { parentKey: b.key })
-    insertContentRow('B child 2', { parentKey: b.key, prevKey: b1.key })
+    const b1 = insertContentRow('B child', { parent: b.ref })
+    const b2 = insertContentRow('B child 2', { parent: b.ref, prevSiblingKey: b1.edgeKey })
 
-    // Reparent b's children to root (b's parent) before deleting
-    const children = getChildren(db, matrixId, b.key)
-    const parentKey = getParent(db, matrixId, b.key)
-    let prevKey: Uint8Array | undefined
-    for (const childKey of children) {
-      const newKey = reparentRow(db, {
-        matrixId,
-        nodeKey: childKey,
-        newParentKey: parentKey ?? undefined,
-        prevSiblingKey: prevKey,
-      })
-      prevKey = newKey
-    }
+    // removeTreePosition promotes b's children to its parent (root) in order.
     removeTreePosition(db, matrixId, b.rowId)
     db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
-    // Children are now root-level
-    const keys = allRankKeys()
-    expect(keys).toHaveLength(3) // A + two former children of B
+    expect(forestRowCount()).toBe(3) // A + two former children of B
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, b1.rowId, b2.rowId])
+    expect(parentRefOf(b1.rowId)).toBeNull()
+  })
+
+  test('deleting a node with a following sibling promotes children into its slot', () => {
+    // A, N, Z at root; N has children C1, C2. Deleting N must leave the
+    // children where N was (between A and Z), not appended after Z.
+    const a = insertContentRow('A')
+    const n = insertContentRow('N', { prevSiblingKey: a.edgeKey })
+    const z = insertContentRow('Z', { prevSiblingKey: n.edgeKey })
+    const c1 = insertContentRow('C1', { parent: n.ref })
+    const c2 = insertContentRow('C2', { parent: n.ref, prevSiblingKey: c1.edgeKey })
+
+    removeTreePosition(db, matrixId, n.rowId)
+    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [n.rowId] })
+
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, c1.rowId, c2.rowId, z.rowId])
   })
 })
 
@@ -350,9 +348,8 @@ describe('Backspace — delete empty row', () => {
 describe('Backspace — merge content with previous row', () => {
   test('merge appends current content to previous row', () => {
     const a = insertContentRow('Hello')
-    const b = insertContentRow(' World', { prevKey: a.key })
+    const b = insertContentRow(' World', { prevSiblingKey: a.edgeKey })
 
-    // Simulate merge: update A's content to combined, then delete B
     updateRow(db, {
       matrixId,
       rowId: a.rowId,
@@ -362,25 +359,13 @@ describe('Backspace — merge content with previous row', () => {
     db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     expect(getRowContent(a.rowId)).toBe(makeDoc('Hello World'))
-    const keys = allRankKeys()
-    expect(keys).toHaveLength(1)
+    expect(forestRowCount()).toBe(1)
   })
 
-  test('merge with nested row: children are reparented before deletion', () => {
+  test('merge with nested row: children are promoted before deletion', () => {
     const a = insertContentRow('Hello')
-    const b = insertContentRow(' World', { prevKey: a.key })
-    insertContentRow('Child of B', { parentKey: b.key })
-
-    // Reparent b's children to root before deleting
-    const children = getChildren(db, matrixId, b.key)
-    const parentOfB = getParent(db, matrixId, b.key)
-    for (const childKey of children) {
-      reparentRow(db, {
-        matrixId,
-        nodeKey: childKey,
-        newParentKey: parentOfB ?? undefined,
-      })
-    }
+    const b = insertContentRow(' World', { prevSiblingKey: a.edgeKey })
+    const bChild = insertContentRow('Child of B', { parent: b.ref })
 
     updateRow(db, {
       matrixId,
@@ -391,7 +376,7 @@ describe('Backspace — merge content with previous row', () => {
     db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [b.rowId] })
 
     expect(getRowContent(a.rowId)).toBe(makeDoc('Hello World'))
-    const keys = allRankKeys()
-    expect(keys).toHaveLength(2) // A + former child of B
+    expect(forestRowCount()).toBe(2) // A + former child of B
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, bChild.rowId])
   })
 })

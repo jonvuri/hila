@@ -15,15 +15,7 @@ import {
   getColumns,
   updateColumnRole,
 } from './matrix'
-import { makeKey, parseKey } from './lexorank'
-import {
-  createTreePosition,
-  removeTreePosition,
-  getChildren,
-  getParent,
-  getDepth,
-  rebuildClosure,
-} from './tree'
+import { createTreePosition, removeTreePosition } from './tree'
 import { ensureTrait } from './traits'
 import {
   installCoreTableTriggers,
@@ -314,7 +306,7 @@ describe('Change tracking infrastructure', () => {
     expect(data.matrix_id).toBe(matrixId)
   })
 
-  test('INSERT into rank table is tracked with hex-encoded key', () => {
+  test('INSERT of an own-edge into joins is tracked with hex-encoded edge_key', () => {
     const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Ranked' })
     clearChangelog()
@@ -322,15 +314,43 @@ describe('Change tracking infrastructure', () => {
     createTreePosition(db, matrixId, rowId)
 
     const log = getChangelog()
-    const rankInsert = log.find((e) => e.table_name === 'rank' && e.operation === 'INSERT')
+    const joinInsert = log.find((e) => e.table_name === 'joins' && e.operation === 'INSERT')
 
-    expect(rankInsert).toBeDefined()
-    const data = JSON.parse(rankInsert!.data!) as Record<string, unknown>
-    expect(data.matrix_id).toBe(matrixId)
-    expect(data.row_kind).toBe(0)
-    expect(data.row_id).toBe(rowId)
-    expect(typeof data.key).toBe('string')
-    expect((data.key as string).length).toBeGreaterThan(0)
+    expect(joinInsert).toBeDefined()
+    const data = JSON.parse(joinInsert!.data!) as Record<string, unknown>
+    expect(data.target_matrix_id).toBe(matrixId)
+    expect(data.target_row_id).toBe(rowId)
+    expect(data.kind).toBe('own')
+    expect(typeof data.edge_key).toBe('string')
+    expect((data.edge_key as string).length).toBeGreaterThan(0)
+  })
+
+  test('DELETE of an own-edge records the old composite key (not just the rowid)', () => {
+    const matrixId = createMatrixWithTraits(db, 'Test')
+    const parent = insertDataRow(db, matrixId, { title: 'P' })
+    createTreePosition(db, matrixId, parent)
+    const child = insertDataRow(db, matrixId, { title: 'C' })
+    createTreePosition(db, matrixId, child, { parent: { matrixId, rowId: parent } })
+    clearChangelog()
+
+    // Sever the own-edge.
+    db.exec(
+      `DELETE FROM joins WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,
+      {
+        bind: [matrixId, child],
+      },
+    )
+
+    const log = getChangelog()
+    const del = log.find((e) => e.table_name === 'joins' && e.operation === 'DELETE')
+    expect(del).toBeDefined()
+    // The old row's logical key must be recorded so a remote apply can locate
+    // the edge by composite key rather than the replica-unstable rowid.
+    const data = JSON.parse(del!.data!) as Record<string, unknown>
+    expect(data.source_row_id).toBe(parent)
+    expect(data.target_matrix_id).toBe(matrixId)
+    expect(data.target_row_id).toBe(child)
+    expect(data.kind).toBe('own')
   })
 
   // -- Closure tables are NOT tracked --
@@ -799,161 +819,6 @@ describe('Change tracking infrastructure', () => {
       stmt.finalize()
     })
 
-    // -- Duplicate rank key collision --
-
-    test('duplicate rank key collision is resolved: both rows present with correct order', () => {
-      const matrixId = createMatrixWithTraits(db, 'Test')
-      const localRowId = insertDataRow(db, matrixId, { title: 'Local row' })
-      const remoteRowId = 777888999
-
-      // Insert the remote data row first (no rank yet)
-      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote row')`, {
-        bind: [remoteRowId],
-      })
-
-      // Insert local row into rank with a known key
-      const localKey = new Uint8Array([0x80, 0x00])
-      db.exec('INSERT INTO rank (key, matrix_id, row_kind, row_id) VALUES (?, ?, 0, ?)', {
-        bind: [localKey, matrixId, localRowId],
-      })
-
-      clearChangelog()
-
-      // Remote device tries to insert with the SAME rank key
-      const result = applyRemoteChanges(
-        db,
-        makeRemoteChangeset([
-          {
-            table: 'rank',
-            rowId: remoteRowId,
-            operation: 'INSERT',
-            timestamp: '2025-01-01 12:00:00',
-            data: {
-              key: '8000', // hex-encoded [0x80, 0x00]
-              matrix_id: matrixId,
-              row_kind: 0,
-              row_id: remoteRowId,
-            },
-          },
-        ]),
-      )
-
-      expect(result.applied).toBe(1)
-
-      // Both rows should exist in rank
-      const countStmt = db.prepare('SELECT COUNT(*) AS cnt FROM rank WHERE matrix_id = ?')
-      countStmt.bind([matrixId])
-      countStmt.step()
-      expect((countStmt.get({}) as { cnt: number }).cnt).toBe(2)
-      countStmt.finalize()
-
-      // Both rows should have different keys
-      const keysStmt = db.prepare(
-        'SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key',
-      )
-      keysStmt.bind([matrixId])
-      const rankRows: { key: Uint8Array; row_id: number }[] = []
-      while (keysStmt.step()) {
-        const r = keysStmt.get({}) as { key: Uint8Array; row_id: number }
-        rankRows.push({ key: new Uint8Array(r.key), row_id: r.row_id })
-      }
-      keysStmt.finalize()
-
-      expect(rankRows).toHaveLength(2)
-      // Keys should be different
-      expect(rankRows[0]!.key).not.toEqual(rankRows[1]!.key)
-      // Both row IDs should be present
-      const rowIds = rankRows.map((r) => r.row_id).sort()
-      expect(rowIds).toContain(localRowId)
-      expect(rowIds).toContain(remoteRowId)
-    })
-
-    // -- No collision when rank keys differ (common case) --
-
-    test('no rank key collision when keys differ', () => {
-      const matrixId = createMatrixWithTraits(db, 'Test')
-      const localRowId = insertDataRow(db, matrixId, { title: 'Local' })
-      const remoteRowId = 123456789
-
-      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote')`, {
-        bind: [remoteRowId],
-      })
-
-      // Local row at key [0x40, 0x00]
-      db.exec('INSERT INTO rank (key, matrix_id, row_kind, row_id) VALUES (?, ?, 0, ?)', {
-        bind: [new Uint8Array([0x40, 0x00]), matrixId, localRowId],
-      })
-
-      clearChangelog()
-
-      // Remote row at different key [0xC0, 0x00]
-      const result = applyRemoteChanges(
-        db,
-        makeRemoteChangeset([
-          {
-            table: 'rank',
-            rowId: remoteRowId,
-            operation: 'INSERT',
-            timestamp: '2025-01-01 12:00:00',
-            data: {
-              key: 'C000', // hex-encoded [0xC0, 0x00]
-              matrix_id: matrixId,
-              row_kind: 0,
-              row_id: remoteRowId,
-            },
-          },
-        ]),
-      )
-
-      expect(result.applied).toBe(1)
-      expect(result.conflicts).toHaveLength(0)
-
-      // Both rows in rank with their original keys
-      const stmt = db.prepare('SELECT key, row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-      stmt.bind([matrixId])
-      const rows: { key: Uint8Array; row_id: number }[] = []
-      while (stmt.step()) {
-        const r = stmt.get({}) as { key: Uint8Array; row_id: number }
-        rows.push({ key: new Uint8Array(r.key), row_id: r.row_id })
-      }
-      stmt.finalize()
-
-      expect(rows).toHaveLength(2)
-      expect(rows[0]!.row_id).toBe(localRowId) // 0x40 < 0xC0
-      expect(rows[1]!.row_id).toBe(remoteRowId)
-    })
-
-    // -- affectedRankMatrixIds tracking --
-
-    test('affectedRankMatrixIds includes matrix IDs from rank changes', () => {
-      const matrixId = createMatrixWithTraits(db, 'Test')
-      const remoteRowId = 555666777
-      db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'R')`, {
-        bind: [remoteRowId],
-      })
-      clearChangelog()
-
-      const result = applyRemoteChanges(
-        db,
-        makeRemoteChangeset([
-          {
-            table: 'rank',
-            rowId: remoteRowId,
-            operation: 'INSERT',
-            timestamp: '2025-01-01 12:00:00',
-            data: {
-              key: '8000',
-              matrix_id: matrixId,
-              row_kind: 0,
-              row_id: remoteRowId,
-            },
-          },
-        ]),
-      )
-
-      expect(result.affectedRankMatrixIds.has(matrixId)).toBe(true)
-    })
-
     // -- Remote DELETE operation --
 
     test('apply remote DELETE removes the row', () => {
@@ -988,233 +853,91 @@ describe('Change tracking infrastructure', () => {
       stmt.finalize()
     })
 
-    // -- Closure rebuild after remote rank changes --
+    // -- Remote own-forest structural changes (joins) apply by logical key --
 
-    describe('Closure rebuild after remote rank changes', () => {
-      test('rebuildClosure reconstructs hierarchy from rank keys', () => {
-        const matrixId = createMatrixWithTraits(db, 'Test')
+    const ownSourcesOf = (matrixId: number, rowId: number): number[] => {
+      const stmt = db.prepare(
+        `SELECT source_row_id FROM joins
+         WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'
+         ORDER BY source_row_id`,
+      )
+      stmt.bind([matrixId, rowId])
+      const out: number[] = []
+      while (stmt.step()) out.push((stmt.get({}) as { source_row_id: number }).source_row_id)
+      stmt.finalize()
+      return out
+    }
 
-        // Build a hierarchy: parent → child → grandchild
-        const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
-        const parentKey = createTreePosition(db, matrixId, parentRowId)
+    test('apply remote reparent (joins UPDATE) re-homes the own-edge by target, not rowid', () => {
+      const matrixId = createMatrixWithTraits(db, 'Test')
+      const p1 = insertDataRow(db, matrixId, { title: 'P1' })
+      createTreePosition(db, matrixId, p1)
+      const p2 = insertDataRow(db, matrixId, { title: 'P2' })
+      createTreePosition(db, matrixId, p2)
+      const child = insertDataRow(db, matrixId, { title: 'C' })
+      createTreePosition(db, matrixId, child, { parent: { matrixId, rowId: p1 } })
+      clearChangelog()
 
-        const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
-        const childKey = createTreePosition(db, matrixId, childRowId, { parentKey })
+      // Local edge is P1 -> child. A remote replica reparented child under P2.
+      expect(ownSourcesOf(matrixId, child)).toEqual([p1])
 
-        const grandchildRowId = insertDataRow(db, matrixId, { title: 'Grandchild' })
-        const grandchildKey = createTreePosition(db, matrixId, grandchildRowId, {
-          parentKey: childKey,
-        })
-
-        // Verify initial hierarchy is correct
-        expect(getParent(db, matrixId, childKey)).toEqual(parentKey)
-        expect(getParent(db, matrixId, grandchildKey)).toEqual(childKey)
-        expect(getChildren(db, matrixId, parentKey)).toEqual([childKey])
-        expect(getDepth(db, matrixId, grandchildKey)).toBe(2)
-
-        // Corrupt the closure table by clearing it
-        db.exec(`DELETE FROM "mx_${matrixId}_closure"`)
-
-        // Verify it's broken
-        expect(getParent(db, matrixId, childKey)).toBeNull()
-
-        // Rebuild
-        rebuildClosure(db, matrixId)
-
-        // Verify hierarchy is restored
-        expect(getParent(db, matrixId, parentKey)).toBeNull() // root
-        expect(getParent(db, matrixId, childKey)).toEqual(parentKey)
-        expect(getParent(db, matrixId, grandchildKey)).toEqual(childKey)
-        expect(getChildren(db, matrixId, parentKey)).toEqual([childKey])
-        expect(getChildren(db, matrixId, childKey)).toEqual([grandchildKey])
-        expect(getDepth(db, matrixId, parentKey)).toBe(0)
-        expect(getDepth(db, matrixId, childKey)).toBe(1)
-        expect(getDepth(db, matrixId, grandchildKey)).toBe(2)
-      })
-
-      test('rebuildClosure after simulated remote reparent', () => {
-        const matrixId = createMatrixWithTraits(db, 'Test')
-
-        // Build: P1 → C1, P2 → C2 → GC
-        // Insert both root nodes first to avoid key ordering issues
-        const p1RowId = insertDataRow(db, matrixId, { title: 'P1' })
-        const p1Key = createTreePosition(db, matrixId, p1RowId)
-
-        const p2RowId = insertDataRow(db, matrixId, { title: 'P2' })
-        const p2Key = createTreePosition(db, matrixId, p2RowId)
-
-        const c1RowId = insertDataRow(db, matrixId, { title: 'C1' })
-        const c1Key = createTreePosition(db, matrixId, c1RowId, { parentKey: p1Key })
-
-        const c2RowId = insertDataRow(db, matrixId, { title: 'C2' })
-        const c2Key = createTreePosition(db, matrixId, c2RowId, { parentKey: p2Key })
-
-        const gcRowId = insertDataRow(db, matrixId, { title: 'GC' })
-        const gcKey = createTreePosition(db, matrixId, gcRowId, { parentKey: c2Key })
-
-        // Verify initial: GC is under P2 → C2
-        expect(getParent(db, matrixId, gcKey)).toEqual(c2Key)
-        expect(getParent(db, matrixId, c2Key)).toEqual(p2Key)
-
-        // Simulate remote reparent: move C2 (with GC) to be a child of P1
-        // Rewrite C2's rank key to have P1's prefix
-        const p1Segments = parseKey(p1Key)
-        const gcSegments = parseKey(gcKey)
-
-        // New C2 key: P1 prefix + a unique segment (0xD0 to avoid colliding with C1's segment)
-        const newC2Segment = new Uint8Array([0xd0])
-        const newC2Key = makeKey([...p1Segments, newC2Segment])
-        // New GC key: new C2 prefix + GC's last segment
-        const newGcKey = makeKey([
-          ...p1Segments,
-          newC2Segment,
-          gcSegments[gcSegments.length - 1]!,
-        ])
-
-        // Directly modify rank keys (simulating remote change applied)
-        db.exec('UPDATE rank SET key = ? WHERE matrix_id = ? AND key = ?', {
-          bind: [newC2Key, matrixId, c2Key],
-        })
-        db.exec('UPDATE rank SET key = ? WHERE matrix_id = ? AND key = ?', {
-          bind: [newGcKey, matrixId, gcKey],
-        })
-
-        // Rebuild closure
-        rebuildClosure(db, matrixId)
-
-        // Verify new hierarchy: P1 → C1, P1 → C2 → GC
-        expect(getParent(db, matrixId, p1Key)).toBeNull()
-        expect(getParent(db, matrixId, p2Key)).toBeNull()
-        expect(getParent(db, matrixId, c1Key)).toEqual(p1Key)
-        expect(getParent(db, matrixId, newC2Key)).toEqual(p1Key)
-        expect(getParent(db, matrixId, newGcKey)).toEqual(newC2Key)
-        expect(getDepth(db, matrixId, newGcKey)).toBe(2)
-
-        // P1 now has two children: C1 and C2
-        const p1Children = getChildren(db, matrixId, p1Key)
-        expect(p1Children).toHaveLength(2)
-
-        // P2 has no children
-        expect(getChildren(db, matrixId, p2Key)).toHaveLength(0)
-      })
-
-      test('applyRemoteChanges triggers closure rebuild for affected matrixes', () => {
-        const matrixId = createMatrixWithTraits(db, 'Test')
-
-        // Create a parent and child
-        const parentRowId = insertDataRow(db, matrixId, { title: 'Parent' })
-        const parentKey = createTreePosition(db, matrixId, parentRowId)
-
-        const childRowId = insertDataRow(db, matrixId, { title: 'Child' })
-        createTreePosition(db, matrixId, childRowId, { parentKey })
-
-        clearChangelog()
-
-        // Apply a remote rank INSERT (new row as child of parent)
-        const remoteRowId = 888999111
-        db.exec(`INSERT INTO mx_${matrixId}_data (id, title) VALUES (?, 'Remote child')`, {
-          bind: [remoteRowId],
-        })
-
-        // Build a rank key that's a child of parentKey
-        const parentSegments = parseKey(parentKey)
-        const remoteChildKey = makeKey([...parentSegments, new Uint8Array([0xc0])])
-
-        const hexKey = Array.from(remoteChildKey)
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join('')
-          .toUpperCase()
-
-        const result = applyRemoteChanges(
-          db,
-          makeRemoteChangeset([
-            {
-              table: 'rank',
-              rowId: remoteRowId,
-              operation: 'INSERT',
-              timestamp: '2025-01-01 12:00:00',
-              data: {
-                key: hexKey,
-                matrix_id: matrixId,
-                row_kind: 0,
-                row_id: remoteRowId,
-              },
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'joins',
+            // Deliberately bogus rowid: a replica-stable apply must ignore it.
+            rowId: 99999999,
+            operation: 'UPDATE',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              source_matrix_id: matrixId,
+              source_row_id: p2,
+              target_matrix_id: matrixId,
+              target_row_id: child,
+              kind: 'own',
+              edge_key: '8000', // hex-encoded [0x80, 0x00]
             },
-          ]),
-        )
+          },
+        ]),
+      )
 
-        expect(result.applied).toBe(1)
-        expect(result.affectedRankMatrixIds.has(matrixId)).toBe(true)
+      expect(result.applied).toBe(1)
+      // The own-edge now originates from P2; the old P1 edge is gone (single-owner).
+      expect(ownSourcesOf(matrixId, child)).toEqual([p2])
+    })
 
-        // Closure should have been rebuilt — the remote child should be under parent
-        const parent = getParent(db, matrixId, remoteChildKey)
-        expect(parent).toEqual(parentKey)
+    test('apply remote joins DELETE removes the own-edge by composite key, not rowid', () => {
+      const matrixId = createMatrixWithTraits(db, 'Test')
+      const parent = insertDataRow(db, matrixId, { title: 'P' })
+      createTreePosition(db, matrixId, parent)
+      const child = insertDataRow(db, matrixId, { title: 'C' })
+      createTreePosition(db, matrixId, child, { parent: { matrixId, rowId: parent } })
+      clearChangelog()
 
-        // Parent should have both children
-        const children = getChildren(db, matrixId, parentKey)
-        expect(children.length).toBe(2)
-      })
+      expect(ownSourcesOf(matrixId, child)).toEqual([parent])
 
-      test('outline query returns correct results after closure rebuild', () => {
-        const matrixId = createMatrixWithTraits(db, 'Test')
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'joins',
+            rowId: 88888888, // bogus rowid
+            operation: 'DELETE',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              source_matrix_id: matrixId,
+              source_row_id: parent,
+              target_matrix_id: matrixId,
+              target_row_id: child,
+              kind: 'own',
+            },
+          },
+        ]),
+      )
 
-        // Build a tree: root → A, root → B → C
-        const rootRowId = insertDataRow(db, matrixId, { title: 'Root' })
-        const rootKey = createTreePosition(db, matrixId, rootRowId)
-
-        const aRowId = insertDataRow(db, matrixId, { title: 'A' })
-        const aKey = createTreePosition(db, matrixId, aRowId, { parentKey: rootKey })
-
-        const bRowId = insertDataRow(db, matrixId, { title: 'B' })
-        const bKey = createTreePosition(db, matrixId, bRowId, { parentKey: rootKey })
-
-        const cRowId = insertDataRow(db, matrixId, { title: 'C' })
-        const cKey = createTreePosition(db, matrixId, cRowId, { parentKey: bKey })
-
-        // Rebuild closure from scratch
-        rebuildClosure(db, matrixId)
-
-        // Verify the full hierarchy via queries
-        expect(getParent(db, matrixId, rootKey)).toBeNull()
-        const rootChildren = getChildren(db, matrixId, rootKey)
-        expect(rootChildren).toHaveLength(2)
-        expect(rootChildren).toContainEqual(aKey)
-        expect(rootChildren).toContainEqual(bKey)
-        expect(getChildren(db, matrixId, bKey)).toEqual([cKey])
-        expect(getChildren(db, matrixId, aKey)).toHaveLength(0)
-        expect(getDepth(db, matrixId, cKey)).toBe(2)
-
-        // Verify outline-style query (rank order with depth)
-        const outlineStmt = db.prepare(`
-          SELECT r.key, r.row_id, d.title,
-                 COALESCE((SELECT MAX(depth) FROM "mx_${matrixId}_closure" WHERE descendant_key = r.key), 0) as depth
-          FROM rank r
-          JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
-          WHERE r.matrix_id = ?
-          ORDER BY r.key
-        `)
-        outlineStmt.bind([matrixId])
-
-        const outline: { title: string; depth: number }[] = []
-        while (outlineStmt.step()) {
-          const row = outlineStmt.get({}) as { title: string; depth: number }
-          outline.push({ title: row.title, depth: row.depth })
-        }
-        outlineStmt.finalize()
-
-        expect(outline).toHaveLength(4)
-        // Root is at depth 0
-        expect(outline.find((r) => r.title === 'Root')!.depth).toBe(0)
-        // A and B are at depth 1
-        expect(outline.find((r) => r.title === 'A')!.depth).toBe(1)
-        expect(outline.find((r) => r.title === 'B')!.depth).toBe(1)
-        // C is at depth 2 (child of B)
-        expect(outline.find((r) => r.title === 'C')!.depth).toBe(2)
-        // C must come right after B in rank order (B's subtree)
-        const bIndex = outline.findIndex((r) => r.title === 'B')
-        const cIndex = outline.findIndex((r) => r.title === 'C')
-        expect(cIndex).toBe(bIndex + 1)
-      })
+      expect(result.applied).toBe(1)
+      expect(ownSourcesOf(matrixId, child)).toEqual([])
     })
 
     // -- Trigger suppression flag is cleaned up after error --

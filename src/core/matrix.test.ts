@@ -31,17 +31,17 @@ import {
   getOrCreateDeviceId,
   resetDeviceIdCache,
   ConstraintViolationError,
+  ROOT_MATRIX_ID,
+  ROOT_ROW_ID,
 } from './matrix'
 import {
   createTreePosition,
-  removeTreePosition,
   reparentRow,
   deleteSubtree,
-  getChildren,
-  getParent,
-  getDepth,
+  getOwnChildren,
+  getOwnEdge,
+  type NodeRef,
 } from './tree'
-import { compareKeys, parseKey } from './lexorank'
 import { ensureTrait } from './traits'
 
 /** Create a matrix with default rank + closure traits provisioned. */
@@ -216,20 +216,15 @@ describe('Matrix Operations', () => {
     expect(dataCount).toBeLessThanOrEqual(3)
     dataStmt.finalize()
 
-    // Verify rank entries were created
-    const rankStmt = db.prepare(`SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?`)
-    rankStmt.bind([matrixId])
-    rankStmt.step()
-    const rankCount = (rankStmt.get({}) as { count: number }).count
-    expect(rankCount).toBe(dataCount)
-    rankStmt.finalize()
-
-    // Verify closure table has self-references (minimum)
-    const closureStmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
-    closureStmt.step()
-    const closureCount = (closureStmt.get({}) as { count: number }).count
-    expect(closureCount).toBeGreaterThanOrEqual(dataCount) // At least self-references
-    closureStmt.finalize()
+    // Verify an own-edge was created for each row.
+    const edgeStmt = db.prepare(
+      `SELECT COUNT(*) as count FROM joins WHERE target_matrix_id = ? AND kind = 'own'`,
+    )
+    edgeStmt.bind([matrixId])
+    edgeStmt.step()
+    const edgeCount = (edgeStmt.get({}) as { count: number }).count
+    expect(edgeCount).toBe(dataCount)
+    edgeStmt.finalize()
   })
 
   test('addSampleRowsToMatrix should create hierarchical relationships on subsequent calls', () => {
@@ -238,19 +233,20 @@ describe('Matrix Operations', () => {
     // Add first batch of sample rows
     addSampleRowsToMatrix(db, matrixId)
 
-    // Add second batch (should create some child relationships)
+    // Add second batch (should nest at least one row under an existing row)
     addSampleRowsToMatrix(db, matrixId)
 
-    // Verify we have more closure relationships than just self-references
-    const closureStmt = db.prepare(`
-      SELECT COUNT(*) as count 
-      FROM "mx_${matrixId}_closure" 
-      WHERE depth > 0
-    `)
-    closureStmt.step()
-    const hierarchicalCount = (closureStmt.get({}) as { count: number }).count
+    // A nested row is an own-edge whose source is a real row in this matrix
+    // (rather than the root sentinel).
+    const nestedStmt = db.prepare(
+      `SELECT COUNT(*) as count FROM joins
+       WHERE source_matrix_id = ? AND kind = 'own'`,
+    )
+    nestedStmt.bind([matrixId])
+    nestedStmt.step()
+    const hierarchicalCount = (nestedStmt.get({}) as { count: number }).count
     expect(hierarchicalCount).toBeGreaterThan(0) // Should have some parent-child relationships
-    closureStmt.finalize()
+    nestedStmt.finalize()
   })
 })
 
@@ -300,1597 +296,226 @@ describe('renameMatrix', () => {
   })
 })
 
-describe('insertRow API', () => {
-  let db: Database
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {}, // Suppress logs in tests
-      printErr: () => {},
-    })
-
-    // Use in-memory database for tests
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-
-    // Initialize the matrix schema
-    initMatrixSchema(db)
-  })
-
-  test('should insert row at root level with no existing rows', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    // Create a data row
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['First row'])
-    dataStmt.step()
-    const dataRowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    // Insert row
-    const key = createTreePosition(db, matrixId, dataRowId)
-
-    // Verify rank entry was created
-    const rankStmt = db.prepare('SELECT * FROM rank WHERE matrix_id = ?')
-    rankStmt.bind([matrixId])
-    expect(rankStmt.step()).toBe(true)
-    const rankRow = rankStmt.get({}) as {
-      key: Uint8Array
-      matrix_id: number
-      row_kind: number
-      row_id: number
-    }
-    expect(rankRow.matrix_id).toBe(matrixId)
-    expect(rankRow.row_kind).toBe(0)
-    expect(rankRow.row_id).toBe(dataRowId)
-    expect(compareKeys(rankRow.key, key)).toBe(0)
-    rankStmt.finalize()
-
-    // Verify closure entry was created (self-reference)
-    const closureStmt = db.prepare(`SELECT * FROM "mx_${matrixId}_closure"`)
-    expect(closureStmt.step()).toBe(true)
-    const closureRow = closureStmt.get({}) as {
-      ancestor_key: Uint8Array
-      descendant_key: Uint8Array
-      depth: number
-    }
-    expect(compareKeys(closureRow.ancestor_key, key)).toBe(0)
-    expect(compareKeys(closureRow.descendant_key, key)).toBe(0)
-    expect(closureRow.depth).toBe(0)
-    expect(closureStmt.step()).toBe(false) // Should only have one entry
-    closureStmt.finalize()
-  })
-
-  test('should insert multiple rows in order with only prevKey', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['First'])
-    dataStmt.step()
-    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key1 = createTreePosition(db, matrixId, dataRowId1)
-
-    // Insert second row after first
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Second'])
-    dataStmt.step()
-    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key2 = createTreePosition(db, matrixId, dataRowId2, { prevKey: key1 })
-
-    // Insert third row after second
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Third'])
-    dataStmt.step()
-    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key3 = createTreePosition(db, matrixId, dataRowId3, { prevKey: key2 })
-
-    // Verify ordering: key1 < key2 < key3
-    expect(compareKeys(key1, key2)).toBe(-1)
-    expect(compareKeys(key2, key3)).toBe(-1)
-    expect(compareKeys(key1, key3)).toBe(-1)
-
-    // Verify rows appear in order in the database
-    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    rankStmt.bind([matrixId])
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
-
-    expect(rankStmt.step()).toBe(false)
-    rankStmt.finalize()
-  })
-
-  test('should insert multiple rows in order with only nextKey', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['Third'])
-    dataStmt.step()
-    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key3 = createTreePosition(db, matrixId, dataRowId3)
-
-    // Insert second row before third
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Second'])
-    dataStmt.step()
-    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key2 = createTreePosition(db, matrixId, dataRowId2, { nextKey: key3 })
-
-    // Insert first row before second
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['First'])
-    dataStmt.step()
-    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key1 = createTreePosition(db, matrixId, dataRowId1, { nextKey: key2 })
-
-    // Verify ordering: key1 < key2 < key3
-    expect(compareKeys(key1, key2)).toBe(-1)
-    expect(compareKeys(key2, key3)).toBe(-1)
-    expect(compareKeys(key1, key3)).toBe(-1)
-
-    // Verify rows appear in order in the database
-    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    rankStmt.bind([matrixId])
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
-
-    expect(rankStmt.step()).toBe(false)
-    rankStmt.finalize()
-  })
-
-  test('should insert row between two existing rows', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['First'])
-    dataStmt.step()
-    const dataRowId1 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key1 = createTreePosition(db, matrixId, dataRowId1)
-
-    // Insert third row
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Third'])
-    dataStmt.step()
-    const dataRowId3 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key3 = createTreePosition(db, matrixId, dataRowId3, { prevKey: key1 })
-
-    // Insert middle row
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Second'])
-    dataStmt.step()
-    const dataRowId2 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key2 = createTreePosition(db, matrixId, dataRowId2, {
-      prevKey: key1,
-      nextKey: key3,
-    })
-
-    // Verify ordering: key1 < key2 < key3
-    expect(compareKeys(key1, key2)).toBe(-1)
-    expect(compareKeys(key2, key3)).toBe(-1)
-    expect(compareKeys(key1, key3)).toBe(-1)
-
-    // Verify rows appear in order in the database
-    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    rankStmt.bind([matrixId])
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId1)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId2)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(dataRowId3)
-
-    expect(rankStmt.step()).toBe(false)
-    rankStmt.finalize()
-  })
-
-  test('should insert child rows with parentKey', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    // Create and insert parent row
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['Parent'])
-    dataStmt.step()
-    const parentRowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const parentKey = createTreePosition(db, matrixId, parentRowId)
-
-    // Create and insert first child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Child 1'])
-    dataStmt.step()
-    const childRowId1 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const childKey1 = createTreePosition(db, matrixId, childRowId1, { parentKey })
-
-    // Create and insert second child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Child 2'])
-    dataStmt.step()
-    const childRowId2 = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const childKey2 = createTreePosition(db, matrixId, childRowId2, {
-      parentKey,
-      prevKey: childKey1,
-    })
-
-    // Verify ordering: parentKey < childKey1 < childKey2
-    expect(compareKeys(parentKey, childKey1)).toBe(-1)
-    expect(compareKeys(childKey1, childKey2)).toBe(-1)
-    expect(compareKeys(parentKey, childKey2)).toBe(-1)
-
-    // Verify closure relationships for first child
-    const closure1Stmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closure1Stmt.bind([childKey1])
-
-    expect(closure1Stmt.step()).toBe(true)
-    let closureRow = closure1Stmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, childKey1)).toBe(0)
-    expect(closureRow.depth).toBe(0) // Self-reference
-
-    expect(closure1Stmt.step()).toBe(true)
-    closureRow = closure1Stmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, parentKey)).toBe(0)
-    expect(closureRow.depth).toBe(1) // Parent relationship
-
-    expect(closure1Stmt.step()).toBe(false)
-    closure1Stmt.finalize()
-
-    // Verify closure relationships for second child
-    const closure2Stmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closure2Stmt.bind([childKey2])
-
-    expect(closure2Stmt.step()).toBe(true)
-    closureRow = closure2Stmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, childKey2)).toBe(0)
-    expect(closureRow.depth).toBe(0) // Self-reference
-
-    expect(closure2Stmt.step()).toBe(true)
-    closureRow = closure2Stmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, parentKey)).toBe(0)
-    expect(closureRow.depth).toBe(1) // Parent relationship
-
-    expect(closure2Stmt.step()).toBe(false)
-    closure2Stmt.finalize()
-  })
-
-  test('should handle nested parent-child relationships', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    // Create and insert root row
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['Root'])
-    dataStmt.step()
-    const rootRowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const rootKey = createTreePosition(db, matrixId, rootRowId)
-
-    // Create and insert child row
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Child'])
-    dataStmt.step()
-    const childRowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const childKey = createTreePosition(db, matrixId, childRowId, { parentKey: rootKey })
-
-    // Create and insert grandchild row
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Grandchild'])
-    dataStmt.step()
-    const grandchildRowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const grandchildKey = createTreePosition(db, matrixId, grandchildRowId, {
-      parentKey: childKey,
-    })
-
-    // Verify ordering: rootKey < childKey < grandchildKey
-    expect(compareKeys(rootKey, childKey)).toBe(-1)
-    expect(compareKeys(childKey, grandchildKey)).toBe(-1)
-    expect(compareKeys(rootKey, grandchildKey)).toBe(-1)
-
-    // Verify closure relationships for grandchild
-    const closureStmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closureStmt.bind([grandchildKey])
-
-    expect(closureStmt.step()).toBe(true)
-    let closureRow = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, grandchildKey)).toBe(0)
-    expect(closureRow.depth).toBe(0) // Self-reference
-
-    expect(closureStmt.step()).toBe(true)
-    closureRow = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, childKey)).toBe(0)
-    expect(closureRow.depth).toBe(1) // Parent relationship
-
-    expect(closureStmt.step()).toBe(true)
-    closureRow = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(closureRow.ancestor_key, rootKey)).toBe(0)
-    expect(closureRow.depth).toBe(2) // Grandparent relationship
-
-    expect(closureStmt.step()).toBe(false)
-    closureStmt.finalize()
-  })
-
-  test('should insert two children of the same parent correctly', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    // Create parent
-    let dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind(['Parent'])
-    dataStmt.step()
-    const parentId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const parentKey = createTreePosition(db, matrixId, parentId)
-
-    // Create first child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Child 1'])
-    dataStmt.step()
-    const child1Id = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const child1Key = createTreePosition(db, matrixId, child1Id, { parentKey })
-
-    // Create second child
-    dataStmt = db.prepare(`INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`)
-    dataStmt.bind(['Child 2'])
-    dataStmt.step()
-    const child2Id = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const child2Key = createTreePosition(db, matrixId, child2Id, {
-      parentKey,
-      prevKey: child1Key,
-    })
-
-    // Verify keys are different
-    expect(compareKeys(child1Key, child2Key)).toBe(-1)
-
-    // Verify both are children of parent
-    expect(compareKeys(parentKey, child1Key)).toBe(-1)
-    expect(compareKeys(parentKey, child2Key)).toBe(-1)
-
-    // Verify they appear in order in the database
-    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    rankStmt.bind([matrixId])
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(parentId)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(child1Id)
-
-    expect(rankStmt.step()).toBe(true)
-    expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(child2Id)
-
-    expect(rankStmt.step()).toBe(false)
-    rankStmt.finalize()
-  })
-
-  test('should maintain correct ordering with multiple inserts at different levels', () => {
-    const matrixId = createMatrixWithTraits(db, 'Test Matrix')
-
-    // Create root level rows
-    const dataStmt1 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt1.bind(['Root 1'])
-    dataStmt1.step()
-    const rootId1 = (dataStmt1.get({}) as { id: number }).id
-    dataStmt1.finalize()
-
-    const rootKey1 = createTreePosition(db, matrixId, rootId1)
-
-    const dataStmt2 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt2.bind(['Root 2'])
-    dataStmt2.step()
-    const rootId2 = (dataStmt2.get({}) as { id: number }).id
-    dataStmt2.finalize()
-
-    const rootKey2 = createTreePosition(db, matrixId, rootId2, { prevKey: rootKey1 })
-
-    // Create children for Root 1
-    const dataStmt3 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt3.bind(['Child 1.1'])
-    dataStmt3.step()
-    const childId1_1 = (dataStmt3.get({}) as { id: number }).id
-    dataStmt3.finalize()
-
-    const childKey1_1 = createTreePosition(db, matrixId, childId1_1, { parentKey: rootKey1 })
-
-    const dataStmt4 = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt4.bind(['Child 1.2'])
-    dataStmt4.step()
-    const childId1_2 = (dataStmt4.get({}) as { id: number }).id
-    dataStmt4.finalize()
-
-    const childKey1_2 = createTreePosition(db, matrixId, childId1_2, {
-      parentKey: rootKey1,
-      prevKey: childKey1_1,
-    })
-
-    // Verify all keys are in correct order
-    const keys = [rootKey1, childKey1_1, childKey1_2, rootKey2]
-    for (let i = 0; i < keys.length - 1; i++) {
-      expect(compareKeys(keys[i]!, keys[i + 1]!)).toBe(-1)
-    }
-
-    // Verify they appear in order in the database
-    const rankStmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    rankStmt.bind([matrixId])
-
-    const expectedOrder = [rootId1, childId1_1, childId1_2, rootId2]
-    for (const expectedId of expectedOrder) {
-      expect(rankStmt.step()).toBe(true)
-      expect((rankStmt.get({}) as { row_id: number }).row_id).toBe(expectedId)
-    }
-
-    expect(rankStmt.step()).toBe(false)
-    rankStmt.finalize()
-  })
-})
-
-describe('reparentRow', () => {
+describe('tree position (own-edges)', () => {
   let db: Database
   let matrixId: number
 
-  // Helper: create a data row and insert it into the outline
+  const SENTINEL: NodeRef = { matrixId: ROOT_MATRIX_ID, rowId: ROOT_ROW_ID }
+
+  type Made = { rowId: number; edgeKey: Uint8Array; ref: NodeRef }
+
   const makeRow = (
     title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-      nextKey: opts.nextKey,
+    opts: { parent?: NodeRef; prevSiblingKey?: Uint8Array; nextSiblingKey?: Uint8Array } = {},
+  ): Made => {
+    const rowId = insertDataRow(db, matrixId, { title })
+    const edgeKey = createTreePosition(db, matrixId, rowId, {
+      parent: opts.parent,
+      prevSiblingKey: opts.prevSiblingKey,
+      nextSiblingKey: opts.nextSiblingKey,
     })
-    return { key, rowId }
+    return { rowId, edgeKey, ref: { matrixId, rowId } }
   }
 
-  // Helper: get all ancestors (including self) for a key, sorted by depth
-  const getAncestors = (key: Uint8Array) => {
-    const stmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    stmt.bind([key])
-    const ancestors: { ancestor_key: Uint8Array; depth: number }[] = []
-    while (stmt.step()) {
-      const row = stmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-      ancestors.push({ ancestor_key: new Uint8Array(row.ancestor_key), depth: row.depth })
-    }
-    stmt.finalize()
-    return ancestors
+  const childRowIds = (parent: NodeRef): number[] =>
+    getOwnChildren(db, parent).map((c) => c.rowId)
+
+  const parentRefOf = (rowId: number): NodeRef | null => {
+    const edge = getOwnEdge(db, matrixId, rowId)
+    if (!edge) return null
+    if (edge.parent.matrixId === ROOT_MATRIX_ID && edge.parent.rowId === ROOT_ROW_ID)
+      return null
+    return edge.parent
   }
 
-  // Helper: get all rank row_ids in order
-  const getRankOrder = () => {
-    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    stmt.bind([matrixId])
-    const ids: number[] = []
-    while (stmt.step()) {
-      ids.push((stmt.get({}) as { row_id: number }).row_id)
-    }
+  const edgeKeyOf = (rowId: number): Uint8Array => getOwnEdge(db, matrixId, rowId)!.edgeKey
+
+  const dataRowCount = (): number => {
+    const stmt = db.prepare(`SELECT COUNT(*) AS n FROM "mx_${matrixId}_data"`)
+    stmt.step()
+    const n = (stmt.get({}) as { n: number }).n
     stmt.finalize()
-    return ids
+    return n
   }
 
   beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
+    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     matrixId = createMatrixWithTraits(db, 'Test')
   })
 
-  test('reparent leaf node to a new parent', () => {
-    // root1, root2, child1 (under root1)
+  // -- insert positioning ---------------------------------------------------
+
+  test('insertRow appends top-level rows under the sentinel in order', () => {
+    const a = makeRow('A')
+    const b = makeRow('B', { prevSiblingKey: a.edgeKey })
+    const c = makeRow('C', { prevSiblingKey: b.edgeKey })
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, b.rowId, c.rowId])
+  })
+
+  test('insertRow places a row between two siblings', () => {
+    const a = makeRow('A')
+    const c = makeRow('C', { prevSiblingKey: a.edgeKey })
+    const b = makeRow('B', { prevSiblingKey: a.edgeKey, nextSiblingKey: c.edgeKey })
+    expect(childRowIds(SENTINEL)).toEqual([a.rowId, b.rowId, c.rowId])
+  })
+
+  test('insertRow nests children under a parent', () => {
+    const p = makeRow('Parent')
+    const c1 = makeRow('C1', { parent: p.ref })
+    const c2 = makeRow('C2', { parent: p.ref, prevSiblingKey: c1.edgeKey })
+    expect(childRowIds(p.ref)).toEqual([c1.rowId, c2.rowId])
+    expect(parentRefOf(c1.rowId)).toEqual(p.ref)
+  })
+
+  test('the unified insertRow wrapper attaches every row to the forest', () => {
+    const { rowId, edgeKey } = insertRow(db, matrixId, { values: { title: 'X' } })
+    expect(edgeKey.length).toBeGreaterThan(0)
+    expect(parentRefOf(rowId)).toBeNull() // top-level (sentinel)
+  })
+
+  // -- reparent -------------------------------------------------------------
+
+  test('reparent moves a node under a new parent', () => {
     const root1 = makeRow('Root 1')
-    const root2 = makeRow('Root 2', { prevKey: root1.key })
-    const child1 = makeRow('Child 1', { parentKey: root1.key })
+    const root2 = makeRow('Root 2', { prevSiblingKey: root1.edgeKey })
+    const child = makeRow('Child', { parent: root1.ref })
 
-    // Reparent child1 under root2
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child1.key,
-      newParentKey: root2.key,
-    })
+    reparentRow(db, { matrixId, rowId: child.rowId, newParent: root2.ref })
 
-    // Verify ordering: root1 < root2 < child1 (now under root2)
-    const order = getRankOrder()
-    expect(order).toEqual([root1.rowId, root2.rowId, child1.rowId])
-
-    // Verify new key is a child of root2 (more segments)
-    const newSegments = parseKey(newKey)
-    const root2Segments = parseKey(root2.key)
-    expect(newSegments.length).toBe(root2Segments.length + 1)
-
-    // Verify closure: child1 now has root2 as parent, no link to root1
-    const ancestors = getAncestors(newKey)
-    expect(ancestors).toHaveLength(2) // self + root2
-    expect(ancestors[0]!.depth).toBe(0) // self
-    expect(compareKeys(ancestors[1]!.ancestor_key, root2.key)).toBe(0)
-    expect(ancestors[1]!.depth).toBe(1)
+    expect(childRowIds(root1.ref)).toEqual([])
+    expect(childRowIds(root2.ref)).toEqual([child.rowId])
   })
 
-  test('reparent subtree (node with children)', () => {
-    // root1, root2, child (under root1), grandchild (under child)
+  test('reparent to root makes a row top-level', () => {
+    const root = makeRow('Root')
+    const child = makeRow('Child', { parent: root.ref })
+
+    reparentRow(db, { matrixId, rowId: child.rowId })
+
+    expect(parentRefOf(child.rowId)).toBeNull()
+  })
+
+  test('reparent re-points one edge and leaves descendant keys byte-identical', () => {
     const root1 = makeRow('Root 1')
-    const root2 = makeRow('Root 2', { prevKey: root1.key })
-    const child = makeRow('Child', { parentKey: root1.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+    const root2 = makeRow('Root 2', { prevSiblingKey: root1.edgeKey })
+    const child = makeRow('Child', { parent: root1.ref })
+    const gc = makeRow('Grandchild', { parent: child.ref })
 
-    // Reparent child (and its subtree) under root2
-    const newChildKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-      newParentKey: root2.key,
-    })
+    const gcKeyBefore = edgeKeyOf(gc.rowId)
+    reparentRow(db, { matrixId, rowId: child.rowId, newParent: root2.ref })
+    const gcKeyAfter = edgeKeyOf(gc.rowId)
 
-    // Verify ordering: root1 < root2 < child < grandchild
-    const order = getRankOrder()
-    expect(order).toEqual([root1.rowId, root2.rowId, child.rowId, grandchild.rowId])
-
-    // Verify child's closure: root2 at depth 1, self at depth 0
-    const childAncestors = getAncestors(newChildKey)
-    expect(childAncestors).toHaveLength(2)
-    expect(childAncestors[0]!.depth).toBe(0)
-    expect(compareKeys(childAncestors[1]!.ancestor_key, root2.key)).toBe(0)
-    expect(childAncestors[1]!.depth).toBe(1)
-
-    // Find grandchild's new key (it was rewritten with the new prefix)
-    const rankStmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    rankStmt.bind([matrixId, grandchild.rowId])
-    rankStmt.step()
-    const newGrandchildKey = new Uint8Array((rankStmt.get({}) as { key: Uint8Array }).key)
-    rankStmt.finalize()
-
-    // Verify grandchild's closure: root2 at depth 2, child at depth 1, self at depth 0
-    const gcAncestors = getAncestors(newGrandchildKey)
-    expect(gcAncestors).toHaveLength(3)
-    expect(gcAncestors[0]!.depth).toBe(0) // self
-    expect(compareKeys(gcAncestors[1]!.ancestor_key, newChildKey)).toBe(0)
-    expect(gcAncestors[1]!.depth).toBe(1) // parent
-    expect(compareKeys(gcAncestors[2]!.ancestor_key, root2.key)).toBe(0)
-    expect(gcAncestors[2]!.depth).toBe(2) // grandparent
+    expect(Array.from(gcKeyAfter)).toEqual(Array.from(gcKeyBefore))
+    expect(childRowIds(child.ref)).toEqual([gc.rowId])
   })
 
-  test('reparent to root (no newParentKey)', () => {
-    // root, child (under root)
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-
-    // Reparent child to root level
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-    })
-
-    // Verify new key has single segment (root level)
-    const newSegments = parseKey(newKey)
-    expect(newSegments.length).toBe(1)
-
-    // Verify closure: only self-reference, no parent
-    const ancestors = getAncestors(newKey)
-    expect(ancestors).toHaveLength(1)
-    expect(ancestors[0]!.depth).toBe(0)
-  })
-
-  test('reparent subtree to root preserves subtree-internal closure', () => {
-    // root, child (under root), grandchild (under child)
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
-
-    // Reparent child (with grandchild) to root level
-    const newChildKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-    })
-
-    // Find grandchild's new key
-    const rankStmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    rankStmt.bind([matrixId, grandchild.rowId])
-    rankStmt.step()
-    const newGcKey = new Uint8Array((rankStmt.get({}) as { key: Uint8Array }).key)
-    rankStmt.finalize()
-
-    // Grandchild should still have child as parent at depth 1
-    const gcAncestors = getAncestors(newGcKey)
-    expect(gcAncestors).toHaveLength(2) // self + child (no root ancestor)
-    expect(gcAncestors[0]!.depth).toBe(0)
-    expect(compareKeys(gcAncestors[1]!.ancestor_key, newChildKey)).toBe(0)
-    expect(gcAncestors[1]!.depth).toBe(1)
-  })
-
-  test('reparent with prevSiblingKey positions correctly', () => {
-    // parent, child1 (under parent), child2 (under parent)
-    // Move a root node under parent, after child1
+  test('reparent positions among new siblings', () => {
     const parent = makeRow('Parent')
-    const child1 = makeRow('Child 1', { parentKey: parent.key })
-    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
-    const loner = makeRow('Loner', { prevKey: parent.key })
+    const c1 = makeRow('C1', { parent: parent.ref })
+    const c2 = makeRow('C2', { parent: parent.ref, prevSiblingKey: c1.edgeKey })
+    const loner = makeRow('Loner', { prevSiblingKey: parent.edgeKey })
 
-    // Reparent loner under parent, between child1 and child2
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: loner.key,
-      newParentKey: parent.key,
-      prevSiblingKey: child1.key,
-      nextSiblingKey: child2.key,
-    })
-
-    // Verify ordering: parent < child1 < loner < child2
-    const order = getRankOrder()
-    expect(order).toEqual([parent.rowId, child1.rowId, loner.rowId, child2.rowId])
-
-    // Verify new key sorts between child1 and child2
-    expect(compareKeys(child1.key, newKey)).toBe(-1)
-    expect(compareKeys(newKey, child2.key)).toBe(-1)
-  })
-
-  test('reparent with only prevSiblingKey (outdent pattern)', () => {
-    // Simulates Shift-Tab: child becomes sibling of its parent
-    // grandparent, parent (under grandparent), child (under parent), uncle (under grandparent)
-    const grandparent = makeRow('Grandparent')
-    const parent = makeRow('Parent', { parentKey: grandparent.key })
-    const child = makeRow('Child', { parentKey: parent.key })
-    const uncle = makeRow('Uncle', { parentKey: grandparent.key, prevKey: parent.key })
-
-    // Outdent child: reparent under grandparent, after parent
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-      newParentKey: grandparent.key,
-      prevSiblingKey: parent.key,
-    })
-
-    // Verify ordering: grandparent < parent < child < uncle
-    const order = getRankOrder()
-    expect(order).toEqual([grandparent.rowId, parent.rowId, child.rowId, uncle.rowId])
-
-    // Verify child is now at same depth as parent (child of grandparent)
-    const newSegments = parseKey(newKey)
-    const parentSegments = parseKey(parent.key)
-    expect(newSegments.length).toBe(parentSegments.length)
-
-    // Verify closure: grandparent at depth 1, self at depth 0
-    const ancestors = getAncestors(newKey)
-    expect(ancestors).toHaveLength(2)
-    expect(ancestors[0]!.depth).toBe(0)
-    expect(compareKeys(ancestors[1]!.ancestor_key, grandparent.key)).toBe(0)
-    expect(ancestors[1]!.depth).toBe(1)
-  })
-
-  test('reparent as first child (indent pattern)', () => {
-    // Simulates Tab: row becomes child of previous sibling
-    // row1, row2 (both root level)
-    const row1 = makeRow('Row 1')
-    const row2 = makeRow('Row 2', { prevKey: row1.key })
-
-    // Indent row2: reparent under row1
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: row2.key,
-      newParentKey: row1.key,
-    })
-
-    // Verify ordering: row1 < row2
-    const order = getRankOrder()
-    expect(order).toEqual([row1.rowId, row2.rowId])
-
-    // Verify row2 is now a child of row1
-    const newSegments = parseKey(newKey)
-    const row1Segments = parseKey(row1.key)
-    expect(newSegments.length).toBe(row1Segments.length + 1)
-
-    // Verify closure
-    const ancestors = getAncestors(newKey)
-    expect(ancestors).toHaveLength(2)
-    expect(ancestors[0]!.depth).toBe(0)
-    expect(compareKeys(ancestors[1]!.ancestor_key, row1.key)).toBe(0)
-    expect(ancestors[1]!.depth).toBe(1)
-  })
-
-  test('data table is unaffected by reparent', () => {
-    const root1 = makeRow('Root 1')
-    const root2 = makeRow('Root 2', { prevKey: root1.key })
-    const child = makeRow('Child', { parentKey: root1.key })
-
-    // Reparent child under root2
     reparentRow(db, {
       matrixId,
-      nodeKey: child.key,
-      newParentKey: root2.key,
+      rowId: loner.rowId,
+      newParent: parent.ref,
+      prevSiblingKey: c1.edgeKey,
+      nextSiblingKey: c2.edgeKey,
     })
 
-    // Verify data rows are unchanged
-    const dataStmt = db.prepare(`SELECT id, title FROM "mx_${matrixId}_data" ORDER BY id`)
-    const rows: { id: number; title: string }[] = []
-    while (dataStmt.step()) {
-      rows.push(dataStmt.get({}) as { id: number; title: string })
-    }
-    dataStmt.finalize()
-
-    expect(rows).toHaveLength(3)
-    expect(rows[0]!.title).toBe('Root 1')
-    expect(rows[1]!.title).toBe('Root 2')
-    expect(rows[2]!.title).toBe('Child')
+    expect(childRowIds(parent.ref)).toEqual([c1.rowId, loner.rowId, c2.rowId])
   })
 
-  test('throws when reparenting under own descendant', () => {
+  test('reparent under own descendant throws and rolls back', () => {
     const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+    const child = makeRow('Child', { parent: root.ref })
+    const gc = makeRow('Grandchild', { parent: child.ref })
 
-    expect(() =>
-      reparentRow(db, {
-        matrixId,
-        nodeKey: root.key,
-        newParentKey: grandchild.key,
-      }),
-    ).toThrow('Cannot reparent a node under one of its own descendants')
-
-    // Verify nothing changed (transaction rolled back)
-    const order = getRankOrder()
-    expect(order).toEqual([root.rowId, child.rowId, grandchild.rowId])
-  })
-
-  test('reparent with nextSiblingKey positions correctly', () => {
-    const parent = makeRow('Parent')
-    const child1 = makeRow('Child 1', { parentKey: parent.key })
-    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
-    const loner = makeRow('Loner', { prevKey: parent.key })
-
-    // Reparent loner under parent, before child1
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: loner.key,
-      newParentKey: parent.key,
-      nextSiblingKey: child1.key,
-    })
-
-    // Verify ordering: parent < loner < child1 < child2
-    const order = getRankOrder()
-    expect(order).toEqual([parent.rowId, loner.rowId, child1.rowId, child2.rowId])
-
-    // Verify new key sorts before child1
-    expect(compareKeys(newKey, child1.key)).toBe(-1)
-  })
-
-  test('reparent deep subtree preserves all internal relationships', () => {
-    // Build: root > A > B > C
-    const root = makeRow('Root')
-    const a = makeRow('A', { parentKey: root.key })
-    const b = makeRow('B', { parentKey: a.key })
-    const c = makeRow('C', { parentKey: b.key })
-    const root2 = makeRow('Root 2', { prevKey: root.key })
-
-    // Reparent A (with B, C) under root2
-    const newAKey = reparentRow(db, {
-      matrixId,
-      nodeKey: a.key,
-      newParentKey: root2.key,
-    })
-
-    // Find new keys for B and C
-    const findKey = (rowId: number) => {
-      const stmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-      stmt.bind([matrixId, rowId])
-      stmt.step()
-      const key = new Uint8Array((stmt.get({}) as { key: Uint8Array }).key)
-      stmt.finalize()
-      return key
-    }
-    const newBKey = findKey(b.rowId)
-    const newCKey = findKey(c.rowId)
-
-    // Verify ordering
-    const order = getRankOrder()
-    expect(order).toEqual([root.rowId, root2.rowId, a.rowId, b.rowId, c.rowId])
-
-    // Verify C has full ancestor chain: self(0), B(1), A(2), root2(3)
-    const cAncestors = getAncestors(newCKey)
-    expect(cAncestors).toHaveLength(4)
-    expect(cAncestors[0]!.depth).toBe(0)
-    expect(compareKeys(cAncestors[1]!.ancestor_key, newBKey)).toBe(0)
-    expect(cAncestors[1]!.depth).toBe(1)
-    expect(compareKeys(cAncestors[2]!.ancestor_key, newAKey)).toBe(0)
-    expect(cAncestors[2]!.depth).toBe(2)
-    expect(compareKeys(cAncestors[3]!.ancestor_key, root2.key)).toBe(0)
-    expect(cAncestors[3]!.depth).toBe(3)
-  })
-})
-
-describe('deleteRow', () => {
-  let db: Database
-  let matrixId: number
-
-  const makeRow = (
-    title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
+    expect(() => reparentRow(db, { matrixId, rowId: root.rowId, newParent: gc.ref })).toThrow(
+      'Cannot reparent a node under one of its own descendants',
     )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
 
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-      nextKey: opts.nextKey,
-    })
-    return { key, rowId }
-  }
-
-  const getRankOrder = () => {
-    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    stmt.bind([matrixId])
-    const ids: number[] = []
-    while (stmt.step()) {
-      ids.push((stmt.get({}) as { row_id: number }).row_id)
-    }
-    stmt.finalize()
-    return ids
-  }
-
-  const getClosureCount = () => {
-    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
-    stmt.step()
-    const count = (stmt.get({}) as { count: number }).count
-    stmt.finalize()
-    return count
-  }
-
-  const getDataRowCount = () => {
-    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)
-    stmt.step()
-    const count = (stmt.get({}) as { count: number }).count
-    stmt.finalize()
-    return count
-  }
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrixWithTraits(db, 'Test')
+    expect(parentRefOf(root.rowId)).toBeNull()
+    expect(parentRefOf(child.rowId)).toEqual(root.ref)
   })
 
-  test('delete a leaf row removes rank, closure, and data entries', () => {
-    const row = makeRow('Only row')
-
-    removeTreePosition(db, matrixId, row.rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [row.rowId] })
-
-    expect(getRankOrder()).toEqual([])
-    expect(getClosureCount()).toBe(0)
-    expect(getDataRowCount()).toBe(0)
-  })
-
-  test('delete one of several root rows leaves others intact', () => {
-    const row1 = makeRow('Row 1')
-    const row2 = makeRow('Row 2', { prevKey: row1.key })
-    const row3 = makeRow('Row 3', { prevKey: row2.key })
-
-    removeTreePosition(db, matrixId, row2.rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [row2.rowId] })
-
-    expect(getRankOrder()).toEqual([row1.rowId, row3.rowId])
-    expect(getDataRowCount()).toBe(2)
-  })
-
-  test('delete a leaf child removes only that child', () => {
-    const parent = makeRow('Parent')
-    const child1 = makeRow('Child 1', { parentKey: parent.key })
-    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
-
-    removeTreePosition(db, matrixId, child1.rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [child1.rowId] })
-
-    expect(getRankOrder()).toEqual([parent.rowId, child2.rowId])
-    expect(getDataRowCount()).toBe(2)
-
-    // child2 still has parent in its closure
-    const closureStmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closureStmt.bind([child2.key])
-
-    expect(closureStmt.step()).toBe(true)
-    const self = closureStmt.get({}) as { depth: number }
-    expect(self.depth).toBe(0)
-
-    expect(closureStmt.step()).toBe(true)
-    const parentLink = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(parentLink.ancestor_key, parent.key)).toBe(0)
-    expect(parentLink.depth).toBe(1)
-
-    expect(closureStmt.step()).toBe(false)
-    closureStmt.finalize()
-  })
-
-  test('delete parent reparents children to grandparent (or root)', () => {
-    const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
-
-    removeTreePosition(db, matrixId, parent.rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [parent.rowId] })
-
-    // Children remain in rank and data tables
-    expect(getRankOrder()).toEqual([child.rowId, grandchild.rowId])
-    expect(getDataRowCount()).toBe(2)
-
-    // Look up child's NEW key after reparenting (the old key was rewritten)
-    const childKeyStmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    childKeyStmt.bind([matrixId, child.rowId])
-    expect(childKeyStmt.step()).toBe(true)
-    const newChildKey = new Uint8Array((childKeyStmt.get({}) as { key: Uint8Array }).key)
-    childKeyStmt.finalize()
-
-    // Child is now a root-level row (reparented from parent to root).
-    // Its closure has: self-reference (depth 0) only -- no parent link.
-    const closureStmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closureStmt.bind([newChildKey])
-
-    expect(closureStmt.step()).toBe(true)
-    const self = closureStmt.get({}) as { depth: number }
-    expect(self.depth).toBe(0)
-
-    expect(closureStmt.step()).toBe(false)
-    closureStmt.finalize()
-
-    // Look up grandchild's NEW key
-    const gcKeyStmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    gcKeyStmt.bind([matrixId, grandchild.rowId])
-    expect(gcKeyStmt.step()).toBe(true)
-    const newGcKey = new Uint8Array((gcKeyStmt.get({}) as { key: Uint8Array }).key)
-    gcKeyStmt.finalize()
-
-    // Grandchild is still a child of child (depth 1 from child)
-    const gcStmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    gcStmt.bind([newGcKey])
-
-    expect(gcStmt.step()).toBe(true)
-    expect((gcStmt.get({}) as { depth: number }).depth).toBe(0)
-    expect(gcStmt.step()).toBe(true)
-    expect((gcStmt.get({}) as { depth: number }).depth).toBe(1)
-    expect(gcStmt.step()).toBe(false)
-    gcStmt.finalize()
-  })
-
-  test('delete removes closure entries where key is ancestor', () => {
-    const parent = makeRow('Parent')
-    makeRow('Child', { parentKey: parent.key })
-
-    // Before delete: closure has parent→child link
-    const beforeStmt = db.prepare(`
-      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
-      WHERE ancestor_key = ?
-    `)
-    beforeStmt.bind([parent.key])
-    beforeStmt.step()
-    const beforeCount = (beforeStmt.get({}) as { count: number }).count
-    beforeStmt.finalize()
-    expect(beforeCount).toBeGreaterThan(0)
-
-    removeTreePosition(db, matrixId, parent.rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [parent.rowId] })
-
-    // After delete: no closure entries with parent as ancestor
-    const afterStmt = db.prepare(`
-      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
-      WHERE ancestor_key = ?
-    `)
-    afterStmt.bind([parent.key])
-    afterStmt.step()
-    const afterCount = (afterStmt.get({}) as { count: number }).count
-    afterStmt.finalize()
-    expect(afterCount).toBe(0)
-  })
-
-  test('throws when deleting a non-existent row', () => {
-    const fakeRowId = 99999
-
-    expect(() => removeTreePosition(db, matrixId, fakeRowId)).toThrow(/not found in rank table/)
-  })
-
-  test('delete is transactional -- failure rolls back', () => {
-    const row = makeRow('Row')
-
-    // Verify the row exists
-    expect(getRankOrder()).toEqual([row.rowId])
-
-    // Attempt to delete with a bad matrixId -- the rank lookup will fail
-    expect(() => removeTreePosition(db, 9999, row.rowId)).toThrow()
-
-    // Original row is untouched
-    expect(getRankOrder()).toEqual([row.rowId])
-    expect(getDataRowCount()).toBe(1)
-  })
-})
-
-describe('deleteSubtree', () => {
-  let db: Database
-  let matrixId: number
-
-  const makeRow = (
-    title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-      nextKey: opts.nextKey,
-    })
-    return { key, rowId }
-  }
-
-  const getRankOrder = () => {
-    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    stmt.bind([matrixId])
-    const ids: number[] = []
-    while (stmt.step()) {
-      ids.push((stmt.get({}) as { row_id: number }).row_id)
-    }
-    stmt.finalize()
-    return ids
-  }
-
-  const getClosureCount = () => {
-    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"`)
-    stmt.step()
-    const count = (stmt.get({}) as { count: number }).count
-    stmt.finalize()
-    return count
-  }
-
-  const getDataRowCount = () => {
-    const stmt = db.prepare(`SELECT COUNT(*) as count FROM "mx_${matrixId}_data"`)
-    stmt.step()
-    const count = (stmt.get({}) as { count: number }).count
-    stmt.finalize()
-    return count
-  }
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrixWithTraits(db, 'Test')
-  })
-
-  test('delete a single leaf row (no descendants)', () => {
-    const row = makeRow('Only row')
-
-    deleteSubtree(db, { matrixId, key: row.key })
-
-    expect(getRankOrder()).toEqual([])
-    expect(getClosureCount()).toBe(0)
-    expect(getDataRowCount()).toBe(0)
-  })
-
-  test('delete subtree removes parent and all descendants', () => {
-    const parent = makeRow('Parent')
-    const child1 = makeRow('Child 1', { parentKey: parent.key })
-    makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
-    makeRow('Grandchild', { parentKey: child1.key })
-
-    deleteSubtree(db, { matrixId, key: parent.key })
-
-    expect(getRankOrder()).toEqual([])
-    expect(getClosureCount()).toBe(0)
-    expect(getDataRowCount()).toBe(0)
-  })
-
-  test('delete subtree of a child leaves sibling subtrees intact', () => {
-    const root = makeRow('Root')
-    const child1 = makeRow('Child 1', { parentKey: root.key })
-    const child2 = makeRow('Child 2', { parentKey: root.key, prevKey: child1.key })
-    makeRow('GC 1', { parentKey: child1.key })
-
-    // Delete child1's subtree (child1 + GC 1)
-    deleteSubtree(db, { matrixId, key: child1.key })
-
-    expect(getRankOrder()).toEqual([root.rowId, child2.rowId])
-    expect(getDataRowCount()).toBe(2)
-
-    // child2 still has root as ancestor
-    const closureStmt = db.prepare(`
-      SELECT ancestor_key, depth FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-      ORDER BY depth
-    `)
-    closureStmt.bind([child2.key])
-
-    expect(closureStmt.step()).toBe(true)
-    const self = closureStmt.get({}) as { depth: number }
-    expect(self.depth).toBe(0)
-
-    expect(closureStmt.step()).toBe(true)
-    const parentLink = closureStmt.get({}) as { ancestor_key: Uint8Array; depth: number }
-    expect(compareKeys(parentLink.ancestor_key, root.key)).toBe(0)
-    expect(parentLink.depth).toBe(1)
-
-    expect(closureStmt.step()).toBe(false)
-    closureStmt.finalize()
-  })
-
-  test('delete subtree of a middle node preserves unrelated rows', () => {
+  test('reparent leaves the data table untouched', () => {
     const root1 = makeRow('Root 1')
-    const child = makeRow('Child', { parentKey: root1.key })
-    makeRow('Grandchild', { parentKey: child.key })
-    const root2 = makeRow('Root 2', { prevKey: root1.key })
+    const root2 = makeRow('Root 2', { prevSiblingKey: root1.edgeKey })
+    const child = makeRow('Child', { parent: root1.ref })
 
-    // Delete child's subtree (child + grandchild), root1 and root2 remain
-    deleteSubtree(db, { matrixId, key: child.key })
+    reparentRow(db, { matrixId, rowId: child.rowId, newParent: root2.ref })
 
-    expect(getRankOrder()).toEqual([root1.rowId, root2.rowId])
-    expect(getDataRowCount()).toBe(2)
+    expect(dataRowCount()).toBe(3)
   })
 
-  test('delete subtree cleans up all closure entries for subtree keys', () => {
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
+  // -- deleteRow (single node) ---------------------------------------------
 
-    // Before: closure has root→child, root→grandchild, child→grandchild, plus self-refs
-    deleteSubtree(db, { matrixId, key: child.key })
+  test('deleteRow removes a leaf', () => {
+    const a = makeRow('A')
+    makeRow('B', { prevSiblingKey: a.edgeKey })
 
-    // After: no closure entries should reference child or grandchild
-    const stmt = db.prepare(`
-      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
-      WHERE ancestor_key = ? OR descendant_key = ?
-         OR ancestor_key = ? OR descendant_key = ?
-    `)
-    stmt.bind([child.key, child.key, grandchild.key, grandchild.key])
-    stmt.step()
-    const count = (stmt.get({}) as { count: number }).count
-    stmt.finalize()
-    expect(count).toBe(0)
+    deleteRow(db, matrixId, a.rowId)
 
-    // Root should only have self-reference remaining
-    const rootStmt = db.prepare(`
-      SELECT COUNT(*) as count FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ?
-    `)
-    rootStmt.bind([root.key])
-    rootStmt.step()
-    const rootClosureCount = (rootStmt.get({}) as { count: number }).count
-    rootStmt.finalize()
-    expect(rootClosureCount).toBe(1)
+    expect(getOwnEdge(db, matrixId, a.rowId)).toBeNull()
+    expect(dataRowCount()).toBe(1)
   })
 
-  test('delete deep subtree (3+ levels)', () => {
-    const root = makeRow('Root')
-    const a = makeRow('A', { parentKey: root.key })
-    const b = makeRow('B', { parentKey: a.key })
-    const c = makeRow('C', { parentKey: b.key })
-    makeRow('D', { parentKey: c.key })
-
-    deleteSubtree(db, { matrixId, key: a.key })
-
-    expect(getRankOrder()).toEqual([root.rowId])
-    expect(getDataRowCount()).toBe(1)
-    expect(getClosureCount()).toBe(1) // only root's self-ref
-  })
-
-  test('throws when deleting a non-existent key', () => {
-    const fakeKey = new Uint8Array([0x42, 0x00])
-
-    expect(() => deleteSubtree(db, { matrixId, key: fakeKey })).toThrow(
-      'Row not found in rank table',
-    )
-  })
-
-  test('delete is transactional -- failure rolls back', () => {
-    const row = makeRow('Row')
-
-    expect(getRankOrder()).toEqual([row.rowId])
-
-    // Attempt to delete with a non-existent key triggers rollback
-    expect(() =>
-      deleteSubtree(db, { matrixId: 9999, key: new Uint8Array([0x42, 0x00]) }),
-    ).toThrow()
-
-    // Original row is untouched
-    expect(getRankOrder()).toEqual([row.rowId])
-    expect(getDataRowCount()).toBe(1)
-  })
-})
-
-describe('getChildren', () => {
-  let db: Database
-  let matrixId: number
-
-  const makeRow = (
-    title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-      nextKey: opts.nextKey,
-    })
-    return { key, rowId }
-  }
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrixWithTraits(db, 'Test')
-  })
-
-  test('returns empty array for a leaf node', () => {
-    const leaf = makeRow('Leaf')
-    expect(getChildren(db, matrixId, leaf.key)).toEqual([])
-  })
-
-  test('returns direct children in rank order', () => {
+  test('deleteRow promotes children to the grandparent', () => {
     const parent = makeRow('Parent')
-    const child1 = makeRow('Child 1', { parentKey: parent.key })
-    const child2 = makeRow('Child 2', { parentKey: parent.key, prevKey: child1.key })
-    const child3 = makeRow('Child 3', { parentKey: parent.key, prevKey: child2.key })
+    const child = makeRow('Child', { parent: parent.ref })
+    const gc = makeRow('Grandchild', { parent: child.ref })
 
-    const children = getChildren(db, matrixId, parent.key)
+    deleteRow(db, matrixId, parent.rowId)
 
-    expect(children).toHaveLength(3)
-    expect(compareKeys(children[0]!, child1.key)).toBe(0)
-    expect(compareKeys(children[1]!, child2.key)).toBe(0)
-    expect(compareKeys(children[2]!, child3.key)).toBe(0)
+    // child promoted to root; grandchild still under child.
+    expect(parentRefOf(child.rowId)).toBeNull()
+    expect(childRowIds(child.ref)).toEqual([gc.rowId])
+    expect(dataRowCount()).toBe(2)
   })
 
-  test('does not include grandchildren (only depth=1)', () => {
+  // -- deleteSubtree --------------------------------------------------------
+
+  test('deleteSubtree removes a node and all its descendants', () => {
     const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    makeRow('Grandchild', { parentKey: child.key })
+    const child = makeRow('Child', { parent: root.ref })
+    makeRow('GC', { parent: child.ref })
 
-    const children = getChildren(db, matrixId, root.key)
+    deleteSubtree(db, { matrixId, rowId: child.rowId })
 
-    expect(children).toHaveLength(1)
-    expect(compareKeys(children[0]!, child.key)).toBe(0)
+    expect(childRowIds(root.ref)).toEqual([])
+    expect(dataRowCount()).toBe(1) // only root
   })
 
-  test('returns empty array for a root node with no children', () => {
+  test('deleteSubtree leaves sibling subtrees intact', () => {
     const root = makeRow('Root')
-    makeRow('Sibling', { prevKey: root.key })
+    const c1 = makeRow('C1', { parent: root.ref })
+    const c2 = makeRow('C2', { parent: root.ref, prevSiblingKey: c1.edgeKey })
+    makeRow('GC', { parent: c1.ref })
 
-    expect(getChildren(db, matrixId, root.key)).toEqual([])
+    deleteSubtree(db, { matrixId, rowId: c1.rowId })
+
+    expect(childRowIds(root.ref)).toEqual([c2.rowId])
+    expect(dataRowCount()).toBe(2)
   })
 
-  test('returns correct children after reparenting', () => {
-    const parent1 = makeRow('Parent 1')
-    const parent2 = makeRow('Parent 2', { prevKey: parent1.key })
-    const child = makeRow('Child', { parentKey: parent1.key })
+  // -- getOwnChildren / getOwnEdge -----------------------------------------
 
-    // Initially parent1 has one child, parent2 has none
-    expect(getChildren(db, matrixId, parent1.key)).toHaveLength(1)
-    expect(getChildren(db, matrixId, parent2.key)).toHaveLength(0)
-
-    // Reparent child under parent2
-    reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-      newParentKey: parent2.key,
-    })
-
-    // Now parent1 has no children, parent2 has one
-    expect(getChildren(db, matrixId, parent1.key)).toHaveLength(0)
-    expect(getChildren(db, matrixId, parent2.key)).toHaveLength(1)
-  })
-})
-
-describe('getParent', () => {
-  let db: Database
-  let matrixId: number
-
-  const makeRow = (
-    title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array; nextKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-      nextKey: opts.nextKey,
-    })
-    return { key, rowId }
-  }
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrixWithTraits(db, 'Test')
+  test('getOwnChildren returns direct children in sibling order', () => {
+    const p = makeRow('P')
+    const c1 = makeRow('c1', { parent: p.ref })
+    const c2 = makeRow('c2', { parent: p.ref, prevSiblingKey: c1.edgeKey })
+    const c3 = makeRow('c3', { parent: p.ref, prevSiblingKey: c2.edgeKey })
+    expect(childRowIds(p.ref)).toEqual([c1.rowId, c2.rowId, c3.rowId])
   })
 
-  test('returns null for a root-level row', () => {
-    const root = makeRow('Root')
-    expect(getParent(db, matrixId, root.key)).toBeNull()
-  })
-
-  test('returns parent key for a child row', () => {
-    const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
-
-    const result = getParent(db, matrixId, child.key)
-
-    expect(result).not.toBeNull()
-    expect(compareKeys(result!, parent.key)).toBe(0)
-  })
-
-  test('returns immediate parent (not grandparent) for nested rows', () => {
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
-
-    const gcParent = getParent(db, matrixId, grandchild.key)
-    expect(gcParent).not.toBeNull()
-    expect(compareKeys(gcParent!, child.key)).toBe(0)
-
-    const childParent = getParent(db, matrixId, child.key)
-    expect(childParent).not.toBeNull()
-    expect(compareKeys(childParent!, root.key)).toBe(0)
-  })
-
-  test('returns null after reparenting to root', () => {
-    const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
-
-    // Initially has a parent
-    expect(getParent(db, matrixId, child.key)).not.toBeNull()
-
-    // Reparent to root
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-    })
-
-    // Now at root level, no parent
-    expect(getParent(db, matrixId, newKey)).toBeNull()
-  })
-
-  test('returns new parent after reparenting', () => {
-    const parent1 = makeRow('Parent 1')
-    const parent2 = makeRow('Parent 2', { prevKey: parent1.key })
-    const child = makeRow('Child', { parentKey: parent1.key })
-
-    // Initially child's parent is parent1
-    expect(compareKeys(getParent(db, matrixId, child.key)!, parent1.key)).toBe(0)
-
-    // Reparent child under parent2
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-      newParentKey: parent2.key,
-    })
-
-    // Now child's parent is parent2
-    expect(compareKeys(getParent(db, matrixId, newKey)!, parent2.key)).toBe(0)
-  })
-})
-
-describe('getDepth', () => {
-  let db: Database
-  let matrixId: number
-
-  const makeRow = (
-    title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
-  ) => {
-    const dataStmt = db.prepare(
-      `INSERT INTO "mx_${matrixId}_data" (title) VALUES (?) RETURNING id`,
-    )
-    dataStmt.bind([title])
-    dataStmt.step()
-    const rowId = (dataStmt.get({}) as { id: number }).id
-    dataStmt.finalize()
-
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
-    })
-    return { key, rowId }
-  }
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-    initMatrixSchema(db)
-    matrixId = createMatrixWithTraits(db, 'Test')
-  })
-
-  test('returns 0 for a root-level row', () => {
-    const root = makeRow('Root')
-    expect(getDepth(db, matrixId, root.key)).toBe(0)
-  })
-
-  test('returns 1 for a direct child', () => {
-    const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
-    expect(getDepth(db, matrixId, child.key)).toBe(1)
-  })
-
-  test('returns correct depth for deeply nested rows', () => {
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const grandchild = makeRow('Grandchild', { parentKey: child.key })
-    const greatGrandchild = makeRow('Great-grandchild', { parentKey: grandchild.key })
-
-    expect(getDepth(db, matrixId, root.key)).toBe(0)
-    expect(getDepth(db, matrixId, child.key)).toBe(1)
-    expect(getDepth(db, matrixId, grandchild.key)).toBe(2)
-    expect(getDepth(db, matrixId, greatGrandchild.key)).toBe(3)
-  })
-
-  test('returns updated depth after reparenting to root', () => {
-    const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
-
-    expect(getDepth(db, matrixId, child.key)).toBe(1)
-
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: child.key,
-    })
-
-    expect(getDepth(db, matrixId, newKey)).toBe(0)
-  })
-
-  test('returns updated depth after reparenting deeper', () => {
-    const root = makeRow('Root')
-    const child = makeRow('Child', { parentKey: root.key })
-    const sibling = makeRow('Sibling', { prevKey: root.key })
-
-    expect(getDepth(db, matrixId, sibling.key)).toBe(0)
-
-    const newKey = reparentRow(db, {
-      matrixId,
-      nodeKey: sibling.key,
-      newParentKey: child.key,
-    })
-
-    expect(getDepth(db, matrixId, newKey)).toBe(2)
-  })
-
-  test('returns null for a non-existent key', () => {
-    const fakeKey = new Uint8Array([0xff, 0xff, 0xff])
-    expect(getDepth(db, matrixId, fakeKey)).toBeNull()
+  test('getOwnEdge returns the inbound own-edge or null for a missing row', () => {
+    const p = makeRow('P')
+    const c = makeRow('c', { parent: p.ref })
+    expect(getOwnEdge(db, matrixId, c.rowId)?.parent).toEqual(p.ref)
+    expect(getOwnEdge(db, matrixId, 999999)).toBeNull()
   })
 })
 
@@ -2248,7 +873,7 @@ describe('Join table', () => {
     ])
   })
 
-  test('single-ownership invariant: second own join to same target is rejected by PK', () => {
+  test('single-ownership invariant: a second own-edge to the same target is rejected', () => {
     const s1 = createMatrix(db, 'Source1', [{ name: 'title', type: 'TEXT' }])
     const s2 = createMatrix(db, 'Source2', [{ name: 'title', type: 'TEXT' }])
     const target = createMatrix(db, 'Target', [{ name: 'title', type: 'TEXT' }])
@@ -2258,18 +883,13 @@ describe('Join table', () => {
 
     insertJoin(db, s1, rowS1, target, targetRowId, 'own')
 
-    // insertJoin uses INSERT OR IGNORE, so a conflicting PK is a silent no-op
-    // when source differs. But two different sources create distinct PK tuples.
-    // The single-ownership invariant for createDependentRow is that it creates
-    // the target row, so two calls can't target the same row. We verify here
-    // that the data model doesn't accidentally allow two own joins from different
-    // sources by checking that both insertions succeed (different PK tuples) --
-    // the application-level single-ownership is enforced by createDependentRow
-    // always creating a new target row.
+    // The partial unique index joins_single_owner enforces single-parent at the
+    // schema level: a second own-edge to the same target (from any source) is
+    // a silent no-op under INSERT OR IGNORE. Only the first owner survives.
     insertJoin(db, s2, rowS2, target, targetRowId, 'own')
 
-    const sources = getSources(db, target, targetRowId)
-    expect(sources).toHaveLength(2)
+    const ownSources = getSources(db, target, targetRowId).filter((s) => s.kind === 'own')
+    expect(ownSources).toEqual([{ sourceMatrixId: s1, sourceRowId: rowS1, kind: 'own' }])
   })
 
   test('ref joins are not cascade-deleted when source row is deleted', () => {
@@ -3541,75 +2161,63 @@ describe('Row operations round-trip', () => {
   let db: Database
   let matrixId: number
 
-  /**
-   * Simulates the handler's deleteRow logic: re-parent children to the
-   * deleted row's parent (preserving order), then delete the row.
-   * removeTreePosition handles reparenting internally.
-   */
-  const handlerDeleteRow = (rowId: number) => {
-    removeTreePosition(db, matrixId, rowId)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId] })
-  }
+  const SENTINEL: NodeRef = { matrixId: ROOT_MATRIX_ID, rowId: ROOT_ROW_ID }
+
+  type Made = { rowId: number; edgeKey: Uint8Array; ref: NodeRef }
 
   const makeRow = (
     title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
-  ) => {
+    opts: { parent?: NodeRef; prevSiblingKey?: Uint8Array } = {},
+  ): Made => {
     const rowId = insertDataRow(db, matrixId, { title })
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
+    const edgeKey = createTreePosition(db, matrixId, rowId, {
+      parent: opts.parent,
+      prevSiblingKey: opts.prevSiblingKey,
     })
-    return { key, rowId }
+    return { rowId, edgeKey, ref: { matrixId, rowId } }
   }
 
+  // Preorder DFS of the own-forest, reading each row's title.
   const queryTitles = (): string[] => {
-    const stmt = db.prepare(`
-      SELECT d.title
-      FROM rank r
-      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
-      WHERE r.matrix_id = ?
-      ORDER BY r.key
-    `)
-    stmt.bind([matrixId])
     const titles: string[] = []
-    while (stmt.step()) {
-      titles.push((stmt.get({}) as { title: string }).title)
+    const walk = (parent: NodeRef) => {
+      for (const child of getOwnChildren(db, parent)) {
+        const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+        stmt.bind([child.rowId])
+        stmt.step()
+        titles.push((stmt.get({}) as { title: string }).title)
+        stmt.finalize()
+        walk(child)
+      }
     }
-    stmt.finalize()
+    walk(SENTINEL)
     return titles
   }
 
+  const childRowIds = (parent: NodeRef): number[] =>
+    getOwnChildren(db, parent).map((c) => c.rowId)
+
+  const parentRefOf = (rowId: number): NodeRef | null => {
+    const edge = getOwnEdge(db, matrixId, rowId)
+    if (!edge) return null
+    if (edge.parent.matrixId === ROOT_MATRIX_ID && edge.parent.rowId === ROOT_ROW_ID)
+      return null
+    return edge.parent
+  }
+
   beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {},
-      printErr: () => {},
-    })
+    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     matrixId = createMatrixWithTraits(db, 'M')
   })
 
-  test('insert data row + rank row, then query both', () => {
+  test('insert data row + own-edge, then query both', () => {
     const rowId = insertDataRow(db, matrixId, { title: 'Test entry' })
-    const key = createTreePosition(db, matrixId, rowId)
+    createTreePosition(db, matrixId, rowId)
 
-    const stmt = db.prepare(`
-      SELECT d.id, d.title, r.key, r.row_kind
-      FROM rank r
-      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
-      WHERE r.matrix_id = ?
-      ORDER BY r.key
-    `)
-    stmt.bind([matrixId])
-    expect(stmt.step()).toBe(true)
-    const row = stmt.get({}) as { id: number; title: string; key: Uint8Array; row_kind: number }
-    expect(row.id).toBe(rowId)
-    expect(row.title).toBe('Test entry')
-    expect(compareKeys(new Uint8Array(row.key), key)).toBe(0)
-    expect(row.row_kind).toBe(0)
-    expect(stmt.step()).toBe(false)
-    stmt.finalize()
+    expect(queryTitles()).toEqual(['Test entry'])
+    expect(parentRefOf(rowId)).toBeNull()
   })
 
   test('insert → update → query reflects updated value', () => {
@@ -3623,154 +2231,111 @@ describe('Row operations round-trip', () => {
 
   test('insert → reparent → query reflects new structure', () => {
     const parent = makeRow('Parent')
-    const child = makeRow('Child', { prevKey: parent.key })
+    const child = makeRow('Child', { prevSiblingKey: parent.edgeKey })
 
-    reparentRow(db, { matrixId, nodeKey: child.key, newParentKey: parent.key })
+    reparentRow(db, { matrixId, rowId: child.rowId, newParent: parent.ref })
 
     expect(queryTitles()).toEqual(['Parent', 'Child'])
-
-    // Verify child is now nested under parent
-    const children = getChildren(db, matrixId, parent.key)
-    expect(children).toHaveLength(1)
+    expect(childRowIds(parent.ref)).toEqual([child.rowId])
   })
 
-  // -- deleteRow (handler pattern: re-parent children then delete) --
+  // -- deleteRow (promotes children, then removes the node) --
 
   test('deleteRow on a leaf node just removes it', () => {
     const row1 = makeRow('Row 1')
-    makeRow('Row 2', { prevKey: row1.key })
+    makeRow('Row 2', { prevSiblingKey: row1.edgeKey })
 
-    handlerDeleteRow(row1.rowId)
+    deleteRow(db, matrixId, row1.rowId)
 
     expect(queryTitles()).toEqual(['Row 2'])
   })
 
   test('deleteRow re-parents children to root when deleting root parent', () => {
     const parent = makeRow('Parent')
-    const child1 = makeRow('C1', { parentKey: parent.key })
-    makeRow('C2', { parentKey: parent.key, prevKey: child1.key })
+    const child1 = makeRow('C1', { parent: parent.ref })
+    makeRow('C2', { parent: parent.ref, prevSiblingKey: child1.edgeKey })
 
-    handlerDeleteRow(parent.rowId)
+    deleteRow(db, matrixId, parent.rowId)
 
     expect(queryTitles()).toEqual(['C1', 'C2'])
-
-    // Both children should now be root-level (no parent)
-    const stmt = db.prepare(`
-      SELECT COUNT(*) as cnt FROM "mx_${matrixId}_closure" WHERE depth = 1
-    `)
-    stmt.step()
-    expect((stmt.get({}) as { cnt: number }).cnt).toBe(0)
-    stmt.finalize()
+    expect(childRowIds(SENTINEL).length).toBe(2)
   })
 
   test('deleteRow re-parents children to grandparent when deleting mid-level node', () => {
-    // grandparent → parent → (child1, child2)
     const grandparent = makeRow('GP')
-    const parent = makeRow('P', { parentKey: grandparent.key })
-    const child1 = makeRow('C1', { parentKey: parent.key })
-    makeRow('C2', { parentKey: parent.key, prevKey: child1.key })
+    const parent = makeRow('P', { parent: grandparent.ref })
+    const child1 = makeRow('C1', { parent: parent.ref })
+    makeRow('C2', { parent: parent.ref, prevSiblingKey: child1.edgeKey })
 
-    handlerDeleteRow(parent.rowId)
+    deleteRow(db, matrixId, parent.rowId)
 
     expect(queryTitles()).toEqual(['GP', 'C1', 'C2'])
-
-    // Children should now be direct children of grandparent
-    const gpChildren = getChildren(db, matrixId, grandparent.key)
-    expect(gpChildren).toHaveLength(2)
-
-    // Verify depth: children should be at depth 1 from grandparent
-    const stmt = db.prepare(`
-      SELECT r.row_id
-      FROM "mx_${matrixId}_closure" c
-      JOIN rank r ON r.key = c.descendant_key AND r.matrix_id = ?
-      WHERE c.ancestor_key = ? AND c.depth = 1
-      ORDER BY r.key
-    `)
-    stmt.bind([matrixId, grandparent.key])
-    const childRowIds: number[] = []
-    while (stmt.step()) {
-      childRowIds.push((stmt.get({}) as { row_id: number }).row_id)
-    }
-    stmt.finalize()
-    expect(childRowIds).toHaveLength(2)
+    expect(childRowIds(grandparent.ref)).toHaveLength(2)
   })
 
   test('deleteRow re-parents preserve children order with many children', () => {
     const parent = makeRow('P')
-    const c1 = makeRow('C1', { parentKey: parent.key })
-    const c2 = makeRow('C2', { parentKey: parent.key, prevKey: c1.key })
-    const c3 = makeRow('C3', { parentKey: parent.key, prevKey: c2.key })
-    makeRow('C4', { parentKey: parent.key, prevKey: c3.key })
+    const c1 = makeRow('C1', { parent: parent.ref })
+    const c2 = makeRow('C2', { parent: parent.ref, prevSiblingKey: c1.edgeKey })
+    const c3 = makeRow('C3', { parent: parent.ref, prevSiblingKey: c2.edgeKey })
+    makeRow('C4', { parent: parent.ref, prevSiblingKey: c3.edgeKey })
 
-    handlerDeleteRow(parent.rowId)
+    deleteRow(db, matrixId, parent.rowId)
 
     expect(queryTitles()).toEqual(['C1', 'C2', 'C3', 'C4'])
   })
 
   test('deleteRow on mid-level node preserves grandchildren under children', () => {
-    // GP → P → C → GC
     const gp = makeRow('GP')
-    const p = makeRow('P', { parentKey: gp.key })
-    const c = makeRow('C', { parentKey: p.key })
-    makeRow('GC', { parentKey: c.key })
+    const p = makeRow('P', { parent: gp.ref })
+    const c = makeRow('C', { parent: p.ref })
+    makeRow('GC', { parent: c.ref })
 
-    handlerDeleteRow(p.rowId)
+    deleteRow(db, matrixId, p.rowId)
 
     expect(queryTitles()).toEqual(['GP', 'C', 'GC'])
-
-    // C should now be a child of GP
-    const gpChildren = getChildren(db, matrixId, gp.key)
-    expect(gpChildren).toHaveLength(1)
-
-    // GC should still be a child of C (the reparented version of C)
-    const stmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    stmt.bind([matrixId, c.rowId])
-    stmt.step()
-    const newCKey = new Uint8Array((stmt.get({}) as { key: Uint8Array }).key)
-    stmt.finalize()
-
-    const cChildren = getChildren(db, matrixId, newCKey)
-    expect(cChildren).toHaveLength(1)
+    expect(childRowIds(gp.ref)).toHaveLength(1)
+    expect(childRowIds(c.ref)).toHaveLength(1)
   })
 
   test('deleteRow on node with no children and a parent leaves parent intact', () => {
     const parent = makeRow('Parent')
-    const child = makeRow('Child', { parentKey: parent.key })
+    const child = makeRow('Child', { parent: parent.ref })
 
-    handlerDeleteRow(child.rowId)
+    deleteRow(db, matrixId, child.rowId)
 
     expect(queryTitles()).toEqual(['Parent'])
-    expect(getChildren(db, matrixId, parent.key)).toHaveLength(0)
+    expect(childRowIds(parent.ref)).toHaveLength(0)
   })
 
   // -- deleteSubtree round-trips --
 
   test('insert → deleteSubtree → query reflects subtree removal', () => {
     const root1 = makeRow('Root 1')
-    makeRow('Child', { parentKey: root1.key })
-    makeRow('Root 2', { prevKey: root1.key })
+    makeRow('Child', { parent: root1.ref })
+    makeRow('Root 2', { prevSiblingKey: root1.edgeKey })
 
-    deleteSubtree(db, { matrixId, key: root1.key })
+    deleteSubtree(db, { matrixId, rowId: root1.rowId })
 
     expect(queryTitles()).toEqual(['Root 2'])
   })
 
-  // -- Worker integration: insertRow + query pattern --
+  // -- insertRow + query pattern --
 
   test('multiple inserts with positioning produce correct query order', () => {
     const r1 = makeRow('A')
-    const r2 = makeRow('B', { prevKey: r1.key })
-    makeRow('A.5', { prevKey: r1.key })
-    makeRow('C', { prevKey: r2.key })
+    const r2 = makeRow('B', { prevSiblingKey: r1.edgeKey })
+    makeRow('A.5', { prevSiblingKey: r1.edgeKey })
+    makeRow('C', { prevSiblingKey: r2.edgeKey })
 
     expect(queryTitles()).toEqual(['A', 'A.5', 'B', 'C'])
   })
 
   test('insert child rows appear in correct query order', () => {
     const parent = makeRow('P')
-    const c1 = makeRow('C1', { parentKey: parent.key })
-    makeRow('C2', { parentKey: parent.key, prevKey: c1.key })
-    makeRow('Sibling', { prevKey: parent.key })
+    const c1 = makeRow('C1', { parent: parent.ref })
+    makeRow('C2', { parent: parent.ref, prevSiblingKey: c1.edgeKey })
+    makeRow('Sibling', { prevSiblingKey: parent.edgeKey })
 
     expect(queryTitles()).toEqual(['P', 'C1', 'C2', 'Sibling'])
   })
@@ -3860,33 +2425,29 @@ describe('Globally unique random IDs', () => {
   test('existing operations work correctly with random IDs', () => {
     const matrixId = createMatrixWithTraits(db, 'Test')
 
-    // insertDataRow + insertRow
     const rowId1 = insertDataRow(db, matrixId, { title: 'Row 1' })
     const key1 = createTreePosition(db, matrixId, rowId1)
+    const ref1 = { matrixId, rowId: rowId1 }
 
     const rowId2 = insertDataRow(db, matrixId, { title: 'Row 2' })
-    const key2 = createTreePosition(db, matrixId, rowId2, { prevKey: key1 })
+    createTreePosition(db, matrixId, rowId2, { prevSiblingKey: key1 })
+    const ref2 = { matrixId, rowId: rowId2 }
 
     // Verify children and parents work
     const rowId3 = insertDataRow(db, matrixId, { title: 'Child' })
-    const key3 = createTreePosition(db, matrixId, rowId3, { parentKey: key1 })
+    createTreePosition(db, matrixId, rowId3, { parent: ref1 })
 
-    expect(getChildren(db, matrixId, key1)).toHaveLength(1)
-    expect(getParent(db, matrixId, key3)).not.toBeNull()
+    expect(getOwnChildren(db, ref1)).toHaveLength(1)
+    expect(getOwnEdge(db, matrixId, rowId3)).not.toBeNull()
 
     // Reparent
-    reparentRow(db, {
-      matrixId,
-      nodeKey: key3,
-      newParentKey: key2,
-    })
-    expect(getChildren(db, matrixId, key1)).toHaveLength(0)
-    expect(getChildren(db, matrixId, key2)).toHaveLength(1)
+    reparentRow(db, { matrixId, rowId: rowId3, newParent: ref2 })
+    expect(getOwnChildren(db, ref1)).toHaveLength(0)
+    expect(getOwnChildren(db, ref2)).toHaveLength(1)
 
     // Delete
-    removeTreePosition(db, matrixId, rowId3)
-    db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, { bind: [rowId3] })
-    expect(getChildren(db, matrixId, key2)).toHaveLength(0)
+    deleteRow(db, matrixId, rowId3)
+    expect(getOwnChildren(db, ref2)).toHaveLength(0)
   })
 
   test('outline query works with random IDs', () => {
@@ -3896,25 +2457,24 @@ describe('Globally unique random IDs', () => {
     const key1 = createTreePosition(db, matrixId, rowId1)
 
     const rowId2 = insertDataRow(db, matrixId, { title: 'Child' })
-    createTreePosition(db, matrixId, rowId2, { parentKey: key1 })
+    createTreePosition(db, matrixId, rowId2, { parent: { matrixId, rowId: rowId1 } })
 
     const rowId3 = insertDataRow(db, matrixId, { title: 'Sibling' })
-    createTreePosition(db, matrixId, rowId3, { prevKey: key1 })
+    createTreePosition(db, matrixId, rowId3, { prevSiblingKey: key1 })
 
-    // Outline-style query: join rank + data, order by key
-    const stmt = db.prepare(`
-      SELECT d.title
-      FROM rank r
-      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
-      WHERE r.matrix_id = ?
-      ORDER BY r.key
-    `)
-    stmt.bind([matrixId])
+    // Preorder DFS of the own-forest.
     const titles: string[] = []
-    while (stmt.step()) {
-      titles.push((stmt.get({}) as { title: string }).title)
+    const walk = (parent: { matrixId: number; rowId: number }) => {
+      for (const child of getOwnChildren(db, parent)) {
+        const stmt = db.prepare(`SELECT title FROM "mx_${matrixId}_data" WHERE id = ?`)
+        stmt.bind([child.rowId])
+        stmt.step()
+        titles.push((stmt.get({}) as { title: string }).title)
+        stmt.finalize()
+        walk(child)
+      }
     }
-    stmt.finalize()
+    walk({ matrixId: ROOT_MATRIX_ID, rowId: ROOT_ROW_ID })
 
     expect(titles).toEqual(['Parent', 'Child', 'Sibling'])
   })

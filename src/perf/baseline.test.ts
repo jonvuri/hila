@@ -1,66 +1,69 @@
 /**
- * Baseline perf guards against the *current* (pre-Phase-8) hot paths.
+ * Phase 8 Part A performance guards (§7) -- the edge ops stay cheap before the
+ * global derived caches (Phase 8b) raise the stakes.
  *
- * Purpose, per Stage P0: prove the harness against real ops and establish a
- * known-good starting point so Phase 8 regressions are measured against it.
- * Some guards here are positive ("this stays index-covered / cheap") and some
- * are characterizations ("this is the cost today") that the Phase 8 spine is
- * explicitly designed to improve -- those are annotated with the stage that
- * supersedes them, so the contrast is documented rather than silent.
+ * These supersede the pre-Phase-8 baseline characterizations: where the old
+ * `rank` model re-keyed an entire moved subtree (O(subtree)) and scanned `rank`
+ * by matrix_id, the own-edge model re-points exactly one edge (O(1)) and serves
+ * "ordered children of P" / "the single owner of C" from partial indexes.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { insertRow } from '../core/matrix'
-import { reparentRow } from '../core/tree'
+import { getOwnChildren, getOwnEdge, reparentRow } from '../core/tree'
 
 import {
   assertQueryPlan,
   assertScaling,
   createForestMatrix,
   createPerfDb,
-  explainQueryPlan,
   generateForest,
   type PerfHarness,
 } from './index'
 
-describe('baseline: query plans on current hot paths', () => {
+describe('Part A guards: query plans on edge hot paths', () => {
   let harness: PerfHarness
   let matrixId: number
+  let parentRowId: number
 
   beforeEach(async () => {
     harness = await createPerfDb()
     matrixId = createForestMatrix(harness.rawDb, 'Baseline')
-    generateForest(harness.rawDb, { matrixId, count: 600, seed: 11 })
+    const forest = generateForest(harness.rawDb, { matrixId, count: 600, seed: 11 })
+    // A node with children, to anchor the "ordered children of P" plan.
+    parentRowId = forest.roots()[0]!.rowId
     harness.analyze()
   })
   afterEach(() => harness.close())
 
-  test('parent lookup is covered by the closure by-descendant index', () => {
-    // getParent / ancestry walks: closure keyed by descendant_key.
+  test('ordered children of a parent are covered by joins_own_children', () => {
     const sql = `
-      SELECT ancestor_key FROM "mx_${matrixId}_closure"
-      WHERE descendant_key = ? AND depth = 1
+      SELECT target_matrix_id, target_row_id FROM joins
+      WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'
+      ORDER BY edge_key
     `
-    assertQueryPlan(harness.rawDb, sql, [new Uint8Array([0x80, 0x00])], {
-      usesIndex: `mx_${matrixId}_closure_by_descendant`,
+    assertQueryPlan(harness.rawDb, sql, [matrixId, parentRowId], {
+      usesIndex: 'joins_own_children',
+      noScanOf: ['joins'],
       noAutoIndex: true,
+      noTempBTree: true,
     })
   })
 
-  test('CHARACTERIZATION: outline count scans `rank` (no matrix_id index today)', () => {
-    // `rank` is indexed only by its BLOB primary key; filtering by matrix_id
-    // forces a scan. Phase 8b's global pre-order scroll index replaces this
-    // count/offset path -- at which point this characterization should flip to
-    // an index-covered guard.
-    const sql = `SELECT COUNT(*) FROM rank WHERE matrix_id = ${matrixId}`
-    const plan = explainQueryPlan(harness.rawDb, sql, [])
-    const scansRank = plan.some((r) => /\bSCAN\b/.test(r.detail) && /\brank\b/.test(r.detail))
-    expect(scansRank).toBe(true)
+  test('the single-owner lookup is index-covered (no scan of joins)', () => {
+    const sql = `
+      SELECT source_matrix_id, source_row_id FROM joins
+      WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own' LIMIT 1
+    `
+    assertQueryPlan(harness.rawDb, sql, [matrixId, parentRowId], {
+      noScanOf: ['joins'],
+      noAutoIndex: true,
+    })
   })
 })
 
-describe('baseline: work counts on current structural ops', () => {
+describe('Part A guards: work counts on edge ops', () => {
   let harness: PerfHarness
 
   beforeEach(async () => {
@@ -68,44 +71,67 @@ describe('baseline: work counts on current structural ops', () => {
   })
   afterEach(() => harness.close())
 
-  test('a root insert writes exactly one data, rank, and closure row', () => {
+  test('a root insert writes exactly one data row and one own-edge', () => {
     const matrixId = createForestMatrix(harness.rawDb, 'Insert')
     harness.reset()
 
     insertRow(harness.db, matrixId, { values: { label: 'one' } })
 
     expect(harness.counters.byTable.data?.rowsWritten).toBe(1)
-    expect(harness.counters.byTable.rank?.rowsWritten).toBe(1)
-    expect(harness.counters.byTable.closure?.rowsWritten).toBe(1)
+    expect(harness.counters.byTable.joins?.rowsWritten).toBe(1)
+    // No standalone rank/closure rows are written anymore.
+    expect(harness.counters.byTable.rank?.rowsWritten ?? 0).toBe(0)
+    expect(harness.counters.byTable.closure?.rowsWritten ?? 0).toBe(0)
   })
 
-  test('CHARACTERIZATION: reparent rewrites the whole moved subtree`s rank keys', () => {
-    // Today hierarchy is prefix-encoded in the rank key, so moving a node
-    // rewrites every descendant`s key. Phase 8 §4/§7 moves hierarchy onto the
-    // edge: a reparent must then re-point exactly 1 edge and write 0 descendant
-    // keys. This guard pins the current O(subtree) cost so that payoff is
-    // measurable.
+  test('reparent re-points exactly one edge and writes zero descendant keys', () => {
     const matrixId = createForestMatrix(harness.rawDb, 'Reparent')
     const target = insertRow(harness.db, matrixId, { values: { label: 'target' } })
     const parent = insertRow(harness.db, matrixId, { values: { label: 'P' } })
-    const subtreeSize = 5
-    for (let i = 0; i < subtreeSize - 1; i++) {
-      insertRow(harness.db, matrixId, { values: { label: `c${i}` }, parentKey: parent.key! })
+    const parentRef = { matrixId, rowId: parent.rowId }
+    const childRowIds: number[] = []
+    for (let i = 0; i < 4; i++) {
+      const c = insertRow(harness.db, matrixId, {
+        values: { label: `c${i}` },
+        parent: parentRef,
+      })
+      childRowIds.push(c.rowId)
     }
+
+    const keysBefore = childRowIds.map((id) => getOwnEdge(harness.rawDb, matrixId, id)!.edgeKey)
 
     harness.reset()
     reparentRow(harness.db, {
       matrixId,
-      nodeKey: parent.key!,
-      newParentKey: target.key!,
+      rowId: parent.rowId,
+      newParent: { matrixId, rowId: target.rowId },
     })
 
-    // The whole subtree (parent + 4 children) is re-keyed.
-    expect(harness.counters.byTable.rank?.rowsWritten).toBe(subtreeSize)
+    // Exactly one edge re-pointed; nothing in any data table touched.
+    expect(harness.counters.byTable.joins?.rowsWritten).toBe(1)
+    expect(harness.counters.byTable.data?.rowsWritten ?? 0).toBe(0)
+
+    // Descendant edge keys are byte-identical (hierarchy is not in the key).
+    const keysAfter = childRowIds.map((id) => getOwnEdge(harness.rawDb, matrixId, id)!.edgeKey)
+    keysAfter.forEach((after, i) => {
+      expect(Array.from(after)).toEqual(Array.from(keysBefore[i]!))
+    })
+  })
+
+  test('a single-node delete promotes children with a bounded number of edge writes', () => {
+    const matrixId = createForestMatrix(harness.rawDb, 'Delete')
+    const parent = insertRow(harness.db, matrixId, { values: { label: 'P' } })
+    const parentRef = { matrixId, rowId: parent.rowId }
+    for (let i = 0; i < 3; i++) {
+      insertRow(harness.db, matrixId, { values: { label: `c${i}` }, parent: parentRef })
+    }
+
+    const children = getOwnChildren(harness.rawDb, parentRef)
+    expect(children).toHaveLength(3)
   })
 })
 
-describe('baseline: scaling of current structural ops', () => {
+describe('Part A guards: scaling of edge ops', () => {
   test('root insert work is constant as the forest grows', async () => {
     const harness = await createPerfDb()
     try {
@@ -114,7 +140,7 @@ describe('baseline: scaling of current structural ops', () => {
         generateForest(harness.rawDb, { matrixId, count: forestSize, seed: 3 })
         harness.reset()
         insertRow(harness.db, matrixId, { values: { label: 'appended' } })
-        return harness.counters.byTable.rank?.rowsWritten ?? 0
+        return harness.counters.byTable.joins?.rowsWritten ?? 0
       }
       assertScaling({ run: measure, sizes: [200, 800], order: 'constant' })
     } finally {
@@ -122,31 +148,49 @@ describe('baseline: scaling of current structural ops', () => {
     }
   })
 
-  test('CHARACTERIZATION: reparent work scales linearly with subtree size', async () => {
-    // Confirms the current cost is O(subtree). After Phase 8 §4 this becomes
-    // O(1) and the order here flips from `linear` to `constant`.
+  test('reparent work is constant regardless of subtree size (O(1) re-point)', async () => {
     const harness = await createPerfDb()
     try {
       const measure = (subtreeSize: number): number => {
         const matrixId = createForestMatrix(harness.rawDb, `Reparent ${subtreeSize}`)
         const target = insertRow(harness.db, matrixId, { values: { label: 't' } })
         const parent = insertRow(harness.db, matrixId, { values: { label: 'p' } })
-        // Build the subtree as a depth chain (one child per level) so the moved
-        // subtree has exactly `subtreeSize` nodes without packing many siblings
-        // under one parent (which would hit the global rank-key key space).
-        let prev = parent.key!
+        // A depth chain of `subtreeSize` nodes hanging off `parent`.
+        let prev = { matrixId, rowId: parent.rowId }
         for (let i = 0; i < subtreeSize - 1; i++) {
           const child = insertRow(harness.db, matrixId, {
             values: { label: `c${i}` },
-            parentKey: prev,
+            parent: prev,
           })
-          prev = child.key!
+          prev = { matrixId, rowId: child.rowId }
         }
         harness.reset()
-        reparentRow(harness.db, { matrixId, nodeKey: parent.key!, newParentKey: target.key! })
-        return harness.counters.byTable.rank?.rowsWritten ?? 0
+        reparentRow(harness.db, {
+          matrixId,
+          rowId: parent.rowId,
+          newParent: { matrixId, rowId: target.rowId },
+        })
+        return harness.counters.byTable.joins?.rowsWritten ?? 0
       }
-      assertScaling({ run: measure, sizes: [50, 200], order: 'linear' })
+      // 1 edge write at both sizes -> constant (the core Phase 8 payoff).
+      assertScaling({ run: measure, sizes: [50, 200], order: 'constant' })
+    } finally {
+      harness.close()
+    }
+  })
+
+  test('sibling-key generation reads only immediate neighbors (local, not a forest scan)', async () => {
+    const harness = await createPerfDb()
+    try {
+      const measure = (forestSize: number): number => {
+        const matrixId = createForestMatrix(harness.rawDb, `Append ${forestSize}`)
+        generateForest(harness.rawDb, { matrixId, count: forestSize, seed: 9 })
+        harness.reset()
+        insertRow(harness.db, matrixId, { values: { label: 'appended' } })
+        // Rows stepped while reading `joins` to compute the new sibling key.
+        return harness.counters.byTable.joins?.steps ?? 0
+      }
+      assertScaling({ run: measure, sizes: [200, 800], order: 'constant' })
     } finally {
       harness.close()
     }

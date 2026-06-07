@@ -57,8 +57,8 @@ describe('generateForest', () => {
       const matrixIdB = createForestMatrix(other.rawDb, 'B')
       const forestB = generateForest(other.rawDb, { matrixId: matrixIdB, count: 150, seed: 42 })
 
-      expect(forestB.nodes.map((n) => toHex(n.key))).toEqual(
-        forestA.nodes.map((n) => toHex(n.key)),
+      expect(forestB.nodes.map((n) => toHex(n.edgeKey))).toEqual(
+        forestA.nodes.map((n) => toHex(n.edgeKey)),
       )
       expect(forestB.nodes.map((n) => n.depth)).toEqual(forestA.nodes.map((n) => n.depth))
     } finally {
@@ -102,20 +102,18 @@ describe('invalidation recorder', () => {
   afterEach(() => harness.close())
 
   test('tablesVisitedBySql resolves read tables', () => {
-    expect(tablesVisitedBySql('SELECT * FROM rank WHERE matrix_id = 1')).toEqual(
-      new Set(['rank']),
-    )
+    expect(tablesVisitedBySql('SELECT * FROM matrix WHERE id = 1')).toEqual(new Set(['matrix']))
   })
 
   test('recomputedFor selects only subscriptions reading a written table', () => {
     const tracker = harness.createTracker()
-    const rankSql = 'SELECT COUNT(*) FROM rank WHERE matrix_id = 1'
+    const matrixSql = 'SELECT COUNT(*) FROM matrix WHERE id = 1'
     const joinsSql = 'SELECT * FROM joins WHERE source_row_id = 1'
-    tracker.subscribe(rankSql)
+    tracker.subscribe(matrixSql)
     tracker.subscribe(joinsSql)
 
-    const recomputed = tracker.recomputedFor(['rank'])
-    expect(recomputed.has(rankSql)).toBe(true)
+    const recomputed = tracker.recomputedFor(['matrix'])
+    expect(recomputed.has(matrixSql)).toBe(true)
     expect(recomputed.has(joinsSql)).toBe(false)
   })
 
@@ -133,7 +131,7 @@ describe('invalidation recorder', () => {
       insertRow(harness.db, matrixA, { values: { label: 'x' } })
     })
 
-    // The edit wrote matrix A's data table (plus rank/closure/changelog).
+    // The edit wrote matrix A's data table (plus the own-edge in joins + changelog).
     expect(edit.writtenTables.has(`mx_${matrixA}_data`)).toBe(true)
     expect(edit.recomputed.has(aData)).toBe(true)
     // A subscription reading only matrix B's data table is untouched.
@@ -145,8 +143,9 @@ describe('invalidation recorder', () => {
     const matrixB = createForestMatrix(harness.rawDb, 'B')
 
     const tracker = harness.createTracker()
-    const aCount = `SELECT COUNT(*) FROM rank WHERE matrix_id = ${matrixA}`
-    const bCount = `SELECT COUNT(*) FROM rank WHERE matrix_id = ${matrixB}`
+    // Both count queries read the global `joins` table (the own-forest).
+    const aCount = `SELECT COUNT(*) FROM joins WHERE target_matrix_id = ${matrixA}`
+    const bCount = `SELECT COUNT(*) FROM joins WHERE target_matrix_id = ${matrixB}`
     tracker.subscribe(aCount)
     tracker.subscribe(bCount)
 
@@ -154,7 +153,7 @@ describe('invalidation recorder', () => {
       insertRow(harness.db, matrixA, { values: { label: 'x' } })
     })
 
-    // Both count queries read `rank`, so today an edit to A also recomputes the
+    // Both count queries read `joins`, so today an edit to A also recomputes the
     // B-scoped count. Phase 8b §4 makes invalidation range-aware to fix this.
     expect(edit.recomputed.has(aCount)).toBe(true)
     expect(edit.recomputed.has(bCount)).toBe(true)

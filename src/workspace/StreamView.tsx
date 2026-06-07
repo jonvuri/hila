@@ -27,7 +27,11 @@ import type { OverlaidAncestor } from '../design/overlaid-cards/OverlaidCards'
 
 import NavigationPanel from './NavigationPanel'
 import FocusPanel from './FocusPanel'
-import { buildAncestryForRowsQuery, buildMatrixTitleQuery } from './workspace-plugin'
+import {
+  buildAncestryForRowsQuery,
+  buildMatrixTitleQuery,
+  buildRowGlobalKeyQuery,
+} from './workspace-plugin'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,9 +115,7 @@ const StreamView = (props: StreamViewProps) => {
   }
 
   const navigateToRow = async (rowId: number) => {
-    const result = await execQuery(
-      `SELECT key FROM rank WHERE matrix_id = ${props.matrixId} AND row_id = ${rowId}`,
-    )
+    const result = await execQuery(buildRowGlobalKeyQuery(props.matrixId, rowId))
     if (result && result.length > 0) {
       const key = (result[0] as { key: Uint8Array }).key
       handleAppendAfter(0, rowId, new Uint8Array(key))

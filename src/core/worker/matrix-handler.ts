@@ -35,7 +35,13 @@ import {
   updateTagType as updateTagTypeImpl,
   deleteTagType as deleteTagTypeImpl,
 } from '../../tags/tag-types'
-import { reparentRow as reparentRowImpl, deleteSubtree as deleteSubtreeImpl } from '../tree'
+import {
+  reparentRow as reparentRowImpl,
+  deleteSubtree as deleteSubtreeImpl,
+  resolveNodeByGlobalKey,
+  edgeKeyOfGlobalKey,
+  concatKeys,
+} from '../tree'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
   saveFaceConfig as saveFaceConfigImpl,
@@ -158,13 +164,21 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
           }
         }
 
-        const result = insertRowImpl(db, matrixId, {
+        // Translate the (derived) global keys carried by the message into the
+        // edge identities the structural ops operate on.
+        const parent =
+          parentKey ? (resolveNodeByGlobalKey(db, parentKey) ?? undefined) : undefined
+        const prevSiblingKey = prevKey ? edgeKeyOfGlobalKey(prevKey) : undefined
+        const nextSiblingKey = nextKey ? edgeKeyOfGlobalKey(nextKey) : undefined
+
+        const { rowId, edgeKey } = insertRowImpl(db, matrixId, {
           values: resolvedValues,
-          parentKey,
-          prevKey,
-          nextKey,
+          parent,
+          prevSiblingKey,
+          nextSiblingKey,
         })
-        postMessage({ type: 'insertRowSuccess', id, result })
+        const key = concatKeys(parentKey ?? new Uint8Array(0), edgeKey)
+        postMessage({ type: 'insertRowSuccess', id, result: { rowId, key } })
       } catch (err: unknown) {
         postMessage({ type: 'insertRowError', id, error: toError(err) })
       }
@@ -196,16 +210,25 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'reparentRow': {
-      const { matrixId, id, nodeKey, newParentKey, prevSiblingKey, nextSiblingKey } = message
+      const { id, nodeKey, newParentKey, prevSiblingKey, nextSiblingKey } = message
       try {
         const { db } = await sqliteWasm
-        const newKey = reparentRowImpl(db, {
-          matrixId,
-          nodeKey,
-          newParentKey,
-          prevSiblingKey,
-          nextSiblingKey,
+        const node = resolveNodeByGlobalKey(db, nodeKey)
+        if (!node) throw new Error('reparentRow: node not found for the given key')
+
+        const newParent =
+          newParentKey ? (resolveNodeByGlobalKey(db, newParentKey) ?? undefined) : undefined
+        const prevSib = prevSiblingKey ? edgeKeyOfGlobalKey(prevSiblingKey) : undefined
+        const nextSib = nextSiblingKey ? edgeKeyOfGlobalKey(nextSiblingKey) : undefined
+
+        const newEdgeKey = reparentRowImpl(db, {
+          matrixId: node.matrixId,
+          rowId: node.rowId,
+          newParent,
+          prevSiblingKey: prevSib,
+          nextSiblingKey: nextSib,
         })
+        const newKey = concatKeys(newParentKey ?? new Uint8Array(0), newEdgeKey)
         postMessage({ type: 'reparentRowSuccess', id, result: newKey })
       } catch (err: unknown) {
         postMessage({ type: 'reparentRowError', id, error: toError(err) })
@@ -214,10 +237,12 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'deleteSubtree': {
-      const { matrixId, id, key } = message
+      const { id, key } = message
       try {
         const { db } = await sqliteWasm
-        deleteSubtreeImpl(db, { matrixId, key })
+        const node = resolveNodeByGlobalKey(db, key)
+        if (!node) throw new Error('deleteSubtree: node not found for the given key')
+        deleteSubtreeImpl(db, { matrixId: node.matrixId, rowId: node.rowId })
         postMessage({ type: 'deleteSubtreeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteSubtreeError', id, error: toError(err) })

@@ -11,9 +11,15 @@ import { beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, ensureRootMatrix, insertDataRow } from '../core/matrix'
-import { createTreePosition, reparentRow, getChildren, getParent } from '../core/tree'
-import { compareKeys, parseKey } from '../core/lexorank'
+import {
+  initMatrixSchema,
+  ensureRootMatrix,
+  insertDataRow,
+  ROOT_MATRIX_ID,
+  ROOT_ROW_ID,
+} from '../core/matrix'
+import { createTreePosition, reparentRow, getOwnChildren, type NodeRef } from '../core/tree'
+import { compareKeys } from '../core/lexorank'
 
 import { computeDropPosition, clampDropDepth, isNoOpDrop, type RowInfo } from './drag-drop'
 
@@ -214,37 +220,24 @@ describe('drag-and-drop data integration', () => {
   let db: Database
   let matrixId: number
 
+  const SENTINEL: NodeRef = { matrixId: ROOT_MATRIX_ID, rowId: ROOT_ROW_ID }
+
+  type Made = { rowId: number; edgeKey: Uint8Array; ref: NodeRef }
+
   const makeRow = (
     title: string,
-    opts: { parentKey?: Uint8Array; prevKey?: Uint8Array } = {},
-  ) => {
+    opts: { parent?: NodeRef; prevSiblingKey?: Uint8Array } = {},
+  ): Made => {
     const rowId = insertDataRow(db, matrixId, { content: title })
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts.parentKey,
-      prevKey: opts.prevKey,
+    const edgeKey = createTreePosition(db, matrixId, rowId, {
+      parent: opts.parent,
+      prevSiblingKey: opts.prevSiblingKey,
     })
-    return { key, rowId }
+    return { rowId, edgeKey, ref: { matrixId, rowId } }
   }
 
-  const getRankOrder = () => {
-    const stmt = db.prepare('SELECT row_id FROM rank WHERE matrix_id = ? ORDER BY key')
-    stmt.bind([matrixId])
-    const ids: number[] = []
-    while (stmt.step()) {
-      ids.push((stmt.get({}) as { row_id: number }).row_id)
-    }
-    stmt.finalize()
-    return ids
-  }
-
-  const getKeyForRowId = (rowId: number): Uint8Array => {
-    const stmt = db.prepare('SELECT key FROM rank WHERE matrix_id = ? AND row_id = ?')
-    stmt.bind([matrixId, rowId])
-    stmt.step()
-    const key = new Uint8Array((stmt.get({}) as { key: Uint8Array }).key)
-    stmt.finalize()
-    return key
-  }
+  const childRowIds = (parent: NodeRef): number[] =>
+    getOwnChildren(db, parent).map((c) => c.rowId)
 
   beforeEach(async () => {
     const sqlite3 = await initSqliteWasm({
@@ -257,200 +250,89 @@ describe('drag-and-drop data integration', () => {
   })
 
   test('reorder within parent: move last sibling to first position', () => {
-    // A, B, C at root level
     const A = makeRow('A')
-    const B = makeRow('B', { prevKey: A.key })
-    const C = makeRow('C', { prevKey: B.key })
+    const B = makeRow('B', { prevSiblingKey: A.edgeKey })
+    const C = makeRow('C', { prevSiblingKey: B.edgeKey })
 
-    // Simulate dragging C before A.
-    // Non-dragged rows: [A, B]. Gap=0 (before A), depth=0.
-    const visibleRows: RowInfo[] = [
-      { row_id: A.rowId, key: A.key, depth: 0 },
-      { row_id: B.rowId, key: B.key, depth: 0 },
-    ]
-    const pos = computeDropPosition(visibleRows, 0, 0, 0, null)
+    // Drag C before A (no parent → sentinel; nextSibling = A).
+    reparentRow(db, { matrixId, rowId: C.rowId, nextSiblingKey: A.edgeKey })
 
-    reparentRow(db, {
-      matrixId,
-      nodeKey: C.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
-    })
-
-    expect(getRankOrder()).toEqual([C.rowId, A.rowId, B.rowId])
-    // C should still be a root-level row (single segment)
-    const newCKey = getKeyForRowId(C.rowId)
-    expect(parseKey(newCKey).length).toBe(1)
+    expect(childRowIds(SENTINEL)).toEqual([C.rowId, A.rowId, B.rowId])
   })
 
   test('reorder within parent: move first sibling to middle', () => {
-    // A, B, C at root level
     const A = makeRow('A')
-    const B = makeRow('B', { prevKey: A.key })
-    const C = makeRow('C', { prevKey: B.key })
+    const B = makeRow('B', { prevSiblingKey: A.edgeKey })
+    const C = makeRow('C', { prevSiblingKey: B.edgeKey })
 
-    // Simulate dragging A between B and C.
-    // Non-dragged rows: [B, C]. Gap=1 (between B and C), depth=0.
-    const visibleRows: RowInfo[] = [
-      { row_id: B.rowId, key: B.key, depth: 0 },
-      { row_id: C.rowId, key: C.key, depth: 0 },
-    ]
-    const pos = computeDropPosition(visibleRows, 1, 0, 0, null)
-
+    // Drag A between B and C.
     reparentRow(db, {
       matrixId,
-      nodeKey: A.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
+      rowId: A.rowId,
+      prevSiblingKey: B.edgeKey,
+      nextSiblingKey: C.edgeKey,
     })
 
-    expect(getRankOrder()).toEqual([B.rowId, A.rowId, C.rowId])
+    expect(childRowIds(SENTINEL)).toEqual([B.rowId, A.rowId, C.rowId])
   })
 
   test('cross-parent reparent: move root item to become child', () => {
-    // A (root), B (root), C (child of A)
     const A = makeRow('A')
-    const B = makeRow('B', { prevKey: A.key })
-    const C = makeRow('C', { parentKey: A.key })
+    makeRow('B', { prevSiblingKey: A.edgeKey })
+    const C = makeRow('C', { parent: A.ref })
+    const B2 = childRowIds(SENTINEL).find((id) => id !== A.rowId)!
 
-    // Simulate dragging B to become child of A, after C.
-    // Non-dragged: [A(0), C(1)]. Gap=2 (after C), depth=1.
-    const visibleRows: RowInfo[] = [
-      { row_id: A.rowId, key: A.key, depth: 0 },
-      { row_id: C.rowId, key: C.key, depth: 1 },
-    ]
-    const pos = computeDropPosition(visibleRows, 2, 1, 0, null)
+    // Drag B to become child of A, after C.
+    reparentRow(db, { matrixId, rowId: B2, newParent: A.ref, prevSiblingKey: C.edgeKey })
 
-    expect(compareKeys(pos.parentKey!, A.key)).toBe(0)
-    expect(compareKeys(pos.prevSiblingKey!, C.key)).toBe(0)
-
-    reparentRow(db, {
-      matrixId,
-      nodeKey: B.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
-    })
-
-    // B should now be a child of A, after C
-    expect(getRankOrder()).toEqual([A.rowId, C.rowId, B.rowId])
-    const newBKey = getKeyForRowId(B.rowId)
-    expect(parseKey(newBKey).length).toBe(2) // child of root
-
-    const parent = getParent(db, matrixId, newBKey)
-    expect(parent).not.toBeNull()
-    expect(compareKeys(parent!, A.key)).toBe(0)
+    expect(childRowIds(SENTINEL)).toEqual([A.rowId])
+    expect(childRowIds(A.ref)).toEqual([C.rowId, B2])
   })
 
   test('cross-parent reparent: move child to root level', () => {
-    // A (root), B (child of A), C (root)
     const A = makeRow('A')
-    const C = makeRow('C', { prevKey: A.key })
-    const B = makeRow('B', { parentKey: A.key })
+    const C = makeRow('C', { prevSiblingKey: A.edgeKey })
+    const B = makeRow('B', { parent: A.ref })
 
-    // Simulate dragging B between A and C at depth 0.
-    // Non-dragged: [A(0), C(0)]. Gap=1 (between A and C), depth=0.
-    const visibleRows: RowInfo[] = [
-      { row_id: A.rowId, key: A.key, depth: 0 },
-      { row_id: C.rowId, key: C.key, depth: 0 },
-    ]
-    const pos = computeDropPosition(visibleRows, 1, 0, 0, null)
-
-    expect(pos.parentKey).toBeUndefined()
-    expect(compareKeys(pos.prevSiblingKey!, A.key)).toBe(0)
-    expect(compareKeys(pos.nextSiblingKey!, C.key)).toBe(0)
-
+    // Drag B between A and C at root level.
     reparentRow(db, {
       matrixId,
-      nodeKey: B.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
+      rowId: B.rowId,
+      prevSiblingKey: A.edgeKey,
+      nextSiblingKey: C.edgeKey,
     })
 
-    expect(getRankOrder()).toEqual([A.rowId, B.rowId, C.rowId])
-    const newBKey = getKeyForRowId(B.rowId)
-    expect(parseKey(newBKey).length).toBe(1) // root level
-
-    const parent = getParent(db, matrixId, newBKey)
-    expect(parent).toBeNull()
+    expect(childRowIds(SENTINEL)).toEqual([A.rowId, B.rowId, C.rowId])
+    expect(childRowIds(A.ref)).toEqual([])
   })
 
-  test('reparent subtree via drag preserves children', () => {
-    // A (root), B (root), C (child of B), D (child of C)
+  test('reparent subtree via drag preserves children (descendants untouched)', () => {
     const A = makeRow('A')
-    const B = makeRow('B', { prevKey: A.key })
-    const C = makeRow('C', { parentKey: B.key })
-    const D = makeRow('D', { parentKey: C.key })
+    const B = makeRow('B', { prevSiblingKey: A.edgeKey })
+    const C = makeRow('C', { parent: B.ref })
+    const D = makeRow('D', { parent: C.ref })
+
+    const cKeyBefore = getOwnChildren(db, B.ref)[0]!.rowId
+    expect(cKeyBefore).toBe(C.rowId)
 
     // Drag B (with subtree C, D) to become child of A.
-    // Non-dragged: [A(0)]. Gap=1 (after A), depth=1.
-    const visibleRows: RowInfo[] = [{ row_id: A.rowId, key: A.key, depth: 0 }]
-    const pos = computeDropPosition(visibleRows, 1, 1, 0, null)
+    reparentRow(db, { matrixId, rowId: B.rowId, newParent: A.ref })
 
-    reparentRow(db, {
-      matrixId,
-      nodeKey: B.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
-    })
-
-    expect(getRankOrder()).toEqual([A.rowId, B.rowId, C.rowId, D.rowId])
-
-    // B should be child of A
-    const newBKey = getKeyForRowId(B.rowId)
-    const bParent = getParent(db, matrixId, newBKey)
-    expect(bParent).not.toBeNull()
-    expect(compareKeys(bParent!, A.key)).toBe(0)
-
-    // C should be child of B (new key)
-    const newCKey = getKeyForRowId(C.rowId)
-    const cParent = getParent(db, matrixId, newCKey)
-    expect(cParent).not.toBeNull()
-    expect(compareKeys(cParent!, newBKey)).toBe(0)
-
-    // D should be child of C (new key)
-    const newDKey = getKeyForRowId(D.rowId)
-    const dParent = getParent(db, matrixId, newDKey)
-    expect(dParent).not.toBeNull()
-    expect(compareKeys(dParent!, newCKey)).toBe(0)
+    expect(childRowIds(SENTINEL)).toEqual([A.rowId])
+    expect(childRowIds(A.ref)).toEqual([B.rowId])
+    expect(childRowIds(B.ref)).toEqual([C.rowId])
+    expect(childRowIds(C.ref)).toEqual([D.rowId])
   })
 
   test('within-parent reorder among children: move last child to first', () => {
-    // Parent, A (child), B (child), C (child)
     const P = makeRow('Parent')
-    const A = makeRow('A', { parentKey: P.key })
-    const B = makeRow('B', { parentKey: P.key, prevKey: A.key })
-    const C = makeRow('C', { parentKey: P.key, prevKey: B.key })
+    const A = makeRow('A', { parent: P.ref })
+    const B = makeRow('B', { parent: P.ref, prevSiblingKey: A.edgeKey })
+    const C = makeRow('C', { parent: P.ref, prevSiblingKey: B.edgeKey })
 
     // Drag C to before A (first child of Parent).
-    // Non-dragged: [P(0), A(1), B(1)]. Gap=1 (between P and A), depth=1.
-    const visibleRows: RowInfo[] = [
-      { row_id: P.rowId, key: P.key, depth: 0 },
-      { row_id: A.rowId, key: A.key, depth: 1 },
-      { row_id: B.rowId, key: B.key, depth: 1 },
-    ]
-    const pos = computeDropPosition(visibleRows, 1, 1, 0, null)
+    reparentRow(db, { matrixId, rowId: C.rowId, newParent: P.ref, nextSiblingKey: A.edgeKey })
 
-    expect(compareKeys(pos.parentKey!, P.key)).toBe(0)
-    expect(pos.prevSiblingKey).toBeUndefined()
-    expect(compareKeys(pos.nextSiblingKey!, A.key)).toBe(0)
-
-    reparentRow(db, {
-      matrixId,
-      nodeKey: C.key,
-      newParentKey: pos.parentKey,
-      prevSiblingKey: pos.prevSiblingKey,
-      nextSiblingKey: pos.nextSiblingKey,
-    })
-
-    expect(getRankOrder()).toEqual([P.rowId, C.rowId, A.rowId, B.rowId])
-
-    // All children should still be under P
-    const children = getChildren(db, matrixId, P.key)
-    expect(children.length).toBe(3)
+    expect(childRowIds(P.ref)).toEqual([C.rowId, A.rowId, B.rowId])
   })
 })

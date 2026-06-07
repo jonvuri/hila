@@ -9,7 +9,6 @@ import {
 } from '../core/matrix'
 import { applyFaceToMatrix } from '../core/face-config'
 import { getFaceType } from '../core/face-registry'
-import { ensureTrait } from '../core/traits'
 import { withTransaction } from '../core/transaction'
 
 export type TagType = {
@@ -49,7 +48,9 @@ export const createTagType = (
       bind: ['hila.tags', matrixId],
     })
 
-    ensureTrait(db, 'rank', matrixId)
+    // The tag matrix's aspect rows live in the own-forest via the own-edge that
+    // createDependentRow attaches from the host -- no per-matrix rank/closure
+    // provisioning is needed (rank dissolved onto the edge in Phase 8).
 
     let rowId: number
     try {

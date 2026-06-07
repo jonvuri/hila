@@ -74,12 +74,11 @@ describe('work counter', () => {
 
     insertRow(harness.db, matrixId, { values: { label: 'hi' } })
 
-    // One root insert writes: the data row, its rank entry, and its self
-    // closure entry. (The _sync_changelog triggers add untracked-by-table
-    // noise, so we assert per logical table rather than on the grand total.)
+    // One root insert writes the data row plus its own-edge in `joins`. (The
+    // _sync_changelog triggers add untracked-by-table noise, so we assert per
+    // logical table rather than on the grand total.)
     expect(harness.counters.byTable.data?.rowsWritten).toBe(1)
-    expect(harness.counters.byTable.rank?.rowsWritten).toBe(1)
-    expect(harness.counters.byTable.closure?.rowsWritten).toBe(1)
+    expect(harness.counters.byTable.joins?.rowsWritten).toBe(1)
   })
 
   test('counts statements and stepped rows through the proxy', () => {

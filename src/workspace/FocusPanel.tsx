@@ -412,9 +412,12 @@ const FocusPanel = (props: FocusPanelProps) => {
     void updateRow(props.matrixId, props.rowId, { [colName]: value })
   }
 
-  // Children: check if the row has children via closure
+  // Children: check if the row has same-matrix own-children (outline subtree).
   const childCountQuery = createMemo(() => {
-    return `SELECT COUNT(*) as cnt FROM "mx_${props.matrixId}_closure" WHERE ancestor_key = (SELECT key FROM rank WHERE matrix_id = ${props.matrixId} AND row_id = ${props.rowId}) AND depth = 1`
+    return `SELECT COUNT(*) as cnt FROM joins
+      WHERE kind = 'own'
+        AND source_matrix_id = ${props.matrixId} AND source_row_id = ${props.rowId}
+        AND target_matrix_id = ${props.matrixId}`
   })
   const { result: childCountResult } = useQuery(() => childCountQuery())
   const hasChildren = createMemo(() => {

@@ -134,12 +134,15 @@ describe('Tag type registry', () => {
     expect(colNames).not.toContain('label')
   })
 
-  test('createTagType provisions the rank trait for the new matrix', () => {
+  test('createTagType does not provision a rank trait (aspect rows live in the own-forest)', () => {
     const tagType = createTagType(db, 'task')
 
+    // rank dissolved onto the own-edge in Phase 8: a hosted aspect row gets its
+    // order from the own-edge createDependentRow attaches, so the tag matrix
+    // needs no per-matrix rank provisioning.
     const traits = getTraits(db, tagType.matrixId)
     const traitTypes = traits.map((t) => t.trait_type)
-    expect(traitTypes).toContain('rank')
+    expect(traitTypes).not.toContain('rank')
   })
 
   test('createTagType sets source_plugin_id to hila.tags on the matrix', () => {

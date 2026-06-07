@@ -86,8 +86,8 @@ describe('row operations through worker', () => {
     expect(rowId).toBeGreaterThan(0)
   }, 5000)
 
-  it('insertRow triggers subscription update on rank table', async () => {
-    const sql = `SELECT COUNT(*) AS n FROM rank WHERE matrix_id = ${matrixId}`
+  it('insertRow triggers subscription update on the own-forest (joins)', async () => {
+    const sql = `SELECT COUNT(*) AS n FROM joins WHERE target_matrix_id = ${matrixId} AND kind = 'own'`
     const { nextResult, cleanup } = observeResults(sql)
 
     try {
@@ -147,14 +147,15 @@ describe('row operations through worker', () => {
     const r2 = await insertRow(matrixId, { values: { title: 'Multi B' } })
     const r3 = await insertRow(matrixId, { values: { title: 'Multi C' } })
 
-    // Verify all three exist via a single subscription query
+    // Verify all three exist via a single subscription query (ordered by their
+    // sibling edge keys under the sentinel).
     const sql = `
       SELECT d.title
-      FROM rank r
-      JOIN "mx_${matrixId}_data" d ON d.id = r.row_id
-      WHERE r.matrix_id = ${matrixId}
-        AND r.row_id IN (${r1.rowId}, ${r2.rowId}, ${r3.rowId})
-      ORDER BY r.key
+      FROM joins j
+      JOIN "mx_${matrixId}_data" d ON d.id = j.target_row_id
+      WHERE j.kind = 'own' AND j.target_matrix_id = ${matrixId}
+        AND j.target_row_id IN (${r1.rowId}, ${r2.rowId}, ${r3.rowId})
+      ORDER BY j.edge_key
     `
     const { nextResult, cleanup } = observeResults(sql)
 

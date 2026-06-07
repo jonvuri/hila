@@ -96,46 +96,33 @@ describe('Trait provisioning', () => {
     countStmt.finalize()
   })
 
-  test('ensureTrait rank for matrix with existing rank entries causes no data loss', () => {
+  test('re-provisioning a trait does not disturb the own-forest edges', () => {
     const matrixId = createMatrix(db, 'Test')
-
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
 
     const rowId = insertDataRow(db, matrixId, { title: 'Existing' })
     createTreePosition(db, matrixId, rowId)
 
-    const beforeStmt = db.prepare('SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?')
-    beforeStmt.bind([matrixId])
-    beforeStmt.step()
-    const beforeCount = (beforeStmt.get({}) as { count: number }).count
-    beforeStmt.finalize()
-    expect(beforeCount).toBe(1)
+    const countEdges = (): number => {
+      const stmt = db.prepare(
+        `SELECT COUNT(*) as count FROM joins WHERE target_matrix_id = ? AND kind = 'own'`,
+      )
+      stmt.bind([matrixId])
+      stmt.step()
+      const n = (stmt.get({}) as { count: number }).count
+      stmt.finalize()
+      return n
+    }
 
-    ensureTrait(db, 'rank', matrixId)
-
-    const afterStmt = db.prepare('SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?')
-    afterStmt.bind([matrixId])
-    afterStmt.step()
-    const afterCount = (afterStmt.get({}) as { count: number }).count
-    afterStmt.finalize()
-    expect(afterCount).toBe(1)
+    expect(countEdges()).toBe(1)
+    ensureTrait(db, 'closure', matrixId)
+    ensureTrait(db, 'closure', matrixId)
+    expect(countEdges()).toBe(1)
   })
 
-  // -- insertRow without traits -----------------------------------------------
+  // -- createTreePosition needs no trait (the own-forest is universal) --------
 
-  test('insertRow errors when traits are not provisioned', () => {
+  test('createTreePosition succeeds without any provisioned trait', () => {
     const matrixId = createMatrix(db, 'Test')
-    const rowId = insertDataRow(db, matrixId, { title: 'Test' })
-
-    expect(() => createTreePosition(db, matrixId, rowId)).toThrow(
-      /does not have the 'rank' trait provisioned/,
-    )
-  })
-
-  test('insertRow succeeds with only rank provisioned (no closure)', () => {
-    const matrixId = createMatrix(db, 'Test')
-    ensureTrait(db, 'rank', matrixId)
     const rowId = insertDataRow(db, matrixId, { title: 'Test' })
 
     const key = createTreePosition(db, matrixId, rowId)

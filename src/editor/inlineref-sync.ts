@@ -48,7 +48,13 @@ export const syncInlineRefs = async (
     docMap.set(refKey(ref), ref)
   }
 
-  const currentTargets = await getTargets(sourceMatrixId, sourceRowId)
+  // Exclude same-matrix `own`-edges: those are the outline tree structure
+  // (parent -> child), not inlineref-derived joins. Inlinerefs are `ref`-edges
+  // (mentions) or cross-matrix `own`-edges (tag aspect rows). Reconciling the
+  // tree edges here would cascade-delete the row's own children.
+  const currentTargets = (await getTargets(sourceMatrixId, sourceRowId)).filter(
+    (t) => !(t.kind === 'own' && t.targetMatrixId === sourceMatrixId),
+  )
   const dbSet = new Set(
     currentTargets.map((t) =>
       refKey({ targetMatrixId: t.targetMatrixId, targetRowId: t.targetRowId, kind: t.kind }),

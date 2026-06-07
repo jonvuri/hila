@@ -28,16 +28,10 @@ type TraitRow = {
   trait_type: string
 }
 
-type RankRow = {
-  key: Uint8Array
-  row_kind: number
-  row_id: number
-}
-
-type ClosureRow = {
-  ancestor_key: Uint8Array
-  descendant_key: Uint8Array
-  depth: number
+type OwnEdgeRow = {
+  edge_key: Uint8Array
+  source_row_id: number
+  target_row_id: number
 }
 
 type JoinRow = {
@@ -90,13 +84,10 @@ const MatrixDetail: Component<{
     () =>
       `SELECT trait_type FROM matrix_traits WHERE matrix_id = ${props.matrix.id} ORDER BY trait_type`,
   )
-  const { result: rankResult } = useQuery(
+  const { result: ownEdgeResult } = useQuery(
     () =>
-      `SELECT key, row_kind, row_id FROM rank WHERE matrix_id = ${props.matrix.id} ORDER BY key`,
-  )
-  const { result: closureResult } = useQuery(
-    () =>
-      `SELECT ancestor_key, descendant_key, depth FROM "mx_${props.matrix.id}_closure" ORDER BY ancestor_key, depth`,
+      `SELECT edge_key, source_row_id, target_row_id FROM joins
+       WHERE target_matrix_id = ${props.matrix.id} AND kind = 'own' ORDER BY edge_key`,
   )
   const { result: forwardJoinResult } = useQuery(
     () =>
@@ -116,8 +107,7 @@ const MatrixDetail: Component<{
 
   const columns = () => (colResult() as unknown as ColumnDef[]) ?? []
   const traits = () => (traitResult() as unknown as TraitRow[]) ?? []
-  const rankData = () => (rankResult() as unknown as RankRow[]) ?? []
-  const closureData = () => (closureResult() as unknown as ClosureRow[]) ?? []
+  const ownEdges = () => (ownEdgeResult() as unknown as OwnEdgeRow[]) ?? []
   const forwardJoins = () => (forwardJoinResult() as unknown as JoinRow[]) ?? []
   const reverseJoins = () => (reverseJoinResult() as unknown as JoinRow[]) ?? []
   const faceConfigs = () => (faceConfigResult() as unknown as FaceConfigRow[]) ?? []
@@ -256,56 +246,27 @@ const MatrixDetail: Component<{
               </div>
             </Show>
 
-            <h4 class="mb-section-title">Rank Table</h4>
+            <h4 class="mb-section-title">Own-Forest Edges</h4>
             <Show
-              when={rankData().length > 0}
-              fallback={<div class="mb-empty">No rank entries</div>}
+              when={ownEdges().length > 0}
+              fallback={<div class="mb-empty">No own-edges</div>}
             >
               <div class="mb-table-wrap">
                 <table class="mb-table">
                   <thead>
                     <tr>
-                      <th>Key</th>
-                      <th>Kind</th>
+                      <th>Edge Key</th>
+                      <th>Parent Row</th>
                       <th>Row ID</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <For each={rankData()}>
+                    <For each={ownEdges()}>
                       {(row) => (
                         <tr>
-                          <td class="mb-key-cell">{formatKey(row.key)}</td>
-                          <td>{row.row_kind}</td>
-                          <td>{row.row_id}</td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
-
-            <h4 class="mb-section-title">Closure Table</h4>
-            <Show
-              when={closureData().length > 0}
-              fallback={<div class="mb-empty">No closure entries</div>}
-            >
-              <div class="mb-table-wrap">
-                <table class="mb-table">
-                  <thead>
-                    <tr>
-                      <th>Ancestor</th>
-                      <th>Descendant</th>
-                      <th>Depth</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={closureData()}>
-                      {(row) => (
-                        <tr>
-                          <td class="mb-key-cell">{formatKey(row.ancestor_key)}</td>
-                          <td class="mb-key-cell">{formatKey(row.descendant_key)}</td>
-                          <td>{row.depth}</td>
+                          <td class="mb-key-cell">{formatKey(row.edge_key)}</td>
+                          <td>{row.source_row_id === 0 ? '(root)' : row.source_row_id}</td>
+                          <td>{row.target_row_id}</td>
                         </tr>
                       )}
                     </For>

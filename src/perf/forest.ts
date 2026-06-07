@@ -15,13 +15,13 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { createMatrix, insertDataRow } from '../core/matrix'
 import { createTreePosition } from '../core/tree'
-import { ensureTrait } from '../core/traits'
 import { withTransaction } from '../core/transaction'
 
 export type ForestNode = {
   matrixId: number
   rowId: number
-  key: Uint8Array
+  /** The node's sibling-local own-edge key (its order among its siblings). */
+  edgeKey: Uint8Array
   depth: number
   parentRowId: number | null
 }
@@ -71,16 +71,14 @@ const richtextDoc = (text: string): string =>
 
 /**
  * Create a matrix suitable for forest fixtures: `label`/`content` richtext
- * columns plus the rank and closure traits provisioned.
+ * columns. Rows live in the own-forest unconditionally (no per-matrix trait
+ * provisioning needed -- the own-edge is universal infrastructure).
  */
 export const createForestMatrix = (db: Database, title = 'Forest'): number => {
-  const matrixId = createMatrix(db, title, [
+  return createMatrix(db, title, [
     { name: 'label', type: 'TEXT', role: 'label' },
     { name: 'content', type: 'TEXT', role: 'content' },
   ])
-  ensureTrait(db, 'rank', matrixId)
-  ensureTrait(db, 'closure', matrixId)
-  return matrixId
 }
 
 const makeForestView = (matrixId: number, nodes: ForestNode[]): Forest => {
@@ -144,17 +142,17 @@ export const generateForest = (db: Database, options: GenerateForestOptions): Fo
       }
 
       const rowId = insertDataRow(db, matrixId, { [labelColumn]: richtextDoc(`Node ${i}`) })
-      const key = createTreePosition(
+      const edgeKey = createTreePosition(
         db,
         matrixId,
         rowId,
-        parent ? { parentKey: parent.key } : undefined,
+        parent ? { parent: { matrixId, rowId: parent.rowId } } : undefined,
       )
       const depth = parent ? parent.depth + 1 : 0
       const node: ForestNode = {
         matrixId,
         rowId,
-        key,
+        edgeKey,
         depth,
         parentRowId: parent ? parent.rowId : null,
       }

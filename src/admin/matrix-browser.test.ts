@@ -127,38 +127,22 @@ describe('Matrix browser data queries', () => {
     const traits = getTraits(db, matrixId)
     expect(traits).toHaveLength(2)
     expect(traits.map((t) => t.trait_type).sort()).toEqual(['closure', 'rank'])
-
-    const rankStmt = db.prepare('SELECT COUNT(*) as count FROM rank WHERE matrix_id = ?')
-    rankStmt.bind([matrixId])
-    rankStmt.step()
-    const rankCount = (rankStmt.get({}) as { count: number }).count
-    rankStmt.finalize()
-    expect(rankCount).toBe(0)
   })
 
-  test('rank and closure tables show data after adding sample rows', () => {
+  test('own-forest edges show data after adding sample rows', () => {
     const matrixId = createMatrix(db, 'Sample Test')
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
 
     addSampleRowsToMatrix(db, matrixId)
 
-    const rankStmt = db.prepare(
-      'SELECT key, row_kind, row_id FROM rank WHERE matrix_id = ? ORDER BY key',
+    const edgeStmt = db.prepare(
+      `SELECT source_matrix_id, source_row_id, target_row_id, edge_key FROM joins
+       WHERE target_matrix_id = ? AND kind = 'own' ORDER BY edge_key`,
     )
-    rankStmt.bind([matrixId])
-    const ranks: unknown[] = []
-    while (rankStmt.step()) ranks.push(rankStmt.get({}))
-    rankStmt.finalize()
-    expect(ranks.length).toBeGreaterThan(0)
-
-    const closureStmt = db.prepare(
-      `SELECT ancestor_key, descendant_key, depth FROM "mx_${matrixId}_closure" ORDER BY ancestor_key, depth`,
-    )
-    const closures: unknown[] = []
-    while (closureStmt.step()) closures.push(closureStmt.get({}))
-    closureStmt.finalize()
-    expect(closures.length).toBeGreaterThan(0)
+    edgeStmt.bind([matrixId])
+    const edges: unknown[] = []
+    while (edgeStmt.step()) edges.push(edgeStmt.get({}))
+    edgeStmt.finalize()
+    expect(edges.length).toBeGreaterThan(0)
   })
 
   // -- Join state display -----------------------------------------------------

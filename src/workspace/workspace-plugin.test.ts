@@ -9,11 +9,11 @@ import {
   insertDataRow,
   insertJoin,
 } from '../core/matrix'
-import { createTreePosition } from '../core/tree'
+import { createTreePosition, type NodeRef } from '../core/tree'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
-import { ensureTrait, getTraits } from '../core/traits'
+import { getTraits } from '../core/traits'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 
 import {
@@ -45,7 +45,7 @@ describe('Workspace plugin registration', () => {
     registerFaceType(workspaceFaceTypeDefinition)
   })
 
-  test('registers the workspace plugin and creates the matrix with rank and closure traits', async () => {
+  test('registers the workspace plugin and creates the matrix with the closure trait', async () => {
     const ctx = await registerPlugin(db, testWorkspacePlugin)
     const matrixId = ctx.matrixIds['root']!
 
@@ -55,9 +55,10 @@ describe('Workspace plugin registration', () => {
     expect(plugin).not.toBeNull()
     expect(plugin!.name).toBe('Workspace')
 
+    // rank dissolved onto the own-edge; closure remains a provisioned cache.
     const traits = getTraits(db, matrixId)
     const traitTypes = traits.map((t) => t.trait_type)
-    expect(traitTypes).toContain('rank')
+    expect(traitTypes).not.toContain('rank')
     expect(traitTypes).toContain('closure')
   })
 
@@ -155,17 +156,35 @@ describe('Workspace paginated outline query', () => {
       content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
     })
 
+  // Track the derived global key (gkey) the same way the read CTE does: a
+  // row's gkey is its parent's gkey concatenated with its own sibling edge key.
+  type WsRow = {
+    rowId: number
+    edgeKey: Uint8Array
+    gkey: Uint8Array
+    hex: string
+    ref: NodeRef
+  }
+
+  const concat = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+    const out = new Uint8Array(a.length + b.length)
+    out.set(a)
+    out.set(b, a.length)
+    return out
+  }
+
   const insertWorkspaceRow = (
     text: string,
-    opts?: { parentKey?: Uint8Array; prevKey?: Uint8Array },
-  ) => {
+    opts?: { parent?: WsRow; prevSiblingKey?: Uint8Array },
+  ): WsRow => {
     const label = makeLabel(text)
     const rowId = insertDataRow(db, matrixId, { label, content: null })
-    const key = createTreePosition(db, matrixId, rowId, {
-      parentKey: opts?.parentKey,
-      prevKey: opts?.prevKey,
+    const edgeKey = createTreePosition(db, matrixId, rowId, {
+      parent: opts?.parent?.ref,
+      prevSiblingKey: opts?.prevSiblingKey,
     })
-    return { key, rowId, hex: keyToHex(key) }
+    const gkey = opts?.parent ? concat(opts.parent.gkey, edgeKey) : edgeKey
+    return { rowId, edgeKey, gkey, hex: keyToHex(gkey), ref: { matrixId, rowId } }
   }
 
   beforeEach(async () => {
@@ -176,18 +195,16 @@ describe('Workspace paginated outline query', () => {
       { name: 'label', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
   })
 
   const buildTree = () => {
     const a = insertWorkspaceRow('A')
-    const b = insertWorkspaceRow('B', { parentKey: a.key })
-    const c = insertWorkspaceRow('C', { parentKey: b.key })
-    const d = insertWorkspaceRow('D', { parentKey: b.key, prevKey: c.key })
-    const e = insertWorkspaceRow('E', { parentKey: a.key, prevKey: b.key })
-    const f = insertWorkspaceRow('F', { prevKey: a.key })
-    const g = insertWorkspaceRow('G', { prevKey: f.key })
+    const b = insertWorkspaceRow('B', { parent: a })
+    const c = insertWorkspaceRow('C', { parent: b })
+    const d = insertWorkspaceRow('D', { parent: b, prevSiblingKey: c.edgeKey })
+    const e = insertWorkspaceRow('E', { parent: a, prevSiblingKey: b.edgeKey })
+    const f = insertWorkspaceRow('F', { prevSiblingKey: a.edgeKey })
+    const g = insertWorkspaceRow('G', { prevSiblingKey: f.edgeKey })
     return { a, b, c, d, e, f, g }
   }
 
@@ -292,20 +309,18 @@ describe('Workspace ancestry-for-rows query', () => {
       { name: 'label', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
-    ensureTrait(db, 'rank', matrixId)
-    ensureTrait(db, 'closure', matrixId)
   })
 
   test('returns top-down ancestor chains keyed by descendant row id', () => {
     const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
-    const aKey = createTreePosition(db, matrixId, a)
+    createTreePosition(db, matrixId, a)
     const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
-    const bKey = createTreePosition(db, matrixId, b, { parentKey: aKey })
+    createTreePosition(db, matrixId, b, { parent: { matrixId, rowId: a } })
     const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
-    createTreePosition(db, matrixId, c, { parentKey: bKey })
+    createTreePosition(db, matrixId, c, { parent: { matrixId, rowId: b } })
 
     const rows = runQuery(buildAncestryForRowsQuery(matrixId, [c]))
-    // C's chain is [A (depth 2), B (depth 1)] ordered shallowest-first.
+    // C's chain is [A (depth 0), B (depth 1)] ordered shallowest-first.
     expect(rows.map((r) => r.row_id)).toEqual([a, b])
     expect(rows.every((r) => r.for_row_id === c)).toBe(true)
     expect(rows[0]!.label).toContain('A')
@@ -314,11 +329,11 @@ describe('Workspace ancestry-for-rows query', () => {
 
   test('returns chains for multiple descendants in one query', () => {
     const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
-    const aKey = createTreePosition(db, matrixId, a)
+    createTreePosition(db, matrixId, a)
     const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
-    const bKey = createTreePosition(db, matrixId, b, { parentKey: aKey })
+    createTreePosition(db, matrixId, b, { parent: { matrixId, rowId: a } })
     const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
-    createTreePosition(db, matrixId, c, { parentKey: bKey })
+    createTreePosition(db, matrixId, c, { parent: { matrixId, rowId: b } })
 
     const rows = runQuery(buildAncestryForRowsQuery(matrixId, [b, c]))
     const forB = rows.filter((r) => r.for_row_id === b).map((r) => r.row_id)
@@ -350,7 +365,6 @@ describe('Workspace single row query', () => {
       { name: 'label', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
-    ensureTrait(db, 'rank', matrixId)
   })
 
   test('returns a single row by ID with all columns', () => {
@@ -402,21 +416,19 @@ describe('Workspace backlinks query', () => {
       { name: 'label', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
-    ensureTrait(db, 'rank', matrixId)
   })
 
-  test('returns backlinks with label and kind', () => {
+  test('returns ref backlinks and excludes structural own-edges', () => {
     const src1 = insertDataRow(db, matrixId, { label: makeLabel('Alpha'), content: null })
     createTreePosition(db, matrixId, src1)
 
     const src2 = insertDataRow(db, matrixId, { label: makeLabel('Beta'), content: null })
     createTreePosition(db, matrixId, src2)
 
+    // target's own-edge (tree parent) is src2; src1 mentions it via a ref-edge.
     const target = insertDataRow(db, matrixId, { label: makeLabel('Target'), content: null })
-    createTreePosition(db, matrixId, target)
-
+    createTreePosition(db, matrixId, target, { parent: { matrixId, rowId: src2 } })
     insertJoin(db, matrixId, src1, matrixId, target, 'ref')
-    insertJoin(db, matrixId, src2, matrixId, target, 'own')
 
     const sql = buildBacklinksQuery(matrixId, target)
     const stmt = db.prepare(sql)
@@ -426,13 +438,10 @@ describe('Workspace backlinks query', () => {
     }
     stmt.finalize()
 
-    expect(results).toHaveLength(2)
+    expect(results).toHaveLength(1)
     const alpha = results.find((r) => r.id === src1)
-    const beta = results.find((r) => r.id === src2)
     expect(alpha?.kind).toBe('ref')
     expect(alpha?.label).toContain('Alpha')
-    expect(beta?.kind).toBe('own')
-    expect(beta?.label).toContain('Beta')
   })
 
   test('returns empty results when no backlinks exist', () => {
