@@ -88,6 +88,17 @@ describe('inferScope: AST-based scope extraction', () => {
     expect(scope.structural?.matrixId).toBe(11)
   })
 
+  test('outline query with afterKeyHex: extracts keyLow from > operator', () => {
+    const sql = buildPaginatedOutlineQuery(5, { afterKeyHex: 'c000d000' })
+    const tables = new Set(['scroll_index', 'mx_5_data', 'joins'])
+    const scope = inferScope(sql, tables)
+
+    expect(scope.structural).toBeDefined()
+    expect(scope.structural!.matrixId).toBe(5)
+    expect(scope.structural!.keyLow).not.toBeNull()
+    expect(toHex(scope.structural!.keyLow!)).toBe('c000d000')
+  })
+
   test('returns undefined structural scope for unparseable SQL', () => {
     const sql = 'THIS IS NOT VALID SQL AT ALL'
     const tables = new Set(['scroll_index'])

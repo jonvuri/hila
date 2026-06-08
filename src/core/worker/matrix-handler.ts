@@ -43,7 +43,11 @@ import {
   concatKeys,
 } from '../tree'
 import { getGlobalKey as getGlobalKeyFromIndex, rebuildScrollIndex } from '../scroll-index'
-import { getAncestors as getClosureAncestors, rebuildClosure } from '../closure'
+import {
+  getAncestors as getClosureAncestors,
+  getDescendants as getClosureDescendants,
+  rebuildClosure,
+} from '../closure'
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
   saveFaceConfig as saveFaceConfigImpl,
@@ -280,12 +284,16 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       try {
         const { db } = await sqliteWasm
 
-        // Capture the node's scroll key + ancestors before deletion.
+        // Capture the node's scroll key, ancestors, and descendants before deletion.
         const nodeKey = getGlobalKeyFromIndex(db, matrixId, rowId)
         const closureNodes: NodeId[] = [{ matrixId, rowId }]
         const ancestors = getClosureAncestors(db, { matrixId, rowId })
         for (const a of ancestors) {
           closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+        }
+        const descendants = getClosureDescendants(db, { matrixId, rowId })
+        for (const d of descendants) {
+          closureNodes.push({ matrixId: d.matrixId, rowId: d.rowId })
         }
 
         deleteRowImpl(db, matrixId, rowId)
@@ -337,10 +345,15 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         for (const a of ancestors) {
           closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
         }
+        const descendants = getClosureDescendants(db, {
+          matrixId: node.matrixId,
+          rowId: node.rowId,
+        })
+        for (const d of descendants) {
+          closureNodes.push({ matrixId: d.matrixId, rowId: d.rowId })
+        }
         emitStructuralDirty({
           scrollRanges: [
-            // Conservative: mark the entire matrix as affected for reparent.
-            // Old position range + new position range.
             ...(oldNodeKey ?
               [{ matrixId: node.matrixId, low: oldNodeKey, high: oldNodeKey }]
             : []),
@@ -365,7 +378,8 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         const node = resolveNodeByGlobalKey(db, key)
         if (!node) throw new Error('deleteSubtree: node not found for the given key')
 
-        // Capture dirty-set info before deletion.
+        // Capture dirty-set info before deletion (including descendants so
+        // ancestry subscriptions for them fire one last time).
         const nodeKey = getGlobalKeyFromIndex(db, node.matrixId, node.rowId)
         const closureNodes: NodeId[] = [{ matrixId: node.matrixId, rowId: node.rowId }]
         const ancestors = getClosureAncestors(db, {
@@ -374,6 +388,13 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         })
         for (const a of ancestors) {
           closureNodes.push({ matrixId: a.matrixId, rowId: a.rowId })
+        }
+        const descendants = getClosureDescendants(db, {
+          matrixId: node.matrixId,
+          rowId: node.rowId,
+        })
+        for (const d of descendants) {
+          closureNodes.push({ matrixId: d.matrixId, rowId: d.rowId })
         }
 
         deleteSubtreeImpl(db, { matrixId: node.matrixId, rowId: node.rowId })

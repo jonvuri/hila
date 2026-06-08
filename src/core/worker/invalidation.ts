@@ -182,10 +182,10 @@ const extractStructuralScope = (
           }
 
           if (table === 'scroll_index' && column === 'global_lexkey') {
-            if (op === 'GreaterEquals' && right.type === 'BlobLiteral') {
+            if ((op === 'GreaterEquals' || op === 'Greater') && right.type === 'BlobLiteral') {
               keyLow = new Uint8Array(right.bytes)
             }
-            if (op === 'Less' && right.type === 'BlobLiteral') {
+            if ((op === 'Less' || op === 'LessEquals') && right.type === 'BlobLiteral') {
               keyHigh = new Uint8Array(right.bytes)
             }
           }
@@ -258,11 +258,14 @@ const rangesOverlap = (dirty: KeyRange, scope: StructuralScope): boolean => {
   // If dirty has no bounds (full range), it overlaps any scope.
   if (!dirty.low && !dirty.high) return true
 
-  // Check: dirty.low < scope.high AND dirty.high > scope.low
+  // Closed-interval overlap: dirty.low <= scope.high AND dirty.high >= scope.low.
+  // Dirty ranges are emitted as points (low == high), so half-open semantics
+  // would make every point-range empty. Scope bounds are already exclusive on
+  // the high end (the focus-root `<` bound), so closed comparison is correct.
   const dirtyLowBeforeScopeHigh =
-    !scope.keyHigh || !dirty.low || compareKeys(dirty.low, scope.keyHigh) < 0
+    !scope.keyHigh || !dirty.low || compareKeys(dirty.low, scope.keyHigh) <= 0
   const dirtyHighAfterScopeLow =
-    !scope.keyLow || !dirty.high || compareKeys(dirty.high, scope.keyLow) > 0
+    !scope.keyLow || !dirty.high || compareKeys(dirty.high, scope.keyLow) >= 0
 
   return dirtyLowBeforeScopeHigh && dirtyHighAfterScopeLow
 }
@@ -348,10 +351,22 @@ export const shouldRecompute = (
   dirty: DirtySet | null,
 ): boolean => {
   // When a dirty set is present and the subscription has a structural scope,
-  // the structural overlap is the sole authority — data writes are co-located
-  // with the structural change and don't need independent checking.
+  // structural overlap is the primary check. If the structural dirty set does
+  // not cover the subscription's matrix at all (the op was in a different
+  // matrix), data-table writes are checked independently — they may be
+  // non-co-located side effects (e.g. reverse inlineref cleanup writes to
+  // a host matrix's data table during a cross-matrix cascade delete).
   if (dirty && scope.structural) {
-    return overlaps(dirty, scope.structural)
+    if (overlaps(dirty, scope.structural)) return true
+    const structuralCoversThisMatrix = dirty.scrollRanges.some(
+      (r) => r.matrixId === scope.structural!.matrixId,
+    )
+    if (!structuralCoversThisMatrix) {
+      for (const table of scope.dataTables) {
+        if (writtenTables.has(table)) return true
+      }
+    }
+    return false
   }
 
   // No structural scope but dirty set present: conservative fallback for

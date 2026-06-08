@@ -9,9 +9,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 
 import { insertRow } from '../core/matrix'
-import { buildPaginatedOutlineQuery } from '../workspace/workspace-plugin'
+import { getAncestors, getDescendants } from '../core/closure'
+import { reparentRow } from '../core/tree'
+import {
+  buildPaginatedOutlineQuery,
+  buildAncestryForRowsQuery,
+} from '../workspace/workspace-plugin'
 import { getGlobalKey } from '../core/scroll-index'
-import type { DirtySet } from '../core/worker/invalidation'
+import type { DirtySet, NodeId } from '../core/worker/invalidation'
 
 import {
   assertNoCrossInvalidationRangeAware,
@@ -247,5 +252,61 @@ describe('range-aware invalidation: fan-out guards', () => {
 
     // B's subscription should NOT fire (A's collapse is disjoint from B).
     assertNoCrossInvalidationRangeAware(edit, sqlB)
+  })
+
+  test('reparenting an ancestor fires an ancestry subscription for a deep descendant', () => {
+    // Create a chain: A -> B -> C. An ancestry subscription for C should fire
+    // when A is reparented (because C's ancestry changed through A).
+    const a = insertRow(harness.db, matrixId, { values: { label: 'A' } })
+    const b = insertRow(harness.db, matrixId, {
+      values: { label: 'B' },
+      parent: { matrixId, rowId: a.rowId },
+    })
+    const c = insertRow(harness.db, matrixId, {
+      values: { label: 'C' },
+      parent: { matrixId, rowId: b.rowId },
+    })
+    const d = insertRow(harness.db, matrixId, { values: { label: 'D' } })
+
+    // Ancestry subscription for C (reads closure).
+    const ancestrySql = buildAncestryForRowsQuery(matrixId, [c.rowId])
+
+    const tracker = harness.createTracker()
+    tracker.subscribe(ancestrySql)
+
+    // Reparent A under D. C's ancestry now includes D (through A -> B -> C).
+    // Build the dirty set that the handler would emit (including descendants).
+    const nodeA = { matrixId, rowId: a.rowId }
+    reparentRow(harness.db, {
+      matrixId,
+      rowId: a.rowId,
+      newParent: { matrixId, rowId: d.rowId },
+    })
+
+    const closureNodes: NodeId[] = [nodeA]
+    const ancestors = getAncestors(harness.rawDb, nodeA)
+    for (const anc of ancestors) {
+      closureNodes.push({ matrixId: anc.matrixId, rowId: anc.rowId })
+    }
+    const descendants = getDescendants(harness.rawDb, nodeA)
+    for (const desc of descendants) {
+      closureNodes.push({ matrixId: desc.matrixId, rowId: desc.rowId })
+    }
+
+    const aKey = getGlobalKey(harness.rawDb, matrixId, a.rowId)!
+    const dirty: DirtySet = {
+      scrollRanges: [{ matrixId, low: aKey, high: aKey }],
+      closureNodes,
+    }
+
+    const edit = tracker.recordWithDirty(() => {
+      harness.rawDb.exec(`UPDATE "mx_${matrixId}_data" SET label = label WHERE id = ?`, {
+        bind: [a.rowId],
+      })
+    }, dirty)
+
+    // The ancestry subscription for C should fire (C is in closureNodes as a
+    // descendant of the reparented node A).
+    expect(edit.recomputed.has(ancestrySql)).toBe(true)
   })
 })

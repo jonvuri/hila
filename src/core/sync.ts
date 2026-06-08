@@ -1,6 +1,8 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { ApplyResult, ChangeEntry, Changeset, ConflictRecord } from './sync-types'
+import { rebuildClosure } from './closure'
+import { rebuildScrollIndex } from './scroll-index'
 import { withTransaction } from './transaction'
 
 type TrackedColumn = {
@@ -380,14 +382,15 @@ const prepareDataForTable = (
  * - Saves conflict records with both versions
  * - Suppresses change-tracking triggers during apply
  *
- * (The own-forest's derived caches -- closure, scroll index -- refresh from the
- * applied `joins` edges; that rebuild lands in Phase 8b.)
+ * After applying, if any `joins` entries were modified the derived caches
+ * (closure, scroll index) are rebuilt from the updated edge truth.
  */
 export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyResult => {
   const localDeviceId = getLocalDeviceId(db)
   const lastAckedSeq = getDeviceHighWaterMark(db, changeset.deviceId)
   const conflicts: ConflictRecord[] = []
   let applied = 0
+  let joinsModified = false
 
   withTransaction(db, () => {
     // Suppress change-tracking triggers
@@ -498,6 +501,14 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
         }
         applied++
       }
+
+      if (entry.table === 'joins') joinsModified = true
+    }
+
+    // Rebuild derived caches when the own-forest edges changed.
+    if (joinsModified) {
+      rebuildClosure(db)
+      rebuildScrollIndex(db)
     }
 
     // Re-enable change-tracking triggers

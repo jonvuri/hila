@@ -261,6 +261,25 @@ export const getAncestors = (db: Database, node: NodeRef): (NodeRef & { depth: n
   return result
 }
 
+/** Get all descendants of a node. */
+export const getDescendants = (db: Database, node: NodeRef): NodeRef[] => {
+  const stmt = db.prepare(
+    `SELECT descendant_matrix_id, descendant_row_id FROM closure
+     WHERE ancestor_matrix_id = ? AND ancestor_row_id = ?`,
+  )
+  stmt.bind([node.matrixId, node.rowId])
+  const result: NodeRef[] = []
+  while (stmt.step()) {
+    const row = stmt.get({}) as {
+      descendant_matrix_id: number
+      descendant_row_id: number
+    }
+    result.push({ matrixId: row.descendant_matrix_id, rowId: row.descendant_row_id })
+  }
+  stmt.finalize()
+  return result
+}
+
 /** Check if `ancestor` is an ancestor of `descendant` in the closure. */
 export const isAncestor = (db: Database, ancestor: NodeRef, descendant: NodeRef): boolean => {
   const stmt = db.prepare(

@@ -936,6 +936,72 @@ describe('Change tracking infrastructure', () => {
       expect(ownSourcesOf(matrixId, child)).toEqual([])
     })
 
+    // -- Derived caches rebuild after remote joins changes --
+
+    test('apply remote joins INSERT rebuilds closure and scroll_index', () => {
+      const matrixId = createMatrixWithTraits(db, 'Test')
+      const p = insertDataRow(db, matrixId, { title: 'P' })
+      createTreePosition(db, matrixId, p)
+      const child = insertDataRow(db, matrixId, { title: 'C' })
+      clearChangelog()
+
+      // The child has no own-edge yet, so closure/scroll_index should be empty for it.
+      const beforeClosure = db.prepare(
+        'SELECT COUNT(*) AS c FROM closure WHERE descendant_matrix_id = ? AND descendant_row_id = ?',
+      )
+      beforeClosure.bind([matrixId, child])
+      beforeClosure.step()
+      expect((beforeClosure.get({}) as { c: number }).c).toBe(0)
+      beforeClosure.finalize()
+
+      const beforeScroll = db.prepare(
+        'SELECT COUNT(*) AS c FROM scroll_index WHERE matrix_id = ? AND row_id = ?',
+      )
+      beforeScroll.bind([matrixId, child])
+      beforeScroll.step()
+      expect((beforeScroll.get({}) as { c: number }).c).toBe(0)
+      beforeScroll.finalize()
+
+      // Remote replica attached child under P via an own-edge INSERT.
+      applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'joins',
+            rowId: 77777777,
+            operation: 'INSERT',
+            timestamp: '2025-01-01 12:00:00',
+            data: {
+              source_matrix_id: matrixId,
+              source_row_id: p,
+              target_matrix_id: matrixId,
+              target_row_id: child,
+              kind: 'own',
+              edge_key: '8000',
+            },
+          },
+        ]),
+      )
+
+      // Closure should now contain the child as a descendant of P.
+      const afterClosure = db.prepare(
+        'SELECT COUNT(*) AS c FROM closure WHERE descendant_matrix_id = ? AND descendant_row_id = ?',
+      )
+      afterClosure.bind([matrixId, child])
+      afterClosure.step()
+      expect((afterClosure.get({}) as { c: number }).c).toBeGreaterThan(0)
+      afterClosure.finalize()
+
+      // Scroll index should contain the child.
+      const afterScroll = db.prepare(
+        'SELECT COUNT(*) AS c FROM scroll_index WHERE matrix_id = ? AND row_id = ?',
+      )
+      afterScroll.bind([matrixId, child])
+      afterScroll.step()
+      expect((afterScroll.get({}) as { c: number }).c).toBe(1)
+      afterScroll.finalize()
+    })
+
     // -- Trigger suppression flag is cleaned up after error --
 
     test('trigger suppression flag is cleaned up after error', () => {
