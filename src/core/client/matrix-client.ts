@@ -233,10 +233,8 @@ export const getTagType = (name: string): Promise<TagType | null> =>
 
 export const getAllTagTypes = (): Promise<TagType[]> => workerCall('getAllTagTypes', {})
 
-export const updateTagType = (
-  tagTypeId: number,
-  updates: { name?: string; color?: string | null; icon?: string | null },
-): Promise<void> => workerCall('updateTagType', { tagTypeId, ...updates })
+export const updateTagType = (tagTypeId: number, updates: { name?: string }): Promise<void> =>
+  workerCall('updateTagType', { tagTypeId, ...updates })
 
 export const deleteTagType = (tagTypeId: number): Promise<void> =>
   workerCall('deleteTagType', { tagTypeId })

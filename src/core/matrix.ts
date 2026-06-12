@@ -3,6 +3,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 import { compileFormula, parseFormulaRefs } from '../table/formula'
 
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
+import { extractTextFromPmDoc } from './pm-text'
 import {
   dropChangeTrackingTriggers,
   installDataTableTriggers,
@@ -62,7 +63,9 @@ export const initMatrixSchema = (db: Database) => {
     CREATE TABLE IF NOT EXISTS matrix (
       id               INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
       title            TEXT NOT NULL DEFAULT '',
-      source_plugin_id TEXT REFERENCES plugins(id) ON DELETE SET NULL
+      source_plugin_id TEXT REFERENCES plugins(id) ON DELETE SET NULL,
+      owner_matrix_id  INTEGER,
+      owner_row_id     INTEGER
     ) STRICT;
 
     -- ------------------------------------------------------------
@@ -263,6 +266,18 @@ export const initMatrixSchema = (db: Database) => {
     // Column already exists (new database or previously migrated)
   }
 
+  // Migration: add owner columns to matrix table (Phase 8c)
+  try {
+    db.exec('ALTER TABLE matrix ADD COLUMN owner_matrix_id INTEGER')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+  try {
+    db.exec('ALTER TABLE matrix ADD COLUMN owner_row_id INTEGER')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+
   // At most one column per role per matrix (null roles are unrestricted)
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique
@@ -294,6 +309,16 @@ export const initMatrixSchema = (db: Database) => {
       formula_col_id INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
       dep_col_id     INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE RESTRICT,
       PRIMARY KEY (formula_col_id, dep_col_id)
+    ) STRICT;
+  `)
+
+  // -- Promoted nodes (Phase 8c: type-nodes visible in # autocomplete) ---------
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS promoted_nodes (
+      matrix_id INTEGER NOT NULL,
+      row_id    INTEGER NOT NULL,
+      PRIMARY KEY (matrix_id, row_id)
     ) STRICT;
   `)
 
@@ -511,6 +536,261 @@ export const ensureRootMatrix = (db: Database): number => {
 }
 
 /**
+ * Create a new matrix owned by a node. Sets the `matrix.owner` columns and
+ * optionally seeds root rows attached via own-edges to the owner node.
+ *
+ * Returns the new matrix ID.
+ */
+export const createOwnedMatrix = (
+  db: Database,
+  owner: NodeRef,
+  title: string,
+  columns: {
+    name: string
+    type: string
+    constraints?: string
+    role?: 'label' | 'content'
+  }[] = [{ name: 'title', type: 'TEXT' }],
+  options?: { managedBy?: string },
+): number => {
+  return withTransaction(db, () => {
+    const matrixId = createMatrix(db, title, columns, options)
+    db.exec('UPDATE matrix SET owner_matrix_id = ?, owner_row_id = ? WHERE id = ?', {
+      bind: [owner.matrixId, owner.rowId, matrixId],
+    })
+    return matrixId
+  })
+}
+
+const MAX_CASCADE_DEPTH = 100
+
+/**
+ * Drop an owned matrix: sever owner, drop the data table, and bulk-remove all
+ * rows from global infrastructure (joins, closure, scroll_index). The matrix's
+ * own rows go in O(1) table drops + bulk deletes keyed by matrix_id -- NOT a
+ * per-row cascade. Per-item work escapes only for what lives outside the
+ * matrix: cross-matrix own-children of its rows (cascaded), nested owned
+ * matrixes (dropped recursively), and inlineref badges in host docs (one doc
+ * rewrite per host).
+ */
+export const dropOwnedMatrix = (db: Database, matrixId: number): void => {
+  withTransaction(db, () => {
+    dropOwnedMatrixCascade(db, matrixId, 0)
+  })
+}
+
+const dropOwnedMatrixCascade = (db: Database, matrixId: number, depth: number): void => {
+  if (depth >= MAX_CASCADE_DEPTH) {
+    throw new Error(`Cascade deletion depth exceeded ${MAX_CASCADE_DEPTH} — possible cycle`)
+  }
+
+  // Cascade cross-matrix own-children of this matrix's rows (an aspect row
+  // can itself host aspects in other matrixes). Same-matrix children fall
+  // with the bulk deletes below. Without this, the children would survive
+  // as orphans and closure pairs spanning *through* this matrix (ancestor
+  // above, descendant below) would outlive the severed path.
+  const childStmt = db.prepare(
+    `SELECT DISTINCT target_matrix_id, target_row_id FROM joins
+     WHERE source_matrix_id = ? AND kind = 'own' AND target_matrix_id != ?`,
+  )
+  childStmt.bind([matrixId, matrixId])
+  const externalChildren: NodeRef[] = []
+  while (childStmt.step()) {
+    const row = childStmt.get({}) as { target_matrix_id: number; target_row_id: number }
+    externalChildren.push({ matrixId: row.target_matrix_id, rowId: row.target_row_id })
+  }
+  childStmt.finalize()
+  for (const child of externalChildren) {
+    deleteRowCascade(db, child.matrixId, child.rowId, depth + 1)
+  }
+
+  // Recursively drop matrixes owned by this matrix's rows (nested sub-tables).
+  const nestedStmt = db.prepare('SELECT id FROM matrix WHERE owner_matrix_id = ?')
+  nestedStmt.bind([matrixId])
+  const nestedIds: number[] = []
+  while (nestedStmt.step()) {
+    nestedIds.push((nestedStmt.get({}) as { id: number }).id)
+  }
+  nestedStmt.finalize()
+  for (const nestedId of nestedIds) {
+    dropOwnedMatrixCascade(db, nestedId, depth + 1)
+  }
+
+  // Remove inlineref badges from external hosts' docs before the own-edges
+  // go away, matching per-row delete's reverse cleanup. Grouped by host: one
+  // doc rewrite removes all of a host's refs into this matrix.
+  const hostStmt = db.prepare(
+    `SELECT DISTINCT source_matrix_id, source_row_id FROM joins
+     WHERE target_matrix_id = ? AND kind = 'own'
+       AND source_matrix_id != ?
+       AND NOT (source_matrix_id = ${ROOT_MATRIX_ID} AND source_row_id = ${ROOT_ROW_ID})`,
+  )
+  hostStmt.bind([matrixId, matrixId])
+  const hosts: NodeRef[] = []
+  while (hostStmt.step()) {
+    const row = hostStmt.get({}) as { source_matrix_id: number; source_row_id: number }
+    hosts.push({ matrixId: row.source_matrix_id, rowId: row.source_row_id })
+  }
+  hostStmt.finalize()
+  for (const host of hosts) {
+    removeInlineRefsToMatrixFromDoc(db, host.matrixId, host.rowId, matrixId)
+  }
+
+  // Sever ownership
+  db.exec('UPDATE matrix SET owner_matrix_id = NULL, owner_row_id = NULL WHERE id = ?', {
+    bind: [matrixId],
+  })
+
+  // Remove all joins (own + ref) involving rows in this matrix
+  db.exec(
+    `DELETE FROM joins
+     WHERE source_matrix_id = ? OR target_matrix_id = ?`,
+    { bind: [matrixId, matrixId] },
+  )
+
+  // Remove closure entries involving this matrix
+  db.exec(
+    `DELETE FROM closure
+     WHERE ancestor_matrix_id = ? OR descendant_matrix_id = ?`,
+    { bind: [matrixId, matrixId] },
+  )
+
+  // Remove scroll index entries for this matrix
+  db.exec('DELETE FROM scroll_index WHERE matrix_id = ?', { bind: [matrixId] })
+
+  // Remove promoted_nodes entries for rows in this matrix
+  db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ?', { bind: [matrixId] })
+
+  // Drop change-tracking triggers before dropping the data table
+  dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+
+  // Drop the data table itself
+  db.exec(`DROP TABLE IF EXISTS "mx_${matrixId}_data"`)
+
+  // Remove column definitions
+  db.exec('DELETE FROM matrix_columns WHERE matrix_id = ?', { bind: [matrixId] })
+
+  // Remove face configs for this matrix
+  db.exec('DELETE FROM face_configs WHERE matrix_id = ?', { bind: [matrixId] })
+
+  // Remove the matrix registry entry
+  db.exec('DELETE FROM matrix WHERE id = ?', { bind: [matrixId] })
+}
+
+/**
+ * Get all matrix IDs owned by a given node.
+ */
+export const getOwnedMatrixes = (db: Database, owner: NodeRef): number[] => {
+  const stmt = db.prepare(
+    'SELECT id FROM matrix WHERE owner_matrix_id = ? AND owner_row_id = ?',
+  )
+  stmt.bind([owner.matrixId, owner.rowId])
+  const ids: number[] = []
+  while (stmt.step()) {
+    ids.push((stmt.get({}) as { id: number }).id)
+  }
+  stmt.finalize()
+  return ids
+}
+
+/**
+ * Sync the `title` of every matrix owned by `owner` to the plain text of the
+ * owner's label value (PM JSON or a plain string). The label-role column is
+ * the canonical name of anything the node owns (Phase 8c §4); `matrix.title`
+ * is a derived cache of it, kept hot so name queries (tag autocomplete, the
+ * tag browser) never parse ProseMirror JSON in SQL.
+ */
+const syncOwnedMatrixTitles = (db: Database, owner: NodeRef, labelValue: unknown): void => {
+  const ownedIds = getOwnedMatrixes(db, owner)
+  if (ownedIds.length === 0) return
+
+  const title = extractTextFromPmDoc(labelValue)
+  for (const id of ownedIds) {
+    // The title guard keeps no-op label writes from dirtying `matrix` (and
+    // re-running every subscription that reads it).
+    db.exec('UPDATE matrix SET title = ? WHERE id = ? AND title != ?', {
+      bind: [title, id, title],
+    })
+  }
+}
+
+/**
+ * Get the owner node of a matrix, or null if unowned.
+ */
+export const getMatrixOwner = (db: Database, matrixId: number): NodeRef | null => {
+  const stmt = db.prepare('SELECT owner_matrix_id, owner_row_id FROM matrix WHERE id = ?')
+  stmt.bind([matrixId])
+  if (!stmt.step()) {
+    stmt.finalize()
+    return null
+  }
+  const row = stmt.get({}) as { owner_matrix_id: number | null; owner_row_id: number | null }
+  stmt.finalize()
+  if (row.owner_matrix_id == null || row.owner_row_id == null) return null
+  return { matrixId: row.owner_matrix_id, rowId: row.owner_row_id }
+}
+
+// -- Promoted nodes (Phase 8c §4: type-nodes visible in # autocomplete) -------
+
+/**
+ * Mark a node as promoted (globally invocable via # autocomplete). A promoted
+ * node that owns a matrix is a "tag type"; its name is its label-role column.
+ */
+export const promoteNode = (db: Database, node: NodeRef): void => {
+  db.exec('INSERT OR IGNORE INTO promoted_nodes (matrix_id, row_id) VALUES (?, ?)', {
+    bind: [node.matrixId, node.rowId],
+  })
+}
+
+/**
+ * Remove promotion from a node. It will no longer appear in # autocomplete.
+ */
+export const demoteNode = (db: Database, node: NodeRef): void => {
+  db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ? AND row_id = ?', {
+    bind: [node.matrixId, node.rowId],
+  })
+}
+
+/**
+ * Check whether a node is promoted (visible in # autocomplete).
+ */
+export const isPromotedNode = (db: Database, node: NodeRef): boolean => {
+  const stmt = db.prepare(
+    'SELECT 1 FROM promoted_nodes WHERE matrix_id = ? AND row_id = ? LIMIT 1',
+  )
+  stmt.bind([node.matrixId, node.rowId])
+  const found = stmt.step()
+  stmt.finalize()
+  return found
+}
+
+/**
+ * Detect whether an owned matrix is shared (tag type) or dedicated (private
+ * sub-table). Structural signature per Phase 8c §3:
+ * - Dedicated: matrix-owner == every row-owner (all own-edges into this matrix
+ *   come from the same node that owns the matrix).
+ * - Shared: the type-node owns the matrix but different hosts own the rows
+ *   (ownership diverges).
+ *
+ * Returns null if the matrix is unowned.
+ */
+export const isSharedMatrix = (db: Database, matrixId: number): boolean | null => {
+  const owner = getMatrixOwner(db, matrixId)
+  if (!owner) return null
+
+  const stmt = db.prepare(
+    `SELECT 1 FROM joins
+     WHERE target_matrix_id = ? AND kind = 'own'
+       AND NOT (source_matrix_id = ? AND source_row_id = ?)
+     LIMIT 1`,
+  )
+  stmt.bind([matrixId, owner.matrixId, owner.rowId])
+  const hasOtherOwner = stmt.step()
+  stmt.finalize()
+  return hasOtherOwner
+}
+
+/**
  * Insert a new data row into a matrix's data table.
  *
  * @returns The new row's id
@@ -593,6 +873,13 @@ export const updateRow = (
   } catch (err) {
     wrapConstraintError(err)
   }
+
+  // Writing the label-role column renames everything this node owns: keep the
+  // owned matrixes' derived `title` cache in sync (Phase 8c §8.3).
+  const labelEntry = entries.find(([name]) => columnMap.get(name)?.role === 'label')
+  if (labelEntry) {
+    syncOwnedMatrixTitles(db, { matrixId, rowId }, labelEntry[1])
+  }
 }
 
 /**
@@ -632,21 +919,19 @@ export const insertRow = (
 
 type FilterResult = { doc: unknown; changed: boolean }
 
+type InlineRefMatcher = (attrs: Record<string, unknown>) => boolean
+
 /**
  * Recursively walk a PM JSON doc, removing `inlineref` nodes whose attrs
- * match the given target. Returns a new doc tree and a `changed` flag.
+ * satisfy the matcher. Returns a new doc tree and a `changed` flag.
  */
-const filterInlineRefNode = (
-  node: unknown,
-  targetMatrixId: number,
-  targetRowId: number,
-): FilterResult => {
+const filterInlineRefNode = (node: unknown, matches: InlineRefMatcher): FilterResult => {
   if (node == null || typeof node !== 'object') return { doc: node, changed: false }
   if (Array.isArray(node)) {
     let changed = false
     const out: unknown[] = []
     for (const child of node) {
-      const r = filterInlineRefNode(child, targetMatrixId, targetRowId)
+      const r = filterInlineRefNode(child, matches)
       if (r.changed) changed = true
       if (r.doc !== undefined) out.push(r.doc)
     }
@@ -659,8 +944,7 @@ const filterInlineRefNode = (
     obj.type === 'inlineref' &&
     obj.attrs &&
     typeof obj.attrs === 'object' &&
-    (obj.attrs as Record<string, unknown>).targetMatrixId === targetMatrixId &&
-    (obj.attrs as Record<string, unknown>).targetRowId === targetRowId
+    matches(obj.attrs as Record<string, unknown>)
   ) {
     return { doc: undefined, changed: true }
   }
@@ -669,7 +953,7 @@ const filterInlineRefNode = (
   const result: Record<string, unknown> = {}
   for (const [key, val] of Object.entries(obj)) {
     if (key === 'content' && Array.isArray(val)) {
-      const filtered = filterInlineRefNode(val, targetMatrixId, targetRowId)
+      const filtered = filterInlineRefNode(val, matches)
       result[key] = filtered.doc
       if (filtered.changed) changed = true
     } else {
@@ -680,19 +964,16 @@ const filterInlineRefNode = (
 }
 
 /**
- * Remove an `inlineref` node from a source row's PM JSON content.
- *
- * Loads the source row, parses the content/body column as PM JSON, filters
- * out the matching `inlineref` node, and saves the modified doc. If the
+ * Load a source row's content/body column as PM JSON, remove all `inlineref`
+ * nodes satisfying the matcher in one pass, and save the modified doc. If the
  * source row has no rich text column or the content is not PM JSON, this is
  * a no-op.
  */
-export const removeInlineRefFromDoc = (
+const removeMatchingInlineRefsFromDoc = (
   db: Database,
   sourceMatrixId: number,
   sourceRowId: number,
-  targetMatrixId: number,
-  targetRowId: number,
+  matches: InlineRefMatcher,
 ): void => {
   const columns = getColumns(db, sourceMatrixId)
   const contentCol = columns.find((c) => c.name === 'content' || c.name === 'body')
@@ -718,7 +999,7 @@ export const removeInlineRefFromDoc = (
     return
   }
 
-  const modified = filterInlineRefNode(doc, targetMatrixId, targetRowId)
+  const modified = filterInlineRefNode(doc, matches)
   if (!modified.changed) return
 
   db.exec(`UPDATE "mx_${sourceMatrixId}_data" SET ${quoteIdent(colName)} = ? WHERE id = ?`, {
@@ -726,7 +1007,44 @@ export const removeInlineRefFromDoc = (
   })
 }
 
-const MAX_CASCADE_DEPTH = 100
+/**
+ * Remove an `inlineref` node pointing at a specific target row from a source
+ * row's PM JSON content.
+ */
+export const removeInlineRefFromDoc = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+  targetRowId: number,
+): void => {
+  removeMatchingInlineRefsFromDoc(
+    db,
+    sourceMatrixId,
+    sourceRowId,
+    (attrs) => attrs.targetMatrixId === targetMatrixId && attrs.targetRowId === targetRowId,
+  )
+}
+
+/**
+ * Remove all `inlineref` nodes pointing at any row of a target matrix from a
+ * source row's PM JSON content. Used by the matrix-drop cascade so each host
+ * doc is parsed and rewritten once, no matter how many of its badges point
+ * into the dropped matrix.
+ */
+export const removeInlineRefsToMatrixFromDoc = (
+  db: Database,
+  sourceMatrixId: number,
+  sourceRowId: number,
+  targetMatrixId: number,
+): void => {
+  removeMatchingInlineRefsFromDoc(
+    db,
+    sourceMatrixId,
+    sourceRowId,
+    (attrs) => attrs.targetMatrixId === targetMatrixId,
+  )
+}
 
 /**
  * Unified row delete: removes a single node from the own-forest.
@@ -757,8 +1075,19 @@ const deleteRowCascade = (
     throw new Error(`Cascade deletion depth exceeded ${MAX_CASCADE_DEPTH} — possible cycle`)
   }
 
-  // Cascade-delete cross-matrix owned children (e.g. tag aspect rows). Same-
-  // matrix own-children are promoted by removeTreePosition below, not deleted.
+  // Matrix-drop cascade first: if this node owns any matrixes, drop them. This
+  // is the second deletion dependency (Phase 8c §2): deleting a type-node drops
+  // its owned matrix and all rows therein. Dropping before the child walk lets
+  // children living in an owned matrix (e.g. hostless aspect rows owned by the
+  // type-node) go with the bulk table drop instead of a per-row cascade.
+  const ownedMatrixIds = getOwnedMatrixes(db, { matrixId, rowId })
+  for (const ownedId of ownedMatrixIds) {
+    dropOwnedMatrixCascade(db, ownedId, depth + 1)
+  }
+
+  // Cascade-delete the remaining cross-matrix owned children (e.g. tag aspect
+  // rows hosted by this node in surviving matrixes). Same-matrix own-children
+  // are promoted by removeTreePosition below, not deleted.
   const crossMatrixChildren = getOwnChildren(db, { matrixId, rowId }).filter(
     (c) => c.matrixId !== matrixId,
   )
@@ -793,6 +1122,12 @@ const deleteRowCascade = (
   // Promote same-matrix own-children to the grandparent and sever this node's
   // own-edges.
   removeTreePosition(db, matrixId, rowId)
+
+  // Clear any promotion (a deleted type-node must not linger in # autocomplete
+  // bookkeeping, nor resurrect if its random row ID is ever reused).
+  db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ? AND row_id = ?', {
+    bind: [matrixId, rowId],
+  })
 
   db.exec(`DELETE FROM "mx_${matrixId}_data" WHERE id = ?`, {
     bind: [rowId],
@@ -1309,6 +1644,22 @@ export const createDependentRow = (
 
     return targetRowId
   })
+}
+
+/**
+ * Create a hostless aspect row: a row in the tag-type's matrix owned by the
+ * type-node itself (not by any host). This is a "task unto itself" — a record
+ * in the Tasks table not contextualized in any outline bullet.
+ *
+ * Contextualizing later = reparenting its own-edge from the type-node to a host.
+ */
+export const createHostlessAspectRow = (
+  db: Database,
+  typeNode: NodeRef,
+  targetMatrixId: number,
+  columnValues: Record<string, unknown> = {},
+): number => {
+  return createDependentRow(db, typeNode.matrixId, typeNode.rowId, targetMatrixId, columnValues)
 }
 
 /** Insert a ref-kind join (explicit alias for insertJoin with kind='ref'). */

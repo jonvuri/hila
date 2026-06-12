@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import { initMatrixSchema, getColumns } from '../core/matrix'
+import { initMatrixSchema, getColumns, updateRow } from '../core/matrix'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, getFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
+import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin, tagBrowserFaceTypeDefinition } from './tags-plugin'
 import {
@@ -20,6 +21,7 @@ import {
 } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
+const testWorkspacePlugin = { ...workspacePlugin, init: undefined }
 
 afterEach(() => {
   clearFaceTypeRegistry()
@@ -60,6 +62,7 @@ describe('Tags plugin', () => {
   })
 
   test('registering the tags plugin creates the plugin row', async () => {
+    await registerPlugin(db, testWorkspacePlugin)
     await registerPlugin(db, testTagsPlugin)
 
     const plugin = getPlugin(db, 'hila.tags')
@@ -68,20 +71,21 @@ describe('Tags plugin', () => {
     expect(plugin!.version).toBe('1.0.0')
   })
 
-  test('registering the tags plugin creates the registry matrix', async () => {
+  test('registering the tags plugin has no matrixes (registry dissolved)', async () => {
+    await registerPlugin(db, testWorkspacePlugin)
     const ctx = await registerPlugin(db, testTagsPlugin)
-    expect(Object.keys(ctx.matrixIds)).toHaveLength(1)
-    expect(ctx.matrixIds['registry']).toBeTypeOf('number')
+    expect(Object.keys(ctx.matrixIds)).toHaveLength(0)
   })
 
   test('re-registering the tags plugin is idempotent', async () => {
+    await registerPlugin(db, testWorkspacePlugin)
     const ctx1 = await registerPlugin(db, testTagsPlugin)
     const ctx2 = await registerPlugin(db, testTagsPlugin)
     expect(ctx1).toEqual(ctx2)
   })
 })
 
-describe('Tag type registry', () => {
+describe('Tag type registry (type-node model)', () => {
   let db: Database
 
   beforeEach(async () => {
@@ -93,6 +97,7 @@ describe('Tag type registry', () => {
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
 
+    await registerPlugin(db, testWorkspacePlugin)
     await registerPlugin(db, testTagsPlugin)
   })
 
@@ -102,8 +107,6 @@ describe('Tag type registry', () => {
     expect(tagType.id).toBeTypeOf('number')
     expect(tagType.name).toBe('task')
     expect(tagType.matrixId).toBeTypeOf('number')
-    expect(tagType.color).toBeNull()
-    expect(tagType.icon).toBeNull()
   })
 
   test('createTagType creates a matrix with default label column', () => {
@@ -149,10 +152,34 @@ describe('Tag type registry', () => {
     expect(faceTypeIds).toContain('hila.table')
   })
 
+  test('createTagType sets matrix.owner to the type-node', () => {
+    const tagType = createTagType(db, 'task')
+
+    const stmt = db.prepare('SELECT owner_matrix_id, owner_row_id FROM matrix WHERE id = ?')
+    stmt.bind([tagType.matrixId])
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { owner_matrix_id: number; owner_row_id: number }
+    stmt.finalize()
+
+    expect(row.owner_row_id).toBe(tagType.id)
+  })
+
   test('createTagType rejects duplicate name (case-insensitive)', () => {
     createTagType(db, 'task')
-    expect(() => createTagType(db, 'Task')).toThrow()
-    expect(() => createTagType(db, 'TASK')).toThrow()
+    expect(() => createTagType(db, 'task')).toThrow('already exists')
+    expect(() => createTagType(db, 'Task')).toThrow('already exists')
+    expect(() => createTagType(db, 'TASK')).toThrow('already exists')
+  })
+
+  test('updateTagType rejects renaming to an existing name (case-insensitive)', () => {
+    createTagType(db, 'task')
+    const review = createTagType(db, 'review')
+
+    expect(() => updateTagType(db, review.id, { name: 'task' })).toThrow('already exists')
+    expect(() => updateTagType(db, review.id, { name: 'Task' })).toThrow('already exists')
+
+    // Renaming to (a recasing of) its own name is allowed
+    expect(() => updateTagType(db, review.id, { name: 'Review' })).not.toThrow()
   })
 
   test('getTagType retrieves a tag type by name', () => {
@@ -220,14 +247,6 @@ describe('Tag type registry', () => {
     expect(names).toEqual(['alpha', 'middle', 'zebra'])
   })
 
-  test('updateTagType updates the color', () => {
-    const created = createTagType(db, 'task')
-    updateTagType(db, created.id, { color: '#ff0000' })
-
-    const updated = getTagTypeById(db, created.id)
-    expect(updated!.color).toBe('#ff0000')
-  })
-
   test('updateTagType updates the name', () => {
     const created = createTagType(db, 'task')
     updateTagType(db, created.id, { name: 'todo' })
@@ -236,12 +255,34 @@ describe('Tag type registry', () => {
     expect(updated!.name).toBe('todo')
   })
 
-  test('updateTagType updates the icon', () => {
+  test('renaming the type-node label via plain updateRow renames the tag type', () => {
+    // The outline editor writes the label column directly -- the label is the
+    // canonical name, and core syncs the owned matrix's derived title from it.
     const created = createTagType(db, 'task')
-    updateTagType(db, created.id, { icon: 'check' })
 
-    const updated = getTagTypeById(db, created.id)
-    expect(updated!.icon).toBe('check')
+    const metaStmt = db.prepare("SELECT metadata FROM plugins WHERE id = 'hila.workspace'")
+    metaStmt.step()
+    const wsMatrixId = (
+      JSON.parse((metaStmt.get({}) as { metadata: string }).metadata) as {
+        matrixIds: Record<string, number>
+      }
+    ).matrixIds['root']!
+    metaStmt.finalize()
+
+    updateRow(db, {
+      matrixId: wsMatrixId,
+      rowId: created.id,
+      values: {
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'todo' }] }],
+        }),
+      },
+    })
+
+    expect(getTagType(db, 'todo')!.matrixId).toBe(created.matrixId)
+    expect(getTagType(db, 'task')).toBeNull()
+    expect(getAllTagTypes(db).map((t) => t.name)).toEqual(['todo'])
   })
 
   test('updateTagType with no changes is a no-op', () => {
@@ -252,31 +293,18 @@ describe('Tag type registry', () => {
     expect(unchanged!.name).toBe('task')
   })
 
-  test('deleteTagType removes the registry row', () => {
+  test('deleteTagType removes the type-node and cascades the owned matrix', () => {
     const created = createTagType(db, 'task')
+    const matrixId = created.matrixId
     deleteTagType(db, created.id)
 
     expect(getTagTypeById(db, created.id)).toBeNull()
     expect(getTagType(db, 'task')).toBeNull()
-  })
 
-  test('deleteTagType does NOT delete the matrix', () => {
-    const created = createTagType(db, 'task')
-    const matrixId = created.matrixId
-    deleteTagType(db, created.id)
-
+    // The owned matrix is cascade-dropped
     const stmt = db.prepare('SELECT 1 FROM matrix WHERE id = ?')
     stmt.bind([matrixId])
-    expect(stmt.step()).toBe(true)
+    expect(stmt.step()).toBe(false)
     stmt.finalize()
-  })
-
-  test('deleteTagType matrix still accessible via identity face', () => {
-    const created = createTagType(db, 'task')
-    const matrixId = created.matrixId
-    deleteTagType(db, created.id)
-
-    const configs = getFaceConfigsForMatrix(db, matrixId)
-    expect(configs.length).toBeGreaterThan(0)
   })
 })

@@ -87,6 +87,25 @@ Capture decisions that fall out of 9.1–9.6 and leave the remainder as a docume
 
 Heterogeneous cross-matrix children render in one ordered, virtualized outline within the <50ms budget (multi-table gather handled). The property surface renders intrinsic columns ∪ owned aspect fields consistently in focus panels and as compact navigation-row previews, realizable by the Phase 11 renderer registry. Embedded collections and live (query-bound) views render inside the stream view with node-scoped authoring and editable-in-place write-back. Dedicated sub-tables embed via the table face with the `row_kind`-as-position-marker settled. The panel stack is keyed by `(matrix_id, row_id)` and renders boundary hops, with face affinity (`Plan.md` #5) resolved. The unified creation gesture exists. Convergence is captured as a forward note. Static analysis and the workspace/table E2E suites pass throughout.
 
+## Phase 8c carry-overs to resolve in Phase 9
+
+The following issues were deferred from Phase 8c because their fix is a view-layer decision, not a data-layer one.
+
+**Type-nodes in the workspace outline.** Phase 8c makes tag type-nodes regular workspace-matrix rows (they own a matrix and carry a label). This means `createTagType` now inserts a visible outline row at the workspace root. Four E2E tests were marked `test.fixme` because of this:
+
+- `e2e/tags.spec.ts` — "selecting 'Create tag type' creates the tag type and inserts a badge"
+- `e2e/tags.spec.ts` — "newly created tag type appears in the tag browser"
+- `e2e/tags.spec.ts` — "inline tag type creation also creates the aspect row"
+- `e2e/tags.spec.ts` — "deleting a workspace row cascade-deletes both tag aspect rows"
+
+The first three fail because `createTagType` adds a new root-level workspace row, shifting row indices and breaking locators that rely on `.outline-row .ProseMirror.last()`. The fourth fails because deleting a type-node now cascade-drops its owned matrix (correct Phase 8c behaviour), but the test queries the data table after deletion, expecting it to still exist.
+
+The decision to make here (likely in §9.1 or §9.6): should type-nodes be hidden from the root outline by default (e.g. placed under a reserved "Types" parent, or filtered out by the outline scroll query), or should the outline render them visibly but with a distinct presentation? Either way, once that rendering policy is settled, the four E2E tests above need to be updated or rewritten to match the new behaviour.
+
+Note for reviving the fourth test: the Phase 8c review fixes (§8.1) completed the matrix-drop cascade, so deleting a type-node now *also* strips its `#` badges from host docs (eager inlineref cleanup) and clears its `promoted_nodes` entry. The revived test should assert the badges disappear from host content and the tag vanishes from autocomplete — not just that the data table is gone.
+
+**Renaming owned matrixes (related, for §9.1/§9.4).** Phase 8c §8.3 made the owner-node's label the canonical name, with `matrix.title` a derived cache synced on label writes. `renameMatrix` still writes `title` directly; today it is only reachable from the workspace title editor (the workspace matrix is unowned), but any Phase 9 surface that lets users rename an *owned* matrix (e.g. a table-face title editor on a tag type or sub-table) must route the rename through the owner's label column instead — a direct `renameMatrix` would be silently overwritten by the next label edit.
+
 ## Dependency notes
 
 Depends on the data-layer ownership spine ([Phase 8](Phase-8.md) → [8b](Phase-8b.md) → [8c](Phase-8c.md)); each surface here consumes specific data facts settled there (edges, global closure/scroll index, `matrix.owner`, type-nodes). Complementary to [Phase 11](Phase-11.md) (tasks/movie-reviews) -- the property surface (9.2) and the renderer registry must compose. Precedes and feeds [Phase 10](Phase-10.md), the design-system / theming pass, which is best done once these surfaces are settled so the token system spans the final set. Resolves `Plan.md` open question #5 (face affinity) in 9.5.

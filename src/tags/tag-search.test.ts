@@ -6,26 +6,26 @@ import {
   initMatrixSchema,
   createMatrix,
   insertDataRow,
+  insertRow,
   getTargets,
+  getSources,
   createDependentRow,
+  createHostlessAspectRow,
+  createRefJoin,
 } from '../core/matrix'
-import { createTreePosition } from '../core/tree'
+import { createTreePosition, getOwnEdge, reparentRow } from '../core/tree'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
 import { schema } from '../editor/schema'
 import { extractInlineRefs } from '../editor/inlineref-sync'
+import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin } from './tags-plugin'
-import {
-  createTagType,
-  getTagType,
-  getTagTypeByMatrixId,
-  getAllTagTypes,
-  updateTagType,
-} from './tag-types'
+import { createTagType, getTagType, getTagTypeByMatrixId, getAllTagTypes } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
+const testWorkspacePlugin = { ...workspacePlugin, init: undefined }
 
 describe('Tag search, insertion, and inline tag type creation', () => {
   let db: Database
@@ -35,6 +35,7 @@ describe('Tag search, insertion, and inline tag type creation', () => {
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
+    await registerPlugin(db, testWorkspacePlugin)
     await registerPlugin(db, testTagsPlugin)
   })
 
@@ -71,12 +72,11 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       expect(matching).toHaveLength(1)
     })
 
-    test('tag type results include matrixId and color', () => {
+    test('tag type results include matrixId', () => {
       const tt = createTagType(db, 'task')
 
       const all = getAllTagTypes(db)
       expect(all[0]!.matrixId).toBe(tt.matrixId)
-      expect(all[0]!.color).toBeNull()
     })
   })
 
@@ -285,14 +285,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       expect(resolved!.matrixId).toBe(tagType.matrixId)
     })
 
-    test('tag type with explicit color is resolved', () => {
-      const tagType = createTagType(db, 'urgent')
-      updateTagType(db, tagType.id, { color: '#e53e3e' })
-
-      const resolved = getTagTypeByMatrixId(db, tagType.matrixId)
-      expect(resolved!.color).toBe('#e53e3e')
-    })
-
     test('non-tag-type matrix ID returns null from getTagTypeByMatrixId', () => {
       const plainMatrixId = createMatrix(db, 'Notes', [{ name: 'title', type: 'TEXT' }])
 
@@ -326,6 +318,70 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       expect(node.attrs.cachedTitle).toBe('My Note')
       expect(node.attrs.targetMatrixId).toBe(1)
       expect(node.attrs.targetRowId).toBe(10)
+    })
+  })
+
+  describe('Tagging gestures (Phase 8c §5)', () => {
+    const getWsMatrixId = (): number => {
+      const stmt = db.prepare("SELECT metadata FROM plugins WHERE id = 'hila.workspace'")
+      stmt.step()
+      const row = stmt.get({}) as { metadata: string }
+      stmt.finalize()
+      return JSON.parse(row.metadata).matrixIds['root'] as number
+    }
+
+    test('#label (no schema) is a ref-edge to the label-node', () => {
+      const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+      const sourceRowId = insertDataRow(db, outlineMatrixId, { content: '{}' })
+      createTreePosition(db, outlineMatrixId, sourceRowId)
+
+      const wsMatrixId = getWsMatrixId()
+      const { rowId: labelNodeId } = insertRow(db, wsMatrixId, {
+        values: { label: 'important' },
+      })
+
+      // Tagging with a label = ref-edge from source to the label-node
+      createRefJoin(db, outlineMatrixId, sourceRowId, wsMatrixId, labelNodeId)
+
+      const sources = getSources(db, wsMatrixId, labelNodeId)
+      const refSources = sources.filter((s) => s.kind === 'ref')
+      expect(refSources).toHaveLength(1)
+      expect(refSources[0]!.sourceMatrixId).toBe(outlineMatrixId)
+      expect(refSources[0]!.sourceRowId).toBe(sourceRowId)
+    })
+
+    test('hostless aspect row is owned by the type-node', () => {
+      const tagType = createTagType(db, 'task')
+      const wsMatrixId = getWsMatrixId()
+      const typeNode = { matrixId: wsMatrixId, rowId: tagType.id }
+
+      const rowId = createHostlessAspectRow(db, typeNode, tagType.matrixId, {})
+
+      const edge = getOwnEdge(db, tagType.matrixId, rowId)
+      expect(edge).not.toBeNull()
+      expect(edge!.parent.matrixId).toBe(wsMatrixId)
+      expect(edge!.parent.rowId).toBe(tagType.id)
+    })
+
+    test('hostless aspect row can be reparented onto a host', () => {
+      const tagType = createTagType(db, 'task')
+      const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
+      const wsMatrixId = getWsMatrixId()
+      const typeNode = { matrixId: wsMatrixId, rowId: tagType.id }
+      const rowId = createHostlessAspectRow(db, typeNode, tagType.matrixId, {})
+
+      const hostRowId = insertDataRow(db, outlineMatrixId, { content: 'host' })
+      createTreePosition(db, outlineMatrixId, hostRowId)
+
+      reparentRow(db, {
+        matrixId: tagType.matrixId,
+        rowId,
+        newParent: { matrixId: outlineMatrixId, rowId: hostRowId },
+      })
+
+      const edge = getOwnEdge(db, tagType.matrixId, rowId)
+      expect(edge!.parent.matrixId).toBe(outlineMatrixId)
+      expect(edge!.parent.rowId).toBe(hostRowId)
     })
   })
 })

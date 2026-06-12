@@ -4,7 +4,6 @@ import { getAllTagTypes, createTagType, createDependentRow } from '../core/clien
 
 export type TagAutocompleteOption = AutocompleteOption & {
   matrixId: number
-  color: string | null
 }
 
 export const searchTagTypes = async (query: string): Promise<TagAutocompleteOption[]> => {
@@ -15,7 +14,6 @@ export const searchTagTypes = async (query: string): Promise<TagAutocompleteOpti
     id: tt.id,
     title: tt.name,
     matrixId: tt.matrixId,
-    color: tt.color,
   }))
 }
 

@@ -197,7 +197,7 @@ export type MatrixOperationMap = {
     result: TagType[]
   }
   updateTagType: {
-    params: { tagTypeId: number; name?: string; color?: string | null; icon?: string | null }
+    params: { tagTypeId: number; name?: string }
     result: void
   }
   deleteTagType: {

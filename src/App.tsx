@@ -48,7 +48,6 @@ const App: Component = () => {
     matrixId: number
     rowId: number
     tagTypeName: string
-    tagTypeColor: string | null
     anchorRect: DOMRect
   } | null>(null)
 
@@ -89,7 +88,6 @@ const App: Component = () => {
       matrixId: number
       rowId: number
       tagTypeName: string
-      tagTypeColor: string | null
       anchorRect: {
         top: number
         left: number
@@ -104,7 +102,6 @@ const App: Component = () => {
         matrixId: detail.matrixId,
         rowId: detail.rowId,
         tagTypeName: detail.tagTypeName,
-        tagTypeColor: detail.tagTypeColor,
         anchorRect: new DOMRect(
           detail.anchorRect.left,
           detail.anchorRect.top,
@@ -301,7 +298,6 @@ const App: Component = () => {
             matrixId={panel().matrixId}
             rowId={panel().rowId}
             tagTypeName={panel().tagTypeName}
-            tagTypeColor={panel().tagTypeColor}
             anchorRect={panel().anchorRect}
             onClose={() => setTagPanel(null)}
           />

@@ -5,35 +5,54 @@
  * Dynamic table names (`mx_{id}_data`) prevent parameterized binding,
  * so IDs are interpolated directly — consistent with how outline and
  * notes plugins build queries.
+ *
+ * Phase 8c: tag types are now promoted type-nodes in the workspace matrix
+ * that own a matrix via `matrix.owner`. The registry matrix is dissolved.
+ * The canonical tag name is the type-node's label-role column; queries read
+ * `matrix.title`, a derived cache core's `updateRow` keeps in sync, to avoid
+ * parsing ProseMirror JSON in SQL.
  */
 
 /**
- * Tag browser list: all registered tag types with their instance counts.
- * Instance count is the number of own-kind joins targeting each tag type's matrix.
+ * Tag browser list: all promoted type-nodes with their instance counts.
+ * Instance count is the number of own-kind joins targeting the type's
+ * owned matrix. The tag name comes from `matrix.title` (kept in sync).
+ *
+ * @param wsMatrixId - The workspace matrix ID (contains the type-nodes)
  */
-export const buildTagTypesWithCountsQuery = (registryMatrixId: number): string => `
-SELECT tt.id, tt.name, tt.matrix_id, tt.color, tt.icon,
+export const buildTagTypesWithCountsQuery = (wsMatrixId: number): string => `
+SELECT p.row_id AS id, m.title AS name, m.id AS matrix_id,
        (SELECT COUNT(*) FROM joins j
-        WHERE j.target_matrix_id = tt.matrix_id AND j.kind = 'own') AS instance_count
-FROM "mx_${registryMatrixId}_data" tt
-ORDER BY tt.name
+        WHERE j.target_matrix_id = m.id AND j.kind = 'own') AS instance_count
+FROM promoted_nodes p
+JOIN matrix m ON m.owner_matrix_id = p.matrix_id AND m.owner_row_id = p.row_id
+WHERE p.matrix_id = ${wsMatrixId}
+ORDER BY m.title
 `
 
 /**
- * Forward lookup: all tag aspects attached to a specific source row,
- * with tag type metadata (name, color) from the registry matrix.
+ * Forward lookup: all tag aspects attached to a specific source row.
+ * Joins against matrix.owner + promoted_nodes to identify tag type matrixes
+ * and uses matrix.title for the tag name.
+ *
+ * @param wsMatrixId - The workspace matrix ID
+ * @param sourceMatrixId - The matrix containing the tagged row
+ * @param sourceRowId - The tagged row's ID
  */
 export const buildTagsForRowQuery = (
-  registryMatrixId: number,
+  wsMatrixId: number,
   sourceMatrixId: number,
   sourceRowId: number,
 ): string => `
-SELECT j.target_matrix_id, j.target_row_id, tt.name AS tag_type_name, tt.color
+SELECT j.target_matrix_id, j.target_row_id,
+       m.title AS tag_type_name
 FROM joins j
-JOIN "mx_${registryMatrixId}_data" tt ON tt.matrix_id = j.target_matrix_id
+JOIN matrix m ON m.id = j.target_matrix_id
+JOIN promoted_nodes p ON p.matrix_id = m.owner_matrix_id AND p.row_id = m.owner_row_id
 WHERE j.source_matrix_id = ${sourceMatrixId}
   AND j.source_row_id = ${sourceRowId}
   AND j.kind = 'own'
+  AND p.matrix_id = ${wsMatrixId}
 `
 
 /**

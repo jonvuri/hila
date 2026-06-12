@@ -1520,16 +1520,6 @@ body,
   box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.15);
 }
 
-.tag-type-color-input {
-  width: 32px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid #d0d0d0;
-  border-radius: 4px;
-  cursor: pointer;
-  background: none;
-}
-
 /* ---- Tag type context menu ---- */
 
 .tag-type-context-menu {

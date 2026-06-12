@@ -781,10 +781,10 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'updateTagType': {
-      const { id, tagTypeId, name, color, icon } = message
+      const { id, tagTypeId, name } = message
       try {
         const { db } = await sqliteWasm
-        updateTagTypeImpl(db, tagTypeId, { name, color, icon })
+        updateTagTypeImpl(db, tagTypeId, { name })
         postMessage({ type: 'updateTagTypeSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'updateTagTypeError', id, error: toError(err) })

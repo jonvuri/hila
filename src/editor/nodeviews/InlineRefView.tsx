@@ -5,7 +5,6 @@ import { useQuery } from '../../sql/useQuery'
 import { getColumns } from '../../core/client/matrix-client'
 import type { ColumnDefinition } from '../../core/matrix'
 import { tagColorFromName, tagBadgeBackground } from '../../tags/tag-color'
-import { getRegistryMatrixId } from '../../tags/tags-plugin'
 
 const MAX_KEY_PROPS = 2
 const LABEL_COLUMNS = new Set(['id', 'label', 'title', 'name'])
@@ -37,12 +36,16 @@ export const InlineRefView: Component = () => {
   })
   const { result: refTitleResult } = useQuery(() => refTitleQueryStr())
 
-  // Resolve tag type metadata for own-kind refs
+  // Resolve tag type metadata for own-kind refs. The matrix title is kept in
+  // sync with the type-node's label, so we can use it directly.
   const tagTypeQueryStr = createMemo(() => {
     const mid = targetMatrixId()
-    const regId = getRegistryMatrixId()
-    if (!isOwn() || mid == null || regId == null) return ''
-    return `SELECT name, color FROM "mx_${regId}_data" WHERE matrix_id = ${mid}`
+    if (!isOwn() || mid == null) return ''
+    return `SELECT m.title AS name
+            FROM matrix m
+            JOIN promoted_nodes p ON p.matrix_id = m.owner_matrix_id AND p.row_id = m.owner_row_id
+            WHERE m.id = ${mid}
+            LIMIT 1`
   })
   const { result: tagTypeResult } = useQuery(() => tagTypeQueryStr())
 
@@ -84,8 +87,8 @@ export const InlineRefView: Component = () => {
   const tagTypeMeta = createMemo(() => {
     const data = tagTypeResult()
     if (!data || data.length === 0) return null
-    const row = data[0] as { name: string; color: string | null }
-    return { name: row.name, color: row.color }
+    const row = data[0] as { name: string }
+    return { name: row.name }
   })
 
   const resolvedTitle = createMemo(() => {
@@ -126,8 +129,9 @@ export const InlineRefView: Component = () => {
 
   const badgeStyle = createMemo(() => {
     if (!isOwn() || !isLive()) return undefined
-    const meta = tagTypeMeta()
-    const textColor = meta?.color ?? tagColorFromName(cachedTitle() ?? 'tag')
+    // Color from the live tag name (falling back to the cached title) so a
+    // renamed tag recolors consistently with the tag browser.
+    const textColor = tagColorFromName(tagTypeMeta()?.name ?? cachedTitle() ?? 'tag')
     const bgColor = tagBadgeBackground(textColor)
     return { color: textColor, 'background-color': bgColor }
   })
@@ -157,7 +161,6 @@ export const InlineRefView: Component = () => {
           matrixId: targetMatrixId(),
           rowId: targetRowId(),
           tagTypeName: meta?.name ?? cachedTitle() ?? 'tag',
-          tagTypeColor: meta?.color ?? null,
           anchorRect: {
             top: rect.top,
             left: rect.left,

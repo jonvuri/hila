@@ -19,7 +19,6 @@ type TagPropertyPanelProps = {
   matrixId: number
   rowId: number
   tagTypeName: string
-  tagTypeColor: string | null
   anchorRect: DOMRect
   onClose: () => void
 }
@@ -75,7 +74,7 @@ const TagPropertyPanel: Component<TagPropertyPanelProps> = (props) => {
     document.removeEventListener('keydown', handleEscapeKey, true)
   })
 
-  const badgeColor = () => props.tagTypeColor ?? tagColorFromName(props.tagTypeName)
+  const badgeColor = () => tagColorFromName(props.tagTypeName)
   const badgeBg = () => tagBadgeBackground(badgeColor())
 
   const panelStyle = createMemo(() => {

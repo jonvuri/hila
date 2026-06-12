@@ -14,11 +14,13 @@ import { createTreePosition } from '../core/tree'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { tableFaceTypeDefinition } from '../table/table-plugin'
+import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin } from './tags-plugin'
 import { createTagType, getTagTypeByMatrixId } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
+const testWorkspacePlugin = { ...workspacePlugin, init: undefined }
 
 describe('Tag property panel data layer', () => {
   let db: Database
@@ -28,6 +30,7 @@ describe('Tag property panel data layer', () => {
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
+    await registerPlugin(db, testWorkspacePlugin)
     await registerPlugin(db, testTagsPlugin)
   })
 

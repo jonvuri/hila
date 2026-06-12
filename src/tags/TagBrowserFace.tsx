@@ -18,14 +18,11 @@ import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import { tagColorFromName, tagBadgeBackground } from './tag-color'
 import { buildTagTypesWithCountsQuery, buildTagInstancesQuery } from './tag-queries'
-import { getRegistryMatrixId } from './tags-plugin'
 
 type TagTypeRow = {
   id: number
   name: string
   matrix_id: number
-  color: string | null
-  icon: string | null
   instance_count: number
 }
 
@@ -66,13 +63,10 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
     tagType: TagTypeRow
   } | null>(null)
   const [renaming, setRenaming] = createSignal<{ id: number; value: string } | null>(null)
-  const [colorPicking, setColorPicking] = createSignal<{ id: number; value: string } | null>(
-    null,
-  )
 
   const { result } = useQuery(() => {
-    const regId = getRegistryMatrixId()
-    return regId != null ? buildTagTypesWithCountsQuery(regId) : ''
+    const wsId = props.workspaceMatrixId
+    return wsId != null ? buildTagTypesWithCountsQuery(wsId) : ''
   })
 
   const tagTypes = (): TagTypeRow[] => {
@@ -81,7 +75,7 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
     return r as unknown as TagTypeRow[]
   }
 
-  const resolveColor = (tt: TagTypeRow): string => tt.color ?? tagColorFromName(tt.name)
+  const resolveColor = (tt: TagTypeRow): string => tagColorFromName(tt.name)
 
   // Instance drill-down query
   const { result: instanceResult } = useQuery(() => {
@@ -226,19 +220,9 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
     setRenaming(null)
   }
 
-  const handleColorChange = async () => {
-    const c = colorPicking()
-    if (!c) return
-    try {
-      await updateTagTypeClient(c.id, { color: c.value || null })
-    } catch {
-      // ignore
-    }
-    setColorPicking(null)
-  }
-
   const handleDeleteTagType = async (id: number) => {
-    if (!confirm('Delete this tag type? The underlying matrix will be preserved.')) return
+    if (!confirm('Delete this tag type? Its table and all of its instances will be deleted.'))
+      return
     try {
       await deleteTagTypeClient(id)
       if (selectedTagType()?.id === id) {
@@ -387,46 +371,19 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
                       </div>
                     }
                   >
-                    <Show
-                      when={colorPicking()?.id !== tt.id}
-                      fallback={
-                        <div
-                          class="tag-type-row tag-type-row-editing"
-                          data-testid="tag-type-row"
-                        >
-                          <span class="tag-type-badge" style={{ background: bg, color }}>
-                            #{tt.name}
-                          </span>
-                          <input
-                            class="tag-type-color-input"
-                            type="color"
-                            value={colorPicking()!.value || '#7c3aed'}
-                            onInput={(e) =>
-                              setColorPicking({ id: tt.id, value: e.currentTarget.value })
-                            }
-                            onBlur={() => void handleColorChange()}
-                            onChange={() => void handleColorChange()}
-                            autofocus
-                            data-testid="tag-type-color-input"
-                          />
-                        </div>
-                      }
+                    <div
+                      class="tag-type-row"
+                      data-testid="tag-type-row"
+                      onClick={() => setSelectedTagType(tt)}
+                      onContextMenu={(e) => handleContextMenu(e, tt)}
                     >
-                      <div
-                        class="tag-type-row"
-                        data-testid="tag-type-row"
-                        onClick={() => setSelectedTagType(tt)}
-                        onContextMenu={(e) => handleContextMenu(e, tt)}
-                      >
-                        <span class="tag-type-badge" style={{ background: bg, color }}>
-                          #{tt.name}
-                        </span>
-                        <span class="tag-type-count" data-testid="tag-type-count">
-                          {tt.instance_count}{' '}
-                          {tt.instance_count === 1 ? 'instance' : 'instances'}
-                        </span>
-                      </div>
-                    </Show>
+                      <span class="tag-type-badge" style={{ background: bg, color }}>
+                        #{tt.name}
+                      </span>
+                      <span class="tag-type-count" data-testid="tag-type-count">
+                        {tt.instance_count} {tt.instance_count === 1 ? 'instance' : 'instances'}
+                      </span>
+                    </div>
                   </Show>
                 )
               }}
@@ -515,20 +472,6 @@ const TagBrowserFace: Component<TagBrowserFaceProps> = (props) => {
               data-testid="ctx-rename"
             >
               Rename
-            </button>
-            <button
-              class="tag-type-context-item"
-              onClick={() => {
-                const tt = menu().tagType
-                setCtxMenu(null)
-                setColorPicking({
-                  id: tt.id,
-                  value: tt.color ?? '#7c3aed',
-                })
-              }}
-              data-testid="ctx-change-color"
-            >
-              Change color
             </button>
             <button
               class="tag-type-context-item"
