@@ -1,7 +1,7 @@
 const INDENT_PX = 24
 
 export type RowInfo = {
-  row_id: number
+  ck: string
   key: Uint8Array
   depth: number
 }
@@ -119,7 +119,7 @@ export const computeDropTarget = (
   cursorX: number,
   cursorY: number,
   nonDraggedRows: RowInfo[],
-  rowElements: Map<number, HTMLElement>,
+  rowElements: Map<string, HTMLElement>,
   depthOffset: number,
   focusRootKey: Uint8Array | null,
 ): DropTargetVisual | null => {
@@ -127,7 +127,7 @@ export const computeDropTarget = (
 
   const rects: { row: RowInfo; rect: DOMRect }[] = []
   for (const row of nonDraggedRows) {
-    const el = rowElements.get(row.row_id)
+    const el = rowElements.get(row.ck)
     if (el) rects.push({ row, rect: el.getBoundingClientRect() })
   }
   if (rects.length === 0) return null

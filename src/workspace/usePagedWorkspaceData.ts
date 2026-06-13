@@ -5,17 +5,36 @@ import { addObserver, removeObserver } from '../core/client/sql-client'
 import type { SqlObserver } from '../core/sql-types'
 import { useQuery } from '../sql/useQuery'
 
-import { buildPaginatedOutlineQuery, buildOutlineCountQuery } from './workspace-plugin'
+import {
+  buildPaginatedOutlineQuery,
+  buildOutlineCountQuery,
+  buildHydrationQuery,
+} from './workspace-plugin'
 
 export const ROWS_PER_WINDOW = 100
 
-export type WorkspaceRowData = {
+/** Stable cross-matrix row identity. Row ids collide across matrixes (each
+ *  `mx_{id}_data` autoincrements from 1), so the outline keys everything by the
+ *  `(matrix_id, row_id)` pair. */
+export const compositeKey = (matrixId: number, rowId: number): string => `${matrixId}:${rowId}`
+
+// One row of the index-only window scan (before hydration).
+type WindowRow = {
+  ck: string
+  matrix_id: number
   row_id: number
   key: Uint8Array
-  label: string | null
-  content: string | null
   depth: number
   has_children: number
+  is_type_node: number
+  matrix_title: string | null
+}
+
+// A fully-hydrated outline row: window metadata merged with the row's data.
+export type WorkspaceRowData = WindowRow & {
+  label: string | null
+  content: string | null
+  data: Record<string, unknown> | null
 }
 
 export type UsePagedWorkspaceDataOpts = {
@@ -26,9 +45,24 @@ export type UsePagedWorkspaceDataOpts = {
 
 const INITIAL_NEEDED_WINDOWS = new Set([0, 1, 2, 3])
 
+const toWindowRow = (raw: Record<string, unknown>): WindowRow => {
+  const matrix_id = raw.matrix_id as number
+  const row_id = raw.row_id as number
+  return {
+    ck: compositeKey(matrix_id, row_id),
+    matrix_id,
+    row_id,
+    key: raw.key as Uint8Array,
+    depth: raw.depth as number,
+    has_children: raw.has_children as number,
+    is_type_node: raw.is_type_node as number,
+    matrix_title: (raw.matrix_title as string | null) ?? null,
+  }
+}
+
 export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   const countQuery = createMemo(() =>
-    buildOutlineCountQuery(opts.matrixId, {
+    buildOutlineCountQuery({
       focusRootHex: opts.focusRootHex(),
       collapsedKeyHexes: opts.collapsedKeyHexes(),
     }),
@@ -52,27 +86,27 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     return count === 0 ? 0 : Math.ceil(count / ROWS_PER_WINDOW)
   })
 
-  // Focus root row (separate query when in focus mode)
+  // Focus root row (separate query when in focus mode). Only its depth is used
+  // (to compute the focus depth offset), so it does not need hydration.
   const focusRootQuery = createMemo(() => {
     const hex = opts.focusRootHex()
     if (!hex) return ''
-    return buildPaginatedOutlineQuery(opts.matrixId, {
-      focusRootHex: hex,
-      limit: 1,
-    })
+    return buildPaginatedOutlineQuery({ focusRootHex: hex, limit: 1 })
   })
 
   const { result: focusRootResult } = useQuery(() => focusRootQuery())
 
-  const focusRootRow = createMemo((): WorkspaceRowData | null => {
+  const focusRootRow = createMemo((): WindowRow | null => {
     const data = focusRootResult()
     if (!data || data.length === 0) return null
-    return data[0] as unknown as WorkspaceRowData
+    return toWindowRow(data[0] as Record<string, unknown>)
   })
 
-  // Page data (single range query for all needed windows)
+  // -----------------------------------------------------------------------
+  // Window layer: the index-only pre-order scan for the loaded page range.
+  // -----------------------------------------------------------------------
   const [neededWindows, setNeededWindows] = createSignal<Set<number>>(INITIAL_NEEDED_WINDOWS)
-  const [rows, setRows] = createStore<WorkspaceRowData[]>([])
+  const [windowRows, setWindowRows] = createStore<WindowRow[]>([])
 
   const loadedRange = createMemo((): [number, number] | null => {
     const needed = neededWindows()
@@ -89,7 +123,7 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     const offset = minPage * ROWS_PER_WINDOW
     const limit = (maxPage - minPage + 1) * ROWS_PER_WINDOW
 
-    return buildPaginatedOutlineQuery(opts.matrixId, {
+    return buildPaginatedOutlineQuery({
       focusRootHex: opts.focusRootHex(),
       collapsedKeyHexes: opts.collapsedKeyHexes(),
       afterKeyHex: opts.focusRootHex(),
@@ -101,21 +135,99 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   createEffect(() => {
     const sql = rangeQuery()
     if (!sql) {
-      setRows(reconcile([] as WorkspaceRowData[], { key: 'row_id' }))
+      setWindowRows(reconcile([] as WindowRow[], { key: 'ck' }))
       return
     }
 
     const observer: SqlObserver = (result) => {
       if (result) {
-        setRows(reconcile(result as unknown as WorkspaceRowData[], { key: 'row_id' }))
+        const mapped = (result as Record<string, unknown>[]).map(toWindowRow)
+        setWindowRows(reconcile(mapped, { key: 'ck' }))
       }
     }
 
     addObserver(sql, observer)
+    onCleanup(() => removeObserver(sql, observer))
+  })
 
-    onCleanup(() => {
+  // -----------------------------------------------------------------------
+  // Gather layer: hydrate the window's (matrix_id, row_id) pairs with a single
+  // batched `SELECT *` per distinct matrix (Phase 8b §5 multi-table gather).
+  // Subscriptions are reconciled when the per-matrix id set changes, not on
+  // every scroll tick.
+  // -----------------------------------------------------------------------
+  const [hydrated, setHydrated] = createStore<Record<string, Record<string, unknown>>>({})
+
+  // Active gather subscriptions, keyed by SQL string.
+  const gatherObservers = new Map<string, SqlObserver>()
+
+  const removeGather = (sql: string) => {
+    const observer = gatherObservers.get(sql)
+    if (observer) {
       removeObserver(sql, observer)
+      gatherObservers.delete(sql)
+    }
+  }
+
+  createEffect(() => {
+    // Group the current window's rows by matrix.
+    const byMatrix = new Map<number, Set<number>>()
+    for (const row of windowRows) {
+      let ids = byMatrix.get(row.matrix_id)
+      if (!ids) {
+        ids = new Set<number>()
+        byMatrix.set(row.matrix_id, ids)
+      }
+      ids.add(row.row_id)
+    }
+
+    const desired = new Map<string, number>() // sql -> matrixId
+    for (const [matrixId, idSet] of byMatrix) {
+      const rowIds = Array.from(idSet).sort((a, b) => a - b)
+      desired.set(buildHydrationQuery(matrixId, rowIds), matrixId)
+    }
+
+    // Tear down subscriptions no longer needed.
+    for (const sql of Array.from(gatherObservers.keys())) {
+      if (!desired.has(sql)) removeGather(sql)
+    }
+
+    // Add subscriptions for newly-needed matrix/id sets.
+    for (const [sql, matrixId] of desired) {
+      if (gatherObservers.has(sql)) continue
+      const observer: SqlObserver = (result) => {
+        if (!result) return
+        const updates: Record<string, Record<string, unknown>> = {}
+        for (const dataRow of result as Record<string, unknown>[]) {
+          updates[compositeKey(matrixId, dataRow.id as number)] = dataRow
+        }
+        setHydrated(updates)
+      }
+      gatherObservers.set(sql, observer)
+      addObserver(sql, observer)
+    }
+  })
+
+  onCleanup(() => {
+    for (const sql of Array.from(gatherObservers.keys())) removeGather(sql)
+  })
+
+  // -----------------------------------------------------------------------
+  // Merge layer: window order ⨝ hydrated data → the consumer-facing rows.
+  // -----------------------------------------------------------------------
+  const [rows, setRows] = createStore<WorkspaceRowData[]>([])
+
+  createEffect(() => {
+    const merged: WorkspaceRowData[] = windowRows.map((w) => {
+      const data = hydrated[w.ck] ?? null
+      return {
+        ...w,
+        label: (data?.label as string | null) ?? null,
+        content: (data?.content as string | null) ?? null,
+        data,
+      }
     })
+    setRows(reconcile(merged, { key: 'ck' }))
   })
 
   const getWindowRows = (windowIndex: number): WorkspaceRowData[] => {

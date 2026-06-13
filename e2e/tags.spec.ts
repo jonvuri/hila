@@ -111,7 +111,13 @@ const createNewRow = async (page: Page) => {
   await page.keyboard.press('Enter')
   await page.waitForTimeout(300)
 
-  const newEditor = page.locator('.outline-row .ProseMirror').last()
+  // Tag type-nodes (Phase 8c) render as root outline rows with a type chip and
+  // append after the welcome row, so a bare `.last()` can land on a type-node.
+  // Target the last row that is NOT a type/aspect chip row — the new plain row.
+  const plainRows = page
+    .locator('.outline-row')
+    .filter({ hasNot: page.getByTestId('row-type-chip') })
+  const newEditor = plainRows.last().locator('.ProseMirror').first()
   await newEditor.click()
   return newEditor
 }
@@ -184,11 +190,10 @@ test.describe('Tag type creation via autocomplete', () => {
     await expect(createOption).toContainText("Create 'newtype' tag type")
   })
 
-  // Phase-9 fixme: createTagType now inserts the type-node as a workspace row,
-  // which shifts outline ordering and breaks locators that assume a fixed row
-  // count. Fix in Phase 9 once type-nodes have a rendering strategy that keeps
-  // them out of the root outline (or E2E helpers account for the extra row).
-  test.fixme('selecting "Create tag type" creates the tag type and inserts a badge', async ({
+  // Phase 9.1: type-nodes render as root rows with a type chip; `createNewRow`
+  // and the badge locator now target the plain (non-chip) row, so inline tag
+  // type creation is exercised end-to-end again.
+  test('selecting "Create tag type" creates the tag type and inserts a badge', async ({
     page,
   }) => {
     const newEditor = await createNewRow(page)
@@ -199,8 +204,7 @@ test.describe('Tag type creation via autocomplete', () => {
     await expect(tagBadge).toContainText('#newtype')
   })
 
-  // Phase-9 fixme: same type-node row-insertion issue as the test above.
-  test.fixme('newly created tag type appears in the tag browser', async ({ page }) => {
+  test('newly created tag type appears in the tag browser', async ({ page }) => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'project', true)
 
@@ -214,8 +218,7 @@ test.describe('Tag type creation via autocomplete', () => {
     await expect(tagTypeRow).toBeVisible({ timeout: 5000 })
   })
 
-  // Phase-9 fixme: same type-node row-insertion issue as the tests above.
-  test.fixme('inline tag type creation also creates the aspect row', async ({ page }) => {
+  test('inline tag type creation also creates the aspect row', async ({ page }) => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'milestone', true)
 
@@ -485,12 +488,11 @@ test.describe('Tag lifecycle', () => {
     }).toPass({ timeout: 10000 })
   })
 
-  // Phase-9 fixme: Phase 8c changed cascade behaviour -- deleting a type-node
-  // now also drops its owned matrix (matrix-drop cascade). This test queries
-  // mx_{id}_data after the type-node is deleted and the table no longer exists.
-  // Needs reworking once Phase 9 settles how type-node deletion is surfaced in
-  // the workspace UI (type-nodes probably should not be in the root outline).
-  test.fixme('deleting a workspace row cascade-deletes both tag aspect rows', async ({ page }) => {
+  // Phase 9.1: `createNewRow` now targets the plain (non-type-node) row, so the
+  // badges attach to a real host workspace row. Deleting that host cascades the
+  // aspect rows (the task/review matrixes themselves persist — only their rows
+  // are removed), so the post-delete data-count queries are valid again.
+  test('deleting a workspace row cascade-deletes both tag aspect rows', async ({ page }) => {
     const { matrixId: taskMatrixId } = await createTagTypeViaAPI(page, 'task')
     const { matrixId: reviewMatrixId } = await createTagTypeViaAPI(page, 'review')
 
@@ -857,3 +859,77 @@ test.describe('Tag browser', () => {
   })
 })
 
+
+// =============================================================================
+// 6. Phase 9.1 — heterogeneous children in one outline
+// =============================================================================
+
+test.describe('Heterogeneous children (Phase 9.1)', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForRows(page)
+  })
+
+  test('demo subtree renders interleaved bullets and #task/#note aspect rows', async ({
+    page,
+  }) => {
+    await openSidebar(page)
+    await page.getByTestId('add-demo-subtree-btn').click()
+
+    // The host bullet and its plain workspace children render.
+    await expect(page.locator('.outline-row', { hasText: 'Trip planning' })).toBeVisible({
+      timeout: 5000,
+    })
+    await expect(page.locator('.outline-row', { hasText: 'Book flights' })).toBeVisible({
+      timeout: 5000,
+    })
+
+    // Cross-matrix aspect rows render in the same outline, each with a type chip
+    // labelled by its matrix (task / note) — distinct from a plain bullet.
+    await expect(page.locator('.outline-row', { hasText: 'Reserve hotel' })).toBeVisible({
+      timeout: 5000,
+    })
+    await expect(page.locator('.outline-row', { hasText: 'Trip notes' })).toBeVisible({
+      timeout: 5000,
+    })
+
+    await expect(
+      page.getByTestId('row-type-chip').filter({ hasText: /^task$/ }).first(),
+    ).toBeVisible({ timeout: 5000 })
+    await expect(
+      page.getByTestId('row-type-chip').filter({ hasText: /^note$/ }).first(),
+    ).toBeVisible({ timeout: 5000 })
+
+    // A nested host owns its own task — heterogeneous children nest, too.
+    await expect(page.locator('.outline-row', { hasText: 'Visit the museum' })).toBeVisible({
+      timeout: 5000,
+    })
+  })
+
+  test('aspect-row type chip resolves to the matrix title inside a focus panel', async ({
+    page,
+  }) => {
+    await openSidebar(page)
+    await page.getByTestId('add-demo-subtree-btn').click()
+
+    const hostRow = page.locator('.outline-row', { hasText: 'Trip planning' }).first()
+    await expect(hostRow).toBeVisible({ timeout: 5000 })
+    await hostRow.hover()
+    await hostRow.locator('.nav-row-open-focus').click()
+
+    // The nested navigation panel inside the focus column renders the #task
+    // aspect row with a chip reading the matrix title ("task"), not a raw
+    // "matrix <id>" fallback.
+    const focusChildren = page
+      .getByTestId('stream-focus-column')
+      .last()
+      .getByTestId('focus-panel-children')
+    const reserveRow = focusChildren
+      .locator('.outline-row')
+      .filter({ hasText: 'Reserve hotel' })
+      .first()
+    await expect(reserveRow).toBeVisible({ timeout: 5000 })
+    const chip = reserveRow.getByTestId('row-type-chip')
+    await expect(chip).toHaveText('task', { timeout: 5000 })
+  })
+})

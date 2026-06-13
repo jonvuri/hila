@@ -97,10 +97,16 @@ export type PaginatedOutlineQueryOpts = {
   limit?: number
 }
 
-export const buildPaginatedOutlineQuery = (
-  matrixId: number,
-  opts: PaginatedOutlineQueryOpts = {},
-): string => {
+// Phase 9.1: the outline window is now an **index-only** scan over the global
+// pre-order `scroll_index`, spanning every matrix in the reachable own-forest.
+// It no longer joins a single `mx_{id}_data` table (heterogeneous children come
+// from different matrixes); the caller hydrates the returned `(matrix_id, row_id)`
+// pairs via a multi-table gather (`buildHydrationQuery`, batched by matrix).
+//
+//   - `has_children` counts own-children in *any* matrix (cross-matrix children).
+//   - `is_type_node` flags promoted type-nodes so the renderer can present them
+//     distinctly at the workspace root (Phase 8c carry-over).
+export const buildPaginatedOutlineQuery = (opts: PaginatedOutlineQueryOpts = {}): string => {
   const filterClauses = buildFilterClauses({
     focusRootHex: opts.focusRootHex ?? null,
     collapsedKeyHexes: opts.collapsedKeyHexes,
@@ -112,31 +118,42 @@ export const buildPaginatedOutlineQuery = (
   const offsetClause =
     opts.offset !== undefined && opts.offset > 0 ? `OFFSET ${opts.offset}` : ''
 
+  // The row's matrix title travels inline (a join to the global `matrix` table)
+  // so the renderer's type chip resolves without a second subscription — this
+  // avoids cross-query id-type/timing mismatches between panels.
   return `
-SELECT r.global_lexkey AS key, r.row_id, d.label, d.content, r.depth,
+SELECT r.global_lexkey AS key, r.matrix_id, r.row_id, r.depth,
+       mt.title AS matrix_title,
        CASE WHEN EXISTS (
          SELECT 1 FROM joins ch
-         WHERE ch.kind = 'own' AND ch.source_matrix_id = ${matrixId}
-           AND ch.source_row_id = r.row_id AND ch.target_matrix_id = ${matrixId}
-       ) THEN 1 ELSE 0 END as has_children
+         WHERE ch.kind = 'own' AND ch.source_matrix_id = r.matrix_id
+           AND ch.source_row_id = r.row_id
+       ) THEN 1 ELSE 0 END as has_children,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM promoted_nodes p
+         WHERE p.matrix_id = r.matrix_id AND p.row_id = r.row_id
+       ) THEN 1 ELSE 0 END as is_type_node
 FROM scroll_index r
-JOIN "mx_${matrixId}_data" d ON r.row_id = d.id
-WHERE r.matrix_id = ${matrixId}
+LEFT JOIN matrix mt ON mt.id = r.matrix_id
+WHERE 1 = 1
 ${filterClauses}
 ORDER BY r.global_lexkey
 ${limitClause}${offsetClause ? ` ${offsetClause}` : ''}
 `
 }
 
+// Hydrate a window's rows for a single matrix: one batched query per distinct
+// matrix in the window (the Phase 8b §5 multi-table gather bound). Schemas differ
+// across matrixes, so each matrix is fetched separately rather than UNION-ed.
+export const buildHydrationQuery = (matrixId: number, rowIds: number[]): string =>
+  `SELECT * FROM "mx_${matrixId}_data" WHERE id IN (${rowIds.join(', ')})`
+
 export type OutlineCountQueryOpts = {
   focusRootHex?: string | null
   collapsedKeyHexes?: string[]
 }
 
-export const buildOutlineCountQuery = (
-  matrixId: number,
-  opts: OutlineCountQueryOpts = {},
-): string => {
+export const buildOutlineCountQuery = (opts: OutlineCountQueryOpts = {}): string => {
   const filterClauses = buildFilterClauses({
     focusRootHex: opts.focusRootHex ?? null,
     collapsedKeyHexes: opts.collapsedKeyHexes,
@@ -145,7 +162,7 @@ export const buildOutlineCountQuery = (
   return `
 SELECT COUNT(*) as row_count
 FROM scroll_index r
-WHERE r.matrix_id = ${matrixId}
+WHERE 1 = 1
 ${filterClauses}
 `
 }
@@ -208,8 +225,8 @@ export const workspacePlugin: PluginDefinition = {
     },
   ],
   namedQueries: {
-    outlinePage: 'buildPaginatedOutlineQuery(matrixId, opts)',
-    outlineCount: 'buildOutlineCountQuery(matrixId, opts)',
+    outlinePage: 'buildPaginatedOutlineQuery(opts)',
+    outlineCount: 'buildOutlineCountQuery(opts)',
     singleRow: 'buildSingleRowQuery(matrixId, rowId)',
     backlinks: 'buildBacklinksQuery(matrixId, rowId)',
   },

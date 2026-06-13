@@ -55,9 +55,9 @@ describe('range-aware invalidation: fan-out guards', () => {
     const hexB = toHex(keyB)
 
     // Subscription A: scoped to subtree A via focusRootHex.
-    const sqlA = buildPaginatedOutlineQuery(matrixId, { focusRootHex: hexA })
+    const sqlA = buildPaginatedOutlineQuery({ focusRootHex: hexA })
     // Subscription B: scoped to subtree B via focusRootHex.
-    const sqlB = buildPaginatedOutlineQuery(matrixId, { focusRootHex: hexB })
+    const sqlB = buildPaginatedOutlineQuery({ focusRootHex: hexB })
 
     const tracker = harness.createTracker()
     tracker.subscribe(sqlA)
@@ -133,7 +133,7 @@ describe('range-aware invalidation: fan-out guards', () => {
     const hexC3 = toHex(keyC3)
 
     // Subscription focused on c3's subtree (deep, unrelated to top-level).
-    const deepSql = buildPaginatedOutlineQuery(matrixId, { focusRootHex: hexC3 })
+    const deepSql = buildPaginatedOutlineQuery({ focusRootHex: hexC3 })
 
     const tracker = harness.createTracker()
     tracker.subscribe(deepSql)
@@ -169,7 +169,7 @@ describe('range-aware invalidation: fan-out guards', () => {
     }
 
     const tracker = harness.createTracker()
-    const sqls = roots.map((r) => buildPaginatedOutlineQuery(matrixId, { focusRootHex: r.hex }))
+    const sqls = roots.map((r) => buildPaginatedOutlineQuery({ focusRootHex: r.hex }))
     for (const sql of sqls) tracker.subscribe(sql)
 
     // Insert under root[2].
@@ -231,7 +231,7 @@ describe('range-aware invalidation: fan-out guards', () => {
     const hexB = toHex(keyB)
 
     // Subscription focused on B's subtree.
-    const sqlB = buildPaginatedOutlineQuery(matrixId, { focusRootHex: hexB })
+    const sqlB = buildPaginatedOutlineQuery({ focusRootHex: hexB })
     const tracker = harness.createTracker()
     tracker.subscribe(sqlB)
 

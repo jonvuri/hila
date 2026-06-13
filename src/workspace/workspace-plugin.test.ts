@@ -20,6 +20,7 @@ import {
   workspacePlugin,
   buildPaginatedOutlineQuery,
   buildOutlineCountQuery,
+  buildHydrationQuery,
   buildAncestryForRowsQuery,
   buildSingleRowQuery,
   buildBacklinksQuery,
@@ -118,11 +119,11 @@ describe('Workspace paginated outline query', () => {
 
   type QueryRow = {
     key: Uint8Array
+    matrix_id: number
     row_id: number
-    label: string
-    content: string | null
     depth: number
     has_children: number
+    is_type_node: number
   }
 
   const runQuery = (sql: string): QueryRow[] => {
@@ -201,9 +202,9 @@ describe('Workspace paginated outline query', () => {
     return { a, b, c, d, e, f, g }
   }
 
-  test('returns all rows with label and content columns', () => {
+  test('returns all rows in pre-order with their matrix id', () => {
     const { a, b, c, d, e, f, g } = buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId)
+    const sql = buildPaginatedOutlineQuery()
     const rows = runQuery(sql)
 
     expect(rows.map((r) => r.row_id)).toEqual([
@@ -215,58 +216,74 @@ describe('Workspace paginated outline query', () => {
       f.rowId,
       g.rowId,
     ])
-    expect(rows[0]!.label).toContain('A')
-    expect(rows[0]!.content).toBeNull()
+    // Index-only window: every row carries its own matrix id (here all the
+    // workspace matrix) and is not a type-node.
+    expect(rows.every((r) => r.matrix_id === matrixId)).toBe(true)
+    expect(rows.every((r) => r.is_type_node === 0)).toBe(true)
+  })
+
+  test('hydration query fetches label/content for a window of row ids', () => {
+    const { a, b } = buildTree()
+    const stmt = db.prepare(buildHydrationQuery(matrixId, [a.rowId, b.rowId]))
+    const byId = new Map<number, { label: string; content: string | null }>()
+    while (stmt.step()) {
+      const row = stmt.get({}) as { id: number; label: string; content: string | null }
+      byId.set(row.id, { label: row.label, content: row.content })
+    }
+    stmt.finalize()
+    expect(byId.get(a.rowId)!.label).toContain('A')
+    expect(byId.get(a.rowId)!.content).toBeNull()
+    expect(byId.get(b.rowId)!.label).toContain('B')
   })
 
   test('returns correct depth for each row', () => {
     buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId)
+    const sql = buildPaginatedOutlineQuery()
     const rows = runQuery(sql)
     expect(rows.map((r) => r.depth)).toEqual([0, 1, 2, 2, 1, 0, 0])
   })
 
   test('returns correct has_children flag', () => {
     buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId)
+    const sql = buildPaginatedOutlineQuery()
     const rows = runQuery(sql)
     expect(rows.map((r) => r.has_children)).toEqual([1, 1, 0, 0, 0, 0, 0])
   })
 
   test('focus root filter limits to subtree', () => {
     const { a, b, c, d, e } = buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId, { focusRootHex: a.hex })
+    const sql = buildPaginatedOutlineQuery({ focusRootHex: a.hex })
     const rows = runQuery(sql)
     expect(rows.map((r) => r.row_id)).toEqual([a.rowId, b.rowId, c.rowId, d.rowId, e.rowId])
   })
 
   test('excludes collapsed subtree', () => {
     const { a, b, e, f, g } = buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId, { collapsedKeyHexes: [b.hex] })
+    const sql = buildPaginatedOutlineQuery({ collapsedKeyHexes: [b.hex] })
     const rows = runQuery(sql)
     expect(rows.map((r) => r.row_id)).toEqual([a.rowId, b.rowId, e.rowId, f.rowId, g.rowId])
   })
 
   test('limit restricts row count', () => {
     buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId, { limit: 3 })
+    const sql = buildPaginatedOutlineQuery({ limit: 3 })
     const rows = runQuery(sql)
     expect(rows).toHaveLength(3)
   })
 
   test('offset skips initial rows', () => {
     const { c, d, e, f, g } = buildTree()
-    const sql = buildPaginatedOutlineQuery(matrixId, { limit: 10, offset: 2 })
+    const sql = buildPaginatedOutlineQuery({ limit: 10, offset: 2 })
     const rows = runQuery(sql)
     expect(rows.map((r) => r.row_id)).toEqual([c.rowId, d.rowId, e.rowId, f.rowId, g.rowId])
   })
 
-  test('count matches data query row count', () => {
+  test('count matches window query row count', () => {
     const { a, b } = buildTree()
     const opts = { focusRootHex: a.hex, collapsedKeyHexes: [b.hex] }
-    const dataRows = runQuery(buildPaginatedOutlineQuery(matrixId, opts))
-    const count = runCount(buildOutlineCountQuery(matrixId, opts))
-    expect(count).toBe(dataRows.length)
+    const windowRows = runQuery(buildPaginatedOutlineQuery(opts))
+    const count = runCount(buildOutlineCountQuery(opts))
+    expect(count).toBe(windowRows.length)
   })
 })
 

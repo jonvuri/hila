@@ -72,7 +72,10 @@ export type DirtySet = {
 }
 
 export type StructuralScope = {
-  matrixId: number
+  // null = the scope spans the whole global forest (the Phase 9.1 unified
+  // outline reads `scroll_index` without a `matrix_id` filter). Overlap is then
+  // decided by the global `global_lexkey` range alone.
+  matrixId: number | null
   keyLow: Uint8Array | null
   keyHigh: Uint8Array | null
   closureNodeIds?: NodeId[]
@@ -220,7 +223,15 @@ const extractStructuralScope = (
     },
   })
 
-  if (matrixId === undefined && closureMatrixId === undefined) return undefined
+  const readsScroll = structuralTables.has('scroll_index')
+
+  // Bail to table-grained only when we learned nothing useful. A query over
+  // `scroll_index` always yields a structural scope (matrix-agnostic when there
+  // is no `matrix_id` filter — the global Phase 9.1 outline), so range overlap
+  // can still discriminate it.
+  if (matrixId === undefined && closureMatrixId === undefined && !readsScroll) {
+    return undefined
+  }
 
   // Resolve closure node IDs from the collected matrix + row IDs.
   if (closureMatrixId !== undefined && closureRowIds.length > 0) {
@@ -230,7 +241,7 @@ const extractStructuralScope = (
   }
 
   return {
-    matrixId: matrixId ?? closureMatrixId ?? 0,
+    matrixId: matrixId ?? closureMatrixId ?? null,
     keyLow,
     keyHigh,
     closureNodeIds: closureNodeIds.length > 0 ? closureNodeIds : undefined,
@@ -250,7 +261,8 @@ const compareKeys = (a: Uint8Array, b: Uint8Array): number => {
 }
 
 const rangesOverlap = (dirty: KeyRange, scope: StructuralScope): boolean => {
-  if (dirty.matrixId !== scope.matrixId) return false
+  // A null scope matrix spans the whole forest; discriminate by key range only.
+  if (scope.matrixId !== null && dirty.matrixId !== scope.matrixId) return false
 
   // If scope has no bounds, any key in this matrix overlaps.
   if (!scope.keyLow && !scope.keyHigh) return true
@@ -358,9 +370,9 @@ export const shouldRecompute = (
   // a host matrix's data table during a cross-matrix cascade delete).
   if (dirty && scope.structural) {
     if (overlaps(dirty, scope.structural)) return true
-    const structuralCoversThisMatrix = dirty.scrollRanges.some(
-      (r) => r.matrixId === scope.structural!.matrixId,
-    )
+    const structuralCoversThisMatrix =
+      scope.structural.matrixId === null ||
+      dirty.scrollRanges.some((r) => r.matrixId === scope.structural!.matrixId)
     if (!structuralCoversThisMatrix) {
       for (const table of scope.dataTables) {
         if (writtenTables.has(table)) return true

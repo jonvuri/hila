@@ -36,11 +36,13 @@ import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
+import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import { buildMatrixTitleQuery } from './workspace-plugin'
 import {
   usePagedWorkspaceData,
+  compositeKey,
   ROWS_PER_WINDOW,
   type WorkspaceRowData,
 } from './usePagedWorkspaceData'
@@ -75,8 +77,8 @@ type NavigationPanelProps = {
 }
 
 type DragState = {
-  rowId: number
-  subtreeRowIds: Set<number>
+  ck: string
+  subtreeCks: Set<string>
   startX: number
   startY: number
   activated: boolean
@@ -109,8 +111,8 @@ const keyToHex = (key: Uint8Array): string =>
 const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
   key ? new Uint8Array(key) : undefined
 
-const findRowIndex = (rows: WorkspaceRowData[], rowId: number): number =>
-  rows.findIndex((r) => r.row_id === rowId)
+const findRowIndex = (rows: WorkspaceRowData[], ck: string): number =>
+  rows.findIndex((r) => r.ck === ck)
 
 const findParentRow = (
   rows: WorkspaceRowData[],
@@ -271,7 +273,13 @@ const LabelEditorInner = (props: LabelEditorProps) => {
         if (!editorView) return
         const currentDoc = JSON.stringify(editorView.state.doc.toJSON())
         logPmContentSync(props.rowId, currentDoc !== newLabel)
-        if (currentDoc !== newLabel && !editorView.hasFocus()) {
+        // Normally we skip syncing into a focused editor to avoid clobbering an
+        // in-progress edit. But with the Phase 9.1 two-phase gather the label
+        // arrives a frame after the (auto-focused) editor mounts empty, so an
+        // *empty* focused editor must still accept its initial hydrated content.
+        const docIsEmpty = editorView.state.doc.content.size <= 2
+        if (currentDoc !== newLabel && (!editorView.hasFocus() || docIsEmpty)) {
+          const hadFocus = editorView.hasFocus()
           let docJson: unknown | undefined
           if (newLabel) {
             docJson = JSON.parse(newLabel) as unknown
@@ -285,6 +293,12 @@ const LabelEditorInner = (props: LabelEditorProps) => {
             }),
           ])
           editorView.updateState(newState)
+          if (hadFocus) {
+            editorView.focus()
+            editorView.dispatch(
+              editorView.state.tr.setSelection(Selection.atStart(editorView.state.doc)),
+            )
+          }
         }
       },
       { defer: true },
@@ -481,8 +495,8 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
 
-  // Expanded content editors (rows where the content preview has been expanded)
-  const [expandedContentRows, setExpandedContentRows] = createSignal<Set<number>>(new Set())
+  // Expanded content editors (composite keys whose content preview is expanded)
+  const [expandedContentRows, setExpandedContentRows] = createSignal<Set<string>>(new Set())
 
   const matrixId = props.matrixId // eslint-disable-line solid/reactivity -- stable for component lifetime
   const pageData = usePagedWorkspaceData({
@@ -505,6 +519,20 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   const matrixTitle = createMemo(
     () => (matrixTitleResult()?.[0] as { title: string } | undefined)?.title ?? '',
   )
+
+  // The chip shown on a heterogeneous row, or null for a plain workspace bullet.
+  // An aspect row from another matrix shows that matrix's title (carried inline
+  // on the row); a type-node shows a distinct "type" chip.
+  const chipFor = (row: WorkspaceRowData): { text: string; color: string } | null => {
+    if (row.is_type_node === 1) {
+      return { text: 'type', color: tagColorFromName('type') }
+    }
+    if (row.matrix_id !== props.matrixId) {
+      const title = row.matrix_title ?? `matrix ${row.matrix_id}`
+      return { text: title, color: tagColorFromName(title) }
+    }
+    return null
+  }
 
   const focusDepthOffset = createMemo(() => {
     const rootRow = focusRootRow()
@@ -554,43 +582,43 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   // Label focus management
   // -----------------------------------------------------------------------
 
-  const [focusedRowId, setFocusedRowId] = createSignal<number | null>(null)
+  const [focusedCk, setFocusedCk] = createSignal<string | null>(null)
   const [pendingFocus, setPendingFocus] = createSignal<{
-    rowId: number
+    ck: string
     pos?: number | 'start' | 'end'
   } | null>(null)
-  const handleMap = new Map<number, EditorHandle>()
+  const handleMap = new Map<string, EditorHandle>()
 
-  const registerHandle = (rowId: number, handle: EditorHandle) => {
-    handleMap.set(rowId, handle)
+  const registerHandle = (ck: string, handle: EditorHandle) => {
+    handleMap.set(ck, handle)
     const pending = pendingFocus()
-    if (pending && pending.rowId === rowId) {
+    if (pending && pending.ck === ck) {
       setPendingFocus(null)
       queueMicrotask(() => {
         handle.focus(pending.pos)
-        setFocusedRowId(rowId)
+        setFocusedCk(ck)
       })
     }
   }
 
-  const unregisterHandle = (rowId: number) => {
-    handleMap.delete(rowId)
+  const unregisterHandle = (ck: string) => {
+    handleMap.delete(ck)
   }
 
-  const requestFocus = (rowId: number, pos?: number | 'start' | 'end') => {
-    const handle = handleMap.get(rowId)
+  const requestFocus = (ck: string, pos?: number | 'start' | 'end') => {
+    const handle = handleMap.get(ck)
     if (handle) {
       handle.focus(pos)
-      setFocusedRowId(rowId)
+      setFocusedCk(ck)
     } else {
-      setPendingFocus({ rowId, pos })
+      setPendingFocus({ ck, pos })
     }
   }
 
   createEffect(() => {
     const vRows = visibleRows()
-    if (vRows.length > 0 && focusedRowId() === null) {
-      requestFocus(vRows[0]!.row_id, 'start')
+    if (vRows.length > 0 && focusedCk() === null) {
+      requestFocus(vRows[0]!.ck, 'start')
     }
   })
 
@@ -598,32 +626,32 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   // Content editor focus management
   // -----------------------------------------------------------------------
 
-  const contentHandleMap = new Map<number, ContentEditorHandle>()
-  const [pendingContentFocus, setPendingContentFocus] = createSignal<number | null>(null)
+  const contentHandleMap = new Map<string, ContentEditorHandle>()
+  const [pendingContentFocus, setPendingContentFocus] = createSignal<string | null>(null)
 
-  const registerContentHandle = (rowId: number, handle: ContentEditorHandle) => {
-    contentHandleMap.set(rowId, handle)
-    if (pendingContentFocus() === rowId) {
+  const registerContentHandle = (ck: string, handle: ContentEditorHandle) => {
+    contentHandleMap.set(ck, handle)
+    if (pendingContentFocus() === ck) {
       setPendingContentFocus(null)
       queueMicrotask(() => handle.focus('start'))
     }
   }
 
-  const unregisterContentHandle = (rowId: number) => {
-    contentHandleMap.delete(rowId)
+  const unregisterContentHandle = (ck: string) => {
+    contentHandleMap.delete(ck)
   }
 
-  const expandAndFocusContent = (rowId: number) => {
+  const expandAndFocusContent = (ck: string) => {
     setExpandedContentRows((prev) => {
       const next = new Set(prev)
-      next.add(rowId)
+      next.add(ck)
       return next
     })
-    const existing = contentHandleMap.get(rowId)
+    const existing = contentHandleMap.get(ck)
     if (existing) {
       queueMicrotask(() => existing.focus('start'))
     } else {
-      setPendingContentFocus(rowId)
+      setPendingContentFocus(ck)
     }
   }
 
@@ -634,10 +662,11 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   const [dragState, setDragState] = createSignal<DragState | null>(null)
   const [dropTarget, setDropTarget] = createSignal<DropTargetVisual | null>(null)
 
-  const getRowElements = (): Map<number, HTMLElement> => {
-    const map = new Map<number, HTMLElement>()
-    document.querySelectorAll<HTMLElement>('[data-row-id]').forEach((el) => {
-      map.set(Number(el.dataset.rowId), el)
+  const getRowElements = (): Map<string, HTMLElement> => {
+    const map = new Map<string, HTMLElement>()
+    document.querySelectorAll<HTMLElement>('[data-row-ck]').forEach((el) => {
+      const ck = el.dataset.rowCk
+      if (ck) map.set(ck, el)
     })
     return map
   }
@@ -656,7 +685,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     }
 
     const vRows = visibleRows()
-    const nonDragged = vRows.filter((r) => !drag.subtreeRowIds.has(r.row_id))
+    const nonDragged = vRows.filter((r) => !drag.subtreeCks.has(r.ck))
     const rowEls = getRowElements()
 
     const target = computeDropTarget(
@@ -683,10 +712,10 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
     if (drag?.activated && target) {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, drag.rowId)
+      const index = findRowIndex(vRows, drag.ck)
       if (index !== -1) {
         const row = vRows[index]!
-        void reparentRow(props.matrixId, copyKey(row.key)!, {
+        void reparentRow(row.matrix_id, copyKey(row.key)!, {
           newParentKey: copyKey(target.parentKey),
           prevSiblingKey: copyKey(target.prevSiblingKey),
           nextSiblingKey: copyKey(target.nextSiblingKey),
@@ -702,24 +731,25 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     document.removeEventListener('pointerup', handleDragEnd)
   }
 
-  const startDrag = (rowId: number, e: PointerEvent) => {
+  const startDrag = (ck: string, e: PointerEvent) => {
     const vRows = visibleRows()
-    const index = findRowIndex(vRows, rowId)
+    const index = findRowIndex(vRows, ck)
     if (index === -1) return
 
     const row = vRows[index]!
-    const subtreeRowIds = new Set<number>([rowId])
+    if (!isPlainWorkspaceRow(row)) return
+    const subtreeCks = new Set<string>([ck])
     for (let i = index + 1; i < vRows.length; i++) {
       if (vRows[i]!.depth <= row.depth) break
-      subtreeRowIds.add(vRows[i]!.row_id)
+      subtreeCks.add(vRows[i]!.ck)
     }
 
     const originParentRow = findParentRow(vRows, index)
     const originPrevSib = findPrevSibling(vRows, index)
 
     setDragState({
-      rowId,
-      subtreeRowIds,
+      ck,
+      subtreeCks,
       startX: e.clientX,
       startY: e.clientY,
       activated: false,
@@ -753,12 +783,20 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     return focusRoot ? new Uint8Array(focusRoot) : undefined
   }
 
-  const makeCallbacks = (rowId: number): OutlineCallbacks => ({
+  // A "plain workspace row" is one that lives in this panel's workspace matrix
+  // and is not a tag type-node. Structural gestures (create/move/merge/expand
+  // content) are scoped to these for now; cross-matrix aspect rows are render +
+  // inline-label-edit only in 9.1 (creation gestures land in 9.6).
+  const isPlainWorkspaceRow = (row: WorkspaceRowData): boolean =>
+    row.matrix_id === props.matrixId && row.is_type_node !== 1
+
+  const makeCallbacks = (ck: string): OutlineCallbacks => ({
     onEnter: (view: EditorView) => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      if (!isPlainWorkspaceRow(row)) return
       const parentKey = resolveParentKey(vRows, index)
 
       const { from, to } = view.state.selection
@@ -771,7 +809,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           prevKey: copyKey(row.key),
           values: { label: EMPTY_LABEL_JSON, content: null },
         }).then(({ rowId: newRowId }) => {
-          requestFocus(newRowId, 'start')
+          requestFocus(compositeKey(props.matrixId, newRowId), 'start')
         })
       } else {
         const pos = from
@@ -781,7 +819,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         const tr = view.state.tr.replace(pos, doc.content.size, Slice.empty)
         view.dispatch(tr)
 
-        const handle = handleMap.get(rowId)
+        const handle = handleMap.get(ck)
         handle?.flushSave()
 
         void insertRow(props.matrixId, {
@@ -789,16 +827,17 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           prevKey: copyKey(row.key),
           values: { label: afterValue, content: null },
         }).then(({ rowId: newRowId }) => {
-          requestFocus(newRowId, 'start')
+          requestFocus(compositeKey(props.matrixId, newRowId), 'start')
         })
       }
     },
 
     onBackspaceAtStart: (view: EditorView) => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      if (!isPlainWorkspaceRow(row)) return
 
       if (index === 0) {
         const doc = view.state.doc
@@ -817,18 +856,18 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const hasChildren = row.has_children === 1
 
       if (isEmpty && !hasChildren) {
-        const targetRowId = prevRow.row_id
+        const targetCk = prevRow.ck
         void deleteRow(props.matrixId, row.row_id).then(() => {
-          requestFocus(targetRowId, 'end')
+          requestFocus(targetCk, 'end')
         })
       } else if (isEmpty && hasChildren) {
         const firstChild = findFirstChild(vRows, index)
-        const targetRowId = firstChild?.row_id ?? prevRow.row_id
+        const targetCk = firstChild?.ck ?? prevRow.ck
         void deleteRow(props.matrixId, row.row_id).then(() => {
-          requestFocus(targetRowId, 'start')
+          requestFocus(targetCk, 'start')
         })
       } else {
-        const prevHandle = handleMap.get(prevRow.row_id)
+        const prevHandle = handleMap.get(prevRow.ck)
         if (!prevHandle) return
         const prevView = prevHandle.getView()
         if (!prevView) return
@@ -844,41 +883,43 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         prevHandle.flushSave()
 
         void deleteRow(props.matrixId, row.row_id).then(() => {
-          requestFocus(prevRow.row_id, mergePoint)
+          requestFocus(prevRow.ck, mergePoint)
         })
       }
     },
 
     onIndent: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      if (!isPlainWorkspaceRow(row)) return
 
       const prevSibling = findPrevSibling(vRows, index)
       if (!prevSibling) return
 
-      const prevSiblingIndex = findRowIndex(vRows, prevSibling.row_id)
+      const prevSiblingIndex = findRowIndex(vRows, prevSibling.ck)
       const lastChild = findLastDirectChild(vRows, prevSiblingIndex)
 
       void reparentRow(props.matrixId, copyKey(row.key)!, {
         newParentKey: copyKey(prevSibling.key),
         prevSiblingKey: copyKey(lastChild?.key),
       }).then(() => {
-        requestFocus(rowId, 'start')
+        requestFocus(ck, 'start')
       })
     },
 
     onOutdent: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      if (!isPlainWorkspaceRow(row)) return
 
       const parentRow = findParentRow(vRows, index)
       if (!parentRow) return
 
-      const grandparentIndex = findRowIndex(vRows, parentRow.row_id)
+      const grandparentIndex = findRowIndex(vRows, parentRow.ck)
       const grandparent = findParentRow(vRows, grandparentIndex)
       const newParentKey =
         grandparent ? copyKey(grandparent.key) : resolveParentKey(vRows, grandparentIndex)
@@ -888,7 +929,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         prevSiblingKey: copyKey(parentRow.key),
       })
         .then(() => {
-          requestFocus(rowId, 'start')
+          requestFocus(ck, 'start')
         })
         .catch((err: unknown) => {
           console.error('onOutdent reparentRow failed:', err)
@@ -897,39 +938,44 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
     onArrowUp: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index <= 0) return
       const prevRow = vRows[index - 1]!
-      requestFocus(prevRow.row_id, 'end')
+      requestFocus(prevRow.ck, 'end')
     },
 
     onArrowDown: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1 || index >= vRows.length - 1) return
       const nextRow = vRows[index + 1]!
-      requestFocus(nextRow.row_id, 'start')
+      requestFocus(nextRow.ck, 'start')
     },
 
     onInsertLink: () => {},
 
     onToggleCollapse: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
       if (row.has_children === 1) toggleCollapse(row.key)
     },
 
     onShiftEnter: () => {
-      expandAndFocusContent(rowId)
+      const vRows = visibleRows()
+      const index = findRowIndex(vRows, ck)
+      if (index === -1) return
+      if (!isPlainWorkspaceRow(vRows[index]!)) return
+      expandAndFocusContent(ck)
     },
 
     onOpenFocus: () => {
       const vRows = visibleRows()
-      const index = findRowIndex(vRows, rowId)
+      const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      if (!isPlainWorkspaceRow(row)) return
       props.onOpenFocus(row.row_id, new Uint8Array(row.key))
     },
   })
@@ -959,26 +1005,31 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           {(row, localI) => {
             const globalIdx = () => startIdx() + localI()
             const rowId = row.row_id
-            const callbacks = makeCallbacks(rowId)
-            const isExpanded = () => expandedContentRows().has(rowId)
-            const isFocusTarget = () => props.focusedRowId === rowId
+            const rowMatrixId = row.matrix_id
+            const rowCk = row.ck
+            const callbacks = makeCallbacks(rowCk)
+            const isExpanded = () => expandedContentRows().has(rowCk)
+            const isFocusTarget = () =>
+              rowMatrixId === props.matrixId && props.focusedRowId === rowId
+            const chip = chipFor(row)
 
             onCleanup(() => {
-              unregisterHandle(rowId)
-              unregisterContentHandle(rowId)
+              unregisterHandle(rowCk)
+              unregisterContentHandle(rowCk)
             })
 
             return (
               <div
                 class="outline-row"
                 data-row-id={rowId}
+                data-row-ck={rowCk}
                 data-depth={row.depth - depthOffset()}
                 style={{
                   display: 'flex',
                   'align-items': 'flex-start',
                   position: 'relative',
                   opacity:
-                    dragState()?.subtreeRowIds.has(rowId) && dragState()?.activated ? 0.25 : 1,
+                    dragState()?.subtreeCks.has(rowCk) && dragState()?.activated ? 0.25 : 1,
                   transition: 'opacity 0.15s',
                   background: isFocusTarget() ? 'hsla(225, 60%, 50%, 0.08)' : undefined,
                 }}
@@ -999,7 +1050,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   }}
                   onPointerDown={(e: PointerEvent) => {
                     e.preventDefault()
-                    startDrag(rowId, e)
+                    startDrag(rowCk, e)
                   }}
                 >
                   ⠿
@@ -1013,15 +1064,45 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     decoration={decorations()[globalIdx()]!}
                     onToggle={toggleCollapseByHex}
                     renderContent={() => (
-                      <LabelEditor
-                        rowId={rowId}
-                        label={row.label ?? ''}
-                        matrixId={props.matrixId}
-                        pageIndex={wIdx}
-                        callbacks={callbacks}
-                        onHandle={(handle) => registerHandle(rowId, handle)}
-                        onEditorFocus={() => setFocusedRowId(rowId)}
-                      />
+                      <div
+                        style={{
+                          display: 'flex',
+                          'align-items': 'baseline',
+                          gap: '6px',
+                          flex: 1,
+                          'min-width': 0,
+                        }}
+                      >
+                        <Show when={chip}>
+                          {(c) => (
+                            <span
+                              class="nav-row-type-chip"
+                              data-testid="row-type-chip"
+                              style={{
+                                'flex-shrink': 0,
+                                'font-size': '11px',
+                                'font-weight': '600',
+                                'line-height': '1.4',
+                                padding: '0 6px',
+                                'border-radius': '4px',
+                                color: c().color,
+                                background: tagBadgeBackground(c().color),
+                              }}
+                            >
+                              {c().text}
+                            </span>
+                          )}
+                        </Show>
+                        <LabelEditor
+                          rowId={rowId}
+                          label={row.label ?? ''}
+                          matrixId={rowMatrixId}
+                          pageIndex={wIdx}
+                          callbacks={callbacks}
+                          onHandle={(handle) => registerHandle(rowCk, handle)}
+                          onEditorFocus={() => setFocusedCk(rowCk)}
+                        />
+                      </div>
                     )}
                   />
 
@@ -1050,7 +1131,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                               'padding-bottom': '2px',
                               'line-height': '1.4',
                             }}
-                            onClick={() => expandAndFocusContent(rowId)}
+                            onClick={() => expandAndFocusContent(rowCk)}
                           >
                             {extractTextFromPmDoc(row.content) || '\u00A0'}
                           </div>
@@ -1059,40 +1140,43 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                         <ContentInlineEditor
                           rowId={rowId}
                           content={row.content ?? EMPTY_CONTENT_JSON}
-                          matrixId={props.matrixId}
+                          matrixId={rowMatrixId}
                           pageIndex={wIdx}
-                          onHandle={(handle) => registerContentHandle(rowId, handle)}
-                          onFocus={() => setFocusedRowId(rowId)}
+                          onHandle={(handle) => registerContentHandle(rowCk, handle)}
+                          onFocus={() => setFocusedCk(rowCk)}
                         />
                       </Show>
                     </div>
                   </Show>
                 </div>
 
-                {/* Right-arrow button: open focus panel */}
-                <button
-                  class="nav-row-open-focus"
-                  data-testid="open-focus-btn"
-                  aria-label="Open focus panel"
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    'font-size': '14px',
-                    color: 'var(--text-muted)',
-                    padding: '2px 4px',
-                    'border-radius': '3px',
-                    opacity: 0,
-                    transition: 'opacity 0.15s, color 0.15s',
-                  }}
-                  onClick={() => props.onOpenFocus(row.row_id, new Uint8Array(row.key))}
-                >
-                  →
-                </button>
+                {/* Right-arrow button: open focus panel (workspace rows only;
+                    boundary-hop drill-in for aspect rows is Phase 9.5) */}
+                <Show when={isPlainWorkspaceRow(row)}>
+                  <button
+                    class="nav-row-open-focus"
+                    data-testid="open-focus-btn"
+                    aria-label="Open focus panel"
+                    style={{
+                      position: 'absolute',
+                      right: '4px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      'font-size': '14px',
+                      color: 'var(--text-muted)',
+                      padding: '2px 4px',
+                      'border-radius': '3px',
+                      opacity: 0,
+                      transition: 'opacity 0.15s, color 0.15s',
+                    }}
+                    onClick={() => props.onOpenFocus(row.row_id, new Uint8Array(row.key))}
+                  >
+                    →
+                  </button>
+                </Show>
               </div>
             )
           }}
@@ -1167,7 +1251,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                 void insertRow(props.matrixId, {
                   values: { label: EMPTY_LABEL_JSON, content: null },
                 }).then(({ rowId: newRowId }) => {
-                  requestFocus(newRowId, 'start')
+                  requestFocus(compositeKey(props.matrixId, newRowId), 'start')
                 })
               }
             }}

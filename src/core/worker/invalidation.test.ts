@@ -12,33 +12,34 @@ import {
   buildAncestryForRowsQuery,
 } from '../../workspace/workspace-plugin'
 
-import { inferScope, STRUCTURAL_TABLES } from './invalidation'
+import { inferScope, tablesVisitedBySql, STRUCTURAL_TABLES } from './invalidation'
 
 const toHex = (key: Uint8Array): string =>
   Array.from(key, (b) => b.toString(16).padStart(2, '0')).join('')
 
 describe('inferScope: AST-based scope extraction', () => {
-  test('outline query without focus root: extracts matrix_id, no key range', () => {
-    const sql = buildPaginatedOutlineQuery(42)
-    const tables = new Set(['scroll_index', 'mx_42_data', 'joins'])
+  test('outline query without focus root: global scope (null matrix), no key range', () => {
+    // Phase 9.1: the unified outline reads scroll_index with no matrix_id filter,
+    // so the scope is matrix-agnostic (null) and matches the whole forest.
+    const sql = buildPaginatedOutlineQuery()
+    const tables = tablesVisitedBySql(sql)
     const scope = inferScope(sql, tables)
 
-    expect(scope.dataTables).toEqual(new Set(['mx_42_data']))
     expect(scope.structuralTables).toEqual(new Set(['scroll_index', 'joins']))
     expect(scope.structural).toBeDefined()
-    expect(scope.structural!.matrixId).toBe(42)
+    expect(scope.structural!.matrixId).toBeNull()
     expect(scope.structural!.keyLow).toBeNull()
     expect(scope.structural!.keyHigh).toBeNull()
     expect(scope.structural!.readsClosure).toBe(false)
   })
 
   test('outline query with focus root: extracts key range from blob literals', () => {
-    const sql = buildPaginatedOutlineQuery(7, { focusRootHex: '8000c000' })
-    const tables = new Set(['scroll_index', 'mx_7_data', 'joins'])
+    const sql = buildPaginatedOutlineQuery({ focusRootHex: '8000c000' })
+    const tables = tablesVisitedBySql(sql)
     const scope = inferScope(sql, tables)
 
     expect(scope.structural).toBeDefined()
-    expect(scope.structural!.matrixId).toBe(7)
+    expect(scope.structural!.matrixId).toBeNull()
     expect(scope.structural!.keyLow).not.toBeNull()
     expect(scope.structural!.keyHigh).not.toBeNull()
     expect(toHex(scope.structural!.keyLow!)).toBe('8000c000')
@@ -89,12 +90,12 @@ describe('inferScope: AST-based scope extraction', () => {
   })
 
   test('outline query with afterKeyHex: extracts keyLow from > operator', () => {
-    const sql = buildPaginatedOutlineQuery(5, { afterKeyHex: 'c000d000' })
-    const tables = new Set(['scroll_index', 'mx_5_data', 'joins'])
+    const sql = buildPaginatedOutlineQuery({ afterKeyHex: 'c000d000' })
+    const tables = tablesVisitedBySql(sql)
     const scope = inferScope(sql, tables)
 
     expect(scope.structural).toBeDefined()
-    expect(scope.structural!.matrixId).toBe(5)
+    expect(scope.structural!.matrixId).toBeNull()
     expect(scope.structural!.keyLow).not.toBeNull()
     expect(toHex(scope.structural!.keyLow!)).toBe('c000d000')
   })

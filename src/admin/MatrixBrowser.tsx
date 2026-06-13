@@ -1,7 +1,79 @@
 import { createSignal, createMemo, For, Show, type Component } from 'solid-js'
 
-import { createMatrix, addSampleRows, resetDatabase } from '../core/client/matrix-client'
+import {
+  createMatrix,
+  addSampleRows,
+  resetDatabase,
+  insertRow,
+  createDependentRow,
+  getTagType,
+  createTagType,
+} from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
+
+// Wrap a plain string as a minimal ProseMirror doc (the label/content encoding
+// used throughout the workspace and tag matrixes).
+const pmDoc = (text: string): string =>
+  JSON.stringify({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  })
+
+// Ensure a tag type exists (with a `label` column so its aspect rows show a
+// label in the outline), returning its instance matrix id.
+const ensureTagType = async (
+  name: string,
+  extraColumns: { name: string; type: string }[],
+): Promise<number> => {
+  const existing = await getTagType(name)
+  if (existing) return existing.matrixId
+  const created = await createTagType(name, [{ name: 'label', type: 'TEXT' }, ...extraColumns])
+  return created.matrixId
+}
+
+// Phase 9.1 demo: build a subtree under the workspace root that exercises
+// heterogeneous children — plain bullets interleaved with `#task` and `#note`
+// aspect rows from other matrixes, plus a nested host owning its own task.
+const buildDemoSubtree = async (workspaceMatrixId: number): Promise<void> => {
+  const taskMatrixId = await ensureTagType('task', [
+    { name: 'status', type: 'TEXT' },
+    { name: 'due', type: 'TEXT' },
+  ])
+  const noteMatrixId = await ensureTagType('note', [{ name: 'body', type: 'TEXT' }])
+
+  const host = await insertRow(workspaceMatrixId, {
+    values: { label: pmDoc('Trip planning') },
+  })
+
+  // Children append in call order, so bullets and aspect rows interleave.
+  await insertRow(workspaceMatrixId, {
+    parentKey: host.key ?? undefined,
+    values: { label: pmDoc('Book flights') },
+  })
+  await createDependentRow(workspaceMatrixId, host.rowId, taskMatrixId, {
+    label: pmDoc('Reserve hotel'),
+    status: 'todo',
+    due: '2026-07-01',
+  })
+  await insertRow(workspaceMatrixId, {
+    parentKey: host.key ?? undefined,
+    values: { label: pmDoc('Pack bags') },
+  })
+  await createDependentRow(workspaceMatrixId, host.rowId, noteMatrixId, {
+    label: pmDoc('Trip notes'),
+    body: 'Remember passports and travel adapters.',
+  })
+
+  const nested = await insertRow(workspaceMatrixId, {
+    parentKey: host.key ?? undefined,
+    values: { label: pmDoc('Day 1 itinerary') },
+  })
+  await createDependentRow(workspaceMatrixId, nested.rowId, taskMatrixId, {
+    label: pmDoc('Visit the museum'),
+    status: 'todo',
+    due: '2026-07-02',
+  })
+}
 
 type MatrixRow = {
   id: number
@@ -446,6 +518,7 @@ const MatrixBrowser: Component<MatrixBrowserProps> = (props) => {
   const [newMatrixTitle, setNewMatrixTitle] = createSignal('')
   const [resetLoading, setResetLoading] = createSignal(false)
   const [resetConfirm, setResetConfirm] = createSignal(false)
+  const [demoLoading, setDemoLoading] = createSignal(false)
 
   const { result: matricesResult } = useQuery(
     () => 'SELECT m.id, m.title, m.source_plugin_id FROM matrix m ORDER BY m.id',
@@ -491,6 +564,22 @@ const MatrixBrowser: Component<MatrixBrowserProps> = (props) => {
       setNewMatrixTitle('')
     } catch (err) {
       console.error('Error creating matrix:', err)
+    }
+  }
+
+  const handleAddDemoSubtree = async () => {
+    const ws = matrices().find((m) => m.source_plugin_id === 'hila.workspace')
+    if (!ws) {
+      console.error('Cannot add demo subtree: workspace matrix not found')
+      return
+    }
+    setDemoLoading(true)
+    try {
+      await buildDemoSubtree(ws.id)
+    } catch (err) {
+      console.error('Error adding demo subtree:', err)
+    } finally {
+      setDemoLoading(false)
     }
   }
 
@@ -541,6 +630,14 @@ const MatrixBrowser: Component<MatrixBrowserProps> = (props) => {
                   Create
                 </button>
               </div>
+              <button
+                class="mb-action-btn mb-action-demo"
+                onClick={handleAddDemoSubtree}
+                disabled={demoLoading()}
+                data-testid="add-demo-subtree-btn"
+              >
+                {demoLoading() ? 'Adding…' : 'Add Demo Subtree'}
+              </button>
               <button
                 class="mb-action-btn mb-action-reset"
                 onClick={handleResetDatabase}
