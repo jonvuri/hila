@@ -23,7 +23,7 @@ Each sub-phase may get its own deeper session and spawn its own doc when tackled
 
 ## 9.1 Heterogeneous children in one outline
 
-A node's `own`-children can span multiple matrixes (bullets + `#task` rows + a `#note` + …), interleaved in one sibling order carried on the `own`-edges (Phase 8 §3, the scroll index in Phase 8b §2). This sub-phase makes that render.
+A node's `own`-children can span multiple matrixes (bullets + `#task` rows + a `#note` + …), interleaved in one sibling order carried on the `own`-edges (Phase 8 §3, the scroll index in Phase 8b §2). This sub-phase makes that render. In the [Phase 9.2](Phase-9.2.md) model this is a **meshed band** with the outline face; meshing is gated by anchoring (only owned, anchored rows can interleave into the focal node's order).
 
 - How do heterogeneous children render together in a single ordered outline, and how does each row *type* present in a navigation row (a plain bullet vs an aspect row vs an embedded-collection marker)?
 - **Perf:** scroll order stays a single-column keyset range scan on the derived pre-order index (Phase 8b §2), so windowing is unchanged. The genuinely new hot-path cost is that a window yields `(matrix_id, row_id)` pairs **spanning matrixes**, so hydrating the ~500 visible rows is a **multi-table gather** rather than one `SELECT *`. Batch by matrix, lazy-load, virtualize against the <50ms target.
@@ -31,16 +31,19 @@ A node's `own`-children can span multiple matrixes (bullets + `#task` rows + a `
 
 ## 9.2 The property surface (most tangible)
 
-Intrinsic columns ∪ 0/1 owned aspect fields rendered as inline fields: a consistent property list in the focus panel and a **compact preview in navigation rows**; the add/edit gesture; coexistence of intrinsic columns and tag fields.
+> **Deep-dive: [Phase 9.2](Phase-9.2.md).** A design session generalized this sub-phase: the property surface is one point on a broader model of **bands** (related row-sets around a focal node), an **anchoring** data axis, an **integration continuum** (merged / banded / meshed), a shared **schema-adaptive row renderer**, and a **composed vs. substrate** fidelity axis. The model unifies 9.2 with 9.1/9.3/9.4/9.5. The summary below reflects it; Phase-9.2.md has the full reasoning.
 
-- A node's **property surface** = its intrinsic columns (its own row) ∪ the hydrated fields of its 0/1 owned aspect attachments (tags shown as merged inline fields). The `own`-edge supplies lifecycle; hydrated columns supply editability.
-- Builds directly on the existing focus-panel overflow "Properties" list, `src/shared/FieldEditor.tsx`, and the tag badge chips.
-- **Design it so [Phase 11](Phase-11.md)'s renderer registry / tag property panel realize it directly** -- 9.2 (design + workspace integration) and Phase 11 (renderer registry, templates, custom cell renderers) are complementary; sequence them flexibly.
-- Touches `src/workspace/FocusPanel.tsx`, `src/workspace/NavigationPanel.tsx`, `FieldEditor.tsx`, `src/tags/*`.
+A node's **property surface** = its intrinsic columns (its own row) ∪ the hydrated fields of its owned aspect attachments. This is the **merged** integration level (a presentational left-join `host ⋈ aspect` on the `own`-edge); the `own`-edge supplies lifecycle, hydrated columns supply editability. (Cardinality is dropped as a distinction — see Phase-9.2.md.) Owned aspects that are *not* merged render as an **aspect band** above the children nav panel, through the shared schema-adaptive renderer.
+
+- **Anchoring drives the visuals.** A content-anchored aspect (an `own`-join materialized from an inline `#`-ref in prose) is tethered to its token when banded/meshed; a structurally-anchored edge needs no tether. Moves go *through the anchor* — drag for structural, edit the `#`-token for content (no modal prompts).
+- **Schema-adaptive renderer** keyed on `(row, columns, density, fidelity)` and the existing column `role`s, shared with §9.1 heterogeneous rows, table cells, and nav previews. Prototyped in `src/design/outline/AspectRowPrototype.stories.tsx`.
+- **Design it so [Phase 11](Phase-11.md)'s renderer registry / tag property panel realize it directly** -- 9.2 and Phase 11 are complementary; sequence them flexibly.
+- Builds on the focus-panel overflow "Properties" list and `src/shared/FieldEditor.tsx` (intrinsic half) and the retained aspect-gather spine (`buildTagsForRowsQuery`, `aspectsByHostCk` / `getHydratedData`).
+- Touches `src/workspace/FocusPanel.tsx`, `src/workspace/NavigationPanel.tsx`, `src/workspace/usePagedWorkspaceData.ts`, `src/shared/property-surface.ts`, `FieldEditor.tsx`, `src/tags/*`.
 
 ## 9.3 Embedded collections & live views
 
-Render a row-set under a node as an embedded face (table / outline / board): **owned collections** (`own`-edges @ 0..N) and **query bindings** (live views).
+Render a row-set under a node as an embedded face (table / outline / board): **owned collections** (`own`-edges @ 0..N) and **query bindings** (live views). In the [Phase 9.2](Phase-9.2.md) model these are **bands** — owned collections are anchored bands (can fold/merge into the owned order); query bindings are **unanchored** bands (no tether, a `query:` header, cannot mesh).
 
 - **Node-scoped query authoring UX:** express "tasks whose host is in this subtree" without writing SQL -- closure (Phase 8b) gives "in this subtree," the `own`-edge into the type's matrix gives "is a task." Design the authoring affordance.
 - **Editable-in-place write-back** via hydration, with **insertion target = the node** (a node-scoped query has an obvious place to insert new rows). Notion-linked-database-style.
@@ -49,7 +52,7 @@ Render a row-set under a node as an embedded face (table / outline / board): **o
 
 ## 9.4 Dedicated sub-table embedding
 
-The embedded `TableFace` inside the stream view for an own-matrix (Phase 8c §2); a collapsed preview in the navigation panel; outline interactions around a sub-table row.
+The embedded `TableFace` inside the stream view for an own-matrix (Phase 8c §2); a collapsed preview in the navigation panel; outline interactions around a sub-table row. In the [Phase 9.2](Phase-9.2.md) model this is a **band with the table face** — the composed cousin of the substrate (see §9.2 deep-dive).
 
 - **Open, data-adjacent item -- reinterpret the old `row_kind = 1` stub.** Ownership is already fully expressed by `own`-edges + `matrix.owner` (Phase 8/8c), so the old `rank.row_kind = 1` "child matrix reference" should be reinterpreted as a **view-layer positioning marker**: it carries **position among a node's heterogeneous children, not ownership.** Settle its exact shape here (where the embedded face sits among siblings, how it's stored as a positioning marker rather than on the dissolved `rank` table).
 - The `FocusPanel` placeholder (the old "Child matrix reference (row_kind=1). Table face would render here." string) is replaced by the real embedded face.
@@ -61,7 +64,7 @@ The data is trivial now (ancestry = the `own`-chain across boundaries, Phase 8),
 
 - Generalize the overlaid-cards / panel-stack model so a panel is keyed by **`(matrix_id, row_id)`** rather than a single matrix's row id.
 - Render a **boundary hop**: a `#task` aspect row whose `own`-parent is a host bullet in another matrix, shown in one continuous ancestry chain.
-- Decide **what face shows on the far side** when you drill into an aspect/record row. This is `Plan.md` open question #5 (**face affinity**) -- an attachment / matrix may carry a preferred face. Resolve #5 here.
+- Decide **what face shows on the far side** when you drill into an aspect/record row. This is `Plan.md` open question #5 (**face affinity**) -- an attachment / matrix may carry a preferred face. Resolve #5 here. The [Phase 9.2](Phase-9.2.md) **substrate** gives a floor answer: with no declared preferred face, drill-in lands in the substrate (the identity face, generalized). The breadcrumb here is the substrate rendering of the `(matrix_id, row_id)`-keyed panel stack.
 - Touches `src/workspace/StreamView.tsx` panel-stack state, `src/design/overlaid-cards/OverlaidCards.tsx`, the breadcrumb/ancestry data.
 
 ## 9.6 The unified creation gesture

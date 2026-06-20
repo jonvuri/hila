@@ -264,6 +264,8 @@ This is used by any plugin that needs lifecycle-bound cross-matrix rows (tags, f
 - Joins are orthogonal to traits. A note can join to a tag row in a matrix that has no rank or closure traits.
 - Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline references in rich text), or as the **primary source of truth** for a relationship (e.g. a foreign-key cell in a table), depending on the surface.
 
+> **Anchoring (view-layer consequence).** This "where the source of truth lives" distinction is load-bearing for the UI, not just bookkeeping. An `own`-join whose source of truth is an inline `#`-ref in prose is **content-anchored** (its edge lives *inside* a node's content, and moving it is a prose edit); an `own`-join whose source of truth is a structural table or an FK cell is **structurally-anchored** (moving it is a pure structural write); a node-scoped query with no join row is **unanchored**. The [Phase 9.2](Phase-9.2.md) rendering model builds directly on these three anchoring tiers (tether geometry, move-from-anchor gestures, and which presentations a related set may take).
+
 ### Hydration
 
 Join reference columns follow the same hydration rules as any other column. When a query selects a join reference (the target matrix and row IDs), that column is **hydrated** -- it is live and editable. The user can relink, unlink, or create links by editing the visible reference value. If the join reference is not selected in the query, the join relationship is invisible and cannot be modified from that face.

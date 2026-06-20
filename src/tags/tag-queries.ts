@@ -100,6 +100,31 @@ SELECT * FROM "mx_${sourceMatrixId}_data" WHERE id = ${sourceRowId}
 `
 
 /**
+ * Bulk forward lookup: all tag aspects attached to a set of source rows.
+ * Returns one row per (source row, tag type) pair. Used for batched
+ * navigation-row property-preview chip hydration (Phase 9.2).
+ *
+ * @param wsMatrixId - The workspace matrix ID (for promoted_nodes filter)
+ * @param sourceMatrixId - The matrix containing the tagged rows
+ * @param sourceRowIds - The row IDs to look up (must be non-empty)
+ */
+export const buildTagsForRowsQuery = (
+  wsMatrixId: number,
+  sourceMatrixId: number,
+  sourceRowIds: number[],
+): string => `
+SELECT j.source_row_id, j.target_matrix_id, j.target_row_id,
+       m.title AS tag_type_name
+FROM joins j
+JOIN matrix m ON m.id = j.target_matrix_id
+JOIN promoted_nodes p ON p.matrix_id = m.owner_matrix_id AND p.row_id = m.owner_row_id
+WHERE j.source_matrix_id = ${sourceMatrixId}
+  AND j.source_row_id IN (${sourceRowIds.join(',')})
+  AND j.kind = 'own'
+  AND p.matrix_id = ${wsMatrixId}
+`
+
+/**
  * Specific aspect lookup: the aspect row for a (source row, tag type) pair.
  * Returns all columns from the tag matrix's data table for the matching
  * aspect row.

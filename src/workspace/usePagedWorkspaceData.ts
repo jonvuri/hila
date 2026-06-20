@@ -4,6 +4,8 @@ import { createStore, reconcile } from 'solid-js/store'
 import { addObserver, removeObserver } from '../core/client/sql-client'
 import type { SqlObserver } from '../core/sql-types'
 import { useQuery } from '../sql/useQuery'
+import type { AspectAttachment } from '../shared/property-surface'
+import { buildTagsForRowsQuery } from '../tags/tag-queries'
 
 import {
   buildPaginatedOutlineQuery,
@@ -210,6 +212,67 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
 
   onCleanup(() => {
     for (const sql of Array.from(gatherObservers.keys())) removeGather(sql)
+    removeAspectGather()
+  })
+
+  // -----------------------------------------------------------------------
+  // Aspect gather: tag attachments for workspace-matrix rows in the window.
+  // Only workspace-matrix rows can have tag aspects, so we filter by matrixId.
+  // This is the data spine for the Phase 9.2 "aspect band" (see
+  // context/Phase-9.2.md): `aspectsByHostCk` maps a host row to its owned aspect
+  // attachments, and `getHydratedData` supplies their fields. The band + the
+  // shared schema-adaptive renderer (the immediate next build) consume these;
+  // until then they are produced but not yet rendered.
+  // -----------------------------------------------------------------------
+  const [aspectsByHostCk, setAspectsByHostCk] = createStore<Record<string, AspectAttachment[]>>(
+    {},
+  )
+
+  const aspectGatherMap = new Map<string, SqlObserver>()
+
+  const removeAspectGather = () => {
+    for (const [sql, observer] of aspectGatherMap) {
+      removeObserver(sql, observer)
+    }
+    aspectGatherMap.clear()
+  }
+
+  createEffect(() => {
+    const wsId = opts.matrixId
+    const wsRowIds = windowRows
+      .filter((r) => r.matrix_id === wsId)
+      .map((r) => r.row_id)
+      .sort((a, b) => a - b)
+
+    const sql = wsRowIds.length > 0 ? buildTagsForRowsQuery(wsId, wsId, wsRowIds) : ''
+
+    // If the desired query hasn't changed, nothing to do.
+    if (sql ? aspectGatherMap.has(sql) : aspectGatherMap.size === 0) return
+
+    removeAspectGather()
+
+    if (!sql) {
+      setAspectsByHostCk(reconcile({}))
+      return
+    }
+
+    const observer: SqlObserver = (result) => {
+      if (!result) return
+      const byHostCk: Record<string, AspectAttachment[]> = {}
+      for (const row of result as Record<string, unknown>[]) {
+        const hostCk = compositeKey(wsId, row.source_row_id as number)
+        if (!byHostCk[hostCk]) byHostCk[hostCk] = []
+        byHostCk[hostCk]!.push({
+          target_matrix_id: row.target_matrix_id as number,
+          target_row_id: row.target_row_id as number,
+          tag_type_name: row.tag_type_name as string,
+        })
+      }
+      setAspectsByHostCk(reconcile(byHostCk))
+    }
+
+    aspectGatherMap.set(sql, observer)
+    addObserver(sql, observer)
   })
 
   // -----------------------------------------------------------------------
@@ -239,6 +302,9 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     return rows.slice(localOffset, localOffset + ROWS_PER_WINDOW) as WorkspaceRowData[]
   }
 
+  const getHydratedData = (mid: number, rowId: number): Record<string, unknown> | null =>
+    hydrated[compositeKey(mid, rowId)] ?? null
+
   return {
     totalWindows,
     totalRows,
@@ -249,5 +315,7 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     getWindowRows,
     setNeededWindows,
     error: countError,
+    aspectsByHostCk,
+    getHydratedData,
   }
 }

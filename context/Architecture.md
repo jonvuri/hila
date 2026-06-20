@@ -161,6 +161,15 @@ This is not an abstract capability -- it enables concrete workflows:
 
 Faces update optimistically with user input and propagate updates to underlying data asynchronously. If updates fail, faces retry and get user input if intervention is needed.
 
+#### Composed and substrate fidelity
+
+Faces render at one of two **fidelities** -- an axis orthogonal to density (panel width):
+
+- **Composed** (default): structure is *suggested* -- bullets, prose bodies, chip strips, tethers -- optimized for fluid viewing and editing.
+- **Substrate**: structure is *spelled out* -- explicit row borders, column names (per-cell or a shared header), `role` chips, and visible relationship metadata (own-edge kind, anchoring, view mode). The substrate is the [identity face](#identity-face) generalized from "a per-matrix table view" to a fidelity available at any granularity (cell / row / band / focus column / workspace).
+
+A global **x-ray** toggle forces substrate everywhere at once (the debugging/inspector view); fidelity otherwise cascades down a scope unless overridden finer. Because the substrate must render *everything* -- every column as a labeled cell, all relationship metadata -- it doubles as a conformance test: any datum it cannot show is a gap in the model. The view-layer composition this enables (a focal node as a stack of provenance-carrying **bands**, an **anchoring** axis, and a shared schema-adaptive row renderer keyed on `(row, columns, density, fidelity)`) is developed in [Phase 9.2](Phase-9.2.md).
+
 ## Execution model
 
 SQLite is not just a storage engine -- it is the primary computation and data manipulation substrate. All relational logic (reads, writes, structural operations) is expressed in SQL and executes inside the SQLite engine. TypeScript serves as a thin orchestration layer that routes user actions to the appropriate SQL operations and wires results to the UI.
@@ -369,6 +378,8 @@ The **identity face** is the canonical face for a matrix, bound to it 1-to-1. It
 The identity face is also the **source** in the hydration model -- the pool from which data flows downstream to other faces.
 
 A matrix can also be viewed through **specialized face types** with slot bindings (outline, note, flashcard, etc.). These are additional views, not replacements for the identity face. The identity face remains the authoritative surface for schema and destructive operations. A note matrix's primary user-facing view might be the note face, but its identity face (the table view) is always accessible for full-authority management.
+
+The identity face also generalizes into the **substrate** fidelity (see [Composed and substrate fidelity](#composed-and-substrate-fidelity)): the same "every column as a labeled cell, full metadata shown" treatment, lifted from a per-matrix table view to a fidelity available at any granularity. As such it is the universal drill-in fallback when an attachment/matrix declares no preferred face ([Plan.md open question #5](Plan.md)).
 
 **Dependent rows and the identity face.** A matrix may contain rows created as owned aspects of rows in other matrixes (via `own`-kind joins -- see [Traits - Join kinds](./Traits.md#join-kinds)). These dependent rows appear in the identity face like any other row. Deleting a dependent row from the identity face is permitted -- the core removes the `own` join entry and the plugin managing the source-side reference handles cleanup (removing an inline tag node from rich text, or nulling a cell value in a table). Cascade deletion through owned joins is an automatic lifecycle consequence, not a manual destructive operation -- it does not require the identity face.
 

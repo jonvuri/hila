@@ -19,6 +19,7 @@ import 'prosemirror-view/style/prosemirror.css'
 import { updateRow, getColumns } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
+import { filterIntrinsicOverflowColumns } from '../shared/property-surface'
 import {
   createLabelEditorState,
   createContentEditorState,
@@ -388,8 +389,7 @@ const FocusPanel = (props: FocusPanelProps) => {
 
   createEffect(() => {
     void getColumns(props.matrixId).then((cols) => {
-      const coreNames = new Set(['label', 'content'])
-      setOverflowColumns(cols.filter((c) => !coreNames.has(c.name)))
+      setOverflowColumns(filterIntrinsicOverflowColumns(cols))
     })
   })
 
@@ -411,6 +411,12 @@ const FocusPanel = (props: FocusPanelProps) => {
     setOverflowValues((prev) => ({ ...prev, [colName]: value }))
     void updateRow(props.matrixId, props.rowId, { [colName]: value })
   }
+
+  // Note: owned aspect attachments (the heterogeneous half of the property
+  // surface) are no longer rendered here as collapsible field groups. They become
+  // an "aspect band" rendered through the shared schema-adaptive row renderer
+  // (Phase 9.2; see context/Phase-9.2.md). The gather spine that feeds it lives in
+  // usePagedWorkspaceData (aspectsByHostCk / getHydratedData).
 
   // Children: check if the row has same-matrix own-children (outline subtree).
   const childCountQuery = createMemo(() => {
@@ -532,7 +538,8 @@ const FocusPanel = (props: FocusPanelProps) => {
                 </Show>
               </div>
 
-              {/* Overflow columns section */}
+              {/* Properties section: intrinsic overflow columns. The owned-aspect
+                  half of the property surface renders as an aspect band (Phase 9.2). */}
               <Show when={overflowColumns().length > 0}>
                 <div
                   class="focus-panel-overflow"

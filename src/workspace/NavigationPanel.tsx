@@ -507,6 +507,10 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const error = pageData.error
   const rows = pageData.rows
+  // The aspect gather (pageData.aspectsByHostCk / getHydratedData) is kept on the
+  // data spine but no longer consumed here: owned-aspect previews move from ad-hoc
+  // inline chips to the aspect band + schema-adaptive renderer (Phase 9.2; see
+  // context/Phase-9.2.md), which is the immediate next build.
 
   const focusRootRow = () => pageData.focusRootRow()
 
