@@ -31,7 +31,11 @@ import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
-import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
+import {
+  syncInlineRefs,
+  refreshCachedTitles,
+  extractInlineRefsFromJson,
+} from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 
@@ -413,11 +417,28 @@ const FocusPanel = (props: FocusPanelProps) => {
     void updateRow(props.matrixId, props.rowId, { [colName]: value })
   }
 
-  // Note: owned aspect attachments (the heterogeneous half of the property
-  // surface) are no longer rendered here as collapsible field groups. They become
-  // an "aspect band" rendered through the shared schema-adaptive row renderer
-  // (Phase 9.2; see context/Phase-9.2.md). The gather spine that feeds it lives in
-  // usePagedWorkspaceData (aspectsByHostCk / getHydratedData).
+  // Owned aspects render as an aspect band (Phase 9.2; see context/Phase-9.2.md).
+  // Aspects whose `own`-join is materialized from an inline `#`-ref in this node's
+  // prose are content-anchored: collect their keys from the label + content so the
+  // band can tether them to their badge.
+  const contentAnchoredKeys = createMemo((): Set<string> => {
+    const data = rowData()
+    const keys = new Set<string>()
+    if (!data) return keys
+    for (const field of [data.label, data.content]) {
+      if (!field) continue
+      let json: unknown
+      try {
+        json = JSON.parse(field)
+      } catch {
+        continue
+      }
+      for (const ref of extractInlineRefsFromJson(json)) {
+        if (ref.kind === 'own') keys.add(`${ref.targetMatrixId}:${ref.targetRowId}`)
+      }
+    }
+    return keys
+  })
 
   // Children: check if the row has same-matrix own-children (outline subtree).
   const childCountQuery = createMemo(() => {
@@ -577,7 +598,11 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               {/* Aspect band: owned `#`-tag aspects, banded between the node
                   body and the children nav panel (Phase 9.2). */}
-              <AspectBand hostMatrixId={props.matrixId} hostRowId={props.rowId} />
+              <AspectBand
+                hostMatrixId={props.matrixId}
+                hostRowId={props.rowId}
+                contentAnchoredKeys={contentAnchoredKeys()}
+              />
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>

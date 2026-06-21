@@ -5,7 +5,8 @@ import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import { useRowData } from '../sql/useRowData'
 import { buildTagsForRowQuery } from '../tags/tag-queries'
-import { tagColorFromName } from '../tags/tag-color'
+import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
+import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../editor/aspect-tether'
 import { PropertyRow } from '../shared/PropertyRow'
 
 /**
@@ -80,7 +81,13 @@ const AspectRowItem: Component<{ matrixId: number; rowId: number }> = (props) =>
   )
 }
 
-const AspectBand: Component<{ hostMatrixId: number; hostRowId: number }> = (props) => {
+const AspectBand: Component<{
+  hostMatrixId: number
+  hostRowId: number
+  /** "matrixId:rowId" keys of aspects anchored to an inline `#`-ref in the host
+   *  prose. Those rows show a tether indicator and bridge to their badge. */
+  contentAnchoredKeys?: Set<string>
+}> = (props) => {
   const tagsQuery = createMemo(() =>
     buildTagsForRowQuery(props.hostMatrixId, props.hostMatrixId, props.hostRowId),
   )
@@ -116,36 +123,77 @@ const AspectBand: Component<{ hostMatrixId: number; hostRowId: number }> = (prop
         }}
       >
         <For each={blocks()}>
-          {(block) => (
-            <div
-              class="aspect-block"
-              style={{
-                'border-left': `2px solid ${tagColorFromName(block.tagType)}`,
-                'padding-left': '8px',
-                display: 'flex',
-                'flex-direction': 'column',
-                gap: '4px',
-              }}
-            >
-              <For each={block.items}>
-                {(item) => (
-                  <div
-                    class="aspect-row"
-                    data-testid="aspect-row"
-                    style={{ display: 'flex', 'align-items': 'flex-start', gap: '8px' }}
-                  >
-                    <TypeBadge typeName={block.tagType} />
-                    <div style={{ flex: 1, 'min-width': 0 }}>
-                      <AspectRowItem
-                        matrixId={item.target_matrix_id}
-                        rowId={item.target_row_id}
-                      />
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          )}
+          {(block) => {
+            const color = tagColorFromName(block.tagType)
+            return (
+              <div
+                class="aspect-block"
+                style={{
+                  'border-left': `2px solid ${color}`,
+                  'padding-left': '8px',
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  gap: '4px',
+                }}
+              >
+                <For each={block.items}>
+                  {(item) => {
+                    const key = `${item.target_matrix_id}:${item.target_row_id}`
+                    const target = {
+                      matrixId: item.target_matrix_id,
+                      rowId: item.target_row_id,
+                    }
+                    const anchored = () => props.contentAnchoredKeys?.has(key) ?? false
+                    const hovered = () =>
+                      isAspectHovered(item.target_matrix_id, item.target_row_id)
+                    return (
+                      <div
+                        class="aspect-row"
+                        data-testid="aspect-row"
+                        onMouseEnter={() => anchored() && setHoveredAspect(target)}
+                        onMouseLeave={() => anchored() && clearHoveredAspect(target)}
+                        style={{
+                          display: 'flex',
+                          'align-items': 'flex-start',
+                          gap: '8px',
+                          'border-radius': '4px',
+                          background: hovered() ? tagBadgeBackground(color) : 'transparent',
+                          transition: 'background-color 0.12s',
+                        }}
+                      >
+                        <TypeBadge typeName={block.tagType} />
+                        <div style={{ flex: 1, 'min-width': 0 }}>
+                          <AspectRowItem
+                            matrixId={item.target_matrix_id}
+                            rowId={item.target_row_id}
+                          />
+                        </div>
+                        {/* Tether indicator: lit dot for aspects anchored to an
+                            inline #-ref in the host prose; brightens on hover. */}
+                        <Show when={anchored()}>
+                          <span
+                            class="aspect-tether-indicator"
+                            data-testid="aspect-tether-indicator"
+                            title="Anchored to an inline #tag in the content"
+                            style={{
+                              'align-self': 'center',
+                              'flex-shrink': 0,
+                              width: '6px',
+                              height: '6px',
+                              'border-radius': '50%',
+                              background: color,
+                              opacity: hovered() ? '1' : '0.35',
+                              transition: 'opacity 0.12s',
+                            }}
+                          />
+                        </Show>
+                      </div>
+                    )
+                  }}
+                </For>
+              </div>
+            )
+          }}
         </For>
       </div>
     </Show>

@@ -41,6 +41,8 @@ A node's **property surface** = its intrinsic columns (its own row) ∪ the hydr
 - Builds on the focus-panel overflow "Properties" list and `src/shared/FieldEditor.tsx` (intrinsic half) and the retained aspect-gather spine (`buildTagsForRowsQuery`, `aspectsByHostCk` / `getHydratedData`).
 - Touches `src/workspace/FocusPanel.tsx`, `src/workspace/NavigationPanel.tsx`, `src/workspace/usePagedWorkspaceData.ts`, `src/shared/property-surface.ts`, `FieldEditor.tsx`, `src/tags/*`.
 
+**Status — done criteria met.** Shipped: the schema-adaptive renderer (`src/shared/PropertyRow.tsx`), the focus-panel aspect band (`src/workspace/AspectBand.tsx`), compact navigation-row previews, and the content-anchored tether (`src/editor/aspect-tether.ts`). Deferred to later sub-phases: the *merged* integration level, the *add* gesture (→ §9.6), and substrate/fold-merge. See [Phase 9.2 — Implementation status](Phase-9.2.md#implementation-status).
+
 ## 9.3 Embedded collections & live views
 
 Render a row-set under a node as an embedded face (table / outline / board): **owned collections** (`own`-edges @ 0..N) and **query bindings** (live views). In the [Phase 9.2](Phase-9.2.md) model these are **bands** — owned collections are anchored bands (can fold/merge into the owned order); query bindings are **unanchored** bands (no tether, a `query:` header, cannot mesh).

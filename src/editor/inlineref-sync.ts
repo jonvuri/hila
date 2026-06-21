@@ -114,6 +114,35 @@ export const refreshCachedTitles = async (
   return docJson
 }
 
+/**
+ * Extract inline refs (with `kind`) from a PM doc JSON value — the JSON
+ * counterpart of `extractInlineRefs`, for surfaces that hold stored PM JSON
+ * rather than a live `Node` (e.g. computing which owned aspects are
+ * content-anchored to a node's prose for the aspect tether).
+ */
+export const extractInlineRefsFromJson = (docJson: unknown): InlineRef[] => {
+  const refs: InlineRef[] = []
+  walkJson(docJson, (node) => {
+    if (
+      node &&
+      typeof node === 'object' &&
+      (node as Record<string, unknown>).type === 'inlineref'
+    ) {
+      const attrs = (node as Record<string, unknown>).attrs as
+        | Record<string, unknown>
+        | undefined
+      if (attrs && attrs.targetMatrixId != null && attrs.targetRowId != null) {
+        refs.push({
+          targetMatrixId: attrs.targetMatrixId as number,
+          targetRowId: attrs.targetRowId as number,
+          kind: (attrs.kind as JoinKind) ?? 'ref',
+        })
+      }
+    }
+  })
+  return refs
+}
+
 type TargetPair = { targetMatrixId: number; targetRowId: number }
 
 const collectTargets = (obj: unknown): TargetPair[] => {

@@ -229,30 +229,36 @@ which partially answers [Plan.md open question #5](Plan.md) (face affinity) for 
 - **§9.5 panel stack** = keyed by `(matrix_id, row_id)`; the breadcrumb is its substrate
   rendering; substrate-as-fallback contributes to resolving face affinity (#5).
 
-## Implementation status & next step
+## Implementation status
 
-**Built / in place:**
+**Built / shipped (§9.2 done criteria met):**
 
-- Column roles (`role: 'label' | 'content' | null`) already exist in the data layer
-  (migration, unique-per-role index, `setColumnRole`) — the renderer/substrate can rely
-  on them; no new data-layer work is required for roles.
-- The **aspect gather spine** (`buildTagsForRowsQuery` in `src/tags/tag-queries.ts`;
-  `aspectsByHostCk` + `getHydratedData` in `src/workspace/usePagedWorkspaceData.ts`) is
-  retained — it is exactly the batched related-row fetch a band needs.
-- Shared role logic centralized in `src/shared/property-surface.ts`
-  (`isLabelLikeColumn`, role-aware with a name fallback for pre-role matrixes).
-- The composed renderer's design corners are prototyped in
-  `src/design/outline/AspectRowPrototype.stories.tsx`.
+- **Column roles** (`role: 'label' | 'content' | null`) already existed in the data layer
+  (migration, unique-per-role index, `setColumnRole`); the renderer relies on them.
+- **Schema-adaptive renderer** — `src/shared/PropertyRow.tsx`, role-aware partition
+  (`partitionPropertyColumns` in `src/shared/property-surface.ts`), wide + narrow density,
+  always-live seamless `FieldEditor` inputs (no display/edit toggle). Design corners
+  prototyped in `src/design/outline/AspectRowPrototype.stories.tsx`.
+- **Aspect band (banded level)** — `src/workspace/AspectBand.tsx`: owned aspects grouped
+  into contiguous type blocks with type-badge bullets, edited in place via the renderer;
+  mounted in the focus panel between the node body and the children nav panel.
+- **Compact navigation-row previews** — restored in `src/workspace/NavigationPanel.tsx`
+  as the nav-panel tier, fed by the retained gather spine (`aspectsByHostCk` /
+  `getHydratedData`) and sharing `buildAspectPreview` key-field logic with the band.
+- **Content-anchored tether (hover bridge)** — `src/editor/aspect-tether.ts` (shared
+  module-scoped hover signal), wired into the inline badge (`InlineRefView`, lit via
+  `.inlineref-tethered`) and the band row; the band marks content-anchored rows with a
+  tether indicator. `FocusPanel` derives the content-anchored set from the node's prose
+  via `extractInlineRefsFromJson` (`src/editor/inlineref-sync.ts`).
 
-**Retired** (it was the pre-band ad-hoc treatment, superseded by the band model): the
-navigation-row property-preview chips and the focus-panel collapsible aspect groups
-(`AspectPropertyGroup`), plus their e2e spec. The intrinsic half of the property surface
-(overflow columns via `FieldEditor` in the focus panel) is kept.
+**Retired** (pre-band ad-hoc treatment, superseded): the focus-panel collapsible aspect
+groups (`AspectPropertyGroup`). The intrinsic half of the property surface (overflow
+columns via `FieldEditor`) is kept.
 
-**Immediate next step:** build the **aspect band + the schema-adaptive row renderer**
-against the retained gather spine — banded by default, content-anchored rows tethered to
-their inline `#`-ref, fields rendered through the role-aware renderer at the focus
-panel's density. New e2e coverage lands with the band (replacing the retired spec).
+**Deferred past §9.2** (to later sub-phases, not blockers): the **merged** integration
+level (intrinsic ∪ aspect fields as one row — we default to banded); the **add** gesture
+for new aspects (leans into §9.6); **substrate / x-ray** fidelity and **fold/merge** (later);
+a drawn-line tether (the hover-highlight bridge is v1).
 
 ## Open sub-questions
 

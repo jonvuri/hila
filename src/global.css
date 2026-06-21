@@ -485,6 +485,14 @@ body,
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Aspect tether (Phase 9.2): the inline badge end of the hover bridge, lit when
+   its row in the focus-panel aspect band is hovered (and vice versa). */
+.inlineref-tethered {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+  filter: brightness(1.15);
+}
+
 .inlineref-ghost {
   color: var(--text-muted);
   background: hsla(230, 10%, 20%, 0.3);

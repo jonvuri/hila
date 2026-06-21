@@ -5,6 +5,7 @@ import { useQuery } from '../../sql/useQuery'
 import { getColumns } from '../../core/client/matrix-client'
 import type { ColumnDefinition } from '../../core/matrix'
 import { tagColorFromName, tagBadgeBackground } from '../../tags/tag-color'
+import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../aspect-tether'
 
 const MAX_KEY_PROPS = 2
 const LABEL_COLUMNS = new Set(['id', 'label', 'title', 'name'])
@@ -127,6 +128,19 @@ export const InlineRefView: Component = () => {
 
   const kindClass = createMemo(() => (isOwn() ? ' inlineref-own' : ' inlineref-ref'))
 
+  // Aspect tether: own-kind badges bridge to their row in the focus-panel aspect
+  // band (Phase 9.2). Hovering either side highlights the other.
+  const tetherTarget = createMemo(() => {
+    const mid = targetMatrixId()
+    const rid = targetRowId()
+    return isOwn() && mid != null && rid != null ? { matrixId: mid, rowId: rid } : null
+  })
+  const isTethered = createMemo(() => {
+    const t = tetherTarget()
+    return t != null && isAspectHovered(t.matrixId, t.rowId)
+  })
+  const tetherClass = createMemo(() => (isTethered() ? ' inlineref-tethered' : ''))
+
   const badgeStyle = createMemo(() => {
     if (!isOwn() || !isLive()) return undefined
     // Color from the live tag name (falling back to the cached title) so a
@@ -185,10 +199,18 @@ export const InlineRefView: Component = () => {
 
   return (
     <span
-      class={'inlineref' + kindClass() + stateClass()}
+      class={'inlineref' + kindClass() + stateClass() + tetherClass()}
       data-kind={kind()}
       style={badgeStyle()}
       onClick={handleClick}
+      onMouseEnter={() => {
+        const t = tetherTarget()
+        if (t) setHoveredAspect(t)
+      }}
+      onMouseLeave={() => {
+        const t = tetherTarget()
+        if (t) clearHoveredAspect(t)
+      }}
     >
       {displayTitle()}
       <Show when={isOwn() && isLive() && keyProps().length > 0}>

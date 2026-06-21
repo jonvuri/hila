@@ -70,6 +70,14 @@ const setupTaggedRow = async (page: Page) => {
   })
 }
 
+const createTagTypeViaAPI = async (page: Page, name: string) =>
+  page.evaluate(async (tagName: string) => {
+    // @ts-expect-error -- resolved by Vite dev server at runtime
+    const client = await import('/src/core/client/matrix-client.ts')
+    const r = await client.createTagType(tagName)
+    return { matrixId: r.matrixId as number }
+  }, name)
+
 const openFocusOnWelcomeRow = async (page: Page) => {
   const row = page.locator('.outline-row').filter({ hasText: 'Welcome to Hila' }).first()
   const focusBtn = row.locator('.nav-row-open-focus')
@@ -145,5 +153,46 @@ test.describe('Property surface — aspect band (Phase 9.2)', () => {
     // Clicking a preview chip opens the focus panel without losing the chips.
     await chips.first().click()
     await expect(page.getByTestId('focus-panel')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('content-anchored aspect tethers to its inline #-badge (hover bridge)', async ({
+    page,
+  }) => {
+    await createTagTypeViaAPI(page, 'task')
+
+    // Type an inline #task into the seed row's label → badge + content-anchored aspect.
+    const seedEditor = page
+      .locator('.outline-row')
+      .filter({ hasText: 'Welcome to Hila' })
+      .first()
+      .locator('.ProseMirror')
+      .first()
+    await seedEditor.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' ')
+    await page.keyboard.type('#')
+    await page.keyboard.type('task')
+    await page.waitForTimeout(500)
+    await expect(
+      page.locator('.inlineref-autocomplete-item, .inlineref-autocomplete-create').first(),
+    ).toBeVisible({ timeout: 5000 })
+    await page.keyboard.press('Enter')
+    await expect(seedEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+
+    await openFocusOnWelcomeRow(page)
+
+    const band = page.getByTestId('focus-aspect-band')
+    await expect(band).toBeVisible({ timeout: 8000 })
+
+    // Content-anchored → the row shows a tether indicator.
+    await expect(band.getByTestId('aspect-tether-indicator').first()).toBeVisible({
+      timeout: 5000,
+    })
+
+    // Hover bridge: hovering the band row lights the matching inline badge.
+    const badge = page.getByTestId('focus-panel').locator('.inlineref-own').first()
+    await expect(badge).toBeVisible()
+    await band.getByTestId('aspect-row').first().hover()
+    await expect(badge).toHaveClass(/inlineref-tethered/, { timeout: 3000 })
   })
 })
