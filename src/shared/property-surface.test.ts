@@ -8,6 +8,7 @@ import {
   filterIntrinsicOverflowColumns,
   getKeyPropertyColumns,
   isLabelLikeColumn,
+  partitionPropertyColumns,
 } from './property-surface'
 
 const col = (name: string, overrides: Partial<ColumnDefinition> = {}): ColumnDefinition => ({
@@ -62,5 +63,31 @@ describe('property-surface helpers', () => {
     expect(preview.tagName).toBe('task')
     expect(preview.color).toMatch(/^hsl/)
     expect(preview.fields).toEqual([{ name: 'status', value: 'done' }])
+  })
+
+  test('partitionPropertyColumns splits label, fields, and formula', () => {
+    const columns = [
+      col('id'),
+      col('label', { role: 'label' }),
+      col('status'),
+      col('priority'),
+      col('computed', { formula: '1+1' }),
+    ]
+    const { label, fields, formula } = partitionPropertyColumns(columns)
+    expect(label?.name).toBe('label')
+    expect(fields.map((c) => c.name)).toEqual(['status', 'priority'])
+    expect(formula.map((c) => c.name)).toEqual(['computed'])
+  })
+
+  test('partitionPropertyColumns falls back to a label-like name and tolerates no label', () => {
+    // Name fallback when no role is set.
+    const named = partitionPropertyColumns([col('title'), col('status')])
+    expect(named.label?.name).toBe('title')
+    expect(named.fields.map((c) => c.name)).toEqual(['status'])
+
+    // No label-like column at all → null label, all are fields.
+    const none = partitionPropertyColumns([col('status'), col('priority')])
+    expect(none.label).toBeNull()
+    expect(none.fields.map((c) => c.name)).toEqual(['status', 'priority'])
   })
 })

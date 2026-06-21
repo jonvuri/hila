@@ -16,17 +16,27 @@ const parseSelectOptions = (optionsJson: string | null): string[] => {
  * Column-type-aware field editor. Renders a text/number/date input,
  * checkbox, or select dropdown based on the column's `displayType`.
  * Saves on blur or Enter; reverts on Escape.
+ *
+ * `seamless` styles the control to read as plain text (transparent until
+ * hover/focus) so it can sit always-live in a composed surface without looking
+ * like a form input. `showLabel={false}` suppresses the built-in field-name
+ * label, letting a parent (e.g. PropertyRow) own the label placement.
  */
 export const FieldEditor: Component<{
   column: ColumnDefinition
   value: string
   onSave: (value: string) => void
+  seamless?: boolean
+  showLabel?: boolean
 }> = (props) => {
   const [localValue, setLocalValue] = createSignal('')
 
   createEffect(() => {
     setLocalValue(props.value)
   })
+
+  const cls = (base: string) => (props.seamless ? `${base} ${base}--seamless` : base)
+  const showLabel = () => props.showLabel !== false
 
   const commitValue = () => {
     const v = localValue()
@@ -53,13 +63,15 @@ export const FieldEditor: Component<{
   const displayType = () => props.column.displayType
 
   return (
-    <div class="tag-panel-field">
-      <label class="tag-panel-field-label">{props.column.name}</label>
+    <div class={cls('tag-panel-field')}>
+      <Show when={showLabel()}>
+        <label class="tag-panel-field-label">{props.column.name}</label>
+      </Show>
       <Show
         when={displayType() !== 'select' || !props.column.options}
         fallback={
           <select
-            class="tag-panel-field-select"
+            class={cls('tag-panel-field-select')}
             value={localValue()}
             onChange={(e) => {
               setLocalValue(e.currentTarget.value)
@@ -78,7 +90,7 @@ export const FieldEditor: Component<{
           when={displayType() !== 'boolean'}
           fallback={
             <input
-              class="tag-panel-field-checkbox"
+              class={cls('tag-panel-field-checkbox')}
               type="checkbox"
               checked={localValue() === '1' || localValue() === 'true'}
               onChange={(e) => {
@@ -91,7 +103,7 @@ export const FieldEditor: Component<{
           }
         >
           <input
-            class="tag-panel-field-input"
+            class={cls('tag-panel-field-input')}
             type={
               displayType() === 'number' ? 'number'
               : displayType() === 'date' ?

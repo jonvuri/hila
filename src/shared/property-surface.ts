@@ -50,6 +50,31 @@ export const getKeyPropertyColumns = (
 ): ColumnDefinition[] =>
   columns.filter((col) => !isLabelLikeColumn(col) && col.formula == null).slice(0, max)
 
+export type PropertyColumnPartition = {
+  /** The identity/label column rendered prominently (role `label`, else the
+   *  first conventional label-like name), or null if the row has none. */
+  label: ColumnDefinition | null
+  /** Role-less, non-formula columns rendered as the editable field strip. */
+  fields: ColumnDefinition[]
+  /** Formula/derived columns rendered read-only. */
+  formula: ColumnDefinition[]
+}
+
+/** Split a matrix's columns into the parts the schema-adaptive row renderer
+ *  ([PropertyRow]) lays out: a prominent label, an editable field strip, and
+ *  read-only formula columns. The shared partition keeps the renderer, the
+ *  property overflow, and key-field previews consistent. */
+export const partitionPropertyColumns = (
+  columns: ColumnDefinition[],
+): PropertyColumnPartition => ({
+  label:
+    columns.find((col) => col.role === 'label') ??
+    columns.find((col) => isLabelLikeColumn(col) && !SKIPPED_PROPERTY_COLUMNS.has(col.name)) ??
+    null,
+  fields: filterIntrinsicOverflowColumns(columns),
+  formula: filterFormulaColumns(columns),
+})
+
 export const buildAspectPreviewFields = (
   columns: ColumnDefinition[],
   row: Record<string, unknown> | null | undefined,

@@ -1672,6 +1672,45 @@ body,
   cursor: pointer;
 }
 
+/* PropertyRow label: the prominent identity control sits flush-left and reads
+   larger than the field strip below it. */
+.property-row-label .tag-panel-field-input--seamless {
+  font-size: var(--text-base, 14px);
+  font-weight: 500;
+  color: var(--c-fg, inherit);
+  padding-left: 0;
+  width: 100%;
+}
+
+/* Seamless variant: always-live controls that read as plain text until
+   hover/focus, for composed surfaces like the aspect band (PropertyRow). */
+.tag-panel-field--seamless {
+  padding: 0;
+  gap: 6px;
+}
+
+.tag-panel-field-input--seamless,
+.tag-panel-field-select--seamless {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 2px 4px;
+  font: inherit;
+  color: inherit;
+}
+
+.tag-panel-field-input--seamless:hover,
+.tag-panel-field-select--seamless:hover {
+  border-color: var(--c-border, #e0e0e0);
+}
+
+.tag-panel-field-input--seamless:focus,
+.tag-panel-field-select--seamless:focus {
+  background: var(--c-surface, #fff);
+  border-color: var(--c-accent, #7c3aed);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
 .tag-panel-field-formula {
   opacity: 0.7;
 }

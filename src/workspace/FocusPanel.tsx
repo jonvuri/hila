@@ -35,6 +35,7 @@ import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 
+import AspectBand from './AspectBand'
 import { buildSingleRowQuery, buildBacklinksQuery } from './workspace-plugin'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
@@ -573,6 +574,10 @@ const FocusPanel = (props: FocusPanelProps) => {
                   </For>
                 </div>
               </Show>
+
+              {/* Aspect band: owned `#`-tag aspects, banded between the node
+                  body and the children nav panel (Phase 9.2). */}
+              <AspectBand hostMatrixId={props.matrixId} hostRowId={props.rowId} />
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
