@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
+import { createStore } from 'solid-js/store'
 import { Slice } from 'prosemirror-model'
 import { EditorView } from 'prosemirror-view'
 import { Selection, TextSelection, type Plugin as StatePlugin } from 'prosemirror-state'
@@ -14,7 +15,9 @@ import {
   reparentRow,
   updateRow,
   renameMatrix,
+  getColumns,
 } from '../core/client/matrix-client'
+import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import {
   OutlineRow as DesignOutlineRow,
@@ -37,6 +40,8 @@ import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
+import { buildAspectPreview } from '../shared/property-surface'
+import type { AspectPreview } from '../shared/property-surface'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import { buildMatrixTitleQuery } from './workspace-plugin'
@@ -507,10 +512,31 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const error = pageData.error
   const rows = pageData.rows
-  // The aspect gather (pageData.aspectsByHostCk / getHydratedData) is kept on the
-  // data spine but no longer consumed here: owned-aspect previews move from ad-hoc
-  // inline chips to the aspect band + schema-adaptive renderer (Phase 9.2; see
-  // context/Phase-9.2.md), which is the immediate next build.
+  // Aspect gather spine (Phase 9.2): the owned-aspect attachments per host row,
+  // plus the batched hydration lookup. Consumed below for the compact navigation-
+  // row property preview — the nav-panel tier of the property surface, sharing the
+  // key-field logic (`buildAspectPreview`) with the focus-panel aspect band.
+  const aspectsByHostCk = pageData.aspectsByHostCk
+  const getHydratedData = pageData.getHydratedData
+
+  // Column definitions for aspect matrixes, loaded lazily as their rows enter the
+  // visible window (aspect rows render as own-children, so they are hydrated by
+  // the main gather and resolvable via getHydratedData).
+  const [colCache, setColCache] = createStore<Record<number, ColumnDefinition[]>>({})
+
+  createEffect(() => {
+    const seenMatrixIds = new Set<number>()
+    for (const row of rows) {
+      for (const a of aspectsByHostCk[row.ck] ?? []) {
+        seenMatrixIds.add(a.target_matrix_id)
+      }
+    }
+    for (const mid of seenMatrixIds) {
+      if (!colCache[mid]) {
+        void getColumns(mid).then((cols) => setColCache(mid, cols))
+      }
+    }
+  })
 
   const focusRootRow = () => pageData.focusRootRow()
 
@@ -1017,6 +1043,20 @@ const NavigationPanel = (props: NavigationPanelProps) => {
               rowMatrixId === props.matrixId && props.focusedRowId === rowId
             const chip = chipFor(row)
 
+            // Compact owned-aspect previews for host workspace rows (Phase 9.2):
+            // key-field values per owned aspect, type-colored, click → focus.
+            const previews = createMemo((): AspectPreview[] => {
+              if (!isPlainWorkspaceRow(row)) return []
+              const attachments = aspectsByHostCk[row.ck] ?? []
+              return attachments.flatMap((a) => {
+                const cols = colCache[a.target_matrix_id]
+                if (!cols) return []
+                const data = getHydratedData(a.target_matrix_id, a.target_row_id)
+                const preview = buildAspectPreview(a.tag_type_name, cols, data)
+                return preview.fields.length > 0 ? [preview] : []
+              })
+            })
+
             onCleanup(() => {
               unregisterHandle(rowCk)
               unregisterContentHandle(rowCk)
@@ -1106,6 +1146,37 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                           onHandle={(handle) => registerHandle(rowCk, handle)}
                           onEditorFocus={() => setFocusedCk(rowCk)}
                         />
+                        {/* Compact aspect preview chips (host workspace rows only) */}
+                        <For each={previews()}>
+                          {(preview) => (
+                            <For each={preview.fields}>
+                              {(f) => (
+                                <span
+                                  class="nav-row-property-chip"
+                                  data-testid="nav-row-property-chip"
+                                  title={`#${preview.tagName} · ${f.name}`}
+                                  style={{
+                                    'flex-shrink': 0,
+                                    'font-size': '11px',
+                                    'font-weight': '500',
+                                    'line-height': '1.4',
+                                    padding: '0 5px',
+                                    'border-radius': '3px',
+                                    color: preview.color,
+                                    background: tagBadgeBackground(preview.color),
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    props.onOpenFocus(row.row_id, new Uint8Array(row.key))
+                                  }}
+                                >
+                                  {f.value}
+                                </span>
+                              )}
+                            </For>
+                          )}
+                        </For>
                       </div>
                     )}
                   />

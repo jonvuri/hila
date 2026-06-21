@@ -218,11 +218,11 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   // -----------------------------------------------------------------------
   // Aspect gather: tag attachments for workspace-matrix rows in the window.
   // Only workspace-matrix rows can have tag aspects, so we filter by matrixId.
-  // This is the data spine for the Phase 9.2 "aspect band" (see
+  // This is the data spine for the Phase 9.2 property surface (see
   // context/Phase-9.2.md): `aspectsByHostCk` maps a host row to its owned aspect
-  // attachments, and `getHydratedData` supplies their fields. The band + the
-  // shared schema-adaptive renderer (the immediate next build) consume these;
-  // until then they are produced but not yet rendered.
+  // attachments, and `getHydratedData` supplies their fields. Consumed by the
+  // navigation-row aspect previews (NavigationPanel); the focus-panel aspect band
+  // hydrates per-aspect directly via `useRowData`.
   // -----------------------------------------------------------------------
   const [aspectsByHostCk, setAspectsByHostCk] = createStore<Record<string, AspectAttachment[]>>(
     {},

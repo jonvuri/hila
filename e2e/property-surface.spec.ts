@@ -126,4 +126,24 @@ test.describe('Property surface — aspect band (Phase 9.2)', () => {
       expect(persisted).toBe('done')
     }).toPass({ timeout: 5000 })
   })
+
+  test('navigation row shows compact aspect preview chips', async ({ page }) => {
+    await setupTaggedRow(page)
+
+    const chips = page
+      .locator('.outline-row')
+      .filter({ hasText: 'Welcome to Hila' })
+      .first()
+      .getByTestId('nav-row-property-chip')
+
+    await expect(async () => {
+      expect(await chips.count()).toBeGreaterThanOrEqual(1)
+    }).toPass({ timeout: 8000 })
+
+    await expect(chips.first()).toContainText('todo')
+
+    // Clicking a preview chip opens the focus panel without losing the chips.
+    await chips.first().click()
+    await expect(page.getByTestId('focus-panel')).toBeVisible({ timeout: 5000 })
+  })
 })
