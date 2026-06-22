@@ -575,6 +575,96 @@ test.describe('Tag lifecycle', () => {
     }).toPass({ timeout: 10000 })
   })
 
+  // Phase 9 (type-node carry-over): deleting the *type-node* itself drops its
+  // owned matrix (the matrix-drop cascade, 8c §8.1) — a distinct axis from the
+  // host-row cascade above. The host doc's badge is stripped/ghosted, the tag
+  // vanishes from # autocomplete, and the promotion is cleared. We deliberately
+  // do NOT query the dropped data table (it no longer exists).
+  test('deleting a tag type-node strips host badges, clears promotion, and leaves autocomplete', async ({
+    page,
+  }) => {
+    await createTagTypeViaAPI(page, 'task')
+
+    const newEditor = await createNewRow(page)
+    await typeHashTag(page, 'task')
+    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    // Wait for the debounced save + syncInlineRefs to persist the badge into the
+    // host doc and materialize the own-join.
+    await page.waitForTimeout(1000)
+
+    const workspaceMid = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      return (rows[0] as { id: number }).id
+    })
+
+    // Precondition: the badge is persisted in a host doc (the bullet label).
+    const refsBefore = await page.evaluate(async (mid: number) => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery(
+        `SELECT COUNT(*) AS cnt FROM "mx_${mid}_data" WHERE label LIKE '%inlineref%'`,
+      )
+      return (rows[0] as { cnt: number }).cnt
+    }, workspaceMid)
+    expect(refsBefore).toBeGreaterThan(0)
+
+    // Delete the type-node itself → matrix-drop cascade (8c §8.1).
+    await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const client = await import('/src/core/client/matrix-client.ts')
+      const tagTypes = await client.getAllTagTypes()
+      const task = tagTypes.find((t: { name: string }) => t.name.toLowerCase() === 'task')
+      await client.deleteTagType(task.id)
+    })
+
+    // The # badge is stripped from the host doc (eager inlineref cleanup).
+    await expect(async () => {
+      const refsAfter = await page.evaluate(async (mid: number) => {
+        // @ts-expect-error -- resolved by Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const rows = await sql.execQuery(
+          `SELECT COUNT(*) AS cnt FROM "mx_${mid}_data" WHERE label LIKE '%inlineref%'`,
+        )
+        return (rows[0] as { cnt: number }).cnt
+      }, workspaceMid)
+      expect(refsAfter).toBe(0)
+    }).toPass({ timeout: 10000 })
+
+    // The tag vanishes from getAllTagTypes (matrix dropped + promotion cleared)…
+    const stillThere = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const client = await import('/src/core/client/matrix-client.ts')
+      const tagTypes = await client.getAllTagTypes()
+      return tagTypes.some((t: { name: string }) => t.name.toLowerCase() === 'task')
+    })
+    expect(stillThere).toBe(false)
+
+    // …and the promoted_nodes entry is gone (no resurrection hazard).
+    const promotedCount = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery('SELECT COUNT(*) AS cnt FROM promoted_nodes')
+      return (rows[0] as { cnt: number }).cnt
+    })
+    expect(promotedCount).toBe(0)
+
+    // Re-typing #task now offers "Create" — no existing item remains to select.
+    await newEditor.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type('#task')
+    await page.waitForTimeout(500)
+    await expect(page.locator('.inlineref-autocomplete-create').first()).toBeVisible({
+      timeout: 5000,
+    })
+    // No *existing* tag item remains (the create option also carries
+    // `.inlineref-autocomplete-item`, so exclude it).
+    await expect(
+      page.locator('.inlineref-autocomplete-item:not(.inlineref-autocomplete-create)'),
+    ).toHaveCount(0)
+  })
+
   test('deleting an aspect row from the table face removes the tag badge from label text', async ({
     page,
   }) => {
@@ -931,5 +1021,41 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     await expect(reserveRow).toBeVisible({ timeout: 5000 })
     const chip = reserveRow.getByTestId('row-type-chip')
     await expect(chip).toHaveText('task', { timeout: 5000 })
+  })
+})
+
+// =============================================================================
+// 7. Phase 9 carry-over — type-nodes are ordinary, navigable workspace nodes
+// =============================================================================
+
+test.describe('Type-node navigability (Phase 9 carry-over)', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await waitForRows(page)
+  })
+
+  test('a type-node renders at the root with a type chip and is navigable via open-focus', async ({
+    page,
+  }) => {
+    await createTagTypeViaAPI(page, 'project')
+
+    // The type-node is a real root outline row (label = tag name) with a distinct
+    // "type" chip — not hidden, not a special side-path.
+    const typeRow = page
+      .locator('.outline-row')
+      .filter({ has: page.getByTestId('row-type-chip') })
+      .filter({ hasText: 'project' })
+      .first()
+    await expect(typeRow).toBeVisible({ timeout: 5000 })
+    await expect(typeRow.getByTestId('row-type-chip')).toHaveText('type')
+
+    // It now exposes the open-focus affordance (navigable like any node — the
+    // Phase 9 carry-over resolution; previously blocked).
+    await typeRow.hover()
+    await typeRow.getByTestId('open-focus-btn').click()
+
+    // Drilling in opens a focus panel titled by the type-node's name.
+    const focusLabel = page.getByTestId('focus-panel-label').last()
+    await expect(focusLabel).toContainText('project', { timeout: 5000 })
   })
 })

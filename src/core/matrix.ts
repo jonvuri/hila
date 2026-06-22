@@ -964,10 +964,15 @@ const filterInlineRefNode = (node: unknown, matches: InlineRefMatcher): FilterRe
 }
 
 /**
- * Load a source row's content/body column as PM JSON, remove all `inlineref`
- * nodes satisfying the matcher in one pass, and save the modified doc. If the
- * source row has no rich text column or the content is not PM JSON, this is
- * a no-op.
+ * Load a source row's rich-text columns as PM JSON, remove all `inlineref`
+ * nodes satisfying the matcher in one pass each, and save the modified docs. A
+ * `#`-badge can live in *any* rich-text column — most commonly a workspace
+ * row's `label` (the bullet text), not just its `content` — so every rich-text
+ * column is swept (the role-tagged label/content columns, plus the name-based
+ * content/body/label fallback for matrixes that don't set roles). Columns whose
+ * value is absent or not PM JSON are skipped. (Without this, a matrix drop would
+ * leave a dangling label-badge in the host doc — Phase 8c §8.1's "remove the
+ * inlineref nodes from the source docs" applies to all of them.)
  */
 const removeMatchingInlineRefsFromDoc = (
   db: Database,
@@ -976,35 +981,46 @@ const removeMatchingInlineRefsFromDoc = (
   matches: InlineRefMatcher,
 ): void => {
   const columns = getColumns(db, sourceMatrixId)
-  const contentCol = columns.find((c) => c.name === 'content' || c.name === 'body')
-  if (!contentCol) return
+  const richTextCols = columns.filter(
+    (c) =>
+      c.role === 'label' ||
+      c.role === 'content' ||
+      c.name === 'content' ||
+      c.name === 'body' ||
+      c.name === 'label',
+  )
+  if (richTextCols.length === 0) return
 
-  const colName = contentCol.name
+  const colNames = richTextCols.map((c) => c.name)
   const stmt = db.prepare(
-    `SELECT ${quoteIdent(colName)} FROM "mx_${sourceMatrixId}_data" WHERE id = ?`,
+    `SELECT ${colNames.map(quoteIdent).join(', ')} FROM "mx_${sourceMatrixId}_data" WHERE id = ?`,
   )
   stmt.bind([sourceRowId])
   if (!stmt.step()) {
     stmt.finalize()
     return
   }
-  const raw = (stmt.get({}) as Record<string, unknown>)[colName]
+  const row = stmt.get({}) as Record<string, unknown>
   stmt.finalize()
-  if (typeof raw !== 'string') return
 
-  let doc: unknown
-  try {
-    doc = JSON.parse(raw)
-  } catch {
-    return
+  for (const colName of colNames) {
+    const raw = row[colName]
+    if (typeof raw !== 'string') continue
+
+    let doc: unknown
+    try {
+      doc = JSON.parse(raw)
+    } catch {
+      continue
+    }
+
+    const modified = filterInlineRefNode(doc, matches)
+    if (!modified.changed) continue
+
+    db.exec(`UPDATE "mx_${sourceMatrixId}_data" SET ${quoteIdent(colName)} = ? WHERE id = ?`, {
+      bind: [JSON.stringify(modified.doc), sourceRowId],
+    })
   }
-
-  const modified = filterInlineRefNode(doc, matches)
-  if (!modified.changed) return
-
-  db.exec(`UPDATE "mx_${sourceMatrixId}_data" SET ${quoteIdent(colName)} = ? WHERE id = ?`, {
-    bind: [JSON.stringify(modified.doc), sourceRowId],
-  })
 }
 
 /**

@@ -813,12 +813,23 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     return focusRoot ? new Uint8Array(focusRoot) : undefined
   }
 
-  // A "plain workspace row" is one that lives in this panel's workspace matrix
-  // and is not a tag type-node. Structural gestures (create/move/merge/expand
-  // content) are scoped to these for now; cross-matrix aspect rows are render +
-  // inline-label-edit only in 9.1 (creation gestures land in 9.6).
+  // A row that lives in this panel's workspace matrix. This *includes* tag
+  // type-nodes: they are ordinary, navigable workspace rows that also happen to
+  // own a matrix (Phase 8c §4 — "a name, a place, a schema, a collection root";
+  // the Phase 9 carry-over resolution). Navigation (open-focus) and notes
+  // (Shift-Enter content) apply to all of them. A type-node's root placement is
+  // just `createTagType`'s insert default, not a constraint — promoting an
+  // arbitrary node *anywhere* is the §9.6 unified-creation gesture, and a saved
+  // "all type-nodes" view is a §9.3 query band.
+  const isWorkspaceRow = (row: WorkspaceRowData): boolean => row.matrix_id === props.matrixId
+
+  // A "plain workspace row" additionally excludes type-nodes. The remaining
+  // structural gestures stay scoped to these: backspace-delete of a type-node is
+  // a matrix-drop cascade (8c §8.1, large blast radius), and cross-matrix
+  // create/reparent are §9.6. Cross-matrix aspect rows are render +
+  // inline-label-edit only.
   const isPlainWorkspaceRow = (row: WorkspaceRowData): boolean =>
-    row.matrix_id === props.matrixId && row.is_type_node !== 1
+    isWorkspaceRow(row) && row.is_type_node !== 1
 
   const makeCallbacks = (ck: string): OutlineCallbacks => ({
     onEnter: (view: EditorView) => {
@@ -996,7 +1007,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const vRows = visibleRows()
       const index = findRowIndex(vRows, ck)
       if (index === -1) return
-      if (!isPlainWorkspaceRow(vRows[index]!)) return
+      if (!isWorkspaceRow(vRows[index]!)) return
       expandAndFocusContent(ck)
     },
 
@@ -1005,7 +1016,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
-      if (!isPlainWorkspaceRow(row)) return
+      if (!isWorkspaceRow(row)) return
       props.onOpenFocus(row.row_id, new Uint8Array(row.key))
     },
   })
@@ -1225,9 +1236,11 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   </Show>
                 </div>
 
-                {/* Right-arrow button: open focus panel (workspace rows only;
-                    boundary-hop drill-in for aspect rows is Phase 9.5) */}
-                <Show when={isPlainWorkspaceRow(row)}>
+                {/* Right-arrow button: open focus panel. Workspace rows —
+                    including type-nodes (navigable per the Phase 9 carry-over
+                    resolution) — get it; boundary-hop drill-in for cross-matrix
+                    aspect rows is Phase 9.5. */}
+                <Show when={isWorkspaceRow(row)}>
                   <button
                     class="nav-row-open-focus"
                     data-testid="open-focus-btn"

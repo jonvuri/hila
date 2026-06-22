@@ -224,6 +224,47 @@ describe('Owned matrix drop cascade (Phase 8c §8.1)', () => {
     expect(doc).toContain('hello ')
   })
 
+  test('host docs lose badges in the label column too, not just content (matrix drop)', () => {
+    // The common case: a `#`-badge sits in a workspace row's *label* (the bullet
+    // text), not its content. A label-role and a content-role column coexist.
+    const labeledWsId = createMatrix(db, 'Labeled WS', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+      { name: 'content', type: 'TEXT', role: 'content' },
+    ])
+    const { rowId: typeNodeId } = insertRow(db, labeledWsId)
+    const { rowId: hostId } = insertRow(db, labeledWsId)
+    const taskMatrixId = createOwnedMatrix(
+      db,
+      { matrixId: labeledWsId, rowId: typeNodeId },
+      'Tasks',
+      [{ name: 'label', type: 'TEXT' }],
+    )
+    const aspectId = createDependentRow(db, labeledWsId, hostId, taskMatrixId, { label: 'a1' })
+
+    updateRow(db, {
+      matrixId: labeledWsId,
+      rowId: hostId,
+      values: {
+        label: makePmDoc(makeTextNode('do it '), makeInlineRef(taskMatrixId, aspectId)),
+      },
+    })
+
+    const getLabel = (rowId: number): string => {
+      const s = db.prepare(`SELECT label FROM "mx_${labeledWsId}_data" WHERE id = ?`)
+      s.bind([rowId])
+      s.step()
+      const r = s.get({}) as { label: string }
+      s.finalize()
+      return r.label
+    }
+    expect(getLabel(hostId)).toContain(`"targetMatrixId":${taskMatrixId}`)
+
+    dropOwnedMatrix(db, taskMatrixId)
+
+    expect(getLabel(hostId)).not.toContain(`"targetMatrixId":${taskMatrixId}`)
+    expect(getLabel(hostId)).toContain('do it ')
+  })
+
   test('plain deleteRow of a promoted type-node clears its promotion and drops the owned matrix', () => {
     const { rowId: typeNodeId } = insertRow(db, wsMatrixId)
     promoteNode(db, { matrixId: wsMatrixId, rowId: typeNodeId })
