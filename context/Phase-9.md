@@ -45,12 +45,18 @@ A node's **property surface** = its intrinsic columns (its own row) ∪ the hydr
 
 ## 9.3 Embedded collections & live views
 
-Render a row-set under a node as an embedded face (table / outline / board): **owned collections** (`own`-edges @ 0..N) and **query bindings** (live views). In the [Phase 9.2](Phase-9.2.md) model these are **bands** — owned collections are anchored bands (can fold/merge into the owned order); query bindings are **unanchored** bands (no tether, a `query:` header, cannot mesh).
+> **Deep-dive: [Phase 9.3](Phase-9.3.md).** A design session settled the model:
+> **query bands are SQL-first, and structure follows anchoring, not authoring.** The
+> summary below reflects it; Phase-9.3.md has the full reasoning and the build plan.
 
-- **Node-scoped query authoring UX:** express "tasks whose host is in this subtree" without writing SQL -- closure (Phase 8b) gives "in this subtree," the `own`-edge into the type's matrix gives "is a task." Design the authoring affordance.
-- **Editable-in-place write-back** via hydration, with **insertion target = the node** (a node-scoped query has an obvious place to insert new rows). Notion-linked-database-style.
-- The embedded face is the isolated `TableFace` (and later outline/board) finally embedded inside the stream view -- the "live embedded query face" workflow from `Architecture.md`.
-- Touches `src/table/TableFace.tsx`, `src/core/FaceRenderer.tsx`, `useQuery.ts`.
+Render a row-set under a node as a band (the [Phase 9.2](Phase-9.2.md) `band = (query, face, integration)`). Two kinds: **owned-collection bands** (`own`-edges @ 0..N — anchored) and **query-binding bands** (live views — unanchored: no tether, a `query:` header, cannot mesh).
+
+- **Structure follows anchoring.** Write-back splits into two orthogonal axes: **update** (edit existing cells) is governed by *query provenance* and works on any recognized query; **insert** is governed by *band anchoring* and exists only for anchored bands. Because **ownership is an input to queries, never an output** (deriving it from a query result would make cascade-deletes depend on query edits), node-scoped insert is reassigned out of query bands to anchored bands — realized by `createDependentRow` (→ §9.4/§9.6).
+- **Query bands are SQL-first** (no structured spec for v1 — the [composed/substrate](Phase-9.2.md#composed-vs-substrate-fidelity-and-x-ray) axis applied to authoring). Reads work today via `useQuery` + tables-visited invalidation; common shapes ("type T in this subtree" — closure ∪ self) ship as **snippets**, not a builder.
+- **Two write tiers:** *recognized SQL → editable cells* (a sound recognizer over `sqlite3_column_origin_name` + an AST gate + PK injection; update-only, single-base-table for v1 — the *view-update problem*), and *arbitrary SQL → read-only*. A `SQLITE_ENABLE_COLUMN_METADATA` capability spike gates the recognizer's cost.
+- **Persistence:** a dedicated **`bands` table** keyed by the focal `(matrix_id, row_id)` (**local-only this phase**). Renderer is the **schema-adaptive** `PropertyRow` (heterogeneous SQL results), *not* the matrix-bound `TableFace` — that belongs to §9.4.
+- **Build plan:** S1 read slice (bands table + read-only `QueryBand` in the focus panel + minimal SQL authoring) → S2 recognized-SQL write-back → S3 (later) schema-aware editor polish.
+- Touches a new `bands` table + ops, `src/workspace/FocusPanel.tsx` (band mount, cf. `AspectBand`), `src/shared/PropertyRow.tsx`, `src/sql/useQuery.ts`, `src/tags/tag-queries.ts` + `src/core/closure.ts` (snippet builders).
 
 ## 9.4 Dedicated sub-table embedding
 
