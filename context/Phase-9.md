@@ -66,6 +66,16 @@ The embedded `TableFace` inside the stream view for an own-matrix (Phase 8c §2)
 - The `FocusPanel` placeholder (the old "Child matrix reference (row_kind=1). Table face would render here." string) is replaced by the real embedded face.
 - Touches the former `rank`/`row_kind` concept (now an edge/position marker, see Phase 8 §5), `src/workspace/FocusPanel.tsx`.
 
+**Status — done criteria met (2026-06-27).** Shipped the FocusPanel-embedded `TableFace` band over a node's dedicated own-matrixes. Settled decisions:
+
+- **`row_kind` was fully dead, not merely dissolved.** The workspace matrix has only `label`/`content`, and `buildSingleRowQuery` projects `d.*`, so `FocusPanel`'s `data?.row_kind === 1` was permanently `undefined` — the placeholder branch was unreachable. Removed the phantom (`RowData.row_kind`, `isChildMatrixRef`, the dead branch) rather than "reinterpreting" a marker that no live code read.
+- **Position marker: live-derived, no new storage in v1.** The sub-table band is identified by ownership — `buildDedicatedSubtablesQuery` (the SQL twin of `isSharedMatrix`: owned ∧ no non-owner inbound `own`-edge), ordered by `matrix.id` for a stable derived position. No marker row is minted: duplicating `matrix.owner` into a `bands`/marker row is exactly the divergence "ownership is an input, never an output" forbids. A persisted position marker is only earned when reorder / §9.1-meshing becomes a real gesture (its home then is a band `order` / own-edge `edge_key`, never a revived `row_kind`).
+- **Live-derive the band, like `AspectBand`** (not persisted in `bands`). The `bands` table stays query-binding-only; folding aspect + sub-table bands into it together remains the single deferred "one table backs all bands" unification (§9.3).
+- **Anchored insert via `createDependentRow`.** The embedded `TableFace` takes an optional `insertParent`; "+ New Row" routes through `createDependentRow(focalNode, subMatrix)` so every row stays an `own`-child of the node (the dedicated invariant). Realizes the node-scoped insert §9.3 reassigned to anchored bands. Plain `insertRow` (root-sentinel) is unchanged for the standalone table view.
+- **Config reuses `applyFaceToMatrix`/`getFaceConfigs`** (guarded against double-create); flat rows (own-forest table hierarchy stays the §9.7 forward note).
+- **Scope:** FocusPanel band only. The StreamView embed and nav-panel collapsed preview reuse the same `SubTableBand` later. A minimal `createOwnedMatrix` worker call + a dev-grade "+ sub-table" button make dedicated sub-tables reachable/testable now; the real creation UX is the §9.6 unified gesture.
+- New: `src/workspace/SubTableBand.tsx`, `buildDedicatedSubtablesQuery` (`workspace-plugin.ts`), `createOwnedMatrix` client/worker exposure, `TableFace` `insertParent`. Tests: `src/workspace/dedicated-subtables.test.ts` + the `Phase 9.4` block in `e2e/focus-panel.spec.ts`.
+
 ## 9.5 Boundary-hop rendering & the panel stack (hardest)
 
 The data is trivial now (ancestry = the `own`-chain across boundaries, Phase 8), so the work is purely view-layer.
@@ -81,6 +91,7 @@ One "add a collection / make this a …" gesture with a single knob: **existing 
 
 - Where it lives, its defaults, and how the promotion taxonomy (Phase 8c §6) surfaces inline (e.g. promoting a label to a type, a shared collection to a dedicated sub-table).
 - Data paths exist after Phase 8c (own-matrix creation op, promotion ops); this is their UX surface.
+- **Supersedes the §9.4 dev-grade placeholder.** §9.4 shipped a stand-in "+ sub-table" button (in `SubTableBand`) that always renders in every focus panel and creates an own-matrix with a fixed `'Sub-table'` title and a single `title` column. It also leans on `syncOwnedMatrixTitles`, so every dedicated sub-table a node owns inherits the node's label as its `title` (fine for a placeholder, confusing for multiple sub-tables). The real gesture should replace it with a named/placed creation step (the new-dedicated-matrix knob), not a fixed default.
 
 ## 9.7 Paradigm convergence (forward note)
 

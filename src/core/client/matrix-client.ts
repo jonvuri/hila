@@ -215,6 +215,18 @@ export const createDependentRow = (
     columnValues,
   })
 
+export const createOwnedMatrix = (
+  owner: { matrixId: number; rowId: number },
+  title: string,
+  columns?: { name: string; type: string; constraints?: string; role?: 'label' | 'content' }[],
+): Promise<number> =>
+  workerCall('createOwnedMatrix', {
+    ownerMatrixId: owner.matrixId,
+    ownerRowId: owner.rowId,
+    title,
+    columns,
+  })
+
 export const deleteOwnedTarget = (targetMatrixId: number, targetRowId: number): Promise<void> =>
   workerCall('deleteOwnedTarget', { targetMatrixId, targetRowId })
 

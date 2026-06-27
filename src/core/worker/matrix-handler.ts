@@ -6,6 +6,7 @@ import {
   getOrCreateDeviceId,
   resetDeviceIdCache,
   createMatrix as createMatrixImpl,
+  createOwnedMatrix as createOwnedMatrixImpl,
   renameMatrix as renameMatrixImpl,
   addSampleRowsToMatrix,
   insertRow as insertRowImpl,
@@ -721,6 +722,23 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'createDependentRowSuccess', id, result: targetRowId })
       } catch (err: unknown) {
         postMessage({ type: 'createDependentRowError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'createOwnedMatrix': {
+      const { id, ownerMatrixId, ownerRowId, title, columns } = message
+      try {
+        const { db } = await sqliteWasm
+        const matrixId = createOwnedMatrixImpl(
+          db,
+          { matrixId: ownerMatrixId, rowId: ownerRowId },
+          title,
+          columns,
+        )
+        postMessage({ type: 'createOwnedMatrixSuccess', id, result: matrixId })
+      } catch (err: unknown) {
+        postMessage({ type: 'createOwnedMatrixError', id, error: toError(err) })
       }
       break
     }

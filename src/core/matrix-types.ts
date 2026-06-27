@@ -176,6 +176,20 @@ export type MatrixOperationMap = {
     }
     result: number
   }
+  createOwnedMatrix: {
+    params: {
+      ownerMatrixId: number
+      ownerRowId: number
+      title: string
+      columns?: {
+        name: string
+        type: string
+        constraints?: string
+        role?: 'label' | 'content'
+      }[]
+    }
+    result: number
+  }
   deleteOwnedTarget: {
     params: { targetMatrixId: number; targetRowId: number }
     result: void

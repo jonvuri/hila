@@ -297,3 +297,98 @@ test.describe('Focus panel', () => {
     await expect(page.getByTestId('navigation-panel')).toBeVisible()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 9.4 — embedded dedicated sub-table (TableFace band)
+// ---------------------------------------------------------------------------
+
+const workspaceIds = (page: Page) =>
+  page.evaluate(async () => {
+    // @ts-expect-error -- resolved by Vite dev server at runtime
+    const sql = await import('/src/core/client/sql-client.ts')
+    const ms = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+    const wsId = (ms[0] as { id: number }).id
+    const wr = await sql.execQuery(`SELECT id FROM "mx_${wsId}_data" ORDER BY id LIMIT 1`)
+    const focalRowId = (wr[0] as { id: number }).id
+    return { wsId, focalRowId }
+  })
+
+test.describe('Focus panel — embedded sub-table (Phase 9.4)', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await goToWorkspace(page)
+    await waitForRows(page, 1)
+  })
+
+  test('creates a dedicated sub-table and adds a node-owned row via the embedded table', async ({
+    page,
+  }) => {
+    await openFocusPanel(page)
+
+    // No sub-table to start.
+    await expect(page.getByTestId('sub-table-band-item')).toHaveCount(0)
+
+    // Create one through the dev-grade affordance.
+    await page.getByTestId('sub-table-add').click()
+
+    const bandItem = page.getByTestId('sub-table-band-item')
+    await expect(bandItem).toBeVisible({ timeout: 5000 })
+
+    // The real TableFace renders inside the band, with its "+ New Row" control.
+    const addRowBtn = bandItem.getByRole('button', { name: '+ New Row' })
+    await expect(addRowBtn).toBeVisible({ timeout: 5000 })
+
+    // Resolve the focal node and the freshly created sub-table matrix.
+    const base = await workspaceIds(page)
+    const subId = await page.evaluate(async (b) => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const r = await sql.execQuery(
+        `SELECT id FROM matrix WHERE owner_matrix_id = ${b.wsId} AND owner_row_id = ${b.focalRowId}`,
+      )
+      return (r[0] as { id: number } | undefined)?.id ?? 0
+    }, base)
+    expect(subId).toBeGreaterThan(0)
+
+    // Add a row through the anchored band: it must be owned by the focal node
+    // (createDependentRow), not the root sentinel — the dedicated invariant.
+    await addRowBtn.click()
+
+    await expect(async () => {
+      const owned = await page.evaluate(
+        async (q) => {
+          // @ts-expect-error -- resolved by Vite dev server at runtime
+          const sql = await import('/src/core/client/sql-client.ts')
+          const r = await sql.execQuery(
+            `SELECT COUNT(*) AS cnt FROM joins
+             WHERE source_matrix_id = ${q.wsId} AND source_row_id = ${q.focalRowId}
+               AND target_matrix_id = ${q.subId} AND kind = 'own'`,
+          )
+          return (r[0] as { cnt: number }).cnt
+        },
+        { ...base, subId },
+      )
+      expect(owned).toBeGreaterThanOrEqual(1)
+    }).toPass({ timeout: 5000 })
+
+    // The new row also renders in the embedded table (≥1 data row + the add-row tr).
+    await expect(async () => {
+      const c = await bandItem.locator('tbody tr').count()
+      expect(c).toBeGreaterThanOrEqual(2)
+    }).toPass({ timeout: 5000 })
+  })
+
+  test('sub-table is live-derived from ownership and survives reload', async ({ page }) => {
+    await openFocusPanel(page)
+    await page.getByTestId('sub-table-add').click()
+    await expect(page.getByTestId('sub-table-band-item')).toBeVisible({ timeout: 5000 })
+
+    // Reload: bands are not persisted; the embed re-derives from matrix.owner.
+    await page.reload()
+    await goToWorkspace(page)
+    await waitForRows(page, 1)
+    await openFocusPanel(page)
+
+    await expect(page.getByTestId('sub-table-band-item')).toBeVisible({ timeout: 5000 })
+  })
+})

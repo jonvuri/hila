@@ -41,6 +41,7 @@ import { FieldEditor } from '../shared/FieldEditor'
 
 import AspectBand from './AspectBand'
 import { QueryBandsSection } from './QueryBand'
+import SubTableBand from './SubTableBand'
 import { buildSingleRowQuery, buildBacklinksQuery } from './workspace-plugin'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
@@ -80,7 +81,6 @@ type RowData = Record<string, unknown> & {
   id: number
   label: string | null
   content: string | null
-  row_kind?: number
 }
 
 type BacklinkData = {
@@ -455,11 +455,6 @@ const FocusPanel = (props: FocusPanelProps) => {
     return (data[0] as { cnt: number }).cnt > 0
   })
 
-  const isChildMatrixRef = createMemo(() => {
-    const data = rowData()
-    return data?.row_kind === 1
-  })
-
   return (
     <div
       class="focus-panel"
@@ -481,22 +476,7 @@ const FocusPanel = (props: FocusPanelProps) => {
           }
         >
           {(data) => (
-            <Show
-              when={!isChildMatrixRef()}
-              fallback={
-                <div data-testid="focus-child-matrix-ref" style={{ padding: '8px' }}>
-                  <div
-                    style={{
-                      color: 'var(--text-muted)',
-                      'font-size': '13px',
-                      'margin-bottom': '8px',
-                    }}
-                  >
-                    Child matrix reference (row_kind=1). Table face would render here.
-                  </div>
-                </div>
-              }
-            >
+            <>
               {/* Label header. Active (rightmost) panel: an editable title.
                   Non-active panels: the same-looking header is a clickable
                   collapse target (with an integrated chevron) that closes deeper
@@ -609,6 +589,10 @@ const FocusPanel = (props: FocusPanelProps) => {
                   through the schema-adaptive renderer (Phase 9.3). */}
               <QueryBandsSection matrixId={props.matrixId} rowId={props.rowId} />
 
+              {/* Sub-table bands: the node's dedicated own-matrixes, rendered
+                  through the real TableFace with node-scoped insert (Phase 9.4). */}
+              <SubTableBand focalMatrixId={props.matrixId} focalRowId={props.rowId} />
+
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
                 <div
@@ -715,7 +699,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                   </Suspense>
                 </Show>
               </div>
-            </Show>
+            </>
           )}
         </Show>
       </div>

@@ -24,11 +24,13 @@ import {
   insertJoin,
   deleteJoin,
   deleteOwnedTarget,
+  createDependentRow,
 } from '../core/client/matrix-client'
 import { execQuery } from '../core/client/sql-client'
 import { useQuery } from '../sql/useQuery'
 import type { SqlResult } from '../sql/types'
 import type { ColumnDefinition, JoinKind } from '../core/matrix'
+import type { NodeRef } from '../core/tree'
 
 import {
   buildTableQuery,
@@ -136,7 +138,14 @@ const formatValue = (value: unknown, displayType: string): string => {
 
 type CellAddress = { row: number; col: number }
 
-const TableFace: Component<FaceComponentProps> = (props) => {
+// `insertParent` makes this an *anchored* table band (Phase 9.4): when present,
+// "+ New Row" creates the row as an `own`-child of that node via
+// `createDependentRow`, preserving the dedicated sub-table invariant (every row
+// owned by the focal node). Without it, rows attach to the root sentinel as
+// before — the standalone table-view behavior App.tsx mounts.
+type TableFaceProps = FaceComponentProps & { insertParent?: NodeRef }
+
+const TableFace: Component<TableFaceProps> = (props) => {
   const matrixId = () => props.config.matrixId
 
   // -- Settings from face config (ID-based) -------
@@ -304,7 +313,12 @@ const TableFace: Component<FaceComponentProps> = (props) => {
 
   // -- Row operations -------
   const addRow = async () => {
-    await insertRow(matrixId())
+    const parent = props.insertParent
+    if (parent) {
+      await createDependentRow(parent.matrixId, parent.rowId, matrixId())
+    } else {
+      await insertRow(matrixId())
+    }
   }
 
   const deleteSelectedRow = async () => {

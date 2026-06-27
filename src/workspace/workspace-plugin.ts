@@ -194,6 +194,37 @@ export const buildRowGlobalKeyQuery = (matrixId: number, rowId: number): string 
 SELECT global_lexkey AS key FROM scroll_index WHERE matrix_id = ${matrixId} AND row_id = ${rowId}
 `
 
+/**
+ * The dedicated sub-tables a node owns (Phase 9.4; see context/Phase-9.md §9.4).
+ *
+ * A node's own-matrixes split into *shared* (tag types: rows owned by various
+ * hosts) and *dedicated* (private sub-tables: matrix-owner == every row-owner,
+ * Phase 8c §3). This returns only the dedicated ones — the structural signature
+ * is "no `own`-edge into the matrix comes from a non-owner" (the SQL twin of
+ * `isSharedMatrix`). A freshly created, still-empty owned matrix has no inbound
+ * own-edges, so it qualifies as dedicated.
+ *
+ * Ownership is the sole source of truth here: the embedded sub-table band is
+ * *live-derived* from `matrix.owner` rather than persisted (consistent with the
+ * aspect band, and with "ownership is an input, never an output"). Ordering by
+ * `m.id` gives a stable derived position among the node's bands for v1;
+ * persisted reordering / meshing into §9.1 children is deferred.
+ */
+export const buildDedicatedSubtablesQuery = (
+  focalMatrixId: number,
+  focalRowId: number,
+): string => `
+SELECT m.id, m.title
+FROM matrix m
+WHERE m.owner_matrix_id = ${focalMatrixId} AND m.owner_row_id = ${focalRowId}
+  AND NOT EXISTS (
+    SELECT 1 FROM joins j
+    WHERE j.target_matrix_id = m.id AND j.kind = 'own'
+      AND NOT (j.source_matrix_id = m.owner_matrix_id AND j.source_row_id = m.owner_row_id)
+  )
+ORDER BY m.id
+`
+
 export const buildMatrixTitleQuery = (matrixId: number): string =>
   `SELECT title FROM matrix WHERE id = ${matrixId}`
 
