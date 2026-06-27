@@ -278,6 +278,7 @@ const ExpandedStaircase = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
           key: a.key,
           label: a.label || 'Untitled',
           rowId: a.rowId,
+          matrixId: a.matrixId,
         }))
         if (i === 0 && entries.length > 0) {
           entries.unshift({ key: 'anc-title', label: title, rowId: null })
@@ -460,6 +461,7 @@ const CollapsedBreadcrumb = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
           key: a.key,
           label: a.label || 'Untitled',
           rowId: a.rowId,
+          matrixId: a.matrixId,
         }))
         if (i === 0 && entries.length > 0) {
           entries.unshift({ key: 'anc-title', label: title, rowId: null })

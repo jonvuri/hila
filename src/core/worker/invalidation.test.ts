@@ -48,7 +48,11 @@ describe('inferScope: AST-based scope extraction', () => {
   })
 
   test('ancestry query: extracts closure node IDs from IN list', () => {
-    const sql = buildAncestryForRowsQuery(3, [10, 20, 30])
+    const sql = buildAncestryForRowsQuery(3, [
+      { matrixId: 3, rowId: 10 },
+      { matrixId: 3, rowId: 20 },
+      { matrixId: 3, rowId: 30 },
+    ])
     const tables = new Set(['closure', 'scroll_index', 'mx_3_data'])
     const scope = inferScope(sql, tables)
 

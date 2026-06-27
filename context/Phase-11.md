@@ -483,6 +483,16 @@ Stage 1 (default values) is a prerequisite for stages 3 and 8 (extended column s
 
 ---
 
+## Incoming deferrals (from Phase 9.5 boundary-hop work)
+
+[Phase 9.5](Phase-9.md) made foreign aspect rows **navigable** — you can now drill into a `#task` (or any cross-matrix record) and land on its own focus panel. Phase 11 is the first phase where those records become *rich and routinely navigated*, which is the point where three items deferred from §9.5 first become load-bearing. They are not Phase 11 stage deliverables; flag them when the relevant infrastructure is designed so the shape accounts for them:
+
+- **A declared preferred-face mechanism (Plan.md open question #5, fuller answer).** §9.5 resolved #5 as *substrate-as-floor only* — drill-in lands in the generalized `FocusPanel`. A task/movie-review record is the first thing that wants a **declared non-substrate default face** (e.g. a task lands in a task view, not the bare identity panel). When the renderer/template registry (stages 2–3, 7–8) is designed, decide whether a matrix (or attachment) carries a `preferred_face` and have drill-in honor it, falling back to the substrate floor. The registry schema is the **point of no return** — retrofitting a preferred-face slot later is costly.
+- **Cross-matrix backlinks.** [`buildBacklinksQuery`](../src/workspace/workspace-plugin.ts) is still matrix-scoped (`source_matrix_id = matrixId`); a record's focus panel can't yet show notes in *other* matrixes that reference it. Sitting on a navigated task and wanting "what references this" is the first real use case. Needs the foreign-label gather below.
+- **The per-matrix foreign-label gather.** Both cross-matrix backlinks and §9.5's foreign **multi-hop ancestry** chains (which currently degrade foreign ancestors to "Untitled" via the workspace-conditioned label join) want one shared piece: resolving labels of rows in *arbitrary* matrixes in bulk, via each matrix's label-role column (cf. `getLabelColumnName`, the `usePagedWorkspaceData` batched gather). Build it once here and both consumers light up.
+
+---
+
 ## Done criteria
 
 All ten stage groups complete (1, 2, 3, 4, 5, 6, 7, 8, 9, 10a–c). Column-level default values are applied automatically on row creation — both literal values and SQL expressions. The cell renderer registry maps (displayType, variant) to custom display/edit components, and the existing built-in types are refactored through it. The star rating renderer displays and edits numeric values as clickable stars. The status toggle renderer cycles through select options on click. The date picker provides a calendar dropdown for date columns. `createTagType` accepts rich column specs (constraints, display type, options, defaults). Tag type templates provide predefined column schemas for "task" and "movie-review", detected by name on inline creation. Inline tag affordances allow quick status toggling and date picking directly from tag badges in the outline. `npm run typecheck && npm run lint && npm run test:run && pnpm test:e2e` all pass.

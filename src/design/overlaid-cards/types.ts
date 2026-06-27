@@ -20,11 +20,14 @@ import type { JSX } from 'solid-js'
 export type OverlaidCardsTheme = 'expanded-staircase' | 'collapsed-breadcrumb'
 
 /** A single unfocused ancestor in the gap before a panel. `rowId === null`
- *  marks the workspace-title tab (leads panel 0's gap). */
+ *  marks the workspace-title tab (leads panel 0's gap). `matrixId` identifies the
+ *  ancestor's matrix so the stack can reopen the correct `(matrix_id, row_id)`
+ *  panel across a boundary hop (Phase 9.5); omitted/undefined for the title tab. */
 export type OverlaidAncestor = {
   key: string
   label: string
   rowId: number | null
+  matrixId?: number
 }
 
 /**

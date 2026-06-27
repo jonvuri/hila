@@ -43,6 +43,7 @@ const EmbeddedSubTable: Component<{
   title: string
   focalMatrixId: number
   focalRowId: number
+  onOpenRowRef: (matrixId: number, rowId: number) => void
 }> = (props) => {
   const [config] = createResource<FaceConfig, number>(
     () => props.matrixId,
@@ -76,6 +77,7 @@ const EmbeddedSubTable: Component<{
               config={c()}
               bindings={EMBED_BINDINGS}
               insertParent={{ matrixId: props.focalMatrixId, rowId: props.focalRowId }}
+              onOpenRow={(rowId) => props.onOpenRowRef(props.matrixId, rowId)}
             />
           )}
         </Show>
@@ -84,7 +86,11 @@ const EmbeddedSubTable: Component<{
   )
 }
 
-const SubTableBand: Component<{ focalMatrixId: number; focalRowId: number }> = (props) => {
+const SubTableBand: Component<{
+  focalMatrixId: number
+  focalRowId: number
+  onOpenRowRef: (matrixId: number, rowId: number) => void
+}> = (props) => {
   const { result } = useQuery(() =>
     buildDedicatedSubtablesQuery(props.focalMatrixId, props.focalRowId),
   )
@@ -122,6 +128,7 @@ const SubTableBand: Component<{ focalMatrixId: number; focalRowId: number }> = (
             title={t.title}
             focalMatrixId={props.focalMatrixId}
             focalRowId={props.focalRowId}
+            onOpenRowRef={props.onOpenRowRef}
           />
         )}
       </For>

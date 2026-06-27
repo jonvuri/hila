@@ -269,7 +269,7 @@ describe('range-aware invalidation: fan-out guards', () => {
     const d = insertRow(harness.db, matrixId, { values: { label: 'D' } })
 
     // Ancestry subscription for C (reads closure).
-    const ancestrySql = buildAncestryForRowsQuery(matrixId, [c.rowId])
+    const ancestrySql = buildAncestryForRowsQuery(matrixId, [{ matrixId, rowId: c.rowId }])
 
     const tracker = harness.createTracker()
     tracker.subscribe(ancestrySql)

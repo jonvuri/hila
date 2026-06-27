@@ -36,6 +36,7 @@ const badge: string;
 const coercionError: string;
 const thRowId: string;
 const rowIdCell: string;
+const openRowBtn: string;
 const addRowTr: string;
 const addRowBtn: string;
 const typePicker: string;
@@ -89,6 +90,7 @@ export {
 	coercionError,
 	thRowId,
 	rowIdCell,
+	openRowBtn,
 	addRowTr,
 	addRowBtn,
 	typePicker,
@@ -143,6 +145,7 @@ export default {
 	coercionError,
 	thRowId,
 	rowIdCell,
+	openRowBtn,
 	addRowTr,
 	addRowBtn,
 	typePicker,

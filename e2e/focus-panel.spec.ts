@@ -392,3 +392,67 @@ test.describe('Focus panel — embedded sub-table (Phase 9.4)', () => {
     await expect(page.getByTestId('sub-table-band-item')).toBeVisible({ timeout: 5000 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 9.5 — boundary-hop drill-in from an embedded sub-table row
+// ---------------------------------------------------------------------------
+
+test.describe('Focus panel — boundary hop (Phase 9.5)', () => {
+  test.beforeEach(async ({ page }) => {
+    await resetDB(page)
+    await goToWorkspace(page)
+    await waitForRows(page, 1)
+  })
+
+  test('drills from a sub-table row into a (matrix_id, row_id) focus panel, role-adaptively', async ({
+    page,
+  }) => {
+    await openFocusPanel(page)
+
+    // Create a dedicated sub-table and one node-owned row in it.
+    await page.getByTestId('sub-table-add').click()
+    const bandItem = page.getByTestId('sub-table-band-item')
+    await expect(bandItem).toBeVisible({ timeout: 5000 })
+    await bandItem.getByRole('button', { name: '+ New Row' }).click()
+    await expect(async () => {
+      const c = await bandItem.locator('tbody tr').count()
+      expect(c).toBeGreaterThanOrEqual(2) // ≥1 data row + the add-row tr
+    }).toPass({ timeout: 5000 })
+
+    // One focus column so far (the focal node).
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+
+    // Drill into the sub-table row via its per-row open affordance — the boundary
+    // hop: the row lives in the sub-matrix, owned by the workspace focal node.
+    await bandItem.getByTestId('table-open-row-btn').first().click()
+
+    // A second focus column opens for the sub-matrix row (panel keyed by its matrix).
+    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2, { timeout: 5000 })
+
+    // Role-adaptive far side: the sub-table's label column is `title`, not `label`.
+    // Typing into the far-side header must persist to `title` (no write to a missing
+    // `label` column). Target the rightmost (active) panel's label editor.
+    const farLabel = page.getByTestId('focus-label-editor').last()
+    await farLabel.click()
+    await farLabel.pressSequentially('Hopped', { delay: 20 })
+
+    const subId = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by the Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const ms = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      const wsId = (ms[0] as { id: number }).id
+      const r = await sql.execQuery(`SELECT id FROM matrix WHERE owner_matrix_id = ${wsId} LIMIT 1`)
+      return (r[0] as { id: number }).id
+    })
+
+    await expect(async () => {
+      const title = await page.evaluate(async (mid) => {
+        // @ts-expect-error -- resolved by the Vite dev server at runtime
+        const sql = await import('/src/core/client/sql-client.ts')
+        const r = await sql.execQuery(`SELECT title FROM "mx_${mid}_data" ORDER BY id LIMIT 1`)
+        return (r[0] as { title: string | null }).title ?? ''
+      }, subId)
+      expect(title).toContain('Hopped')
+    }).toPass({ timeout: 5000 })
+  })
+})

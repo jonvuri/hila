@@ -361,6 +361,30 @@
   user-select: none;
 }
 
+/* Boundary-hop drill-in affordance (Phase 9.5): dim until the row is hovered. */
+.openRowBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-muted, #999);
+  padding: 0 2px;
+  opacity: 0.25;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+
+tr:hover .openRowBtn {
+  opacity: 0.7;
+}
+
+.openRowBtn:hover {
+  opacity: 1;
+  color: var(--accent, #2563eb);
+}
+
 /* ---- Add row ---- */
 
 .addRowTr td {

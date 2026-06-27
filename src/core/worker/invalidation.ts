@@ -220,6 +220,58 @@ const extractStructuralScope = (
         }
         return 'skip'
       },
+
+      // Cross-matrix closure filter (Phase 9.5 boundary-hop ancestry):
+      //   (closure.descendant_matrix_id, closure.descendant_row_id)
+      //     IN (VALUES (m, r), …)
+      // yields complete `(matrixId, rowId)` pairs directly — strictly more precise
+      // than the single-matrix `descendant_matrix_id = M AND descendant_row_id IN (…)`
+      // form, and the only form that can express descendants spanning matrixes.
+      InSelectExpr(node: AstNode) {
+        const lhs: AstNode | undefined = node.lhs
+        const rhs: AstNode | undefined = node.rhs
+        if (lhs?.type !== 'ParenthesizedExpr' || !Array.isArray(lhs.exprs)) return
+        const cols = lhs.exprs
+        if (cols.length !== 2) return
+        const [mCol, rCol] = cols
+        if (
+          mCol?.type !== 'QualifiedExpr' ||
+          rCol?.type !== 'QualifiedExpr' ||
+          !isStructuralAlias(mCol.table.text) ||
+          resolveTable(mCol.table.text.toLowerCase()) !== 'closure' ||
+          mCol.column.text.toLowerCase() !== 'descendant_matrix_id' ||
+          rCol.column.text.toLowerCase() !== 'descendant_row_id'
+        ) {
+          return
+        }
+        // Find the VALUES rows under the IN (...) subselect.
+        let valueRows: AstNode[] | undefined
+        const findValues = (n: AstNode | undefined) => {
+          if (!n || typeof n !== 'object' || valueRows) return
+          if (Array.isArray(n)) return n.forEach(findValues)
+          if (n.type === 'SelectValues' && Array.isArray(n.values)) {
+            valueRows = n.values
+            return
+          }
+          for (const k of Object.keys(n)) {
+            if (k === 'type' || k === 'span') continue
+            findValues((n as Record<string, AstNode>)[k])
+          }
+        }
+        findValues(rhs)
+        for (const row of valueRows ?? []) {
+          const vals: AstNode[] | undefined = row?.values
+          if (!Array.isArray(vals) || vals.length !== 2) continue
+          const [m, r] = vals
+          if (m?.type === 'NumericLiteral' && r?.type === 'NumericLiteral') {
+            closureNodeIds.push({
+              matrixId: parseInt(m.value, 10),
+              rowId: parseInt(r.value, 10),
+            })
+          }
+        }
+        return 'skip'
+      },
     },
   })
 

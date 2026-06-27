@@ -167,23 +167,45 @@ ${filterClauses}
 `
 }
 
-// Ancestor chains for a set of descendant row ids, returned in a single query.
-// Uses the global closure table for ancestry and scroll_index for keys/depth.
-export const buildAncestryForRowsQuery = (matrixId: number, rowIds: number[]): string => {
-  const idList = rowIds.join(', ')
+// Ancestor chains for a set of descendant `(matrix_id, row_id)` pairs, returned in
+// a single query (Phase 9.5 — boundary-hop panel stack). The global closure table
+// already records the cross-matrix own-chain, so a descendant may live in a foreign
+// matrix while its ancestors climb back into the workspace.
+//
+// `labelMatrixId` is the workspace matrix used *only* for the label join: ancestor
+// labels are resolved via a workspace-conditioned LEFT JOIN, so workspace ancestors
+// get correct labels, and foreign ancestors (only reachable via repeated multi-hop
+// drill-in) yield NULL → "Untitled" rather than a wrong-matrix id collision. The
+// per-matrix label gather that would resolve foreign ancestor labels is the deferred
+// upgrade; the in-scope §9.5 drill-in gestures are single-hop (all ancestors in the
+// workspace matrix), so this is correct for everything reachable today.
+export const buildAncestryForRowsQuery = (
+  labelMatrixId: number,
+  pairs: { matrixId: number; rowId: number }[],
+): string => {
+  const tuples = pairs.map((p) => `(${p.matrixId}, ${p.rowId})`).join(', ')
   return `
-SELECT c.descendant_row_id AS for_row_id,
+SELECT c.descendant_matrix_id AS for_matrix_id, c.descendant_row_id AS for_row_id,
        s.global_lexkey AS key, s.depth,
-       dt.label, c.ancestor_row_id AS row_id
+       c.ancestor_matrix_id AS matrix_id, c.ancestor_row_id AS row_id,
+       dt.label
 FROM closure c
 JOIN scroll_index s ON s.matrix_id = c.ancestor_matrix_id AND s.row_id = c.ancestor_row_id
-JOIN "mx_${matrixId}_data" dt ON c.ancestor_row_id = dt.id
-WHERE c.descendant_matrix_id = ${matrixId}
-  AND c.descendant_row_id IN (${idList})
-  AND c.ancestor_matrix_id = ${matrixId}
-ORDER BY c.descendant_row_id, s.depth
+LEFT JOIN "mx_${labelMatrixId}_data" dt
+  ON c.ancestor_matrix_id = ${labelMatrixId} AND c.ancestor_row_id = dt.id
+WHERE (c.descendant_matrix_id, c.descendant_row_id) IN (VALUES ${tuples})
+ORDER BY c.descendant_matrix_id, c.descendant_row_id, s.depth
 `
 }
+
+// Whether a node has own-children (gates the children nav panel in the focus panel).
+// Phase 9.5: counts own-edges out of the node regardless of the target matrix, so a
+// boundary-hop row whose children live in another matrix isn't miscounted — the
+// children NavigationPanel it gates is already cross-matrix.
+export const buildChildCountQuery = (matrixId: number, rowId: number): string =>
+  `SELECT COUNT(*) as cnt FROM joins
+   WHERE kind = 'own'
+     AND source_matrix_id = ${matrixId} AND source_row_id = ${rowId}`
 
 export const buildSingleRowQuery = (matrixId: number, rowId: number): string => `
 SELECT d.* FROM "mx_${matrixId}_data" d WHERE d.id = ${rowId}

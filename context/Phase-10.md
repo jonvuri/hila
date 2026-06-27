@@ -47,6 +47,8 @@ Unify the visual language across every surface into one token + theming system. 
 - [ ] **Migration plan for `global.css`.** Sequence the incremental migration of app shell, stream view, faces, and browsers onto the token system (the migration deferred in Plan.md). Keep it incremental and behavior-preserving.
 - [ ] **Output:** updated [Design.md](Design.md) (and Design-Faces.md if face themes are touched), an updated token system, and a staged migration checklist that subsequent sessions execute.
 
+**Incoming deferral — substrate / x-ray fidelity (from [Phase 9.2](Phase-9.2.md#composed-vs-substrate-fidelity-and-x-ray), re-confirmed by [§9.5](Phase-9.md)).** The **composed vs. substrate** fidelity axis (and its global **x-ray** toggle) is a rendering-convention that spans *every* surface at every granularity — the same scope this token/theming pass unifies. It was deliberately deferred from 9.2/9.5 (which only lean on substrate as a *concept*: §9.5's boundary-hop far side reuses the role-adaptive `FocusPanel`, not a built substrate face). **Point of no return:** the elevation/surface/fade token model decided here is what a substrate face would render against; building substrate before this pass would mint tokens this phase then has to reconcile. So settle the fidelity axis as part of the token model (how composed vs. substrate read; whether x-ray is a theme or an orthogonal overlay) and add it to the migration checklist. The **identity face** ([Architecture.md](Architecture.md#identity-face)) is its conformance test — "does every surface x-ray cleanly?"
+
 ---
 
 ## Design decisions

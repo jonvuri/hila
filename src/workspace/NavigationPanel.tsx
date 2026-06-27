@@ -77,7 +77,9 @@ const EMPTY_CONTENT_JSON = JSON.stringify({
 type NavigationPanelProps = {
   matrixId: number
   rootKey?: Uint8Array
-  onOpenFocus: (rowId: number, key: Uint8Array) => void
+  // Boundary-hop aware (Phase 9.5): carries the row's matrix so a meshed cross-matrix
+  // aspect row can drill into a focus panel keyed by `(matrix_id, row_id)`.
+  onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
   focusedRowId?: number
 }
 
@@ -1016,8 +1018,9 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
-      if (!isWorkspaceRow(row)) return
-      props.onOpenFocus(row.row_id, new Uint8Array(row.key))
+      // Any rendered row can drill in, including meshed cross-matrix aspect rows
+      // (the Phase 9.5 boundary hop) — the focus panel is keyed by its matrix.
+      props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
     },
   })
 
@@ -1179,7 +1182,11 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    props.onOpenFocus(row.row_id, new Uint8Array(row.key))
+                                    props.onOpenFocus(
+                                      row.matrix_id,
+                                      row.row_id,
+                                      new Uint8Array(row.key),
+                                    )
                                   }}
                                 >
                                   {f.value}
@@ -1236,35 +1243,34 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   </Show>
                 </div>
 
-                {/* Right-arrow button: open focus panel. Workspace rows —
-                    including type-nodes (navigable per the Phase 9 carry-over
-                    resolution) — get it; boundary-hop drill-in for cross-matrix
-                    aspect rows is Phase 9.5. */}
-                <Show when={isWorkspaceRow(row)}>
-                  <button
-                    class="nav-row-open-focus"
-                    data-testid="open-focus-btn"
-                    aria-label="Open focus panel"
-                    style={{
-                      position: 'absolute',
-                      right: '4px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      'font-size': '14px',
-                      color: 'var(--text-muted)',
-                      padding: '2px 4px',
-                      'border-radius': '3px',
-                      opacity: 0,
-                      transition: 'opacity 0.15s, color 0.15s',
-                    }}
-                    onClick={() => props.onOpenFocus(row.row_id, new Uint8Array(row.key))}
-                  >
-                    →
-                  </button>
-                </Show>
+                {/* Right-arrow button: open focus panel. Every rendered row gets it,
+                    including meshed cross-matrix aspect rows — drilling into one whose
+                    own-parent is a host in this matrix is the Phase 9.5 boundary hop. */}
+                <button
+                  class="nav-row-open-focus"
+                  data-testid="open-focus-btn"
+                  aria-label="Open focus panel"
+                  style={{
+                    position: 'absolute',
+                    right: '4px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    'font-size': '14px',
+                    color: 'var(--text-muted)',
+                    padding: '2px 4px',
+                    'border-radius': '3px',
+                    opacity: 0,
+                    transition: 'opacity 0.15s, color 0.15s',
+                  }}
+                  onClick={() =>
+                    props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
+                  }
+                >
+                  →
+                </button>
               </div>
             )
           }}

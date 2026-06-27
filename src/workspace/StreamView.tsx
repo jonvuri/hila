@@ -37,9 +37,11 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+// Phase 9.5: a focus panel is keyed by `(matrix_id, row_id)`, not a single matrix's
+// row id, so the stack can render boundary hops into rows owned in another matrix.
 type PanelState =
   | { type: 'navigation'; rootKey?: Uint8Array }
-  | { type: 'focus'; rowId: number; rowKey: Uint8Array }
+  | { type: 'focus'; matrixId: number; rowId: number; rowKey: Uint8Array }
 
 type StreamViewProps = {
   matrixId: number
@@ -49,13 +51,18 @@ type StreamViewProps = {
 
 type AncestorData = {
   key: Uint8Array
+  matrix_id: number
   row_id: number
-  label: string
+  label: string | null
   depth: number
 }
 
-// Raw row from buildAncestryForRowsQuery: an ancestor of `for_row_id`.
-type AncestorRow = AncestorData & { for_row_id: number }
+// Raw row from buildAncestryForRowsQuery: an ancestor of `(for_matrix_id, for_row_id)`.
+type AncestorRow = AncestorData & { for_matrix_id: number; for_row_id: number }
+
+// Composite key for the panel/ancestry identity maps (avoids cross-matrix rowId
+// collisions now that the stack spans matrixes).
+const panelCk = (matrixId: number, rowId: number): string => `${matrixId}:${rowId}`
 
 const MAX_COLUMNS = 4
 
@@ -73,19 +80,32 @@ const StreamView = (props: StreamViewProps) => {
     return next
   }
 
-  const handleAppendAfter = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
+  const handleAppendAfter = (
+    fromIndex: number,
+    matrixId: number,
+    rowId: number,
+    rowKey: Uint8Array,
+  ) => {
     setPanels((prev) => {
       const next: PanelState[] = [
         ...prev.slice(0, fromIndex + 1),
-        { type: 'focus', rowId, rowKey },
+        { type: 'focus', matrixId, rowId, rowKey },
       ]
       return enforceColumnLimit(next)
     })
   }
 
-  const handleReplaceAt = (fromIndex: number, rowId: number, rowKey: Uint8Array) => {
+  const handleReplaceAt = (
+    fromIndex: number,
+    matrixId: number,
+    rowId: number,
+    rowKey: Uint8Array,
+  ) => {
     setPanels((prev) => {
-      const next: PanelState[] = [...prev.slice(0, fromIndex), { type: 'focus', rowId, rowKey }]
+      const next: PanelState[] = [
+        ...prev.slice(0, fromIndex),
+        { type: 'focus', matrixId, rowId, rowKey },
+      ]
       return enforceColumnLimit(next)
     })
   }
@@ -98,12 +118,12 @@ const StreamView = (props: StreamViewProps) => {
   // panel the gap precedes and open a focus panel for the ancestor, mirroring
   // the right-arrow focus button. The title tab returns to the root nav panel.
   const handleAncestorClick = (panelIndex: number, ancestor: OverlaidAncestor) => {
-    if (ancestor.rowId == null) {
+    if (ancestor.rowId == null || ancestor.matrixId == null) {
       setPanels([{ type: 'navigation' }])
       return
     }
-    const key = ancestorKeyById().get(ancestor.rowId)
-    if (key) handleReplaceAt(panelIndex, ancestor.rowId, new Uint8Array(key))
+    const key = ancestorKeyByCk().get(panelCk(ancestor.matrixId, ancestor.rowId))
+    if (key) handleReplaceAt(panelIndex, ancestor.matrixId, ancestor.rowId, new Uint8Array(key))
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -114,13 +134,18 @@ const StreamView = (props: StreamViewProps) => {
     }
   }
 
-  const navigateToRow = async (rowId: number) => {
-    const result = await execQuery(buildRowGlobalKeyQuery(props.matrixId, rowId))
+  // Resolve a row's global rank key, then append a focus panel for it. Used both by
+  // top-level navigation (matrix = workspace) and by the sub-table boundary-hop
+  // drill-in (matrix = the embedded sub-matrix), which has a row id but no key yet.
+  const openRowRefAt = async (fromIndex: number, matrixId: number, rowId: number) => {
+    const result = await execQuery(buildRowGlobalKeyQuery(matrixId, rowId))
     if (result && result.length > 0) {
       const key = (result[0] as { key: Uint8Array }).key
-      handleAppendAfter(0, rowId, new Uint8Array(key))
+      handleAppendAfter(fromIndex, matrixId, rowId, new Uint8Array(key))
     }
   }
+
+  const navigateToRow = (rowId: number) => void openRowRefAt(0, props.matrixId, rowId)
 
   createEffect(
     on(
@@ -161,40 +186,50 @@ const StreamView = (props: StreamViewProps) => {
   // missing between a panel and a deeper focus panel to its right.
   // -----------------------------------------------------------------------
 
-  const focusRowIds = createMemo(() =>
-    panels().flatMap((p) => (p.type === 'focus' ? [p.rowId] : [])),
+  const focusPairs = createMemo(() =>
+    panels().flatMap((p) =>
+      p.type === 'focus' ? [{ matrixId: p.matrixId, rowId: p.rowId }] : [],
+    ),
   )
 
   const ancestryQuery = createMemo(() => {
-    const ids = focusRowIds()
-    if (ids.length === 0) return ''
-    return buildAncestryForRowsQuery(props.matrixId, ids)
+    const pairs = focusPairs()
+    if (pairs.length === 0) return ''
+    // props.matrixId is the workspace matrix, used only for the ancestor label join.
+    return buildAncestryForRowsQuery(props.matrixId, pairs)
   })
 
   const { result: ancestryResult } = useQuery(() => ancestryQuery())
 
-  // Group the flat ancestry rows by descendant row id into top-down chains
-  // ([root..parent]); the query already orders each group by depth DESC.
-  const ancestryByRow = createMemo((): Map<number, AncestorData[]> => {
-    const map = new Map<number, AncestorData[]>()
+  // Group the flat ancestry rows by descendant `(matrix_id, row_id)` into top-down
+  // chains ([root..parent]); the query already orders each group by depth ASC.
+  const ancestryByCk = createMemo((): Map<string, AncestorData[]> => {
+    const map = new Map<string, AncestorData[]>()
     const data = ancestryResult() as unknown as AncestorRow[] | undefined
     if (!data) return map
     for (const r of data) {
-      let arr = map.get(r.for_row_id)
+      const ck = panelCk(r.for_matrix_id, r.for_row_id)
+      let arr = map.get(ck)
       if (!arr) {
         arr = []
-        map.set(r.for_row_id, arr)
+        map.set(ck, arr)
       }
-      arr.push({ key: r.key, row_id: r.row_id, label: r.label, depth: r.depth })
+      arr.push({
+        key: r.key,
+        matrix_id: r.matrix_id,
+        row_id: r.row_id,
+        label: r.label,
+        depth: r.depth,
+      })
     }
     return map
   })
 
-  // Lookup from ancestor row id to its rank key (for ancestor-tab navigation).
-  const ancestorKeyById = createMemo((): Map<number, Uint8Array> => {
-    const m = new Map<number, Uint8Array>()
-    for (const arr of ancestryByRow().values()) {
-      for (const a of arr) m.set(a.row_id, a.key)
+  // Lookup from ancestor composite key to its rank key (for ancestor-tab navigation).
+  const ancestorKeyByCk = createMemo((): Map<string, Uint8Array> => {
+    const m = new Map<string, Uint8Array>()
+    for (const arr of ancestryByCk().values()) {
+      for (const a of arr) m.set(panelCk(a.matrix_id, a.row_id), a.key)
     }
     return m
   })
@@ -216,27 +251,29 @@ const StreamView = (props: StreamViewProps) => {
 
   const gaps = createMemo((): OverlaidAncestor[][] => {
     const ps = panels()
-    const byRow = ancestryByRow()
+    const byCk = ancestryByCk()
     const result: OverlaidAncestor[][] = []
 
     for (let i = 0; i < ps.length; i++) {
       const panel = ps[i]!
-      const chain = panel.type === 'focus' ? (byRow.get(panel.rowId) ?? []) : []
+      const chain =
+        panel.type === 'focus' ? (byCk.get(panelCk(panel.matrixId, panel.rowId)) ?? []) : []
 
       const prev = i > 0 ? ps[i - 1]! : undefined
-      const prevRowId = prev && prev.type === 'focus' ? prev.rowId : null
+      const prevCk = prev && prev.type === 'focus' ? panelCk(prev.matrixId, prev.rowId) : null
 
       let gap = chain
-      if (prevRowId != null) {
-        const idx = chain.findIndex((a) => a.row_id === prevRowId)
+      if (prevCk != null) {
+        const idx = chain.findIndex((a) => panelCk(a.matrix_id, a.row_id) === prevCk)
         gap = idx >= 0 ? chain.slice(idx + 1) : chain
       }
 
       result.push(
         gap.map((a) => ({
-          key: `anc-${a.row_id}`,
-          label: extractTextFromPmDoc(a.label) || 'Untitled',
+          key: `anc-${a.matrix_id}-${a.row_id}`,
+          label: extractTextFromPmDoc(a.label ?? '') || 'Untitled',
           rowId: a.row_id,
+          matrixId: a.matrix_id,
         })),
       )
     }
@@ -254,7 +291,10 @@ const StreamView = (props: StreamViewProps) => {
     for (let idx = 0; idx < p.length; idx++) {
       if (p[idx]!.type === 'navigation') {
         const next = p[idx + 1]
-        if (next?.type === 'focus') {
+        // The top-level nav panel renders the workspace matrix; only highlight when
+        // the next focus panel is in that same matrix (a boundary-hop focus row lives
+        // in another matrix and isn't present in this outline).
+        if (next?.type === 'focus' && next.matrixId === props.matrixId) {
           map.set(idx, next.rowId)
         }
       }
@@ -272,7 +312,9 @@ const StreamView = (props: StreamViewProps) => {
         <NavigationPanel
           matrixId={props.matrixId}
           rootKey={panel.rootKey}
-          onOpenFocus={(rowId, key) => handleAppendAfter(index, rowId, new Uint8Array(key))}
+          onOpenFocus={(matrixId, rowId, key) =>
+            handleAppendAfter(index, matrixId, rowId, new Uint8Array(key))
+          }
           focusedRowId={focusedRowForNav().get(index)}
         />
       )
@@ -280,12 +322,17 @@ const StreamView = (props: StreamViewProps) => {
 
     return (
       <FocusPanel
-        matrixId={props.matrixId}
+        matrixId={panel.matrixId}
         rowId={panel.rowId}
         rowKey={panel.rowKey}
         active={index === panels().length - 1}
-        onAppendFocus={(rowId, key) => handleAppendAfter(index, rowId, new Uint8Array(key))}
-        onReplaceFocus={(rowId, key) => handleReplaceAt(index, rowId, new Uint8Array(key))}
+        onAppendFocus={(matrixId, rowId, key) =>
+          handleAppendAfter(index, matrixId, rowId, new Uint8Array(key))
+        }
+        onReplaceFocus={(matrixId, rowId, key) =>
+          handleReplaceAt(index, matrixId, rowId, new Uint8Array(key))
+        }
+        onOpenRowRef={(matrixId, rowId) => void openRowRefAt(index, matrixId, rowId)}
         onCollapse={() => handleClose(index + 1)}
         onClose={() => handleClose(index)}
       />

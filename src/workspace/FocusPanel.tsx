@@ -42,7 +42,11 @@ import { FieldEditor } from '../shared/FieldEditor'
 import AspectBand from './AspectBand'
 import { QueryBandsSection } from './QueryBand'
 import SubTableBand from './SubTableBand'
-import { buildSingleRowQuery, buildBacklinksQuery } from './workspace-plugin'
+import {
+  buildSingleRowQuery,
+  buildBacklinksQuery,
+  buildChildCountQuery,
+} from './workspace-plugin'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
 
@@ -65,8 +69,13 @@ type FocusPanelProps = {
   matrixId: number
   rowId: number
   rowKey: Uint8Array
-  onAppendFocus: (rowId: number, key: Uint8Array) => void
-  onReplaceFocus: (rowId: number, key: Uint8Array) => void
+  // Boundary-hop aware (Phase 9.5): focus callbacks carry the target row's matrix.
+  onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  // Drill into a row known only by `(matrixId, rowId)` (no rank key in hand yet):
+  // the stack resolves the key and appends a focus panel. Used by the embedded
+  // sub-table boundary-hop drill-in.
+  onOpenRowRef: (matrixId: number, rowId: number) => void
   onClose: () => void
   // Every focus panel shows a prominent header. On the active (rightmost) panel
   // the header is an editable title; on non-active panels the whole header is a
@@ -121,6 +130,9 @@ type FocusLabelEditorProps = {
   rowId: number
   label: string
   matrixId: number
+  // The label-role column this header writes to (Phase 9.5 role-adaptive far side):
+  // `label` for the workspace matrix, but e.g. `title` for a sub-table.
+  column: string
   onEscape: () => void
 }
 
@@ -131,7 +143,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
     void refreshCachedTitles(docJson).then((updated) => {
-      void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(updated) })
+      void updateRow(props.matrixId, props.rowId, { [props.column]: JSON.stringify(updated) })
     })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
   }, SAVE_DEBOUNCE_MS)
@@ -225,6 +237,7 @@ const FocusLabelEditor = (props: FocusLabelEditorProps) => (
       rowId={props.rowId}
       label={props.label}
       matrixId={props.matrixId}
+      column={props.column}
       onEscape={props.onEscape}
     />
   </ProsemirrorAdapterProvider>
@@ -238,6 +251,8 @@ type FocusContentEditorProps = {
   rowId: number
   content: string
   matrixId: number
+  // The content-role column this body writes to (Phase 9.5 role-adaptive far side).
+  column: string
   onEscape: () => void
 }
 
@@ -248,7 +263,7 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
     void refreshCachedTitles(docJson).then((updated) => {
-      void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(updated) })
+      void updateRow(props.matrixId, props.rowId, { [props.column]: JSON.stringify(updated) })
     })
     void syncInlineRefs(doc, props.matrixId, props.rowId)
   }, SAVE_DEBOUNCE_MS)
@@ -357,6 +372,7 @@ const FocusContentEditor = (props: FocusContentEditorProps) => (
       rowId={props.rowId}
       content={props.content}
       matrixId={props.matrixId}
+      column={props.column}
       onEscape={props.onEscape}
     />
   </ProsemirrorAdapterProvider>
@@ -389,14 +405,46 @@ const FocusPanel = (props: FocusPanelProps) => {
 
   const [backlinksOpen, setBacklinksOpen] = createSignal(false)
 
-  // Overflow columns
-  const [overflowColumns, setOverflowColumns] = createSignal<ColumnDefinition[]>([])
+  // Columns: the full set (for role-adaptive label/content) and the intrinsic
+  // overflow subset (the Properties strip).
+  const [allColumns, setAllColumns] = createSignal<ColumnDefinition[]>([])
   const [overflowValues, setOverflowValues] = createSignal<Record<string, string>>({})
 
   createEffect(() => {
-    void getColumns(props.matrixId).then((cols) => {
-      setOverflowColumns(filterIntrinsicOverflowColumns(cols))
-    })
+    void getColumns(props.matrixId).then((cols) => setAllColumns(cols))
+  })
+
+  const overflowColumns = createMemo(() => filterIntrinsicOverflowColumns(allColumns()))
+
+  // Role-adaptive far side (Phase 9.5): resolve the label/content columns by role,
+  // falling back to conventional names, so a foreign matrix (e.g. a sub-table `title`
+  // column, or one with neither) renders and never writes to a nonexistent column.
+  const labelCol = createMemo((): string | null => {
+    const cols = allColumns()
+    return (
+      (cols.find((c) => c.role === 'label') ?? cols.find((c) => c.name === 'label'))?.name ??
+      null
+    )
+  })
+  const contentCol = createMemo((): string | null => {
+    const cols = allColumns()
+    return (
+      (cols.find((c) => c.role === 'content') ?? cols.find((c) => c.name === 'content'))
+        ?.name ?? null
+    )
+  })
+
+  const labelValue = createMemo((): string => {
+    const col = labelCol()
+    const data = rowData()
+    if (!col || !data) return ''
+    return (data[col] as string | null) ?? ''
+  })
+  const contentValue = createMemo((): string | null => {
+    const col = contentCol()
+    const data = rowData()
+    if (!col || !data) return null
+    return (data[col] as string | null) ?? null
   })
 
   createEffect(
@@ -423,10 +471,9 @@ const FocusPanel = (props: FocusPanelProps) => {
   // prose are content-anchored: collect their keys from the label + content so the
   // band can tether them to their badge.
   const contentAnchoredKeys = createMemo((): Set<string> => {
-    const data = rowData()
     const keys = new Set<string>()
-    if (!data) return keys
-    for (const field of [data.label, data.content]) {
+    if (!rowData()) return keys
+    for (const field of [labelValue(), contentValue()]) {
       if (!field) continue
       let json: unknown
       try {
@@ -441,13 +488,9 @@ const FocusPanel = (props: FocusPanelProps) => {
     return keys
   })
 
-  // Children: check if the row has same-matrix own-children (outline subtree).
-  const childCountQuery = createMemo(() => {
-    return `SELECT COUNT(*) as cnt FROM joins
-      WHERE kind = 'own'
-        AND source_matrix_id = ${props.matrixId} AND source_row_id = ${props.rowId}
-        AND target_matrix_id = ${props.matrixId}`
-  })
+  // Children: check if the row has own-children (outline subtree). Counts across
+  // matrixes (Phase 9.5) so a boundary-hop row's foreign-matrix children aren't missed.
+  const childCountQuery = createMemo(() => buildChildCountQuery(props.matrixId, props.rowId))
   const { result: childCountResult } = useQuery(() => childCountQuery())
   const hasChildren = createMemo(() => {
     const data = childCountResult()
@@ -475,7 +518,7 @@ const FocusPanel = (props: FocusPanelProps) => {
             <div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading...</div>
           }
         >
-          {(data) => (
+          {
             <>
               {/* Label header. Active (rightmost) panel: an editable title.
                   Non-active panels: the same-looking header is a clickable
@@ -493,7 +536,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                     onClick={() => props.onCollapse?.()}
                   >
                     <span class="label-heading focus-panel-collapse-title">
-                      {extractTextFromPmDoc(data().label) || 'Untitled'}
+                      {extractTextFromPmDoc(labelValue()) || 'Untitled'}
                     </span>
                     <span class="focus-panel-collapse-chevron" aria-hidden="true">
                       ‹
@@ -502,44 +545,65 @@ const FocusPanel = (props: FocusPanelProps) => {
                 }
               >
                 <div class="focus-panel-label" data-testid="focus-panel-label">
-                  <FocusLabelEditor
-                    rowId={props.rowId}
-                    label={data().label ?? ''}
-                    matrixId={props.matrixId}
-                    onEscape={props.onClose}
-                  />
+                  {/* Active panel: an editable title when the matrix has a label
+                      column; otherwise a read-only identity header (Phase 9.5
+                      role-adaptive far side — never write to a missing column). */}
+                  <Show
+                    when={labelCol()}
+                    fallback={
+                      <span class="label-heading focus-panel-collapse-title">
+                        {extractTextFromPmDoc(labelValue()) || `Untitled (#${props.rowId})`}
+                      </span>
+                    }
+                  >
+                    {(col) => (
+                      <FocusLabelEditor
+                        rowId={props.rowId}
+                        label={labelValue()}
+                        matrixId={props.matrixId}
+                        column={col()}
+                        onEscape={props.onClose}
+                      />
+                    )}
+                  </Show>
                 </div>
               </Show>
 
-              {/* Content section */}
-              <div
-                class="focus-panel-content"
-                data-testid="focus-panel-content"
-                style={{
-                  'margin-bottom': '16px',
-                  'border-top': '1px solid hsl(230, 15%, 18%)',
-                  'padding-top': '12px',
-                  position: 'relative',
-                }}
-              >
-                <Show
-                  when={data().content}
-                  fallback={
-                    <ContentPlaceholder
-                      rowId={props.rowId}
-                      matrixId={props.matrixId}
-                      onEscape={props.onClose}
-                    />
-                  }
-                >
-                  <FocusContentEditor
-                    rowId={props.rowId}
-                    content={data().content!}
-                    matrixId={props.matrixId}
-                    onEscape={props.onClose}
-                  />
-                </Show>
-              </div>
+              {/* Content section: only when the matrix has a content column. */}
+              <Show when={contentCol()}>
+                {(col) => (
+                  <div
+                    class="focus-panel-content"
+                    data-testid="focus-panel-content"
+                    style={{
+                      'margin-bottom': '16px',
+                      'border-top': '1px solid hsl(230, 15%, 18%)',
+                      'padding-top': '12px',
+                      position: 'relative',
+                    }}
+                  >
+                    <Show
+                      when={contentValue()}
+                      fallback={
+                        <ContentPlaceholder
+                          rowId={props.rowId}
+                          matrixId={props.matrixId}
+                          column={col()}
+                          onEscape={props.onClose}
+                        />
+                      }
+                    >
+                      <FocusContentEditor
+                        rowId={props.rowId}
+                        content={contentValue()!}
+                        matrixId={props.matrixId}
+                        column={col()}
+                        onEscape={props.onClose}
+                      />
+                    </Show>
+                  </div>
+                )}
+              </Show>
 
               {/* Properties section: intrinsic overflow columns. The owned-aspect
                   half of the property surface renders as an aspect band (Phase 9.2). */}
@@ -591,7 +655,11 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               {/* Sub-table bands: the node's dedicated own-matrixes, rendered
                   through the real TableFace with node-scoped insert (Phase 9.4). */}
-              <SubTableBand focalMatrixId={props.matrixId} focalRowId={props.rowId} />
+              <SubTableBand
+                focalMatrixId={props.matrixId}
+                focalRowId={props.rowId}
+                onOpenRowRef={props.onOpenRowRef}
+              />
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
@@ -643,7 +711,9 @@ const FocusPanel = (props: FocusPanelProps) => {
                               'text-align': 'left',
                               width: '100%',
                             }}
-                            onClick={() => props.onReplaceFocus(bl.id, new Uint8Array())}
+                            onClick={() =>
+                              props.onReplaceFocus(props.matrixId, bl.id, new Uint8Array())
+                            }
                           >
                             <span style={{ color: 'var(--text-muted)', 'margin-right': '4px' }}>
                               {bl.kind === 'own' ? '⊙' : '↗'}
@@ -700,7 +770,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                 </Show>
               </div>
             </>
-          )}
+          }
         </Show>
       </div>
     </div>
@@ -714,6 +784,7 @@ const FocusPanel = (props: FocusPanelProps) => {
 type ContentPlaceholderProps = {
   rowId: number
   matrixId: number
+  column: string
   onEscape: () => void
 }
 
@@ -735,7 +806,7 @@ const ContentPlaceholder = (props: ContentPlaceholderProps) => {
             'min-height': '24px',
           }}
           onClick={() => {
-            void updateRow(props.matrixId, props.rowId, { content: EMPTY_CONTENT_JSON })
+            void updateRow(props.matrixId, props.rowId, { [props.column]: EMPTY_CONTENT_JSON })
             setEditing(true)
           }}
         >
@@ -747,6 +818,7 @@ const ContentPlaceholder = (props: ContentPlaceholderProps) => {
         rowId={props.rowId}
         content={EMPTY_CONTENT_JSON}
         matrixId={props.matrixId}
+        column={props.column}
         onEscape={props.onEscape}
       />
     </Show>

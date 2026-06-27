@@ -143,7 +143,13 @@ type CellAddress = { row: number; col: number }
 // `createDependentRow`, preserving the dedicated sub-table invariant (every row
 // owned by the focal node). Without it, rows attach to the root sentinel as
 // before — the standalone table-view behavior App.tsx mounts.
-type TableFaceProps = FaceComponentProps & { insertParent?: NodeRef }
+// `onOpenRow` (Phase 9.5) makes the embedded table's rows navigable: clicking a
+// row's open affordance drills into a focus panel for that `(matrix_id, row_id)` —
+// the boundary hop from a dedicated sub-table into the sub-matrix.
+type TableFaceProps = FaceComponentProps & {
+  insertParent?: NodeRef
+  onOpenRow?: (rowId: number) => void
+}
 
 const TableFace: Component<TableFaceProps> = (props) => {
   const matrixId = () => props.config.matrixId
@@ -769,7 +775,18 @@ const TableFace: Component<TableFaceProps> = (props) => {
             <For each={rows()}>
               {(row, rowIdx) => (
                 <tr>
-                  <td class={styles.rowIdCell}>{rowIdx() + 1}</td>
+                  <td class={styles.rowIdCell}>
+                    <Show when={props.onOpenRow} fallback={rowIdx() + 1}>
+                      <button
+                        class={styles.openRowBtn}
+                        data-testid="table-open-row-btn"
+                        aria-label="Open row"
+                        onClick={() => props.onOpenRow!(row['id'] as number)}
+                      >
+                        →
+                      </button>
+                    </Show>
+                  </td>
                   <For each={columns()}>
                     {(col, colIdx) => {
                       const value = () => row[col.name]

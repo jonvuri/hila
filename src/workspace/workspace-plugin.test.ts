@@ -22,6 +22,7 @@ import {
   buildOutlineCountQuery,
   buildHydrationQuery,
   buildAncestryForRowsQuery,
+  buildChildCountQuery,
   buildSingleRowQuery,
   buildBacklinksQuery,
 } from './workspace-plugin'
@@ -299,7 +300,14 @@ describe('Workspace ancestry-for-rows query', () => {
       content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
     })
 
-  type AncestorRow = { for_row_id: number; row_id: number; label: string; depth: number }
+  type AncestorRow = {
+    for_matrix_id: number
+    for_row_id: number
+    matrix_id: number
+    row_id: number
+    label: string | null
+    depth: number
+  }
 
   const runQuery = (sql: string): AncestorRow[] => {
     const stmt = db.prepare(sql)
@@ -329,7 +337,7 @@ describe('Workspace ancestry-for-rows query', () => {
     const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
     createTreePosition(db, matrixId, c, { parent: { matrixId, rowId: b } })
 
-    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [c]))
+    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [{ matrixId, rowId: c }]))
     // C's chain is [A (depth 0), B (depth 1)] ordered shallowest-first.
     expect(rows.map((r) => r.row_id)).toEqual([a, b])
     expect(rows.every((r) => r.for_row_id === c)).toBe(true)
@@ -345,7 +353,12 @@ describe('Workspace ancestry-for-rows query', () => {
     const c = insertDataRow(db, matrixId, { label: makeLabel('C'), content: null })
     createTreePosition(db, matrixId, c, { parent: { matrixId, rowId: b } })
 
-    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [b, c]))
+    const rows = runQuery(
+      buildAncestryForRowsQuery(matrixId, [
+        { matrixId, rowId: b },
+        { matrixId, rowId: c },
+      ]),
+    )
     const forB = rows.filter((r) => r.for_row_id === b).map((r) => r.row_id)
     const forC = rows.filter((r) => r.for_row_id === c).map((r) => r.row_id)
     expect(forB).toEqual([a])
@@ -356,8 +369,84 @@ describe('Workspace ancestry-for-rows query', () => {
     const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
     createTreePosition(db, matrixId, a)
 
-    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [a]))
+    const rows = runQuery(buildAncestryForRowsQuery(matrixId, [{ matrixId, rowId: a }]))
     expect(rows).toHaveLength(0)
+  })
+
+  // Phase 9.5 boundary hop: a descendant in a *foreign* matrix whose own-parent is a
+  // workspace bullet. The chain climbs back into the workspace matrix; workspace
+  // ancestor labels resolve via the workspace-conditioned LEFT JOIN.
+  test('returns the cross-matrix chain for a foreign descendant', () => {
+    const a = insertDataRow(db, matrixId, { label: makeLabel('A'), content: null })
+    createTreePosition(db, matrixId, a)
+    const b = insertDataRow(db, matrixId, { label: makeLabel('B'), content: null })
+    createTreePosition(db, matrixId, b, { parent: { matrixId, rowId: a } })
+
+    // A foreign matrix (no `label` column) with a row owned by workspace bullet B.
+    const subMatrixId = createMatrix(db, 'Sub', [
+      { name: 'title', type: 'TEXT', role: 'label' },
+    ])
+    const t = insertDataRow(db, subMatrixId, { title: 'T' })
+    createTreePosition(db, subMatrixId, t, { parent: { matrixId, rowId: b } })
+
+    const rows = runQuery(
+      buildAncestryForRowsQuery(matrixId, [{ matrixId: subMatrixId, rowId: t }]),
+    )
+    // T's chain is [A, B] — both workspace rows, resolved with correct labels.
+    expect(rows.map((r) => ({ m: r.matrix_id, r: r.row_id }))).toEqual([
+      { m: matrixId, r: a },
+      { m: matrixId, r: b },
+    ])
+    expect(rows.every((r) => r.for_matrix_id === subMatrixId && r.for_row_id === t)).toBe(true)
+    expect(rows[0]!.label).toContain('A')
+    expect(rows[1]!.label).toContain('B')
+  })
+})
+
+// -- Child count query --------------------------------------------------------
+
+describe('Workspace child count query', () => {
+  let db: Database
+  let matrixId: number
+
+  beforeEach(async () => {
+    const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
+    db = new sqlite3.oo1.DB(':memory:', 'c')
+    initMatrixSchema(db)
+    matrixId = createMatrix(db, 'Workspace', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+      { name: 'content', type: 'TEXT', role: 'content' },
+    ])
+  })
+
+  const count = (mid: number, rowId: number): number => {
+    const stmt = db.prepare(buildChildCountQuery(mid, rowId))
+    stmt.step()
+    const cnt = (stmt.get({}) as { cnt: number }).cnt
+    stmt.finalize()
+    return cnt
+  }
+
+  test('counts same-matrix own-children', () => {
+    const a = insertDataRow(db, matrixId, { label: null, content: null })
+    createTreePosition(db, matrixId, a)
+    const b = insertDataRow(db, matrixId, { label: null, content: null })
+    createTreePosition(db, matrixId, b, { parent: { matrixId, rowId: a } })
+    expect(count(matrixId, a)).toBe(1)
+    expect(count(matrixId, b)).toBe(0)
+  })
+
+  // Phase 9.5: a boundary-hop row's children may live in another matrix; the count
+  // must include them (the gated children panel is already cross-matrix).
+  test('counts foreign-matrix own-children too', () => {
+    const a = insertDataRow(db, matrixId, { label: null, content: null })
+    createTreePosition(db, matrixId, a)
+    const subMatrixId = createMatrix(db, 'Sub', [
+      { name: 'title', type: 'TEXT', role: 'label' },
+    ])
+    const t = insertDataRow(db, subMatrixId, { title: 'T' })
+    createTreePosition(db, subMatrixId, t, { parent: { matrixId, rowId: a } })
+    expect(count(matrixId, a)).toBe(1)
   })
 })
 
