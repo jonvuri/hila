@@ -54,4 +54,31 @@ describe('PropertyRow readOnly mode (Phase 9.3)', () => {
       container.querySelectorAll('[data-testid="property-row-readonly-cell"]').length,
     ).toBe(0)
   })
+
+  test('isEditable predicate lights up only matching cells (overrides readOnly)', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const columns = [col('label', 'label'), col('status'), col('age')]
+    const data = { label: 'Buy milk', status: 'open', age: '3' }
+    // `status` editable; `label` and `age` read-only — even with readOnly omitted.
+    dispose = render(
+      () => (
+        <PropertyRow
+          columns={columns}
+          data={data}
+          density="wide"
+          isEditable={(c) => c.name === 'status'}
+        />
+      ),
+      container,
+    )
+    // Exactly one editable input (status); label + age are read-only spans.
+    expect(container.querySelectorAll('input').length).toBe(1)
+    const readonly = Array.from(
+      container.querySelectorAll('[data-testid="property-row-readonly-cell"]'),
+    ).map((c) => c.textContent)
+    expect(readonly).toContain('Buy milk')
+    expect(readonly).toContain('3')
+    expect(readonly).not.toContain('open')
+  })
 })

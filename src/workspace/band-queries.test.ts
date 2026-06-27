@@ -3,6 +3,7 @@ import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { initMatrixSchema, createMatrix, insertRow, createDependentRow } from '../core/matrix'
+import { recognizeUpdatableQuery } from '../sql/recognize-updatable'
 
 import { buildBandsForNodeQuery, buildTypeInSubtreeQuery } from './band-queries'
 
@@ -49,6 +50,13 @@ describe('band query builders (Phase 9.3)', () => {
 
     const result = runIds(buildTypeInSubtreeQuery(typeMatrixId, wsMatrixId, node.rowId))
     expect(result).toEqual([taskOnNode, taskOnChild].sort((a, b) => a - b))
+  })
+
+  test('the snippet is recognized as an updatable single-table view', () => {
+    // The correlated-EXISTS shape keeps the FROM single-table, so Session 2 can
+    // make the type's own columns editable (and `d.*` carries the id key).
+    const r = recognizeUpdatableQuery(buildTypeInSubtreeQuery(typeMatrixId, wsMatrixId, 1))
+    expect(r).toMatchObject({ updatable: true, baseMatrixId: typeMatrixId, star: true })
   })
 
   test('buildTypeInSubtreeQuery on a leaf node returns only its own hosted rows', () => {

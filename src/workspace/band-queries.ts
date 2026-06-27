@@ -22,9 +22,15 @@ ORDER BY "order", id
  * in the focal node's subtree. Scope = {node} ∪ descendants(node).
  *
  * Closure has NO self-pairs (it starts at depth 1; see src/core/closure.ts), so
- * the WHERE clause unions the node's own direct hosts with its closure
- * descendants — otherwise rows hosted directly by the focal node would be
- * missed.
+ * the host test unions the node's own direct hosts with its closure descendants
+ * — otherwise rows hosted directly by the focal node would be missed.
+ *
+ * Shape: a **single-table `FROM`** (`mx_<T>_data d`) with all host/closure
+ * scoping pushed into a correlated `EXISTS`. This is semantically identical to a
+ * `JOIN joins` formulation but keeps the top-level relation single-table, so the
+ * Session-2 recognizer (`src/sql/recognize-updatable.ts`) can mark the type's
+ * own columns editable — a live view you can write back through. `d.*` also
+ * carries `id`, satisfying the recognizer's row-identity gate.
  */
 export const buildTypeInSubtreeQuery = (
   typeMatrixId: number,
@@ -32,11 +38,18 @@ export const buildTypeInSubtreeQuery = (
   focalRowId: number,
 ): string => `SELECT d.*
 FROM "mx_${typeMatrixId}_data" d
-JOIN joins j ON j.target_matrix_id = ${typeMatrixId} AND j.target_row_id = d.id AND j.kind = 'own'
-WHERE (j.source_matrix_id = ${focalMatrixId} AND j.source_row_id = ${focalRowId})
-   OR EXISTS (
-     SELECT 1 FROM closure c
-     WHERE c.ancestor_matrix_id = ${focalMatrixId} AND c.ancestor_row_id = ${focalRowId}
-       AND c.descendant_matrix_id = j.source_matrix_id
-       AND c.descendant_row_id = j.source_row_id
-   )`
+WHERE EXISTS (
+  SELECT 1 FROM joins j
+  WHERE j.target_matrix_id = ${typeMatrixId}
+    AND j.target_row_id = d.id
+    AND j.kind = 'own'
+    AND (
+      (j.source_matrix_id = ${focalMatrixId} AND j.source_row_id = ${focalRowId})
+      OR EXISTS (
+        SELECT 1 FROM closure c
+        WHERE c.ancestor_matrix_id = ${focalMatrixId} AND c.ancestor_row_id = ${focalRowId}
+          AND c.descendant_matrix_id = j.source_matrix_id
+          AND c.descendant_row_id = j.source_row_id
+      )
+    )
+)`

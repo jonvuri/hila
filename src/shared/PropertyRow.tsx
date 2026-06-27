@@ -23,12 +23,14 @@ import { partitionPropertyColumns } from './property-surface'
  * yet — no aspect carries one today; it lands when this renderer is reused for
  * §9.1 heterogeneous outline rows.
  *
- * `readOnly` renders every cell (label and field strip alike) as a display span
- * rather than an always-live `FieldEditor`, reusing the read-only styling the
- * formula partition already uses. Query bands (Phase 9.3) render read-only this
- * way; Session 2 will upgrade `readOnly` from a row-level flag to a per-column
- * predicate so recognized-updatable cells light up while derived cells stay
- * read-only. When `readOnly`, `onSave` is never called (and may be omitted).
+ * Editability is decided **per cell**. `isEditable`, when provided, is the
+ * authority — a column renders as an always-live `FieldEditor` iff it returns
+ * true, else as a read-only display span (reusing the formula partition's
+ * read-only styling). This is how Phase 9.3 query bands light up only the
+ * recognized-updatable cells while derived/aggregate cells stay read-only. When
+ * `isEditable` is absent, `readOnly` is the row-level fallback: all cells
+ * read-only when true, all editable when false (the aspect-band default).
+ * `onSave` is never called for a read-only cell (and may be omitted).
  */
 export const PropertyRow: Component<{
   columns: ColumnDefinition[]
@@ -36,9 +38,14 @@ export const PropertyRow: Component<{
   density: 'wide' | 'narrow'
   onSave?: (columnName: string, value: string) => void
   readOnly?: boolean
+  /** Per-cell editability predicate; overrides `readOnly` when provided. */
+  isEditable?: (col: ColumnDefinition) => boolean
 }> = (props) => {
   const partition = createMemo(() => partitionPropertyColumns(props.columns))
   const valueOf = (col: ColumnDefinition) => String(props.data?.[col.name] ?? '')
+
+  const cellEditable = (col: ColumnDefinition): boolean =>
+    props.isEditable ? props.isEditable(col) : !props.readOnly
 
   const FieldName = (p: { name: string }) => (
     <span
@@ -56,18 +63,27 @@ export const PropertyRow: Component<{
     </span>
   )
 
-  const Field = (p: { col: ColumnDefinition }) =>
-    props.readOnly ?
-      <span class="tag-panel-field-value-readonly" data-testid="property-row-readonly-cell">
-        {valueOf(p.col)}
-      </span>
-    : <FieldEditor
+  // `<Show>` (not a bare ternary) so the cell re-renders if editability resolves
+  // reactively — e.g. a query band marking cells editable once the base catalog
+  // loads. A ternary would capture the choice at first render and never update.
+  const Field = (p: { col: ColumnDefinition }) => (
+    <Show
+      when={cellEditable(p.col)}
+      fallback={
+        <span class="tag-panel-field-value-readonly" data-testid="property-row-readonly-cell">
+          {valueOf(p.col)}
+        </span>
+      }
+    >
+      <FieldEditor
         column={p.col}
         value={valueOf(p.col)}
         seamless
         showLabel={false}
         onSave={(v) => props.onSave?.(p.col.name, v)}
       />
+    </Show>
+  )
 
   return (
     <div class="property-row" data-testid="property-row">

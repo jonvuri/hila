@@ -165,6 +165,37 @@ walk) but the v1 subset (single-table `SELECT … FROM "mx_<T>_data"`, the snipp
 is well within reach. Switching to the semantic path later remains a drop-in *iff* a
 column-metadata-enabled wasm build is ever adopted.
 
+### Implemented (Session 2, 2026-06-27)
+
+The recognizer shipped as a **pure function**, [src/sql/recognize-updatable.ts](../src/sql/recognize-updatable.ts)
+— SQL in, resolved passthrough bindings out, **no rewrite** (SQL stays canonical; it
+annotates, never mutates). Two parts: `recognizeUpdatableQuery(sql)` (parse + structural
+gate + per-column passthrough/derived classification) and `resolveEditableColumns(rec,
+columns)` (apply the real catalog: expand `*`, drop `id`/formula, apply the row-identity
+gate). It runs **client-side** in `QueryBand` (the chosen home — reuses the existing
+`updateRow` op, no new worker round-trip, and converts the Session-1 "synthesize columns"
+degrade into *real* column metadata for recognized bands as a bonus). Per-cell editability
+flows through a new `PropertyRow` `isEditable` predicate (the row-level `readOnly` flag
+generalized, as planned).
+
+Two decisions settled here:
+
+- **Single-table shape, via correlated `EXISTS`.** The v1 gate is single-base-table. The
+  Session-1 subtree snippet used a `JOIN joins`, which would render read-only; it was
+  rewritten so the top-level `FROM` is single-table (`mx_<T>_data`) with host/closure
+  scoping pushed into a correlated `EXISTS` (`buildTypeInSubtreeQuery`). Semantically
+  identical, and *now* the motivating live view is write-back-editable. (A `WHERE`
+  subquery does not change outer row identity, so the gate allows it.)
+- **Row-identity gate = require `id` in the result set** (no PK injection / no rewrite,
+  per the SQL-canonical principle). A passthrough cell is editable only if the result set
+  carries `id` (via `*` / `<base>.*` / explicit `id`); the snippet's `d.*` satisfies this.
+  **Enablement direction (spiked Session 2, deferred):** when a band is *shape*-updatable
+  but `id`-less, surface a discoverable hint + a one-click "add `id`" affordance — **not**
+  silent PK injection. Injection was confirmed feasible (AST `{offset,length}` spans let
+  you splice `, <alias>.id` before the top-level `FROM` robustly), but it diverges
+  executed SQL from stored SQL and adds a hidden synthetic column — a crack in
+  SQL-canonical we chose not to take. The affordance keeps executed == stored.
+
 ## The bands table
 
 Persistence is a dedicated **`bands` table** keyed by `(matrix_id, row_id)` (the focal
@@ -213,14 +244,19 @@ have different risk profiles, and coupling them lets a write bug block read vali
   (`e2e/query-band.spec.ts`: attach → live read-only results → edit underlying data →
   band updates; persists across reload). Spike done — see the recognizer section
   (**negative**; S2 takes the AST route).
-- **Session 2 — recognized-SQL write-back.** The recognizer — **AST-parsing route** (the
-  spike ruled out column-origin metadata): an `sqlite3-parser` structural gate over the
-  known dialect + passthrough-column resolution + PK injection — and the
-  output-cell→`updateRow` mapping, plugged into Session 1's rendered bands (lift the
-  `readOnly` flag to a per-column predicate). Soundness-critical; gets a dedicated test
-  battery so a recognizer bug cannot destabilize the read path.
+- **Session 2 — recognized-SQL write-back. ✅ DONE (2026-06-27).** The recognizer (pure
+  `recognizeUpdatableQuery` + `resolveEditableColumns`, AST-parsing route over
+  `sqlite3-parser`; single-base-table v1; **no PK injection** — require `id`), the per-cell
+  `updateRow` mapping in `QueryBand`, and the `PropertyRow` `isEditable` generalization.
+  The subtree snippet was rewritten to single-table `EXISTS` so the motivating live view is
+  editable. Unit battery (`src/sql/recognize-updatable.test.ts` — accept/reject + resolve)
+  + e2e (`e2e/query-band.spec.ts` — edit a recognized cell writes through; id-less band
+  read-only). Enablement-when-id-absent decided (signal + one-click affordance) but **not
+  yet built** — see Open questions.
 - **Session 3 (later) — authoring polish.** The schema-aware SQL editor (logical-table
-  palette, column autocomplete, more snippets). *Not* `TableFace` generalization (→ §9.4).
+  palette, column autocomplete, more snippets) — built on the shared binder/resolver kernel
+  below — plus the **id-enablement affordance** (hint + one-click "add `id`" when a band is
+  shape-updatable but `id`-less). *Not* `TableFace` generalization (→ §9.4).
 
 Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
 
@@ -247,3 +283,33 @@ Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
 - **AST-parsing recognizer scope** — now the confirmed S2 route (the spike failed). Open:
   exactly which single-table shapes the `sqlite3-parser` gate accepts, and how alias /
   `*`-expansion are resolved in the AST walk (the work the engine would have done).
+- **Write-back enablement affordance** (decided 2026-06-27, not built) — when a band is
+  *shape*-updatable but `id`-less, show a discoverable hint + one-click "add `id`" rather
+  than silently injecting a PK. Chosen over auto-injection to keep executed SQL == stored
+  SQL (no IR, no hidden synthetic column). Lands with the §9.3 Session-3 authoring polish.
+
+### Forward direction: a first-party SQL semantic layer (amortizes future generality)
+
+Going SQL-first means we owe genuine first-party understanding of SQLite semantics as the
+recognizer/editor grow. We commit to recovering that understanding over **SQL as the
+canonical form** — *no IR*; the binder *lifts* SQL → resolved bindings for analysis, it
+never replaces SQL with a structured representation, and it never rewrites the stored
+query. The investments that pay off across more than one feature:
+
+- **Catalog as the authoritative semantic source.** Route all schema knowledge through the
+  app's own catalog (`matrix_columns` + `matrix` + `joins`/`closure`), which is richer than
+  SQLite's (roles, formula-ness, ownership/closure). Cheap enrichments compound — e.g. an
+  explicit PK marker rather than the implicit `id` convention, uniqueness, reference
+  semantics.
+- **A shared binder/resolver kernel.** Generalize today's one-off AST walks
+  (`tablesVisitedBySql`, `recognizeUpdatableQuery`) into one `(parsed SQL, catalog) →
+  resolved query` module handling aliases, `*`-expansion, and scopes once. Four consumers,
+  not one: the write-back recognizer, rename-safe `{{columnId}}` templating, the
+  schema-aware editor (autocomplete/validation), and invalidation. `recognizeUpdatableQuery`
+  is the first brick — built deliberately as a binder restricted to the single-table subset.
+- **The strategic fork to revisit, not pre-decide.** When write-back wants to grow past
+  single-table, choose between *owning a fuller SQLite binder* (expressive; recompiling
+  sqlite-wasm with `SQLITE_ENABLE_COLUMN_METADATA` becomes the lever for engine-authoritative
+  resolution) and *narrowing to a closed query algebra* (the deferred structured spec —
+  semantics closed by construction, still compiling to SQL). An ORM is neither (it assumes a
+  static, build-time schema; ours is runtime/user-defined) and is not a fit.
