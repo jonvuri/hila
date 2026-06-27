@@ -22,12 +22,20 @@ import { partitionPropertyColumns } from './property-surface'
  * The rich-text / ProseMirror branch (for `content`-role columns) is not built
  * yet — no aspect carries one today; it lands when this renderer is reused for
  * §9.1 heterogeneous outline rows.
+ *
+ * `readOnly` renders every cell (label and field strip alike) as a display span
+ * rather than an always-live `FieldEditor`, reusing the read-only styling the
+ * formula partition already uses. Query bands (Phase 9.3) render read-only this
+ * way; Session 2 will upgrade `readOnly` from a row-level flag to a per-column
+ * predicate so recognized-updatable cells light up while derived cells stay
+ * read-only. When `readOnly`, `onSave` is never called (and may be omitted).
  */
 export const PropertyRow: Component<{
   columns: ColumnDefinition[]
   data: Record<string, unknown> | null
   density: 'wide' | 'narrow'
-  onSave: (columnName: string, value: string) => void
+  onSave?: (columnName: string, value: string) => void
+  readOnly?: boolean
 }> = (props) => {
   const partition = createMemo(() => partitionPropertyColumns(props.columns))
   const valueOf = (col: ColumnDefinition) => String(props.data?.[col.name] ?? '')
@@ -48,15 +56,18 @@ export const PropertyRow: Component<{
     </span>
   )
 
-  const Field = (p: { col: ColumnDefinition }) => (
-    <FieldEditor
-      column={p.col}
-      value={valueOf(p.col)}
-      seamless
-      showLabel={false}
-      onSave={(v) => props.onSave(p.col.name, v)}
-    />
-  )
+  const Field = (p: { col: ColumnDefinition }) =>
+    props.readOnly ?
+      <span class="tag-panel-field-value-readonly" data-testid="property-row-readonly-cell">
+        {valueOf(p.col)}
+      </span>
+    : <FieldEditor
+        column={p.col}
+        value={valueOf(p.col)}
+        seamless
+        showLabel={false}
+        onSave={(v) => props.onSave?.(p.col.name, v)}
+      />
 
   return (
     <div class="property-row" data-testid="property-row">

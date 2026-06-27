@@ -184,6 +184,18 @@ export type MatrixOperationMap = {
     params: { targetMatrixId: number; targetRowId: number }
     result: JoinRow | null
   }
+  createBand: {
+    params: { focalMatrixId: number; focalRowId: number; sql: string }
+    result: number
+  }
+  updateBand: {
+    params: { bandId: number; sql: string }
+    result: void
+  }
+  deleteBand: {
+    params: { bandId: number }
+    result: void
+  }
   createTagType: {
     params: { name: string; columns?: { name: string; type: string }[] }
     result: TagType

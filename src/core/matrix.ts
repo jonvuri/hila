@@ -322,6 +322,33 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
   `)
 
+  // -- Bands (Phase 9.3: persisted query-binding live views) ------------------
+  //
+  // A band is a node-scoped live view: `(query, face, integration)` keyed by the
+  // focal (matrix_id, row_id). The read slice persists query-binding bands only
+  // (raw SQL rendered read-only through the schema-adaptive renderer).
+  //
+  // LOCAL-ONLY this phase: the table deliberately gets NO change-tracking/sync
+  // triggers (it is absent from installCoreTableTriggers), so bands are treated
+  // as local view state and do not sync. The SQLite update hook still fires for
+  // it, so `useQuery` subscriptions over `bands` stay reactive. Promoting it to
+  // synced source-of-truth (like joins/promoted_nodes) is additive — deferred
+  // until multi-device matters (see context/Phase-9.3.md open questions).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bands (
+      id              INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
+      focal_matrix_id INTEGER NOT NULL,
+      focal_row_id    INTEGER NOT NULL,
+      sql             TEXT    NOT NULL,
+      face            TEXT    NOT NULL DEFAULT 'property-list',
+      integration     TEXT    NOT NULL DEFAULT 'query',
+      "order"         INTEGER NOT NULL DEFAULT 0
+    ) STRICT;
+
+    CREATE INDEX IF NOT EXISTS bands_by_focal
+      ON bands(focal_matrix_id, focal_row_id);
+  `)
+
   // -- Normalized face config tables ------------------------------------------
 
   db.exec(`

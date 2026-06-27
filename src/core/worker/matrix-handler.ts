@@ -36,6 +36,11 @@ import {
   deleteTagType as deleteTagTypeImpl,
 } from '../../tags/tag-types'
 import {
+  createBand as createBandImpl,
+  updateBandSql as updateBandSqlImpl,
+  deleteBand as deleteBandImpl,
+} from '../bands'
+import {
   reparentRow as reparentRowImpl,
   deleteSubtree as deleteSubtreeImpl,
   resolveNodeByGlobalKey,
@@ -740,6 +745,42 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'deleteJoinByTargetSuccess', id, result: joinRow })
       } catch (err: unknown) {
         postMessage({ type: 'deleteJoinByTargetError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'createBand': {
+      const { id, focalMatrixId, focalRowId, sql } = message
+      try {
+        const { db } = await sqliteWasm
+        const bandId = createBandImpl(db, { matrixId: focalMatrixId, rowId: focalRowId }, sql)
+        postMessage({ type: 'createBandSuccess', id, result: bandId })
+      } catch (err: unknown) {
+        postMessage({ type: 'createBandError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'updateBand': {
+      const { id, bandId, sql } = message
+      try {
+        const { db } = await sqliteWasm
+        updateBandSqlImpl(db, bandId, sql)
+        postMessage({ type: 'updateBandSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'updateBandError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteBand': {
+      const { id, bandId } = message
+      try {
+        const { db } = await sqliteWasm
+        deleteBandImpl(db, bandId)
+        postMessage({ type: 'deleteBandSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteBandError', id, error: toError(err) })
       }
       break
     }

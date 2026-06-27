@@ -143,11 +143,27 @@ Boundaries:
   Key-preserving joins (Oracle's "key-preserved table" notion) need uniqueness/constraint
   reasoning that is more than v1 warrants; widen later.
 
-**Prerequisite spike:** confirm the **sqlite-wasm build ships `SQLITE_ENABLE_COLUMN_METADATA`**.
-If present, the recognizer is small and robust. If absent, write-back falls back to pure
-AST parsing (fixed SQLite dialect over *known* logical tables — tractable, but you
-reimplement name resolution and lose per-column robustness). Run this ~30-minute check
-at the tail of Session 1, before committing Session 2's shape.
+**Prerequisite spike — RESULT (Session 1, 2026-06-26): NEGATIVE.** The bundled
+`@sqlite.org/sqlite-wasm@3.50.1` build does **not** ship `SQLITE_ENABLE_COLUMN_METADATA`,
+so the semantic column-origin path above is unavailable. Evidence:
+`sqlite3_compileoption_used('ENABLE_COLUMN_METADATA')` returns `0`;
+`capi.sqlite3_column_origin_name` / `_table_name` / `_database_name` are all `undefined`;
+and the option is absent from the wasm's embedded compile-options table (which jumps
+`ENABLE_BYTECODE_VTAB` → `ENABLE_COMMENTS`). The official wasm build does not define it
+and there is no build flag to toggle from the published package.
+
+**Therefore Session 2 takes the AST-parsing fallback** (a fixed SQLite dialect over the
+*known* logical tables): parse the band SQL, structurally gate it (reject
+`GROUP BY` / `DISTINCT` / aggregate / `UNION` / multi-table-`FROM` for v1), and resolve
+passthrough columns + inject the base PK by name. This is **cheaper here than the design
+feared**, because the codebase already parses SQL this way: `sqlite3-parser`'s
+`parseStmt` / `traverse` is a direct dependency already powering `tablesVisitedBySql`
+([src/core/worker/invalidation.ts](../src/core/worker/invalidation.ts)). The recognizer
+reuses that exact mechanism rather than reimplementing a parser — it loses per-column
+*engine-resolved* robustness (alias / `*`-expansion edge cases must be handled in the AST
+walk) but the v1 subset (single-table `SELECT … FROM "mx_<T>_data"`, the snippet shape)
+is well within reach. Switching to the semantic path later remains a drop-in *iff* a
+column-metadata-enabled wasm build is ever adopted.
 
 ## The bands table
 
@@ -185,16 +201,24 @@ Decisions:
 Split along the seam that separates **read-correctness from write-soundness** — they
 have different risk profiles, and coupling them lets a write bug block read validation.
 
-- **Session 1 — read slice.** The `bands` table + persistence (local-only); the
-  `QueryBand` component (run its SQL via `useQuery`, render the result set through the
-  schema-adaptive renderer, `query:` header) mounted in `FocusPanel` like `AspectBand`;
-  a minimal authoring affordance (a raw SQL box + one "in this subtree" snippet).
-  Deliverable: attach a live SQL view to a node, persisted, rendered live, **read-only**.
-  End with the `SQLITE_ENABLE_COLUMN_METADATA` spike.
-- **Session 2 — recognized-SQL write-back.** The recognizer (column-origin metadata +
-  AST structural gate + PK injection) and the output-cell→`updateRow` mapping, plugged
-  into Session 1's rendered bands. Soundness-critical; gets a dedicated test battery so a
-  recognizer bug cannot destabilize the read path.
+- **Session 1 — read slice. ✅ DONE (2026-06-26).** The `bands` table + persistence
+  (local-only, no sync triggers — reactivity rides the SQLite update hook); CRUD ops
+  (`createBand`/`updateBand`/`deleteBand` in `src/core/bands.ts` + worker wiring); the
+  `QueryBand` component (run its SQL via `useQuery`, render the result set read-only
+  through the schema-adaptive renderer — `PropertyRow` gained a `readOnly` mode, columns
+  synthesized from result keys — with a `query:` header) mounted in `FocusPanel` after
+  `AspectBand`; the authoring affordance (raw SQL box + a promoted-type-node dropdown that
+  inserts the "in this subtree" snippet, `src/workspace/band-queries.ts`). Unit tests
+  (band CRUD, the closure∪self snippet, `PropertyRow` read-only) + e2e
+  (`e2e/query-band.spec.ts`: attach → live read-only results → edit underlying data →
+  band updates; persists across reload). Spike done — see the recognizer section
+  (**negative**; S2 takes the AST route).
+- **Session 2 — recognized-SQL write-back.** The recognizer — **AST-parsing route** (the
+  spike ruled out column-origin metadata): an `sqlite3-parser` structural gate over the
+  known dialect + passthrough-column resolution + PK injection — and the
+  output-cell→`updateRow` mapping, plugged into Session 1's rendered bands (lift the
+  `readOnly` flag to a per-column predicate). Soundness-critical; gets a dedicated test
+  battery so a recognizer bug cannot destabilize the read path.
 - **Session 3 (later) — authoring polish.** The schema-aware SQL editor (logical-table
   palette, column autocomplete, more snippets). *Not* `TableFace` generalization (→ §9.4).
 
@@ -220,4 +244,6 @@ Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
   to the same SQL.
 - **Unifying the aspect band into the `bands` table** (the "one table backs all bands"
   pull from 9.2).
-- **AST-parsing fallback** scope, *iff* the `SQLITE_ENABLE_COLUMN_METADATA` spike fails.
+- **AST-parsing recognizer scope** — now the confirmed S2 route (the spike failed). Open:
+  exactly which single-table shapes the `sqlite3-parser` gate accepts, and how alias /
+  `*`-expansion are resolved in the AST walk (the work the engine would have done).

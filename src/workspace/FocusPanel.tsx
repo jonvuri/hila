@@ -40,6 +40,7 @@ import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-
 import { FieldEditor } from '../shared/FieldEditor'
 
 import AspectBand from './AspectBand'
+import { QueryBandsSection } from './QueryBand'
 import { buildSingleRowQuery, buildBacklinksQuery } from './workspace-plugin'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
@@ -603,6 +604,10 @@ const FocusPanel = (props: FocusPanelProps) => {
                 hostRowId={props.rowId}
                 contentAnchoredKeys={contentAnchoredKeys()}
               />
+
+              {/* Query bands: persisted live SQL views, rendered read-only
+                  through the schema-adaptive renderer (Phase 9.3). */}
+              <QueryBandsSection matrixId={props.matrixId} rowId={props.rowId} />
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
