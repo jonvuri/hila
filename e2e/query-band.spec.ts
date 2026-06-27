@@ -186,8 +186,45 @@ test.describe('Query bands (read slice)', () => {
     await expect(page.getByTestId('query-band-row').first()).toContainText('Task A', {
       timeout: 5000,
     })
-    // No editable badge, no live inputs.
+    // No editable badge, no live inputs — but the one-click enablement affordance
+    // is offered (the view is shape-updatable, just missing id).
     await expect(page.getByTestId('query-band-editable-badge')).toHaveCount(0)
     await expect(page.getByTestId('query-band-row').first().locator('input')).toHaveCount(0)
+    await expect(page.getByTestId('query-band-enable-edit')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('"+ id to edit" rewrites the stored SQL and unlocks write-back', async ({ page }) => {
+    const { tasksId, rowId } = await seedTasksMatrix(page)
+
+    await openFocusPanel(page)
+
+    const sqlInput = page.getByTestId('query-band-sql-input')
+    await sqlInput.fill(`SELECT title FROM "mx_${tasksId}_data"`)
+    await page.getByTestId('query-band-save').click()
+
+    // Click the affordance → the stored SQL gains `id` → the band becomes editable.
+    const enable = page.getByTestId('query-band-enable-edit')
+    await expect(enable).toBeVisible({ timeout: 5000 })
+    await enable.click()
+
+    await expect(page.getByTestId('query-band-editable-badge')).toBeVisible({ timeout: 5000 })
+    const cell = page.getByTestId('query-band-row').first().locator('input').first()
+    await expect(cell).toBeVisible({ timeout: 5000 })
+
+    // And edits now write through to the base row.
+    await cell.fill('Edited via affordance')
+    await cell.press('Enter')
+    await expect(async () => {
+      const title = await page.evaluate(
+        async ([mid, rid]) => {
+          // @ts-expect-error -- resolved by Vite dev server at runtime
+          const sql = await import('/src/core/client/sql-client.ts')
+          const rows = await sql.execQuery(`SELECT title FROM "mx_${mid}_data" WHERE id = ${rid}`)
+          return (rows[0] as { title: string } | undefined)?.title
+        },
+        [tasksId, rowId] as const,
+      )
+      expect(title).toBe('Edited via affordance')
+    }).toPass({ timeout: 5000 })
   })
 })

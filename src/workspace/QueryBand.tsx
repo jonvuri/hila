@@ -1,9 +1,19 @@
 import { createEffect, createMemo, createSignal, For, Show, type Component } from 'solid-js'
 
 import type { ColumnDefinition } from '../core/matrix'
-import { createBand, deleteBand, getColumns, updateRow } from '../core/client/matrix-client'
+import {
+  createBand,
+  deleteBand,
+  getColumns,
+  updateBand,
+  updateRow,
+} from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
-import { recognizeUpdatableQuery, resolveEditableColumns } from '../sql/recognize-updatable'
+import {
+  addIdToProjection,
+  recognizeUpdatableQuery,
+  resolveEditableColumns,
+} from '../sql/recognize-updatable'
 import { PropertyRow } from '../shared/PropertyRow'
 import { buildTagTypesWithCountsQuery } from '../tags/tag-queries'
 
@@ -87,13 +97,24 @@ const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) =>
     else setBaseColumns([])
   })
 
+  const resolution = createMemo(() => {
+    const rec = recognition()
+    if (!rec.updatable) return null
+    return resolveEditableColumns(rec, baseColumns())
+  })
+
   // Editable result columns: output name → base column name (empty unless the
   // recognizer accepts the query *and* `id` is in the result set).
-  const editable = createMemo(() => {
-    const rec = recognition()
-    if (!rec.updatable) return new Map<string, string>()
-    return resolveEditableColumns(rec, baseColumns()).editable
-  })
+  const editable = createMemo(() => resolution()?.editable ?? new Map<string, string>())
+
+  // The band is shape-updatable but `id`-less, and adding `id` would unlock at
+  // least one cell — show the one-click "add id to edit" affordance.
+  const canEnableWithId = createMemo(() => resolution()?.enableableWithId ?? false)
+
+  const enableEditing = () => {
+    const next = addIdToProjection(props.band.sql)
+    if (next) void updateBand(props.band.id, next)
+  }
 
   // Render columns synthesized from result keys, with editable passthrough
   // columns enriched from the base catalog (so e.g. a number/date/select cell
@@ -161,6 +182,26 @@ const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) =>
             >
               editable
             </span>
+          </Show>
+          <Show when={canEnableWithId()}>
+            <button
+              type="button"
+              data-testid="query-band-enable-edit"
+              title="This view's columns become editable once the result set includes id"
+              onClick={() => enableEditing()}
+              style={{
+                'margin-left': '6px',
+                background: 'none',
+                border: '1px solid var(--accent)',
+                'border-radius': '3px',
+                color: 'var(--accent)',
+                cursor: 'pointer',
+                'font-size': '10px',
+                padding: '0 5px',
+              }}
+            >
+              + id to edit
+            </button>
           </Show>
         </span>
         <button

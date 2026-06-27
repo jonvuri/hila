@@ -160,9 +160,16 @@ export const recognizeUpdatableQuery = (sql: string): UpdatableRecognition => {
 }
 
 export type EditableResolution = {
-  /** result output name → base column name, for editable cells only. Empty when
-   *  the result set carries no `id` (no row identity to write back through). */
+  /** result output name → base column name, for editable cells only. Empty
+   *  unless `id` is in the result set (the row-identity gate). */
   editable: Map<string, string>
+  /** is `id` in the result set (via `*`/`<base>.*`/explicit `id`)? */
+  idPresent: boolean
+  /** would the band become editable if `id` were added to the projection? True
+   *  only when `id` is absent *and* there is at least one writable passthrough
+   *  (or `*` over a table with a writable column) — i.e. the one-click "add id"
+   *  affordance would actually help. */
+  enableableWithId: boolean
 }
 
 /**
@@ -177,26 +184,53 @@ export const resolveEditableColumns = (
   recognition: Extract<UpdatableRecognition, { updatable: true }>,
   columns: ColumnDefinition[],
 ): EditableResolution => {
-  const editable = new Map<string, string>()
-
-  const idPresent =
-    recognition.star || recognition.passthrough.some((p) => p.baseColumn.toLowerCase() === 'id')
-  if (!idPresent) return { editable }
-
   const colByName = new Map(columns.map((c) => [c.name.toLowerCase(), c]))
   const isWritable = (col: ColumnDefinition | undefined): boolean =>
     col != null && col.formula == null && col.name.toLowerCase() !== 'id'
 
+  // The writable passthrough set, *ignoring* the id gate.
+  const writable = new Map<string, string>()
   if (recognition.star) {
     for (const col of columns) {
-      if (isWritable(col)) editable.set(col.name, col.name)
+      if (isWritable(col)) writable.set(col.name, col.name)
     }
   }
-
   for (const p of recognition.passthrough) {
     const col = colByName.get(p.baseColumn.toLowerCase())
-    if (isWritable(col)) editable.set(p.outputName, col!.name)
+    if (isWritable(col)) writable.set(p.outputName, col!.name)
   }
 
-  return { editable }
+  const idPresent =
+    recognition.star || recognition.passthrough.some((p) => p.baseColumn.toLowerCase() === 'id')
+
+  return {
+    editable: idPresent ? writable : new Map(),
+    idPresent,
+    enableableWithId: !idPresent && writable.size > 0,
+  }
+}
+
+/**
+ * Add `id` to a recognized query's projection, returning the rewritten SQL (or
+ * null if it can't be parsed). This backs the one-click "add id to edit"
+ * affordance — a **user-initiated** edit of the *stored* canonical SQL (the band
+ * genuinely gains `id`), distinct from the silent execution-time PK injection we
+ * deliberately avoid. Splices `, <alias>.id` just before the top-level `FROM`,
+ * located by the AST span so a `WHERE`-subquery `FROM` can't mislead it.
+ */
+export const addIdToProjection = (sql: string): string | null => {
+  const parsed = parseStmt(sql, { allowTrailing: true })
+  if (parsed.status !== 'ok') return null
+
+  const sel = (parsed.root as AstNode)?.body?.select as AstNode
+  if (sel?.type !== 'SelectFrom') return null
+
+  const fromOffset: number | undefined = sel.from?.span?.offset
+  if (typeof fromOffset !== 'number') return null
+
+  const alias: string | undefined = sel.from?.select?.alias?.name?.text
+  const idExpr = alias ? `${alias}.id` : 'id'
+
+  const head = sql.slice(0, fromOffset).replace(/\s+$/, '')
+  return `${head}, ${idExpr} ${sql.slice(fromOffset)}`
 }

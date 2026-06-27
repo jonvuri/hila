@@ -189,12 +189,13 @@ Two decisions settled here:
 - **Row-identity gate = require `id` in the result set** (no PK injection / no rewrite,
   per the SQL-canonical principle). A passthrough cell is editable only if the result set
   carries `id` (via `*` / `<base>.*` / explicit `id`); the snippet's `d.*` satisfies this.
-  **Enablement direction (spiked Session 2, deferred):** when a band is *shape*-updatable
-  but `id`-less, surface a discoverable hint + a one-click "add `id`" affordance — **not**
-  silent PK injection. Injection was confirmed feasible (AST `{offset,length}` spans let
-  you splice `, <alias>.id` before the top-level `FROM` robustly), but it diverges
-  executed SQL from stored SQL and adds a hidden synthetic column — a crack in
-  SQL-canonical we chose not to take. The affordance keeps executed == stored.
+  **Enablement affordance (built Session 2):** when a band is *shape*-updatable but
+  `id`-less and adding `id` would unlock a cell, `QueryBand` shows a one-click "+ id to
+  edit" control. It rewrites the **stored** SQL via `addIdToProjection` (an AST
+  span-guided splice of `, <alias>.id` before the top-level `FROM`) — a *user-initiated*
+  edit of the canonical query, distinct from the silent execution-time PK injection we
+  rejected (which would diverge executed from stored SQL and hide a synthetic column).
+  Executed == stored throughout.
 
 ## The bands table
 
@@ -251,12 +252,12 @@ have different risk profiles, and coupling them lets a write bug block read vali
   The subtree snippet was rewritten to single-table `EXISTS` so the motivating live view is
   editable. Unit battery (`src/sql/recognize-updatable.test.ts` — accept/reject + resolve)
   + e2e (`e2e/query-band.spec.ts` — edit a recognized cell writes through; id-less band
-  read-only). Enablement-when-id-absent decided (signal + one-click affordance) but **not
-  yet built** — see Open questions.
+  read-only). Includes the **id-enablement affordance**: a one-click "+ id to edit" that
+  rewrites the stored SQL (`addIdToProjection`) when a band is shape-updatable but
+  `id`-less (signal, not silent injection — keeps executed == stored).
 - **Session 3 (later) — authoring polish.** The schema-aware SQL editor (logical-table
   palette, column autocomplete, more snippets) — built on the shared binder/resolver kernel
-  below — plus the **id-enablement affordance** (hint + one-click "add `id`" when a band is
-  shape-updatable but `id`-less). *Not* `TableFace` generalization (→ §9.4).
+  below. *Not* `TableFace` generalization (→ §9.4).
 
 Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
 
@@ -283,10 +284,10 @@ Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
 - **AST-parsing recognizer scope** — now the confirmed S2 route (the spike failed). Open:
   exactly which single-table shapes the `sqlite3-parser` gate accepts, and how alias /
   `*`-expansion are resolved in the AST walk (the work the engine would have done).
-- **Write-back enablement affordance** (decided 2026-06-27, not built) — when a band is
-  *shape*-updatable but `id`-less, show a discoverable hint + one-click "add `id`" rather
-  than silently injecting a PK. Chosen over auto-injection to keep executed SQL == stored
-  SQL (no IR, no hidden synthetic column). Lands with the §9.3 Session-3 authoring polish.
+- ~~**Write-back enablement affordance**~~ — **built 2026-06-27** (the one-click "+ id to
+  edit" in `QueryBand` via `addIdToProjection`; signal over silent injection, executed ==
+  stored). Remaining nuance: it currently rewrites to a bare/alias-qualified `id`; revisit
+  if a band ever needs a different projection style.
 
 ### Forward direction: a first-party SQL semantic layer (amortizes future generality)
 

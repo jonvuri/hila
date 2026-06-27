@@ -2,7 +2,11 @@ import { describe, expect, test } from 'vitest'
 
 import type { ColumnDefinition } from '../core/matrix'
 
-import { recognizeUpdatableQuery, resolveEditableColumns } from './recognize-updatable'
+import {
+  addIdToProjection,
+  recognizeUpdatableQuery,
+  resolveEditableColumns,
+} from './recognize-updatable'
 
 const col = (
   name: string,
@@ -103,5 +107,57 @@ describe('resolveEditableColumns', () => {
     if (!r.updatable) throw new Error('expected updatable')
     const { editable } = resolveEditableColumns(r, columns)
     expect(editable.size).toBe(0)
+  })
+
+  test('id-less view with a writable column → enableableWithId', () => {
+    const r = recognizeUpdatableQuery(`SELECT status FROM "mx_1_data"`)
+    if (!r.updatable) throw new Error('expected updatable')
+    const res = resolveEditableColumns(r, columns)
+    expect(res.idPresent).toBe(false)
+    expect(res.enableableWithId).toBe(true)
+  })
+
+  test('id-less view with only derived/formula columns → not enableableWithId', () => {
+    const r = recognizeUpdatableQuery(`SELECT upper(status), age FROM "mx_1_data"`)
+    if (!r.updatable) throw new Error('expected updatable')
+    const res = resolveEditableColumns(r, columns)
+    // upper(status) is derived; age is a formula → adding id unlocks nothing.
+    expect(res.enableableWithId).toBe(false)
+  })
+
+  test('id present → not enableableWithId (already editable)', () => {
+    const r = recognizeUpdatableQuery(`SELECT * FROM "mx_1_data"`)
+    if (!r.updatable) throw new Error('expected updatable')
+    const res = resolveEditableColumns(r, columns)
+    expect(res.idPresent).toBe(true)
+    expect(res.enableableWithId).toBe(false)
+  })
+})
+
+describe('addIdToProjection', () => {
+  test('appends a bare id when there is no alias', () => {
+    expect(addIdToProjection(`SELECT status FROM "mx_5_data"`)).toBe(
+      `SELECT status, id FROM "mx_5_data"`,
+    )
+  })
+
+  test('qualifies id with the table alias', () => {
+    expect(addIdToProjection(`SELECT d.status FROM "mx_5_data" d`)).toBe(
+      `SELECT d.status, d.id FROM "mx_5_data" d`,
+    )
+  })
+
+  test('the rewrite becomes editable (round-trip through the recognizer)', () => {
+    const rewritten = addIdToProjection(`SELECT status FROM "mx_5_data"`)
+    expect(rewritten).not.toBeNull()
+    const r = recognizeUpdatableQuery(rewritten!)
+    if (!r.updatable) throw new Error('expected updatable')
+    const res = resolveEditableColumns(r, [col('id'), col('status')])
+    expect(res.idPresent).toBe(true)
+    expect([...res.editable.keys()]).toEqual(['status'])
+  })
+
+  test('returns null on unparseable SQL', () => {
+    expect(addIdToProjection(`SELECT FROM WHERE`)).toBeNull()
   })
 })
