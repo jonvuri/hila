@@ -157,3 +157,23 @@ E2E status: the first three tests were already revived against this policy in th
 ## Dependency notes
 
 Depends on the data-layer ownership spine ([Phase 8](Phase-8.md) → [8b](Phase-8b.md) → [8c](Phase-8c.md)); each surface here consumes specific data facts settled there (edges, global closure/scroll index, `matrix.owner`, type-nodes). Complementary to [Phase 11](Phase-11.md) (tasks/movie-reviews) -- the property surface (9.2) and the renderer registry must compose. Precedes and feeds [Phase 10](Phase-10.md), the design-system / theming pass, which is best done once these surfaces are settled so the token system spans the final set. Resolves `Plan.md` open question #5 (face affinity) in 9.5.
+
+## Follow-ups (known issues to address later)
+
+Captured during Phase 9 but deferred to keep their fix-diffs focused. Not blocking; each is a real bug or sharp edge with a known fix direction.
+
+### SQL subscription late-joiner race (latent correctness bug)
+
+The client SQL subscription layer has a latent race where a **second observer joining an already-subscribed SQL pool gets no initial result**, which can blank a panel.
+
+- **Symptom.** An embedded `TableFace` or a drilled-in `FocusPanel` (`buildSingleRowQuery`) renders **blank** when the panel stack re-renders and a component **remounts before the previous one's cleanup runs** (the common SolidJS reconciliation order). The tell is a `[error] Tried to subscribe, but SQL was already subscribed: …` line in the worker logs. Concretely surfaced during §9.6: a debounced no-op label save after the `/table` slash command (typing dirties the row editor) re-renders the stack and trips it.
+- **Root cause.** Refcounted subscribe with **no replay path for late joiners**:
+  - Client (`src/core/client/sql-client.ts` `addObserver`): always posts `{type:'subscribe'}`, even when joining an existing pool, and keeps **no client-side last-result cache**.
+  - Worker (`src/core/worker/sql-handler.ts` `subscribe`): **ignores a duplicate subscribe** for an already-prepared SQL (logs the line above and returns without re-posting a `subscribeResult`).
+  - So the redundant `subscribe` is dead on arrival, and the late joiner gets nothing. If the underlying data is **static** (no further invalidation to force a redraw), the UI stays blank.
+- **Fix direction** (prototyped and reverted in §9.6 to keep that diff focused — it's a shared hot path): (a) post `subscribe` **only when creating a new pool**; (b) cache the last `subscribeResult` per SQL (`lastResultBySql`) and **replay it synchronously** to an observer that joins an existing pool, clearing it on unsubscribe. Add a targeted regression test — the bug is currently **invisible to the suite** because the §9.5 boundary-hop e2e was deliberately decoupled (it now seeds its sub-table via the data layer instead of the slash UX) to stop triggering it.
+- **Touches:** `src/core/client/sql-client.ts`, `src/core/client/sql-client-promises.ts`, `src/core/worker/sql-handler.ts`.
+
+### Aspect band host-matrix scope (cross-matrix `/attach`)
+
+See the **"Known sharp edge"** bullet under §9.6 above: `/attach` onto a non-workspace node creates the row correctly but it's absent from the aspect band (fields uneditable). Local fix in that bullet; deeper resolution is the §9.7 convergence.
