@@ -283,7 +283,7 @@ describe('Owned matrix drop cascade (Phase 8c §8.1)', () => {
     expect(tableExists(`mx_${taskMatrixId}_data`)).toBe(false)
   })
 
-  test('updating the label-role column syncs owned matrix titles (label is canonical)', () => {
+  test('updating the label-role column syncs a promoted type-node owned matrix title (label is canonical)', () => {
     const labeledWsId = createMatrix(db, 'Labeled WS', [
       { name: 'label', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
@@ -297,6 +297,8 @@ describe('Owned matrix drop cascade (Phase 8c §8.1)', () => {
       'task',
       [{ name: 'label', type: 'TEXT' }],
     )
+    // The sync rule is scoped to promoted (type-node) owners (Phase 9 §9.6).
+    promoteNode(db, { matrixId: labeledWsId, rowId: typeNodeId })
 
     // Renaming via the generic row-edit path (what the outline editor does)
     updateRow(db, {
@@ -322,6 +324,43 @@ describe('Owned matrix drop cascade (Phase 8c §8.1)', () => {
     titleStmt2.step()
     expect((titleStmt2.get({}) as { title: string }).title).toBe('todo')
     titleStmt2.finalize()
+  })
+
+  test('a non-promoted node owns independently-named dedicated sub-tables that survive label edits (Phase 9 §9.6)', () => {
+    const labeledWsId = createMatrix(db, 'Labeled WS', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+    ])
+    const { rowId: nodeId } = insertRow(db, labeledWsId, {
+      values: { label: makePmDoc(makeTextNode('Project')) },
+    })
+    // A plain node can own several dedicated sub-tables, each with its own name.
+    const groceriesId = createOwnedMatrix(
+      db,
+      { matrixId: labeledWsId, rowId: nodeId },
+      'Groceries',
+      [{ name: 'title', type: 'TEXT', role: 'label' }],
+    )
+    const budgetId = createOwnedMatrix(db, { matrixId: labeledWsId, rowId: nodeId }, 'Budget', [
+      { name: 'title', type: 'TEXT', role: 'label' },
+    ])
+
+    // Renaming the owner node must NOT clobber the sub-tables' names.
+    updateRow(db, {
+      matrixId: labeledWsId,
+      rowId: nodeId,
+      values: { label: makePmDoc(makeTextNode('Q3 Project')) },
+    })
+
+    const titleOf = (id: number): string => {
+      const stmt = db.prepare('SELECT title FROM matrix WHERE id = ?')
+      stmt.bind([id])
+      stmt.step()
+      const t = (stmt.get({}) as { title: string }).title
+      stmt.finalize()
+      return t
+    }
+    expect(titleOf(groceriesId)).toBe('Groceries')
+    expect(titleOf(budgetId)).toBe('Budget')
   })
 
   test('label writes on rows that own nothing are unaffected by the sync rule', () => {

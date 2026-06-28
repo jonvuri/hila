@@ -726,8 +726,18 @@ export const getOwnedMatrixes = (db: Database, owner: NodeRef): number[] => {
  * the canonical name of anything the node owns (Phase 8c §4); `matrix.title`
  * is a derived cache of it, kept hot so name queries (tag autocomplete, the
  * tag browser) never parse ProseMirror JSON in SQL.
+ *
+ * Scoped to **promoted (type-node) owners** (Phase 9 §9.6): a type-node and its
+ * matrix are 1:1 and the matrix's name genuinely *is* the node's label, so the
+ * cache must follow it. A plain node, by contrast, can own several *dedicated
+ * sub-tables* with their own independent names (`/table <name>`, §9.6) — those
+ * must not be clobbered by the owner's label. (Edge: a promoted node that also
+ * owns a private sub-table would still sync it; no consumer hits that yet — see
+ * Phase-9.md §9.6 forward notes.)
  */
 const syncOwnedMatrixTitles = (db: Database, owner: NodeRef, labelValue: unknown): void => {
+  if (!isPromotedNode(db, owner)) return
+
   const ownedIds = getOwnedMatrixes(db, owner)
   if (ownedIds.length === 0) return
 

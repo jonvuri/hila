@@ -31,8 +31,10 @@ import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
+import { createSlashPlugin } from '../editor/slash-plugin'
 import {
   syncInlineRefs,
+  extractInlineRefsFromStored,
   refreshCachedTitles,
   extractInlineRefsFromJson,
 } from '../editor/inlineref-sync'
@@ -145,7 +147,12 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
     void refreshCachedTitles(docJson).then((updated) => {
       void updateRow(props.matrixId, props.rowId, { [props.column]: JSON.stringify(updated) })
     })
-    void syncInlineRefs(doc, props.matrixId, props.rowId)
+    void syncInlineRefs(
+      doc,
+      props.matrixId,
+      props.rowId,
+      extractInlineRefsFromStored(props.label),
+    )
   }, SAVE_DEBOUNCE_MS)
 
   const mountEditor = (el: HTMLDivElement) => {
@@ -160,6 +167,10 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
         rowIdAccessor: () => props.rowId,
         searchProvider: createTagSearchProvider(props.matrixId),
         onTagSelect: handleTagSelection,
+      }),
+      createSlashPlugin({
+        matrixId: props.matrixId,
+        rowIdAccessor: () => props.rowId,
       }),
       buildLabelKeymap(props.onEscape),
     ]
@@ -213,6 +224,10 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
               searchProvider: createTagSearchProvider(props.matrixId),
               onTagSelect: handleTagSelection,
             }),
+            createSlashPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+            }),
             buildLabelKeymap(props.onEscape),
           ])
           editorView.updateState(newState)
@@ -265,7 +280,12 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
     void refreshCachedTitles(docJson).then((updated) => {
       void updateRow(props.matrixId, props.rowId, { [props.column]: JSON.stringify(updated) })
     })
-    void syncInlineRefs(doc, props.matrixId, props.rowId)
+    void syncInlineRefs(
+      doc,
+      props.matrixId,
+      props.rowId,
+      extractInlineRefsFromStored(props.content),
+    )
   }, SAVE_DEBOUNCE_MS)
 
   const mountEditor = (el: HTMLDivElement) => {
@@ -280,6 +300,10 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
         rowIdAccessor: () => props.rowId,
         searchProvider: createTagSearchProvider(props.matrixId),
         onTagSelect: handleTagSelection,
+      }),
+      createSlashPlugin({
+        matrixId: props.matrixId,
+        rowIdAccessor: () => props.rowId,
       }),
       buildContentKeymap(props.onEscape),
     ]
@@ -341,6 +365,10 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
               rowIdAccessor: () => props.rowId,
               searchProvider: createTagSearchProvider(props.matrixId),
               onTagSelect: handleTagSelection,
+            }),
+            createSlashPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
             }),
             buildContentKeymap(props.onEscape),
           ])

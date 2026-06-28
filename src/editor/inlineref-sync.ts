@@ -32,20 +32,35 @@ export const extractInlineRefs = (doc: Node): InlineRef[] => {
   return refs
 }
 
+/** Parse a stored PM-JSON string (or empty) into its inline refs. */
+export const extractInlineRefsFromStored = (stored: string | null | undefined): InlineRef[] =>
+  stored ? extractInlineRefsFromJson(JSON.parse(stored) as unknown) : []
+
 /**
  * Sync inlineref nodes in a ProseMirror doc to the join table.
- * The PM doc is the source of truth: new refs are inserted, stale refs are
- * deleted. Removed `own`-kind joins cascade-delete their target rows.
+ *
+ * New refs in the doc are inserted. A join is deleted only when its **token was
+ * actually removed** — present in `prevRefs` (the previously-stored prose) but
+ * absent from the current doc. This is the crucial distinction for Phase 9.6:
+ * a `/attach` aspect is a **structurally-anchored** `own`-edge that never had a
+ * `#` token, so it is never in `prevRefs` and a content edit leaves it intact.
+ * (Reconciling against the doc alone would cascade-delete every structural edge
+ * on the next save.) Removed `own`-kind joins still cascade-delete their target.
  */
 export const syncInlineRefs = async (
   doc: Node,
   sourceMatrixId: number,
   sourceRowId: number,
+  prevRefs: InlineRef[] = [],
 ): Promise<void> => {
   const docRefs = extractInlineRefs(doc)
   const docMap = new Map<string, InlineRef>()
   for (const ref of docRefs) {
     docMap.set(refKey(ref), ref)
+  }
+  const prevMap = new Map<string, InlineRef>()
+  for (const ref of prevRefs) {
+    prevMap.set(refKey(ref), ref)
   }
 
   // Exclude same-matrix `own`-edges: those are the outline tree structure
@@ -62,12 +77,14 @@ export const syncInlineRefs = async (
   )
 
   const toInsert = [...docMap.entries()].filter(([key]) => !dbSet.has(key))
-  const toDelete = currentTargets.filter(
-    (t) =>
-      !docMap.has(
-        refKey({ targetMatrixId: t.targetMatrixId, targetRowId: t.targetRowId, kind: t.kind }),
-      ),
-  )
+  const toDelete = currentTargets.filter((t) => {
+    const key = refKey({
+      targetMatrixId: t.targetMatrixId,
+      targetRowId: t.targetRowId,
+      kind: t.kind,
+    })
+    return prevMap.has(key) && !docMap.has(key)
+  })
 
   await Promise.all([
     ...toInsert.map(([, ref]) =>

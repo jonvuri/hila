@@ -1,14 +1,25 @@
-import { createMemo, createResource, For, lazy, Show, Suspense, type Component } from 'solid-js'
-
 import {
-  applyFaceToMatrix,
-  createOwnedMatrix,
-  getFaceConfigs,
-} from '../core/client/matrix-client'
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  lazy,
+  onCleanup,
+  onMount,
+  Show,
+  Suspense,
+  type Component,
+} from 'solid-js'
+
+import { applyFaceToMatrix, getFaceConfigs, renameMatrix } from '../core/client/matrix-client'
 import type { FaceConfig, SlotBindingResult } from '../core/face-types'
+import { pendingNewTableMatrixId, clearPendingNewTable } from '../editor/pending-table'
 import { useQuery } from '../sql/useQuery'
 
 import { buildDedicatedSubtablesQuery } from './workspace-plugin'
+
+const RENAME_DEBOUNCE_MS = 300
 
 const TableFace = lazy(() => import('../table/TableFace'))
 
@@ -25,8 +36,9 @@ const TableFace = lazy(() => import('../table/TableFace'))
  * gets `insertParent` = the focal node, routing "+ New Row" through
  * `createDependentRow` so every row stays owned by the node.
  *
- * The "+ sub-table" control is a dev-grade placeholder for the §9.6 unified
- * creation gesture: it creates an empty dedicated own-matrix for the node.
+ * The band is render-only: dedicated sub-tables are *created* through the §9.6
+ * `/table` slash command (see `src/editor/slash-commands.ts`), which supersedes
+ * the former dev-grade "+ sub-table" button.
  */
 
 type SubTableRow = { id: number; title: string }
@@ -54,18 +66,73 @@ const EmbeddedSubTable: Component<{
     },
   )
 
+  // Editable sub-table name (Phase 9 §9.6). Writes through `renameMatrix`; safe
+  // for a plain node's sub-table since `syncOwnedMatrixTitles` is scoped to
+  // promoted owners (so the owner's label no longer clobbers this title).
+  let nameInput: HTMLInputElement | undefined
+  const [highlight, setHighlight] = createSignal(false)
+
+  let renameTimer: ReturnType<typeof setTimeout> | undefined
+  const scheduleRename = (value: string) => {
+    if (renameTimer) clearTimeout(renameTimer)
+    renameTimer = setTimeout(() => {
+      void renameMatrix(props.matrixId, value).catch((e) =>
+        console.error('rename sub-table failed', e),
+      )
+    }, RENAME_DEBOUNCE_MS)
+  }
+  onCleanup(() => {
+    if (renameTimer) clearTimeout(renameTimer)
+  })
+
+  // Reconcile the input from the live title only while the user isn't editing it,
+  // mirroring the focus-panel editors (avoids stomping an in-flight rename).
+  createEffect(() => {
+    const title = props.title
+    if (nameInput && document.activeElement !== nameInput) {
+      nameInput.value = title
+    }
+  })
+
+  // Auto-focus handoff: `/table` set the pending signal to this matrix; on mount
+  // scroll into view, focus + accent-highlight the name input, then clear it so
+  // the next keystrokes name the freshly-created table.
+  onMount(() => {
+    if (pendingNewTableMatrixId() === props.matrixId) {
+      clearPendingNewTable(props.matrixId)
+      queueMicrotask(() => {
+        if (!nameInput) return
+        nameInput.scrollIntoView({ block: 'nearest' })
+        nameInput.focus()
+        nameInput.select()
+        setHighlight(true)
+      })
+    }
+  })
+
   return (
     <div class="sub-table-band-item" data-testid="sub-table-band-item">
-      <div
+      <input
+        ref={nameInput}
+        class="sub-table-name-input"
+        data-testid="sub-table-name-input"
+        placeholder="Untitled table"
+        onInput={(e) => scheduleRename(e.currentTarget.value)}
+        onBlur={() => setHighlight(false)}
         style={{
           'font-size': '12px',
           'font-weight': 600,
           color: 'var(--text-muted)',
           'margin-bottom': '6px',
+          background: 'transparent',
+          border: '1px solid transparent',
+          'border-radius': '3px',
+          padding: '1px 3px',
+          width: '100%',
+          outline: 'none',
+          'box-shadow': highlight() ? '0 0 0 2px var(--accent)' : 'none',
         }}
-      >
-        {props.title || 'Sub-table'}
-      </div>
+      />
       <Suspense
         fallback={
           <div style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>Loading table…</div>
@@ -100,58 +167,33 @@ const SubTableBand: Component<{
     return data as unknown as SubTableRow[]
   })
 
-  const addSubTable = () => {
-    void createOwnedMatrix(
-      { matrixId: props.focalMatrixId, rowId: props.focalRowId },
-      'Sub-table',
-      [{ name: 'title', type: 'TEXT', role: 'label' }],
-    )
-  }
-
   return (
-    <div
-      class="sub-table-band"
-      data-testid="sub-table-band"
-      style={{
-        'margin-bottom': '16px',
-        'border-top': '1px solid hsl(230, 15%, 18%)',
-        'padding-top': '12px',
-        display: 'flex',
-        'flex-direction': 'column',
-        gap: '12px',
-      }}
-    >
-      <For each={subTables()}>
-        {(t) => (
-          <EmbeddedSubTable
-            matrixId={t.id}
-            title={t.title}
-            focalMatrixId={props.focalMatrixId}
-            focalRowId={props.focalRowId}
-            onOpenRowRef={props.onOpenRowRef}
-          />
-        )}
-      </For>
-
-      {/* Dev-grade creation affordance — placeholder for the §9.6 gesture. */}
-      <button
-        type="button"
-        data-testid="sub-table-add"
-        onClick={() => addSubTable()}
+    <Show when={subTables().length > 0}>
+      <div
+        class="sub-table-band"
+        data-testid="sub-table-band"
         style={{
-          'font-size': '12px',
-          cursor: 'pointer',
-          'align-self': 'flex-start',
-          background: 'none',
-          border: '1px solid hsl(230, 15%, 24%)',
-          'border-radius': '4px',
-          color: 'var(--text-dim)',
-          padding: '3px 8px',
+          'margin-bottom': '16px',
+          'border-top': '1px solid hsl(230, 15%, 18%)',
+          'padding-top': '12px',
+          display: 'flex',
+          'flex-direction': 'column',
+          gap: '12px',
         }}
       >
-        + sub-table
-      </button>
-    </div>
+        <For each={subTables()}>
+          {(t) => (
+            <EmbeddedSubTable
+              matrixId={t.id}
+              title={t.title}
+              focalMatrixId={props.focalMatrixId}
+              focalRowId={props.focalRowId}
+              onOpenRowRef={props.onOpenRowRef}
+            />
+          )}
+        </For>
+      </div>
+    </Show>
   )
 }
 

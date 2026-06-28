@@ -37,7 +37,12 @@ import { ParagraphView } from '../editor/nodeviews/ParagraphView'
 import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
-import { syncInlineRefs, refreshCachedTitles } from '../editor/inlineref-sync'
+import { createSlashPlugin } from '../editor/slash-plugin'
+import {
+  syncInlineRefs,
+  refreshCachedTitles,
+  extractInlineRefsFromStored,
+} from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
 import { buildAspectPreview } from '../shared/property-surface'
@@ -195,7 +200,12 @@ const LabelEditorInner = (props: LabelEditorProps) => {
     void refreshCachedTitles(docJson).then((updated) => {
       void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(updated) })
     })
-    void syncInlineRefs(doc, props.matrixId, props.rowId)
+    void syncInlineRefs(
+      doc,
+      props.matrixId,
+      props.rowId,
+      extractInlineRefsFromStored(props.label),
+    )
   }, SAVE_DEBOUNCE_MS)
 
   const handle: EditorHandle = {
@@ -228,6 +238,10 @@ const LabelEditorInner = (props: LabelEditorProps) => {
         rowIdAccessor: () => props.rowId,
         searchProvider: createTagSearchProvider(props.matrixId),
         onTagSelect: handleTagSelection,
+      }),
+      createSlashPlugin({
+        matrixId: props.matrixId,
+        rowIdAccessor: () => props.rowId,
       }),
     ]
     const state = createLabelEditorState(docJson, props.callbacks, extraPlugins)
@@ -298,6 +312,10 @@ const LabelEditorInner = (props: LabelEditorProps) => {
               searchProvider: createTagSearchProvider(props.matrixId),
               onTagSelect: handleTagSelection,
             }),
+            createSlashPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
+            }),
           ])
           editorView.updateState(newState)
           if (hadFocus) {
@@ -357,7 +375,12 @@ const ContentEditorInner = (props: ContentEditorProps) => {
     void refreshCachedTitles(docJson).then((updated) => {
       void updateRow(props.matrixId, props.rowId, { content: JSON.stringify(updated) })
     })
-    void syncInlineRefs(doc, props.matrixId, props.rowId)
+    void syncInlineRefs(
+      doc,
+      props.matrixId,
+      props.rowId,
+      extractInlineRefsFromStored(props.content),
+    )
   }, SAVE_DEBOUNCE_MS)
 
   const handle: ContentEditorHandle = {
@@ -386,6 +409,10 @@ const ContentEditorInner = (props: ContentEditorProps) => {
         rowIdAccessor: () => props.rowId,
         searchProvider: createTagSearchProvider(props.matrixId),
         onTagSelect: handleTagSelection,
+      }),
+      createSlashPlugin({
+        matrixId: props.matrixId,
+        rowIdAccessor: () => props.rowId,
       }),
     ]
     const state = createContentEditorState(docJson, extraPlugins)
@@ -449,6 +476,10 @@ const ContentEditorInner = (props: ContentEditorProps) => {
               rowIdAccessor: () => props.rowId,
               searchProvider: createTagSearchProvider(props.matrixId),
               onTagSelect: handleTagSelection,
+            }),
+            createSlashPlugin({
+              matrixId: props.matrixId,
+              rowIdAccessor: () => props.rowId,
             }),
           ])
           editorView.updateState(newState)
