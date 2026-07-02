@@ -13,6 +13,25 @@ const BLOCK_SIZE = 4 + THRESHOLD_DISTANCE * 2 // Size of window blocks for repos
 
 type WindowState = 'GHOST' | 'VISIBLE'
 
+// The virtualizer's own scroll container (`.scrollContainer`) only actually
+// scrolls when an ancestor chain gives it a bounded height (a `flex` column
+// with `min-height: 0` all the way up). Callers that embed the virtualizer
+// inside their own scrolling wrapper (e.g. OverlaidCards' `.card-inner`) leave
+// `.scrollContainer` sized to its content instead, so it never clips — using it
+// as the IntersectionObserver root would then report every window as
+// permanently visible. Walk up to the nearest ancestor that actually
+// establishes a scrollbox (`overflow-y: auto|scroll`); fall back to the
+// virtualizer's own container for genuinely standalone (self-scrolling) usage.
+const findScrollRoot = (el: HTMLElement): HTMLElement => {
+  let cur = el.parentElement
+  while (cur && cur !== document.body) {
+    const overflowY = getComputedStyle(cur).overflowY
+    if (overflowY === 'auto' || overflowY === 'scroll') return cur
+    cur = cur.parentElement
+  }
+  return el
+}
+
 type WindowRendererProps = {
   windowIndex: number
 }
@@ -23,7 +42,8 @@ type WindowComponentProps = {
   windowIndex: number
   onIntersection: (windowIndex: number, isIntersecting: boolean) => void
   onResize: (windowIndex: number, height: number) => void
-  containerRef: HTMLDivElement | undefined
+  /** The actual scrolling ancestor (see `findScrollRoot`) — the IntersectionObserver root. */
+  scrollRootRef: HTMLElement | undefined
   getPosition: (windowIndex: number) => number
   renderWindow: WindowRendererFunction
 }
@@ -43,7 +63,7 @@ const WindowComponent = (props: WindowComponentProps) => {
         })
       },
       {
-        root: props.containerRef,
+        root: props.scrollRootRef,
       },
     )
 
@@ -116,6 +136,12 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   const [containerVirtualOffset, setContainerVirtualOffset] = createSignal(0)
 
   let containerRef: HTMLDivElement | undefined
+
+  // The actual scrolling element (may be `containerRef` itself, or an
+  // embedding ancestor — see `findScrollRoot`). Resolved lazily since
+  // `containerRef` is only set once the element is created.
+  const getScrollRoot = (): HTMLElement | undefined =>
+    containerRef ? findScrollRoot(containerRef) : undefined
 
   // Return the measured height for a window, or minWindowHeight as the
   // estimate for windows that haven't been rendered/measured yet.
@@ -201,9 +227,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   createEffect(() => {
     const newOffset = computeContainerOffset()
     const currentOffset = containerVirtualOffset()
+    const scrollRoot = getScrollRoot()
 
-    if (newOffset !== currentOffset && containerRef) {
-      const currentScrollTop = containerRef.scrollTop
+    if (newOffset !== currentOffset && scrollRoot) {
+      const currentScrollTop = scrollRoot.scrollTop
       const offsetDelta = newOffset - currentOffset
 
       // Apply changes in same animation frame
@@ -212,9 +239,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
         setContainerVirtualOffset(newOffset)
 
         // Compensate scroll position
-        if (containerRef) {
-          containerRef.scrollTop = currentScrollTop - offsetDelta
-        }
+        scrollRoot.scrollTop = currentScrollTop - offsetDelta
       })
     }
   })
@@ -426,7 +451,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
                 windowIndex={windowIndex}
                 onIntersection={handleWindowIntersection}
                 onResize={handleWindowResize}
-                containerRef={containerRef}
+                scrollRootRef={getScrollRoot()}
                 getPosition={getPhysicalPosition}
                 renderWindow={props.renderWindow}
               />
