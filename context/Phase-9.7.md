@@ -14,8 +14,10 @@
 > **Status:** design converged; not yet implemented. Both gating spikes are complete —
 > [deep-portal materialization](Phase-9.7a.md) (GO, deep-in-v1) and
 > [windowing/height-variance perf](Phase-9.7b.md) (GO, count+slice with no per-row dynamic
-> offsets for v1) — leaving [Phase 9.7c](Phase-9.7c-reconciliation.md) (doc reconciliation) and
-> the build proper. Composed fidelity and the merged level remain [Phase 10](Phase-10.md).
+> offsets for v1) — and [Phase 9.7c](Phase-9.7c-reconciliation.md) (doc reconciliation) is
+> **done**, leaving **the build proper**: three staged sessions with ready-to-run handoff
+> prompts in [§13](#13-the-build-proper--implementation-prompts). Composed fidelity and the
+> merged level remain [Phase 10](Phase-10.md).
 
 ---
 
@@ -315,9 +317,156 @@ underneath (invisible to the ownership question). Sources:
    `IntersectionObserver`-root bug was fixed) absorbs block-composition height variance without
    visible jitter, so no per-row dynamic-offset machinery ships for v1.
 4. **[Phase 9.7c](Phase-9.7c-reconciliation.md)** — reconcile both spikes' outcomes into the
-   canonical docs.
-5. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
+   canonical docs. **Done.**
+5. **The build proper** — three staged sessions ([§13](#13-the-build-proper--implementation-prompts)):
+   A (data layer / portals), B (block markers + count+slice windowing), C (renderer unification
+   + gestures).
+6. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
    over the substrate floor.
 
 Also on the books, orthogonal: the **SQL subscription late-joiner race**
 ([Phase-9.md follow-ups](Phase-9.md#sql-subscription-late-joiner-race-latent-correctness-bug)).
+
+## 13. The build proper — implementation prompts
+
+The design is converged, both spikes are GO, and the docs are reconciled ([§12](#12-forward)).
+What remains is the build, split into **three staged sessions** along the seams the spikes
+carved — each a distinct risk profile with its own gate (format, lint, typecheck, unit, e2e).
+The order is a hard dependency chain: **A → B → C**. Each prompt below is self-contained;
+start a fresh session and paste the corresponding block (or just point the session at
+"Phase-9.7.md §13, Stage X").
+
+**Why staged, not one session.** The build touches all three layers — data (schema +
+`scroll_index` maintenance + ops), windowing (`usePagedWorkspaceData` + block markers), and
+view (one renderer replacing three bands). Bundling them lets a view-layer bug block
+data-layer validation — the anti-pattern [Phase 9.3's build plan](Phase-9.3.md#build-plan)
+already split along. Reset-not-migrate applies throughout (pre-release, no live DBs).
+
+### Stage A — Data layer: deep portals + multi-location `scroll_index`
+
+> **Build Phase 9.7 — Stage A: the data layer (deep portals + multi-location `scroll_index`).**
+> First of three build stages for the [Phase 9.7](Phase-9.7.md) convergence; design converged,
+> both spikes GO, docs reconciled. **Do the data layer only — no view/windowing work this
+> session** (Stages B and C).
+>
+> **Orient first.** Read [Phase-9.7.md](Phase-9.7.md) (esp. §4 ownership≠position, §5
+> portals/refs, §6 the one interleaved index) and [Phase-9.7a.md](Phase-9.7a.md) in full — its
+> §1 is the settled model, §5 the hand-off you're implementing. The validated maintenance path
+> exists as a prototype: read [`src/perf/deep-portal-spike.ts`](../src/perf/deep-portal-spike.ts)
+> and [`.test.ts`](../src/perf/deep-portal-spike.test.ts) — it stands up production's schema
+> plus the deltas below and is your blueprint (it is *not* wired into production ops; that's
+> this session). Then read the real code you'll generalize: `src/core/matrix.ts` (schema, the
+> `joins_single_owner` partial index at ~L300, the `kind`/`edge_key` CHECK at ~L142), the
+> `scroll-index.ts` maintenance (`addToScrollIndex` / `moveSubtreeInScrollIndex`),
+> `src/core/closure.ts`, and the join ops.
+>
+> **Apply the four schema deltas** (fresh-DB rewrite, reset not migrate): (1) widen the `joins`
+> CHECK so `kind IN ('own','portal')` may carry an `edge_key`; (2) add partial index
+> `joins_position_children ON (source, edge_key) WHERE kind IN ('own','portal')`; (3) drop the
+> `scroll_index_identity` UNIQUE index, add a non-unique `scroll_index_by_identity`; (4) add
+> `is_ghost` and `lazy` render flags to `scroll_index`.
+>
+> **Generalize maintenance and add the ops:** make `scroll-index.ts` iterate `positionsOf(node)`
+> instead of assuming one location; extend the recursive CTEs to `kind IN ('own','portal')`;
+> implement `addPortal` / `removePortal` (detach, non-destructive), `move-owner` (`reparentRow`
+> + `addPortal` at the old parent), and two-tier delete (detach vs. hard-delete-including-refs).
+> Home-delete **ghosts** the portals via a surviving `is_ghost` tombstone entry (the one
+> intentional divergence from the `@`-ref ghost path — 9.7a §2).
+>
+> **Guardrails.** Single-owner lifecycle/cascade must read only `kind='own'` and be provably
+> unaffected (the partial unique index is why portals don't collide). The firewall holds:
+> portals are position-only, never a second owner. **v1 ships deep with cycle detection only,
+> no cap** — reject portaling a node under its own position-descendant/self
+> (`isPositionDescendantOrSelf`), `MAX_POSITION_DEPTH` as backstop; keep the `lazy`/cap
+> mechanism prototyped but off. Closure stays as-is (ownership ancestry); per-appearance display
+> ancestry is read off the `global_lexkey` prefix.
+>
+> **Gate.** Port the spike's Stage-P0 guards (the 12 tests: windowed-scan EQP stays one keyset
+> range with portal/ghost/lazy rows present; write-amplification independent of forest size;
+> add-portal cost = `appearances(host) × |subtree(target)|`; index growth; cycle guard;
+> closure-per-location) to the production ops, then run the full battery. Leave a build note so
+> Stage B starts clean.
+
+### Stage B — Block markers + count+slice windowing
+
+> **Build Phase 9.7 — Stage B: block markers + count+slice windowing.** Second of three build
+> stages; **requires Stage A landed** (multi-location `scroll_index` + portal ops exist).
+> **Do the windowing/paging layer only — no renderer unification this session** (Stage C).
+>
+> **Orient first.** Read [Phase-9.7.md §6](Phase-9.7.md#6-the-one-interleaved-index) (the one
+> interleaved index; count+slice) and [Phase-9.7b.md](Phase-9.7b.md) in full — its §1 is the
+> settled mechanics, §7 the hand-off. The prototype is
+> [`src/perf/windowing-spike.ts`](../src/perf/windowing-spike.ts) +
+> [`.test.ts`](../src/perf/windowing-spike.test.ts) (`computeSegments` / `sliceWindow` /
+> `gatherWindow`) — your blueprint, not wired into production. Then read the paging/virtualizer
+> stack you'll extend: [`usePagedWorkspaceData.ts`](../src/workspace/usePagedWorkspaceData.ts),
+> [`workspace-plugin.ts`](../src/workspace/workspace-plugin.ts) (`buildPaginatedOutlineQuery`,
+> `buildOutlineCountQuery`, the `scroll_index` keyset scan), and
+> [`ScrollVirtualizer.tsx`](../src/virtualizer/ScrollVirtualizer.tsx) (note: the
+> `findScrollRoot` `IntersectionObserver`-root fix **already shipped** with 9.7b — carry it
+> forward as-is, don't redo it).
+>
+> **Build.** Mint each **block marker** (a `view` result or a shared container's extent) as an
+> ordinary `scroll_index` participant per §6 (this also gives an empty container a position and
+> folds `bands.order` into `edge_key`). Generalize `usePagedWorkspaceData`'s window-range query
+> to call `computeSegments` / `sliceWindow` / `gatherWindow` (or their real-schema equivalents)
+> instead of a single `buildPaginatedOutlineQuery` range scan: the flattened sequence is
+> `scroll_index` with each block expanded inline to its cached `COUNT`. Subscribe each visible
+> block's `COUNT` via the existing `useQuery` / `addObserver` reactive path — **no new
+> invalidation machinery** (tables-visited reactive invalidation already covers it, 9.7b §1).
+> **Remove the `bands` table + CRUD ops**; a `view` persists only its SQL on its block marker; a
+> `container` persists nothing new.
+>
+> **Guardrails.** Render-only flattening — **no `own`-edges minted** (the firewall). Deep-portal
+> subtrees are already materialized `scroll_index` rows (Stage A), so the flattener handles only
+> `view`s and shared-container extents; the `lazy` marker is out of scope for v1. No-lonely-window
+> (segment *sizes*, not counts, drive boundaries) and a straddling window gathers exactly the
+> segments it crosses. **Nested blocks (block-in-block) deferred** (9.7b §5). Substrate-first
+> fidelity — composed sugar is Phase 10.
+>
+> **Gate.** Port the spike's Stage-P0 guards (exact coverage; straddling window; no-lonely-window;
+> scale independence; no-sort EQP for both source kinds) to the wired path; confirm
+> `e2e/virtualizer-multiwindow.spec.ts` still passes; run the full battery. Leave a build note so
+> Stage C starts clean.
+
+### Stage C — Renderer unification + gestures
+
+> **Build Phase 9.7 — Stage C: renderer unification + gestures.** Third of three build stages;
+> **requires Stages A and B landed** (portals + block markers + count+slice paging exist). This
+> is the view layer — where the three bands become one renderer and the new gestures surface.
+>
+> **Orient first.** Read [Phase-9.7.md](Phase-9.7.md) §3 (three child-sourcing modes), §5
+> (gestures), §8 (simplifies / migration-touch), and §10 (mapping onto Phase 9). Read the
+> reconciled canonical model: [Architecture.md — Hydration / Inline references / Identity
+> face](Architecture.md#hydration) and [Traits.md — Join](Traits.md#join). Read the three band
+> components being replaced — [`AspectBand.tsx`](../src/workspace/AspectBand.tsx),
+> [`QueryBand.tsx`](../src/workspace/QueryBand.tsx),
+> [`SubTableBand.tsx`](../src/workspace/SubTableBand.tsx) — plus the substrate renderer they
+> collapse into ([`PropertyRow.tsx`](../src/shared/PropertyRow.tsx), the aspect-band precedent)
+> and [`NavigationPanel.tsx`](../src/workspace/NavigationPanel.tsx) (the windowed render).
+>
+> **Build.** Replace the three bands with **one substrate renderer** driven by a node's
+> **child-sourcing mode** — `loose` (the mesh / outline, cross-matrix), `container` (a matrix
+> bounded here, with its border; dedicated vs. shared per `matrix.owner` vs. row-owners), and
+> `view` (a query, count+slice from Stage B). Editability is **per-cell hydration computed
+> uniformly** — no per-band host-matrix scope — so **remove the tag-query host-matrix scope**
+> ([`tag-queries.ts`](../src/tags/tag-queries.ts)) that caused the §9.6 sharp edge. Key DOM rows
+> by **position (`global_lexkey`)**, not `(matrix_id, row_id)` (a row can appear at home + each
+> portal). Grid is **coalescing**, not a mode: a homogeneous same-schema run hoists its column
+> labels to a shared header. Wire the gestures: **portal** (mirror this row elsewhere),
+> **move-owner** (relocate home, leave a portal), **two-tier delete** (detach vs.
+> hard-delete-including-refs — the escalation, never the silent default). `#` / `@` / `/attach`
+> / `/table` keep their [§9.6](Phase-9.md#96-the-unified-creation-gesture) semantics; the sharp
+> edge is gone.
+>
+> **Guardrails.** The retired band vocabulary (`fold`/`merge`) does not come back — only plain
+> collapse. The *merged* level (fields inline on a node) stays **Phase 10** composed sugar,
+> absent at substrate. Ghost portals render from their `is_ghost` tombstone entry (no doc cache).
+> Owner legibility: surface the substrate `owner`/`anchor` columns so "what dies if I delete
+> here" is visible.
+>
+> **Gate.** Revive the four Phase-9 `test.fixme` e2e entries that hinged on the type-node
+> rendering policy (per [8c §8.5](Phase-8c.md#85-guard-and-test-hardening-review-7-8-9--low));
+> add coverage for portal appearance/detach, move-owner, and two-tier delete; run the full
+> battery. This closes the Phase 9.7 build — update the [§12 Forward](#12-forward) status and
+> hand off to [Phase 10](Phase-10.md).
