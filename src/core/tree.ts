@@ -9,7 +9,7 @@ import {
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
 import { between, makeKey, parseKey } from './lexorank'
 import {
-  addToScrollIndex,
+  addOwnChildToScrollIndexAtAllPositions,
   getGlobalKey,
   moveSubtreeInScrollIndex,
   rebuildScrollIndex,
@@ -43,7 +43,7 @@ const sentinel = (parent?: NodeRef): NodeRef =>
 const lastChildKey = (db: Database, parent: NodeRef): Uint8Array | null => {
   const stmt = db.prepare(
     `SELECT edge_key FROM joins
-     WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'
+     WHERE source_matrix_id = ? AND source_row_id = ? AND kind IN ('own','portal')
      ORDER BY edge_key DESC LIMIT 1`,
   )
   stmt.bind([parent.matrixId, parent.rowId])
@@ -62,7 +62,7 @@ const childKeyAfter = (
 ): Uint8Array | null => {
   const stmt = db.prepare(
     `SELECT edge_key FROM joins
-     WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'
+     WHERE source_matrix_id = ? AND source_row_id = ? AND kind IN ('own','portal')
        AND edge_key > ?
        AND NOT (target_matrix_id = ? AND target_row_id = ?)
      ORDER BY edge_key ASC LIMIT 1`,
@@ -89,7 +89,7 @@ const childKeyBefore = (
 ): Uint8Array | null => {
   const stmt = db.prepare(
     `SELECT edge_key FROM joins
-     WHERE source_matrix_id = ? AND source_row_id = ? AND kind = 'own'
+     WHERE source_matrix_id = ? AND source_row_id = ? AND kind IN ('own','portal')
        AND edge_key < ?
        AND NOT (target_matrix_id = ? AND target_row_id = ?)
      ORDER BY edge_key DESC LIMIT 1`,
@@ -241,26 +241,14 @@ export const createTreePosition = (
     { bind: [parent.matrixId, parent.rowId, matrixId, rowId, edgeKey] },
   )
 
-  // Maintain global closure cache.
+  // Maintain global closure cache (ownership ancestry — own-edges only).
   const node: NodeRef = { matrixId, rowId }
   maintainClosureOnInsert(db, node, parent)
 
-  // Maintain scroll index: compute the global key and insert.
-  let parentGlobalKey: Uint8Array | null = null
-  let depth = 0
-  if (parent.matrixId !== ROOT_MATRIX_ID || parent.rowId !== ROOT_ROW_ID) {
-    parentGlobalKey = getGlobalKey(db, parent.matrixId, parent.rowId)
-    // Depth = parent's depth + 1 (looked up from scroll index)
-    const parentDepthStmt = db.prepare(
-      'SELECT depth FROM scroll_index WHERE matrix_id = ? AND row_id = ?',
-    )
-    parentDepthStmt.bind([parent.matrixId, parent.rowId])
-    if (parentDepthStmt.step()) {
-      depth = (parentDepthStmt.get({}) as { depth: number }).depth + 1
-    }
-    parentDepthStmt.finalize()
-  }
-  addToScrollIndex(db, node, parentGlobalKey, edgeKey, depth)
+  // Maintain scroll index at every appearance of the parent. For a plain
+  // own-forest parent this is one entry; under a portaled parent the new child
+  // fans out to each of the parent's positions (multi-location; Phase 9.7a).
+  addOwnChildToScrollIndexAtAllPositions(db, parent, node, edgeKey)
 
   return edgeKey
 }

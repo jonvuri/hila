@@ -48,12 +48,14 @@ describe('Part B guards: scroll index query plans', () => {
     })
   })
 
-  test('scroll index identity lookup uses the unique index', () => {
+  test('scroll index identity lookup uses the by-identity index', () => {
     const sql = `
       SELECT global_lexkey FROM scroll_index WHERE matrix_id = ? AND row_id = ?
     `
+    // Multi-location (Phase 9.7a): identity is no longer unique (a row may have
+    // N appearances), so the lookup rides the non-unique scroll_index_by_identity.
     assertQueryPlan(harness.rawDb, sql, [matrixId, 1], {
-      usesIndex: 'scroll_index_identity',
+      usesIndex: 'scroll_index_by_identity',
       noScanOf: ['scroll_index'],
       noAutoIndex: true,
     })

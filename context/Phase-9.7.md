@@ -387,6 +387,42 @@ already split along. Reset-not-migrate applies throughout (pre-release, no live 
 > closure-per-location) to the production ops, then run the full battery. Leave a build note so
 > Stage B starts clean.
 
+#### Stage A — build note (landed)
+
+The data layer is wired. What Stage B inherits:
+
+- **Schema (fresh-DB, [matrix.ts](../src/core/matrix.ts)).** All four deltas applied:
+  `joins` CHECK widened to `kind IN ('own','portal')` carrying `edge_key`; partial index
+  `joins_position_children` added (own- and portal-children share one sibling-order space);
+  the UNIQUE `scroll_index_identity` dropped for a non-unique `scroll_index_by_identity`;
+  `scroll_index` gained `is_ghost` / `lazy` flags. `joins_single_owner` stays partial on
+  `kind='own'`, so portals never collide with ownership (firewall proven by test).
+- **Multi-location maintenance ([scroll-index.ts](../src/core/scroll-index.ts)).** New
+  primitives: `positionsOf`, `materializeSubtreeAtPrefix` (deep, own+portal walk, cap+lazy
+  lever present but off — `DEFAULT_PORTAL_CAP` never bites in v1), `deleteScrollSubtreeRange`,
+  `insertGhostMarker`, and `addOwnChildToScrollIndexAtAllPositions` — the fan-out the hot
+  insert path ([tree.ts](../src/core/tree.ts) `createTreePosition`) now uses. **Perf note:**
+  the fresh-attach path inserts one row per parent appearance *directly* (no recursive
+  materialize) — routing it through `materializeSubtreeAtPrefix` made forest-building O(n²)
+  and timed the windowing spike out; keep that split. The three rebuild/move CTEs now walk
+  `kind IN ('own','portal')` with a `MAX_POSITION_DEPTH` guard. Sibling-key computation
+  (`lastChildKey`/`childKeyAfter`/`childKeyBefore`) is own+portal aware.
+- **Portal ops ([portal.ts](../src/core/portal.ts)).** `addPortal` / `removePortal` (detach),
+  `moveOwner` (`reparentRow` + `addPortal` at the old parent), `deleteHomeGhostingPortals`
+  (the default home-delete → surviving `is_ghost` tombstones; portal edges kept),
+  `hardDeleteIncludingRefs` (the escalation — cascade everywhere, no ghosts), the
+  `isPositionDescendantOrSelf` cycle guard, and `ancestryOfAppearance` (per-location closure
+  from the lexkey prefix). Closure stays ownership-only, untouched.
+- **Gate.** The 12 Stage-P0 guards are ported to production ops in
+  [portal.test.ts](../src/core/portal.test.ts) (13 tests, +1 firewall) and pass; full unit
+  battery green (809); format/lint/typecheck clean.
+- **Deferred to later stages (not Stage A):** the `bands` table is **still present** (Stage B
+  removes it); portal ops are **not yet wired to the worker or any UI** (the worker
+  `getGlobalKey` dirty-set path still reads a single home key — untouched, correct while no
+  portals exist); `rebuildScrollIndex` re-derives portal appearances from edges but **cannot
+  reproduce `is_ghost` tombstones** (a full rebuild after a home-delete loses ghosts — an
+  accepted repair-path limitation, revisit if sync ever races portals).
+
 ### Stage B — Block markers + count+slice windowing
 
 > **Build Phase 9.7 — Stage B: block markers + count+slice windowing.** Second of three build

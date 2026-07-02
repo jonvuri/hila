@@ -109,15 +109,27 @@ export const initMatrixSchema = (db: Database) => {
     -- the root sentinel down to the node. Pre-order = parent immediately
     -- precedes its first child; a subtree is a contiguous range.
     -- Drives windowed scrolling as a single keyset range scan.
+    --
+    -- MULTI-LOCATION (Phase 9.7a): position is plural. A row may have N
+    -- entries -- its home (own-edge path) plus one per portal appearance --
+    -- each with its own global_lexkey. Identity is therefore NOT unique here.
+    --   - is_ghost: a surviving tombstone marking a portal appearance whose
+    --     home was deleted (the structural-portal ghost; Phase 9.7a §2).
+    --   - lazy: an unexpanded portal marker (the cap+lazy lever; off in v1,
+    --     Phase 9.7a §3.1).
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS scroll_index (
       global_lexkey  BLOB NOT NULL PRIMARY KEY,
       matrix_id      INTEGER NOT NULL,
       row_id         INTEGER NOT NULL,
-      depth          INTEGER NOT NULL DEFAULT 0
+      depth          INTEGER NOT NULL DEFAULT 0,
+      is_ghost       INTEGER NOT NULL DEFAULT 0,
+      lazy           INTEGER NOT NULL DEFAULT 0
     ) STRICT;
 
-    CREATE UNIQUE INDEX IF NOT EXISTS scroll_index_identity
+    -- Non-unique identity lookup ("all appearances of a row"). Replaces the
+    -- former UNIQUE scroll_index_identity now that position is plural.
+    CREATE INDEX IF NOT EXISTS scroll_index_by_identity
       ON scroll_index(matrix_id, row_id);
 
     -- ------------------------------------------------------------
@@ -127,6 +139,11 @@ export const initMatrixSchema = (db: Database) => {
     -- child, and edge_key is the child's sibling-local lexorank order key
     -- (unique among the siblings sharing that own-parent, NOT global). A
     -- ref-edge is an unordered association and carries no edge_key.
+    --
+    -- A portal-edge (Phase 9.7a) is a non-owning *position*: source = host,
+    -- target = the portaled row. It carries an edge_key too -- own- and
+    -- portal-children share one sibling-order space under a host -- but is
+    -- invisible to single-owner lifecycle (which reads only kind='own').
     -- ------------------------------------------------------------
     CREATE TABLE IF NOT EXISTS joins (
       source_matrix_id  INTEGER NOT NULL,
@@ -137,14 +154,15 @@ export const initMatrixSchema = (db: Database) => {
       edge_key          BLOB,
       PRIMARY KEY (source_matrix_id, source_row_id, target_matrix_id, target_row_id),
 
-      -- own-edges carry a valid sibling key (non-empty, single 0x00 terminator);
-      -- non-own edges carry none.
+      -- own- and portal-edges carry a valid sibling key (non-empty, single
+      -- 0x00 terminator); ref-edges carry none.
       CHECK (
-        (kind = 'own'  AND edge_key IS NOT NULL
+        (kind IN ('own','portal')
+                        AND edge_key IS NOT NULL
                         AND length(edge_key) > 0
                         AND substr(edge_key, length(edge_key), 1) = x'00')
         OR
-        (kind != 'own' AND edge_key IS NULL)
+        (kind NOT IN ('own','portal') AND edge_key IS NULL)
       )
     ) STRICT;
 
@@ -278,6 +296,30 @@ export const initMatrixSchema = (db: Database) => {
     // Column already exists (new database or previously migrated)
   }
 
+  // Migration: multi-location scroll_index (Phase 9.7a). Position is plural, so
+  // the identity index is no longer unique; and the two render flags are added.
+  // (The widened joins CHECK and joins_position_children live in the fresh-DB
+  // CREATE only -- SQLite cannot add a CHECK via ADD COLUMN; existing DBs are
+  // reset, not data-migrated.)
+  db.exec('DROP INDEX IF EXISTS scroll_index_identity')
+  try {
+    db.exec('ALTER TABLE scroll_index ADD COLUMN is_ghost INTEGER NOT NULL DEFAULT 0')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+  try {
+    db.exec('ALTER TABLE scroll_index ADD COLUMN lazy INTEGER NOT NULL DEFAULT 0')
+  } catch {
+    // Column already exists (new database or previously migrated)
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS scroll_index_by_identity
+      ON scroll_index(matrix_id, row_id);
+    CREATE INDEX IF NOT EXISTS joins_position_children
+      ON joins (source_matrix_id, source_row_id, edge_key)
+      WHERE kind IN ('own','portal');
+  `)
+
   // At most one column per role per matrix (null roles are unrestricted)
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS matrix_columns_role_unique
@@ -300,6 +342,15 @@ export const initMatrixSchema = (db: Database) => {
     CREATE UNIQUE INDEX IF NOT EXISTS joins_single_owner
       ON joins (target_matrix_id, target_row_id)
       WHERE kind = 'own';
+
+    -- Ordered position-children of a host: own- AND portal-edges share the
+    -- sibling-order space under a host (both are positions under it), so the
+    -- combined set drives sibling-key computation and the pre-order walk.
+    -- joins_single_owner stays partial on kind='own', so a portal-edge into
+    -- an already-owned row never collides -- single ownership is preserved.
+    CREATE INDEX IF NOT EXISTS joins_position_children
+      ON joins (source_matrix_id, source_row_id, edge_key)
+      WHERE kind IN ('own','portal');
   `)
 
   // -- Formula column dependency tracking -------------------------------------
