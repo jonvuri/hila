@@ -6,6 +6,12 @@
 > This doc captures the model that generalizes 9.2 and feeds 9.1, 9.3, 9.4, and
 > 9.5. It honors the [Phase 8](Phase-8.md)/[8c](Phase-8c.md) ownership spine and the
 > development principles (incremental/intentional, gestalt-aware, single-frame perf).
+>
+> **Status (post-[9.7](Phase-9.7.md)):** the [`band` primitive](#bands--the-organizing-primitive)
+> and [fold/merge](#fold--merge) below are superseded by the [9.7 convergence](Phase-9.7.md#3-three-child-sourcing-modes-the-unification)
+> — bands become three **child-sourcing modes** (`loose`/`container`/`view`), fold/merge is
+> retired, and one **substrate** renderer draws every row. The *anchoring* axis and the
+> schema-adaptive renderer carry forward; read the rest as design lineage.
 
 ## The reframing
 
@@ -111,6 +117,8 @@ Its endpoint depth *is* the anchoring tier (no line / border / into-the-token).
 
 ## Bands — the organizing primitive
 
+> **Superseded by [Phase 9.7](Phase-9.7.md#3-three-child-sourcing-modes-the-unification).** The `band = (query, face, integration-level)` primitive below did its job of *unifying* 9.2/9.3/9.4, but the [9.7 convergence](Phase-9.7.md) collapses it further: the three band flavors become three **child-sourcing modes** of one node — `loose` (the mesh = the outline), `container` (a matrix bounded here), and `view` (a query) — all drawn by **one substrate renderer**. The persisted [`bands` table is removed](Phase-9.3.md#the-bands-table) (a `view` persists only its SQL on a block marker; a `container` persists nothing new), and **fold/merge is retired** (only plain collapse survives). Read this section as the design lineage; the built model is 9.7.
+
 Generalize the stream view: a focal node renders as a vertical stack of **bands**, each
 
 ```
@@ -126,6 +134,8 @@ A band must **carry its own provenance** (its defining query, face, and integrat
 level) — see the substrate section for why this is a hard requirement, not a nicety.
 
 ### Fold / merge
+
+> **Retired by [Phase 9.7](Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring).** With `loose` the single paradigm for owned children, the fold/merge band vocabulary is dropped — only plain **collapse** survives. The [open fold/merge gesture question](#open-sub-questions) is thereby closed (as "retired", not "answered"). The *merged* level (fields inline on a node) becomes composed sugar in [Phase 10](Phase-10.md).
 
 Folding moves a band along the integration continuum; merging unions two bands into one
 face instance with one sort order. **Merge-ability is gated by anchoring + face
@@ -262,8 +272,8 @@ a drawn-line tether (the hover-highlight bridge is v1).
 
 ## Open sub-questions
 
-- **Fold/merge gesture vocabulary.** The exact gestures for fold/unfold/merge and how
-  compatibility (anchor domain + face) is surfaced to the user.
+- **Fold/merge gesture vocabulary.** ~~The exact gestures for fold/unfold/merge and how
+  compatibility (anchor domain + face) is surfaced to the user.~~ **Closed by [Phase 9.7](Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring): fold/merge is retired** (only collapse remains); the *merged* level moves to [Phase 10](Phase-10.md).
 - **Within-band ordering of multiple content-anchored aspects** (two `#task`s in one
   node): mirror prose order, or carry an independent rank? Deferred.
 - **A `ref` column role.** Roles today are `label`/`content`/null; the substrate's role

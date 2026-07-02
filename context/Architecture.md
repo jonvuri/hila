@@ -168,7 +168,7 @@ Faces render at one of two **fidelities** -- an axis orthogonal to density (pane
 - **Composed** (default): structure is *suggested* -- bullets, prose bodies, chip strips, tethers -- optimized for fluid viewing and editing.
 - **Substrate**: structure is *spelled out* -- explicit row borders, column names (per-cell or a shared header), `role` chips, and visible relationship metadata (own-edge kind, anchoring, view mode). The substrate is the [identity face](#identity-face) generalized from "a per-matrix table view" to a fidelity available at any granularity (cell / row / band / focus column / workspace).
 
-A global **x-ray** toggle forces substrate everywhere at once (the debugging/inspector view); fidelity otherwise cascades down a scope unless overridden finer. Because the substrate must render *everything* -- every column as a labeled cell, all relationship metadata -- it doubles as a conformance test: any datum it cannot show is a gap in the model. The view-layer composition this enables (a focal node as a stack of provenance-carrying **bands**, an **anchoring** axis, and a shared schema-adaptive row renderer keyed on `(row, columns, density, fidelity)`) is developed in [Phase 9.2](Phase-9.2.md).
+A global **x-ray** toggle forces substrate everywhere at once (the debugging/inspector view); fidelity otherwise cascades down a scope unless overridden finer. Because the substrate must render *everything* -- every column as a labeled cell, all relationship metadata -- it doubles as a conformance test: any datum it cannot show is a gap in the model. The view-layer composition this enables (a focal node's related row-sets, an **anchoring** axis, and a shared schema-adaptive row renderer keyed on `(row, columns, density, fidelity)`) is developed in [Phase 9.2](Phase-9.2.md). The [Phase 9.7 convergence](Phase-9.7.md#3-three-child-sourcing-modes-the-unification) later replaces the per-node stack of **bands** with three **child-sourcing modes** of one node -- `loose` (the mesh), `container` (a matrix bounded here), and `view` (a query) -- all drawn by that one substrate renderer; "substrate first" is the v1 fidelity, with composed sugar as [Phase 10](Phase-10.md).
 
 ## Execution model
 
@@ -381,11 +381,15 @@ A matrix can also be viewed through **specialized face types** with slot binding
 
 The identity face also generalizes into the **substrate** fidelity (see [Composed and substrate fidelity](#composed-and-substrate-fidelity)): the same "every column as a labeled cell, full metadata shown" treatment, lifted from a per-matrix table view to a fidelity available at any granularity. As such it is the universal drill-in fallback when an attachment/matrix declares no preferred face ([Plan.md open question #5](Plan.md)).
 
+The [Phase 9.7 convergence](Phase-9.7.md#4-ownership-vs-position-the-data-layer-crux) sharpens what the identity face *is*: it is a matrix's **container** border, generalized -- it bounds membership + the matrix-axis drop cascade around a matrix's rows *without positioning them*. A container is precisely **not** a "view" (a query owns and positions nothing) and not the `loose` mesh (which positions rows directly); it is the third thing. A dedicated sub-table and a shared type-node's extent are the same container primitive, differing only in where each row's `own`-edge lands (all into the owner vs. out to various hosts).
+
 **Dependent rows and the identity face.** A matrix may contain rows created as owned aspects of rows in other matrixes (via `own`-kind joins -- see [Traits - Join kinds](./Traits.md#join-kinds)). These dependent rows appear in the identity face like any other row. Deleting a dependent row from the identity face is permitted -- the core removes the `own` join entry and the plugin managing the source-side reference handles cleanup (removing an inline tag node from rich text, or nulling a cell value in a table). Cascade deletion through owned joins is an automatic lifecycle consequence, not a manual destructive operation -- it does not require the identity face.
 
 ### Hydration
 
 The hydration model governs what is editable and what is read-only across all faces. Data originates at its **source** (the identity face for a matrix) and **flows** downstream through query expressions to other faces.
+
+> **Editability is per-cell, computed uniformly.** Under the [Phase 9.7 convergence](Phase-9.7.md#8-simplifies--risks--migration-touch-original-goal-3), whether a cell is editable depends only on whether it is hydrated (traces back to a source cell) -- never on *which band* it renders in. The three former bands are gone; a single substrate renderer draws every row across the `loose` mesh, so the [§9.6 host-matrix sharp edge](Phase-9.md#96-the-unified-creation-gesture) (where an `/attach`ed aspect on a non-workspace node became uneditable because it fell outside a host-matrix-scoped band query) **cannot recur** -- there is no per-band query left to carry that restriction.
 
 #### Hydrated columns
 
@@ -445,6 +449,15 @@ An inline reference can be in one of three states:
 - **Ghost.** The target existed but has been deleted. The join entry is gone. The reference retains cached metadata (last known title) from the ProseMirror document attrs and renders with a visual indicator (e.g. trash icon). Clicking offers to restore the target if recoverable.
 
 The ProseMirror document attrs serve as the persistent cache for reference metadata (title, preview, status). Live rendering always prefers the reactive query result; cached data is the fallback for empty and ghost states. The cache is refreshed on document save.
+
+#### Portals: the structural member of the ref family
+
+The [Phase 9.7 convergence](Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring) adds a third non-owning reference, the **portal**, and shows that refs and portals are **one family split by anchoring**. Both are non-owning (severing is non-destructive) and share the live / empty / ghost state machine and backlinks; they differ only in anchoring and rendering:
+
+- An **`@`-ref** is *content-anchored* -- its edge lives inside a node's prose and it renders as an inline **badge**.
+- A **portal** is *structurally-anchored* -- it occupies a position in the forest (a `scroll_index` entry) and **transcludes** the node as a full inline block, **deep** by default (the node *and its owned subtree*). It is the missing cell of the ownership × anchoring square (non-owning + structural).
+
+The ref machinery is **reused**, not replaced. One intentional divergence in the ghost state: an `@`-ref ghost renders from cached ProseMirror doc attrs, but a structural portal has no doc cache, so a deleted home leaves a surviving `is_ghost` tombstone *entry* that holds the position at each portal appearance (see [Phase 9.7a §2](Phase-9.7a.md#2-incremental-maintenance--cases-covered)). Portal storage is a `joins` row with `kind='portal'` ([Traits — Join kinds](./Traits.md#join-kinds)); the maintenance and windowing of the deep-mirror subtrees were validated in [Phase 9.7a](Phase-9.7a.md) / [Phase 9.7b](Phase-9.7b.md) and are pending the 9.7 build.
 
 ## UI concepts
 

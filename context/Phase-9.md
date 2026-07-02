@@ -123,9 +123,14 @@ One "add a collection / make this a …" gesture with a single knob: **existing 
 > data layer gains **ownership ≠ position** (owner = where created; position is plural via
 > opt-in **portals**). `refs` and `portals` are one non-owning family split by anchoring;
 > the `bands` table is removed; `scroll_index` becomes the single multi-location position
-> index. Design converged; two feasibility spikes gate the build (deep-portal
-> materialization; windowing/height-variance). The summary below is the original forward
-> note; Phase-9.7.md has the full model, prior-art grounding, and migration touch-points.
+> index. **Design converged and both gating spikes are complete:**
+> [deep-portal materialization](Phase-9.7a.md) (**GO** on deep-in-v1, cycle detection only)
+> and [windowing / height-variance](Phase-9.7b.md) (**GO** on count+slice, no per-row
+> dynamic offsets for v1 — a pre-existing `ScrollVirtualizer` `IntersectionObserver`-root bug
+> was found and fixed along the way). Remaining before the build proper:
+> [Phase 9.7c](Phase-9.7c-reconciliation.md) doc reconciliation (this pass). The summary below
+> is the original forward note; Phase-9.7.md has the full model, prior-art grounding, and
+> migration touch-points.
 
 Largely a documented direction once 9.1–9.5 land:
 

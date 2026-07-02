@@ -226,13 +226,15 @@ Indexes should support efficient queries in both directions (source -> targets, 
 
 ### Join kinds
 
-The `kind` column distinguishes two flavors of cross-matrix relationship:
+The `kind` column distinguishes flavors of cross-matrix relationship:
 
 - **`ref`** (reference). An independent link -- "this row mentions that row." Neither end affects the other's lifecycle. Removing the join or deleting the source row has no effect on the target row. This is the default and the kind used by `@`-references (wiki-links, foreign-key cell values, backlinks).
 
 - **`own`** (owned). A lifecycle-bound relationship -- "this row created and owns that row as an aspect." The target row exists *because of* this join. When the join is removed or the source row is deleted, the target row is cascade-deleted. This is the kind used by `#`-tags, where tagging a row creates a dependent aspect row in the tag's matrix.
 
-Each row has at most one `own` join pointing to it (single ownership). Multiple `ref` joins may point to the same target. Ownership is not transferable -- it is set at creation time and follows the relationship until it is severed.
+- **`portal`** (position-only mirror). A **non-owning structural** tie -- "this row also *appears* here." A portal gives a row an extra **position** in the forest (an opt-in mirror) without giving it a second owner: severing a portal is non-destructive, and deleting the row's home *ghosts* its portals. Portals are **deep** (a portal transcludes the node *and its owned subtree*) and count-unconstrained. This kind is introduced by the [Phase 9.7 convergence](Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring) (materialization validated in [Phase 9.7a](Phase-9.7a.md)); the schema deltas that carry it -- widening the `kind` CHECK and letting `portal` carry an `edge_key` -- are part of the 9.7 build, not yet shipped.
+
+**Ownership is single; position is plural.** These are different axes, and `kind` splits along the ownership axis: exactly one **`own`** join points to a row (single-owner lifecycle/cascade), while a row may hold **many `portal`** positions in addition to its home. Single-owner is enforced by a *partial* unique index (`WHERE kind='own'`, [matrix.ts:300](../src/core/matrix.ts#L300)), so a non-owning `portal` edge into a row does not collide with its owner. Multiple `ref` joins may likewise point to the same target. Ownership is not transferable at will -- it is set at creation time (the creation site; see [Phase 8c §5](Phase-8c.md#5-tagging-gestures-map-onto-the-two-edges)) and moves only via an explicit *move-owner* op (which relocates the home and leaves a portal behind).
 
 ### Lifecycle rules
 
@@ -242,7 +244,7 @@ The core enforces two rules based on join kind:
 
 2. **Removing an `own` join deletes the target.** When an `own` join entry is removed (e.g. because an inline `#`-tag was deleted from rich text, or a cell was cleared), the target row is deleted. This is the same cascade as rule 1, applied to join removal rather than source row deletion.
 
-`ref` joins have no lifecycle side effects. Removing a `ref` join or deleting its source row simply removes the join entry.
+`ref` joins have no lifecycle side effects. Removing a `ref` join or deleting its source row simply removes the join entry. `portal` joins are likewise non-owning -- removing one (a *detach*) is non-destructive -- but they carry one display consequence: deleting the *target's* home (its single `own`-owner) **ghosts** the surviving portals rather than silently dropping them (see [Phase 9.7a §2](Phase-9.7a.md#2-incremental-maintenance--cases-covered)).
 
 **Reverse deletion from the identity face.** A dependent (owned) row is a real row in its target matrix and appears in that matrix's identity face. Deleting it from the identity face is permitted -- the core removes the `own` join entry and cleans up the source-side reference (nulling the cell value, or removing the inline node from the source row's rich text content). The specifics of source-side cleanup depend on the reference surface (inline text vs. table cell) and are handled by the plugin that manages that surface.
 
@@ -265,6 +267,8 @@ This is used by any plugin that needs lifecycle-bound cross-matrix rows (tags, f
 - Joins can serve as a **materialized index** of relationships that are encoded elsewhere (e.g. inline references in rich text), or as the **primary source of truth** for a relationship (e.g. a foreign-key cell in a table), depending on the surface.
 
 > **Anchoring (view-layer consequence).** This "where the source of truth lives" distinction is load-bearing for the UI, not just bookkeeping. An `own`-join whose source of truth is an inline `#`-ref in prose is **content-anchored** (its edge lives *inside* a node's content, and moving it is a prose edit); an `own`-join whose source of truth is a structural table or an FK cell is **structurally-anchored** (moving it is a pure structural write); a node-scoped query with no join row is **unanchored**. The [Phase 9.2](Phase-9.2.md) rendering model builds directly on these three anchoring tiers (tether geometry, move-from-anchor gestures, and which presentations a related set may take).
+>
+> The [Phase 9.7 convergence](Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring) reads `ref` and `portal` as **one non-owning family split by anchoring**: a `ref` is *content-anchored* (lives in prose, renders as a badge) while a `portal` is *structurally-anchored* (occupies a forest position, transcludes the node). This completes the ownership × anchoring square -- owning/content = `#`-tag, owning/structural = `/attach` loose child, non-owning/content = `@`-mention, non-owning/structural = **portal**.
 
 ### Hydration
 

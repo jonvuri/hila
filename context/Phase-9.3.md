@@ -7,6 +7,11 @@
 > authoring.** It honors the [Phase 8](Phase-8.md)/[8b](Phase-8b.md)/[8c](Phase-8c.md)
 > ownership spine, the [Phase 9.2](Phase-9.2.md) bands model, and the development
 > principles (incremental/intentional, gestalt-aware, single-frame perf).
+>
+> **Status (post-[9.7](Phase-9.7.md)):** the query band is now the **`view` child-sourcing
+> mode**; the [`bands` table is removed](#the-bands-table) and per-band mounts give way to
+> [count + slice windowing](Phase-9.7b.md). Read this doc as the `view` mode's design
+> lineage; the built model is [Phase 9.7](Phase-9.7.md).
 
 ## The reframing
 
@@ -199,6 +204,8 @@ Two decisions settled here:
 
 ## The bands table
 
+> **Removed by [Phase 9.7](Phase-9.7.md#6-the-one-interleaved-index).** The convergence eliminates the `bands` table entirely: a `view` persists **only its SQL** (on a block marker minted as a real `scroll_index` participant), and a `container` persists nothing new (`matrix.owner` + membership suffice). The former `bands.order` collapses into the marker's `edge_key`. The query band described below therefore becomes the **`view` child-sourcing mode**, rendered inline via **count + slice** windowing ([validated in Phase 9.7b](Phase-9.7b.md)) rather than as a separately-mounted band, and the read-only/recognized-write behavior carries over. The `bands` table + CRUD ops shipped in Sessions 1–2 below (build lineage) will be removed by the 9.7 build.
+
 Persistence is a dedicated **`bands` table** keyed by `(matrix_id, row_id)` (the focal
 node) — chosen over reusing face-config (which conflates "how to render a matrix" with
 "which rows + where they integrate," and is not N-per-node-keyed) and over a JSON column
@@ -275,12 +282,16 @@ Each session ends with the standard gate (format, lint, typecheck, unit, e2e).
 
 ## Open questions / deferred
 
-- **Bands sync** — promote `bands` to synced source-of-truth when multi-device matters.
+- ~~**Bands sync** — promote `bands` to synced source-of-truth when multi-device matters.~~
+  **Moot** — the [`bands` table is removed by 9.7](#the-bands-table); a `view`'s SQL rides
+  its block marker (an ordinary synced `scroll_index` participant), so there is no separate
+  bands table to sync.
 - **Key-preserving joins** in the recognizer (widen past single-base-table updatability).
 - **Structured authoring layer** — add only when a concrete consumer appears; it compiles
   to the same SQL.
-- **Unifying the aspect band into the `bands` table** (the "one table backs all bands"
-  pull from 9.2).
+- ~~**Unifying the aspect band into the `bands` table** (the "one table backs all bands"
+  pull from 9.2).~~ **Resolved differently by 9.7:** there is no `bands` table to unify into;
+  aspect/owned children are the `loose` mode and `view`s persist only their SQL on a marker.
 - **AST-parsing recognizer scope** — now the confirmed S2 route (the spike failed). Open:
   exactly which single-table shapes the `sqlite3-parser` gate accepts, and how alias /
   `*`-expansion are resolved in the AST walk (the work the engine would have done).

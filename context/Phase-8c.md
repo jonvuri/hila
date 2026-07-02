@@ -49,16 +49,21 @@ Today the tags plugin (`src/tags/*`) tracks tag types in a **registry matrix** a
 - [x] **Hostless aspect rows are first-class.** A task created directly in the Tasks table is owned by the **type-node** (a "task unto itself"). `owner = host` is a **default, not a law**. Contextualizing such a task later = **reparenting its `own`-edge** from the type-node to a host bullet (an ordinary cross-matrix reparent from Phase 8 §4).
 - [x] Tests: `#task` creates an own aspect row; tagging an existing row creates a `ref`-edge; a hostless task is owned by the type-node and can be reparented onto a host; removing a `#`-tag cascades the aspect row (existing lifecycle, on the edge model).
 
+> **Convergence note ([Phase 9.7](Phase-9.7.md#4-ownership-vs-position-the-data-layer-crux)).** The `owner = where-it-was-created` default above is **kept, not revised**, by the 9.7 convergence, and validated against Tana/Workflowy/Notion prior art: the lifecycle `own`-edge points at the *creation site* (the host for a `#task` typed in prose; the type-node for a row made directly in the table). The tempting alternative -- making the **source matrix / type-node** the owner -- is exactly what produces clutter-at-a-distance, and is the choice all three reference tools refuse. Relatedly, a type-node's extent is read as a **container** (a border = membership + matrix-axis cascade) and *not* a "view": it bounds its rows without positioning them, which is why ownership (single, the `own`-edge) and position (plural, via portals) are separate axes. The convergence also adds a **move-owner** op that relocates the home and leaves a portal behind (the Tana "Move original node" analog), generalizing the hostless-task reparent above.
+
 ## 6. The promotion taxonomy
 
 Every "this got more serious" migration is a crossing of two axes -- **`ref`→`own`** (add lifecycle) and **add-a-matrix** (add schema). Capture these as named ops/migrations where useful (resolution §2.7):
 
-| Promotion | Crossing(s) |
-|---|---|
-| label → type | `ref`→`own` + add-a-matrix |
-| folksonomy member → owned aspect | `ref`→`own` |
-| shared collection → dedicated sub-table | add-a-matrix (+ re-home rows) |
-| subtree → table | add-a-matrix (+ re-home rows) |
+| Promotion | Crossing(s) | 9.7 named op |
+|---|---|---|
+| label → type | `ref`→`own` + add-a-matrix | **make-a-container** (+ re-home) |
+| folksonomy member → owned aspect | `ref`→`own` | — (edge upgrade) |
+| shared collection → dedicated sub-table | add-a-matrix (+ re-home rows) | **re-home owner-edges** |
+| subtree → table | add-a-matrix (+ re-home rows) | **wrap-a-set-in-a-container** |
+| cross-matrix reparent (contextualize a hostless row) | move an `own`-edge | **move-owner** |
+
+The [Phase 9.7 convergence](Phase-9.7.md#8-simplifies--risks--migration-touch-original-goal-3) restates these as the named operations in the right column: cross-matrix reparent = **move-owner**; create-a-new-type = **make-a-container**; `label→type` / `subtree→table` = **wrap-a-set-in-a-container**; `shared→dedicated` = **re-home owner-edges**. Same crossings, now with a gesture vocabulary.
 
 - [x] **"Promote subtree to table" stays a real migration** because of **column-locality** (columns are matrix-wide; the everything matrix must not grow domain columns), **not** anything in the ownership model. The `own`-edges survive a re-home unchanged -- re-homing moves rows into a new owned matrix and keeps their edges.
 - [ ] Implement the promotions that have concrete near-term consumers (at minimum label→type and member→owned-aspect, which the tags UX needs); leave subtree→table and shared→dedicated as documented migration recipes if no consumer needs them yet (do not over-build). *Deferred: the type-node infrastructure from §4 is the substrate these operate on; no near-term consumer exists yet.*
