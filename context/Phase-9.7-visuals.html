@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase 9.7 — Architecture visuals (mesh · container · portal)</title>
+    <style>
+      :root {
+        --bg: #14161d;
+        --panel: #1b1e27;
+        --panel-2: #20242f;
+        --line: #2c3140;
+        --text: #c9cfdb;
+        --dim: #99a1b3;
+        --muted: #6b7488;
+        --accent: #6ea8fe;
+        --own: #6ea8fe;     /* own-edge / lifecycle */
+        --portal: #c08cf0;  /* portal / non-owning structural */
+        --ref: #5bbf9a;     /* ref / non-owning content */
+        --tag: #e0a352;     /* #-tag */
+        --border: #7f8aa3;  /* container border */
+        --danger: #e0696b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 32px 28px 80px;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 {
+        font-size: 16px; margin: 40px 0 6px; padding-bottom: 6px;
+        border-bottom: 1px solid var(--line); color: #e6eaf2;
+      }
+      .lede { color: var(--dim); margin: 0 0 8px; }
+      .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+      figure { margin: 14px 0 0; }
+      svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: block; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; color: #d8c08a; }
+      .legend { display: flex; flex-wrap: wrap; gap: 14px 22px; margin: 10px 2px 0; font-size: 12.5px; color: var(--dim); }
+      .legend span { display: inline-flex; align-items: center; gap: 7px; }
+      .swatch { width: 22px; height: 0; border-top-width: 3px; border-top-style: solid; display: inline-block; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+      .box { width: 13px; height: 11px; border: 1.5px solid var(--border); border-radius: 2px; display: inline-block; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase 9.7 — Architecture visuals</h1>
+      <p class="lede">
+        Thinking aids for the convergence model: <strong>ownership vs. position</strong>,
+        the <strong>matrix container</strong>, <strong>portals</strong>, the three
+        child-sourcing modes, and the one interleaved index. Companion to
+        <code>context/Phase-9.7.md</code>. Drafts — structure over polish.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>1 · The container + the own-edge (ownership ≠ position)</h2>
+      <p class="lede">
+        The matrix draws a <strong>border around</strong> its rows (membership +
+        matrix-axis cascade) but never reaches <em>through</em> a row. Each row's
+        <strong>own-edge</strong> — a line starting <em>inside</em> the row — carries its
+        lifecycle home + position to <em>wherever it was created</em>. Dedicated vs. shared
+        is just where the lines land. Portals (dashed) are opt-in extra positions.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 282" role="img" aria-label="Container border with own-edge lines projecting to creation sites, plus a portal">
+          <defs>
+            <marker id="arrowOwn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--own)" />
+            </marker>
+            <marker id="arrowPortal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--portal)" />
+            </marker>
+          </defs>
+
+          <!-- container -->
+          <rect x="34" y="58" width="300" height="206" rx="8" fill="#191c25" stroke="var(--border)" stroke-width="2" />
+          <text x="50" y="46" fill="var(--dim)" font-size="12.5" class="mono">matrix container — border = membership + matrix-axis drop</text>
+          <rect x="34" y="58" width="300" height="30" rx="8" fill="#23283400" />
+          <text x="50" y="78" fill="#e6eaf2" font-size="13.5" font-weight="600">▣ Tasks</text>
+          <text x="250" y="78" fill="var(--muted)" font-size="11.5" class="mono">mx_5</text>
+          <line x1="34" y1="90" x2="334" y2="90" stroke="var(--line)" />
+
+          <!-- rows -->
+          <g font-size="13">
+            <text x="58" y="124" fill="var(--text)">⊙ Email vendor</text>
+            <circle cx="312" cy="119" r="5" fill="var(--own)" />
+            <text x="58" y="166" fill="var(--text)">○ File report</text>
+            <circle cx="312" cy="161" r="5" fill="var(--own)" />
+            <text x="58" y="208" fill="var(--text)">⊙ Buy domain</text>
+            <circle cx="312" cy="203" r="5" fill="var(--own)" />
+            <text x="58" y="244" fill="var(--muted)" font-size="11.5">+ new row → row homed here (dual owner)</text>
+          </g>
+
+          <!-- hosts -->
+          <rect x="620" y="92" width="250" height="44" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="638" y="119" fill="var(--text)" font-size="13">• Project Alpha</text>
+          <text x="638" y="86" fill="var(--muted)" font-size="11" class="mono">creation site = owner</text>
+
+          <rect x="620" y="180" width="250" height="44" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="638" y="207" fill="var(--text)" font-size="13">• Q3 Roadmap</text>
+
+          <!-- own-edges land at various hosts (shared: the lines land wherever created) -->
+          <!-- Email vendor -> Project Alpha -->
+          <path d="M317,119 C 460,116 500,110 616,110" fill="none" stroke="var(--own)" stroke-width="2" marker-end="url(#arrowOwn)" />
+          <!-- File report -> Q3 Roadmap -->
+          <path d="M317,161 C 470,161 490,190 616,193" fill="none" stroke="var(--own)" stroke-width="2" marker-end="url(#arrowOwn)" />
+
+          <!-- Buy domain -> the Tasks container header itself (created inline = dual owner) -->
+          <path d="M317,203 C 382,203 390,92 306,84" fill="none" stroke="var(--own)" stroke-width="2" marker-end="url(#arrowOwn)" opacity="0.9" />
+          <text x="352" y="252" fill="var(--own)" font-size="11" class="mono">dual owner: own-edge returns to its own container</text>
+
+          <!-- portal: Email vendor also appears under Q3 Roadmap (opt-in, non-owning) -->
+          <path d="M317,127 C 468,152 500,206 616,207" fill="none" stroke="var(--portal)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrowPortal)" />
+          <text x="430" y="140" fill="var(--portal)" font-size="11" class="mono">portal (opt-in, non-owning)</text>
+        </svg>
+      </figure>
+      <div class="legend">
+        <span><i class="box"></i> container border = membership + matrix-axis drop</span>
+        <span><i class="swatch" style="border-top-color: var(--own)"></i> own-edge = lifecycle home + position (single)</span>
+        <span><i class="swatch" style="border-top-color: var(--portal); border-top-style: dashed"></i> portal = extra appearance (non-owning, plural)</span>
+      </div>
+      <p class="note">
+        Delete <em>Project Alpha</em> → its owned rows cascade (no clutter); the portal under
+        <em>Q3 Roadmap</em> <strong>ghosts</strong>. Drop the <em>Tasks</em> matrix → the border
+        deletes every bounded row, then each own-edge cascades onward (8c §8.1).
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>2 · The relationship family: ownership × anchoring</h2>
+      <p class="lede">
+        <code>#</code>-tags, <code>@</code>-mentions, loose children, and portals are one
+        2×2. Refs and portals are the same <strong>non-owning</strong> column (severing is
+        non-destructive; shared ghost/empty states + backlinks) — split only by anchoring.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 300" role="img" aria-label="2x2 of ownership by anchoring">
+          <!-- axes -->
+          <text x="250" y="28" fill="#e6eaf2" font-size="13" font-weight="600" text-anchor="middle">owning · own-edge · single · lifecycle</text>
+          <text x="680" y="28" fill="#e6eaf2" font-size="13" font-weight="600" text-anchor="middle">non-owning · ref · independent lifecycle</text>
+          <text x="44" y="120" fill="var(--dim)" font-size="12.5" transform="rotate(-90 44 120)" text-anchor="middle">content-anchored (prose)</text>
+          <text x="44" y="240" fill="var(--dim)" font-size="12.5" transform="rotate(-90 44 240)" text-anchor="middle">structural (a position)</text>
+
+          <!-- cells -->
+          <g>
+            <rect x="80" y="48" width="350" height="100" rx="8" fill="#1d212c" stroke="var(--line)" />
+            <text x="100" y="86" fill="var(--tag)" font-size="15" font-weight="600">#-tag → owned aspect</text>
+            <text x="100" y="112" fill="var(--dim)" font-size="12.5">created at the host; delete host → cascades</text>
+            <text x="100" y="132" fill="var(--muted)" font-size="11.5" class="mono">createDependentRow (unchanged from 8c)</text>
+          </g>
+          <g>
+            <rect x="450" y="48" width="390" height="100" rx="8" fill="#1d212c" stroke="var(--line)" />
+            <text x="470" y="86" fill="var(--ref)" font-size="15" font-weight="600">@-mention (wiki-link)</text>
+            <text x="470" y="112" fill="var(--dim)" font-size="12.5">badge + backlink; target lifecycle independent</text>
+            <text x="470" y="132" fill="var(--muted)" font-size="11.5" class="mono">ref join · live / empty / ghost</text>
+          </g>
+          <g>
+            <rect x="80" y="168" width="350" height="100" rx="8" fill="#1d212c" stroke="var(--line)" />
+            <text x="100" y="206" fill="var(--own)" font-size="15" font-weight="600">/attach aspect · loose child</text>
+            <text x="100" y="232" fill="var(--dim)" font-size="12.5">structural own-edge; meshes in edge order</text>
+            <text x="100" y="252" fill="var(--muted)" font-size="11.5" class="mono">no prose token; no tether</text>
+          </g>
+          <g>
+            <rect x="450" y="168" width="390" height="100" rx="8" fill="#1d212c" stroke="var(--portal)" stroke-width="1.5" />
+            <text x="470" y="206" fill="var(--portal)" font-size="15" font-weight="600">portal (deep mirror)</text>
+            <text x="470" y="232" fill="var(--dim)" font-size="12.5">structural position; transcludes the node + subtree</text>
+            <text x="470" y="252" fill="var(--muted)" font-size="11.5" class="mono">reuses ref machinery + a scroll_index position</text>
+          </g>
+        </svg>
+      </figure>
+      <p class="note">
+        Delta from today: <code>#</code> / <code>@</code> unchanged. New = <strong>portal</strong>,
+        <strong>move-owner</strong> (promotion), <strong>two-tier delete</strong> (detach vs.
+        hard-delete-including-refs). Retired = the aspect/query/sub-table bands and fold/merge.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>3 · Three child-sourcing modes (mesh is just "loose")</h2>
+      <p class="lede">
+        A node's children are one interleaved region. Every related set is a node with a
+        <strong>mode</strong>. The outline is the <code>loose</code> mode; blocks are
+        <code>container</code>/<code>view</code> nodes occupying one slot that expands.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 250" role="img" aria-label="loose, container, view modes">
+          <!-- loose -->
+          <rect x="20" y="20" width="280" height="210" rx="8" fill="var(--panel)" stroke="var(--line)" />
+          <text x="36" y="44" fill="#e6eaf2" font-size="13" font-weight="600">loose</text>
+          <text x="36" y="62" fill="var(--muted)" font-size="11" class="mono">own-edges · edge_key · row-axis</text>
+          <g font-size="12.5" fill="var(--text)">
+            <text x="40" y="92">• Design schema</text>
+            <text x="56" y="114" fill="var(--tag)">⊙ Email vendor</text>
+            <text x="40" y="136">• Write spec</text>
+            <text x="56" y="158" fill="var(--ref)">↗ See pricing memo</text>
+            <text x="40" y="180">• Ship checklist</text>
+          </g>
+          <text x="36" y="216" fill="var(--muted)" font-size="11">insert ✓ · reorder ✓ · edit cells ✓</text>
+
+          <!-- container -->
+          <rect x="320" y="20" width="280" height="210" rx="8" fill="var(--panel)" stroke="var(--line)" />
+          <text x="336" y="44" fill="#e6eaf2" font-size="13" font-weight="600">container</text>
+          <text x="336" y="62" fill="var(--muted)" font-size="11" class="mono">one matrix · rank · matrix-axis</text>
+          <rect x="336" y="74" width="248" height="118" rx="5" fill="#191c25" stroke="var(--border)" stroke-width="1.5" />
+          <g font-size="12" class="mono">
+            <text x="348" y="92" fill="var(--dim)">name          done  due</text>
+            <line x1="344" y1="98" x2="576" y2="98" stroke="var(--line)" />
+            <text x="348" y="118" fill="var(--text)">Email vendor   ⊙    Fri</text>
+            <text x="348" y="140" fill="var(--text)">File report    ○    Mon</text>
+            <text x="348" y="162" fill="var(--text)">Buy domain     ⊙    —</text>
+          </g>
+          <text x="336" y="216" fill="var(--muted)" font-size="11">insert ✓ (homed here) · border + drop</text>
+
+          <!-- view -->
+          <rect x="620" y="20" width="280" height="210" rx="8" fill="var(--panel)" stroke="var(--line)" />
+          <text x="636" y="44" fill="#e6eaf2" font-size="13" font-weight="600">view</text>
+          <text x="636" y="62" fill="var(--muted)" font-size="11" class="mono">a query · ORDER BY · owns nothing</text>
+          <text x="636" y="86" fill="var(--accent)" font-size="11.5" class="mono">⌖ #task in this subtree</text>
+          <g font-size="12.5" fill="var(--text)">
+            <text x="640" y="112">Email vendor · Project A</text>
+            <text x="640" y="134">Draft RFP · Project A</text>
+            <text x="640" y="156">Ship v2 · Project B</text>
+            <text x="640" y="178" fill="var(--muted)">… capped inline</text>
+          </g>
+          <text x="636" y="216" fill="var(--muted)" font-size="11">insert ✗ (firewall) · deletion-safe</text>
+        </svg>
+      </figure>
+      <p class="note">
+        Grid is not a fourth mode — it is a same-schema run coalescing its labels into one
+        header. The <code>container</code> table above is just that.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>4 · One interleaved index: materialized vs. count + slice</h2>
+      <p class="lede">
+        <code>scroll_index</code> is the single <strong>position</strong> index (multi-location).
+        Own-positioned content (loose, dedicated containers, deep-portal subtrees) is
+        <strong>materialized</strong>; gather-positioned content (views, shared extents) is
+        <strong>flattened by count + slice</strong> at render — never minted as ownership
+        (firewall holds).
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 280" role="img" aria-label="interleaved index with materialized rows and a count-sliced block spanning windows">
+          <!-- flattened sequence column -->
+          <text x="40" y="30" fill="#e6eaf2" font-size="13" font-weight="600">flattened displayed sequence</text>
+          <text x="40" y="48" fill="var(--muted)" font-size="11" class="mono">windowed by ROWS_PER_WINDOW</text>
+
+          <!-- window bracket 1 -->
+          <rect x="36" y="58" width="430" height="86" rx="6" fill="#191c2500" stroke="var(--line)" stroke-dasharray="4 4" />
+          <text x="446" y="74" fill="var(--muted)" font-size="11" text-anchor="end" class="mono">window N</text>
+          <g font-size="12.5">
+            <text x="52" y="80" fill="var(--text)">• Project Alpha</text><text x="300" y="80" fill="var(--own)" font-size="10.5" class="mono">scroll_index ✓</text>
+            <text x="68" y="102" fill="var(--tag)">⊙ Email vendor</text><text x="300" y="102" fill="var(--own)" font-size="10.5" class="mono">materialized</text>
+            <text x="52" y="124" fill="var(--accent)">⌖ #task in subtree</text><text x="300" y="124" fill="var(--portal)" font-size="10.5" class="mono">block marker (COUNT=124)</text>
+          </g>
+
+          <!-- window bracket 2 spanning the block -->
+          <rect x="36" y="150" width="430" height="108" rx="6" fill="#191c2500" stroke="var(--line)" stroke-dasharray="4 4" />
+          <text x="446" y="166" fill="var(--muted)" font-size="11" text-anchor="end" class="mono">window N+1 — slice of the block</text>
+          <g font-size="12.5" fill="var(--text)">
+            <text x="68" y="190">Draft RFP · Project A</text><text x="300" y="190" fill="var(--accent)" font-size="10.5" class="mono">offset 12..</text>
+            <text x="68" y="210">Ship v2 · Project B</text>
+            <text x="68" y="230">Renew cert · Ops</text><text x="300" y="230" fill="var(--accent)" font-size="10.5" class="mono">LIMIT/keyset</text>
+            <text x="52" y="250" fill="var(--text)">• Next workspace node</text><text x="300" y="250" fill="var(--own)" font-size="10.5" class="mono">scroll_index ✓</text>
+          </g>
+
+          <!-- right side: the two source kinds -->
+          <line x1="500" y1="58" x2="500" y2="258" stroke="var(--line)" />
+          <text x="524" y="80" fill="var(--own)" font-size="13" font-weight="600">materialized (in scroll_index)</text>
+          <g font-size="12" fill="var(--dim)">
+            <text x="524" y="104">· loose children</text>
+            <text x="524" y="124">· dedicated container rows</text>
+            <text x="524" y="144">· deep-portal subtrees</text>
+            <text x="524" y="164" fill="var(--muted)" font-size="11">→ ancestry per location = lexkey prefix (free)</text>
+          </g>
+          <text x="524" y="198" fill="var(--portal)" font-size="13" font-weight="600">count + slice (render-only)</text>
+          <g font-size="12" fill="var(--dim)">
+            <text x="524" y="222">· query views (firewalled)</text>
+            <text x="524" y="242">· shared container extents</text>
+          </g>
+        </svg>
+      </figure>
+      <p class="note">
+        A block contributes its cached <code>COUNT</code> to window budgets (prefix-sum for
+        offsets); a window that straddles a block renders a slice by offset. No nested
+        virtualizer, no drill-down. <code>bands</code> table removed — a view persists only
+        its SQL on its block marker. Spikes: deep-portal maintenance; height variance.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>5 · The substrate row (the conformance floor)</h2>
+      <p class="lede">
+        One schema-adaptive renderer at <strong>substrate fidelity</strong>: every column a
+        labeled cell, all relationship metadata shown. "Does it x-ray cleanly?" is the
+        standing acceptance check. Composed bullets/grids are Phase 10 sugar over this.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 150" role="img" aria-label="a row rendered at substrate fidelity with all metadata columns">
+          <rect x="20" y="24" width="880" height="104" rx="8" fill="#191c25" stroke="var(--line)" />
+          <g class="mono" font-size="11.5">
+            <text x="40" y="48" fill="var(--muted)">matrix</text>
+            <text x="160" y="48" fill="var(--muted)">owner</text>
+            <text x="300" y="48" fill="var(--muted)">anchor</text>
+            <text x="440" y="48" fill="var(--muted)">edge_key</text>
+            <text x="600" y="48" fill="var(--muted)">[label]</text>
+            <text x="760" y="48" fill="var(--muted)">done</text>
+          </g>
+          <line x1="20" y1="58" x2="900" y2="58" stroke="var(--line)" />
+          <g class="mono" font-size="12.5" fill="var(--text)">
+            <text x="40" y="86">▣ Tasks (mx_5)</text>
+            <text x="160" y="86" fill="var(--own)">Project Alpha</text>
+            <text x="300" y="86" fill="var(--tag)">prose@…</text>
+            <text x="440" y="86" fill="var(--dim)">01·a3·07</text>
+            <text x="600" y="86">Email vendor</text>
+            <text x="760" y="86">⊙</text>
+          </g>
+          <text x="40" y="114" fill="var(--muted)" font-size="11">editable iff the cell traces to a source column (per-cell hydration — uniform, no band scope)</text>
+        </svg>
+      </figure>
+      <p class="note">
+        The substrate columns (<code>owner</code>, <code>anchor</code>, <code>matrix</code>,
+        <code>edge_key</code>, <code>depth</code>) are the textual twin of the lines in
+        diagram 1 — and they are what keeps the mobile-owner model legible (Tana's own
+        caveat: understand where a node lives to understand deletions).
+      </p>
+    </div>
+  </body>
+</html>

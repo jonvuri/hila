@@ -116,6 +116,17 @@ One "add a collection / make this a …" gesture with a single knob: **existing 
 
 ## 9.7 Paradigm convergence (forward note)
 
+> **Deep-dive: [Phase 9.7](Phase-9.7.md)** (+ visuals: [Phase-9.7-visuals.html](Phase-9.7-visuals.html)).
+> A design session worked the convergence through. The collapse goes deeper than "one
+> renderer for the bands": the three former bands become three **child-sourcing modes** of
+> one node (`loose` / `container` / `view`), the outline *is* the `loose` mode, and the
+> data layer gains **ownership ≠ position** (owner = where created; position is plural via
+> opt-in **portals**). `refs` and `portals` are one non-owning family split by anchoring;
+> the `bands` table is removed; `scroll_index` becomes the single multi-location position
+> index. Design converged; two feasibility spikes gate the build (deep-portal
+> materialization; windowing/height-variance). The summary below is the original forward
+> note; Phase-9.7.md has the full model, prior-art grounding, and migration touch-points.
+
 Largely a documented direction once 9.1–9.5 land:
 
 - Table face with **hierarchy** (it can now render an `own`-forest directly).
