@@ -41,9 +41,7 @@ import {
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 
-import AspectBand from './AspectBand'
-import { QueryBandsSection } from './QueryBand'
-import SubTableBand from './SubTableBand'
+import SubstrateRegion from './SubstrateRegion'
 import {
   buildSingleRowQuery,
   buildBacklinksQuery,
@@ -669,23 +667,15 @@ const FocusPanel = (props: FocusPanelProps) => {
                 </div>
               </Show>
 
-              {/* Aspect band: owned `#`-tag aspects, banded between the node
-                  body and the children nav panel (Phase 9.2). */}
-              <AspectBand
-                hostMatrixId={props.matrixId}
-                hostRowId={props.rowId}
-                contentAnchoredKeys={contentAnchoredKeys()}
-              />
-
-              {/* Query bands: persisted live SQL views, rendered read-only
-                  through the schema-adaptive renderer (Phase 9.3). */}
-              <QueryBandsSection matrixId={props.matrixId} rowId={props.rowId} />
-
-              {/* Sub-table bands: the node's dedicated own-matrixes, rendered
-                  through the real TableFace with node-scoped insert (Phase 9.4). */}
-              <SubTableBand
+              {/* Substrate region (Phase 9.7 Stage C): the three former bands
+                  (aspect / query / sub-table) unified into one mode-dispatching
+                  region — loose owned aspects (per-cell editable, grid-coalesced,
+                  with the portal / move-owner / two-tier-delete gestures), view
+                  blocks, and dedicated containers. */}
+              <SubstrateRegion
                 focalMatrixId={props.matrixId}
                 focalRowId={props.rowId}
+                contentAnchoredKeys={contentAnchoredKeys()}
                 onOpenRowRef={props.onOpenRowRef}
               />
 

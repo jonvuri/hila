@@ -134,6 +134,7 @@ export const buildPaginatedOutlineQuery = (opts: PaginatedOutlineQueryOpts = {})
   // avoids cross-query id-type/timing mismatches between panels.
   return `
 SELECT r.global_lexkey AS key, r.matrix_id, r.row_id, r.depth,
+       r.is_ghost,
        mt.title AS matrix_title,
        CASE WHEN EXISTS (
          SELECT 1 FROM joins ch

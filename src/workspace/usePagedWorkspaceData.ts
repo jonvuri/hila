@@ -15,13 +15,33 @@ import {
 
 export const ROWS_PER_WINDOW = 100
 
-/** Stable cross-matrix row identity. Row ids collide across matrixes (each
- *  `mx_{id}_data` autoincrements from 1), so the outline keys everything by the
- *  `(matrix_id, row_id)` pair. */
+/** Cross-matrix row *data* identity. Row ids collide across matrixes (each
+ *  `mx_{id}_data` autoincrements from 1), so hydration keys everything by the
+ *  `(matrix_id, row_id)` pair. Note: this is NOT unique per rendered row — a
+ *  portaled row appears at its home and each portal with the same `(matrix,
+ *  row)` — so it is used only for hydration lookup, not as the DOM/store key
+ *  (that is `pk`, the position key). */
 export const compositeKey = (matrixId: number, rowId: number): string => `${matrixId}:${rowId}`
+
+/** Position key: the hex `global_lexkey`. Phase 9.7 Stage C — ownership is
+ *  single but position is plural, so a row can legitimately appear more than
+ *  once (home + portals). The renderer keys DOM rows by position, not by
+ *  `(matrix_id, row_id)`. */
+const positionKey = (key: Uint8Array): string =>
+  Array.from(key)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 
 // One row of the index-only window scan (before hydration).
 type WindowRow = {
+  /** Render/reconcile key. Move-stable for the common single-appearance case
+   *  (`rk === ck`), so the stateful ProseMirror editors survive indent/outdent/
+   *  drag without remounting; position-disambiguated (`ck:pk`) only when the
+   *  same `(matrix, row)` appears more than once in the loaded range (a portaled
+   *  row's home + portals — Phase 9.7 Stage C). See `assignRenderKeys`. */
+  rk: string
+  /** Position key (hex `global_lexkey`) — unique per appearance, changes on move. */
+  pk: string
   ck: string
   matrix_id: number
   row_id: number
@@ -29,7 +49,20 @@ type WindowRow = {
   depth: number
   has_children: number
   is_type_node: number
+  is_ghost: number
   matrix_title: string | null
+}
+
+/**
+ * Assign each row its render key `rk` in place. A `(matrix, row)` that occurs
+ * once in the loaded range keeps `rk === ck` (move-stable — the editor persists
+ * across reparents); one that occurs more than once (home + portals) gets
+ * `rk = ck:pk` for every occurrence, so each appearance is a distinct DOM row.
+ */
+const assignRenderKeys = (rows: WindowRow[]): void => {
+  const counts = new Map<string, number>()
+  for (const r of rows) counts.set(r.ck, (counts.get(r.ck) ?? 0) + 1)
+  for (const r of rows) r.rk = counts.get(r.ck)! > 1 ? `${r.ck}:${r.pk}` : r.ck
 }
 
 // A fully-hydrated outline row: window metadata merged with the row's data.
@@ -50,14 +83,19 @@ const INITIAL_NEEDED_WINDOWS = new Set([0, 1, 2, 3])
 const toWindowRow = (raw: Record<string, unknown>): WindowRow => {
   const matrix_id = raw.matrix_id as number
   const row_id = raw.row_id as number
+  const key = raw.key as Uint8Array
+  const ck = compositeKey(matrix_id, row_id)
   return {
-    ck: compositeKey(matrix_id, row_id),
+    rk: ck, // finalized by assignRenderKeys once the full set is known
+    pk: positionKey(key),
+    ck,
     matrix_id,
     row_id,
-    key: raw.key as Uint8Array,
+    key,
     depth: raw.depth as number,
     has_children: raw.has_children as number,
-    is_type_node: raw.is_type_node as number,
+    is_type_node: (raw.is_type_node as number) ?? 0,
+    is_ghost: (raw.is_ghost as number) ?? 0,
     matrix_title: (raw.matrix_title as string | null) ?? null,
   }
 }
@@ -150,14 +188,15 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   createEffect(() => {
     const sql = rangeQuery()
     if (!sql) {
-      setWindowRows(reconcile([] as WindowRow[], { key: 'ck' }))
+      setWindowRows(reconcile([] as WindowRow[], { key: 'rk' }))
       return
     }
 
     const observer: SqlObserver = (result) => {
       if (result) {
         const mapped = (result as Record<string, unknown>[]).map(toWindowRow)
-        setWindowRows(reconcile(mapped, { key: 'ck' }))
+        assignRenderKeys(mapped)
+        setWindowRows(reconcile(mapped, { key: 'rk' }))
       }
     }
 
@@ -257,7 +296,7 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
       .map((r) => r.row_id)
       .sort((a, b) => a - b)
 
-    const sql = wsRowIds.length > 0 ? buildTagsForRowsQuery(wsId, wsId, wsRowIds) : ''
+    const sql = wsRowIds.length > 0 ? buildTagsForRowsQuery(wsId, wsRowIds) : ''
 
     // If the desired query hasn't changed, nothing to do.
     if (sql ? aspectGatherMap.has(sql) : aspectGatherMap.size === 0) return
@@ -303,7 +342,7 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
         data,
       }
     })
-    setRows(reconcile(merged, { key: 'ck' }))
+    setRows(reconcile(merged, { key: 'rk' }))
   })
 
   const getWindowRows = (windowIndex: number): WorkspaceRowData[] => {

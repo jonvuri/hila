@@ -30,7 +30,7 @@ import { computeDropPosition, clampDropDepth, isNoOpDrop, type RowInfo } from '.
 const k = (...bytes: number[]): Uint8Array => new Uint8Array(bytes)
 
 const row = (id: number, key: Uint8Array, depth: number): RowInfo => ({
-  ck: String(id),
+  rk: String(id),
   key,
   depth,
 })

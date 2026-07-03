@@ -251,6 +251,55 @@ export const updateViewBlock = (
 export const deleteViewBlock = (markerMatrixId: number, markerRowId: number): Promise<void> =>
   workerCall('deleteViewBlock', { markerMatrixId, markerRowId })
 
+// Phase 9.7 Stage C — portal / move-owner / two-tier-delete gestures.
+
+/** Mirror `target` under `host`: a non-owning extra position (opt-in, deep). */
+export const addPortal = (
+  host: { matrixId: number; rowId: number },
+  target: { matrixId: number; rowId: number },
+): Promise<void> =>
+  workerCall('addPortal', {
+    hostMatrixId: host.matrixId,
+    hostRowId: host.rowId,
+    targetMatrixId: target.matrixId,
+    targetRowId: target.rowId,
+  })
+
+/** Detach a portal (non-destructive): the home and other portals survive. */
+export const removePortal = (
+  host: { matrixId: number; rowId: number },
+  target: { matrixId: number; rowId: number },
+): Promise<void> =>
+  workerCall('removePortal', {
+    hostMatrixId: host.matrixId,
+    hostRowId: host.rowId,
+    targetMatrixId: target.matrixId,
+    targetRowId: target.rowId,
+  })
+
+/** Relocate a node's home to `newParent`, leaving a portal behind (promotion). */
+export const moveOwner = (
+  node: { matrixId: number; rowId: number },
+  newParent: { matrixId: number; rowId: number },
+  positioning?: { prevSiblingKey?: Uint8Array; nextSiblingKey?: Uint8Array },
+): Promise<void> =>
+  workerCall('moveOwner', {
+    matrixId: node.matrixId,
+    rowId: node.rowId,
+    newParentMatrixId: newParent.matrixId,
+    newParentRowId: newParent.rowId,
+    prevSiblingKey: positioning?.prevSiblingKey,
+    nextSiblingKey: positioning?.nextSiblingKey,
+  })
+
+/** Default home-delete: cascade the home subtree, ghost surviving portals. */
+export const deleteHomeGhostingPortals = (matrixId: number, rowId: number): Promise<number> =>
+  workerCall('deleteHomeGhostingPortals', { matrixId, rowId })
+
+/** The escalation: cascade everywhere (home + every portal appearance), no ghosts. */
+export const hardDeleteIncludingRefs = (matrixId: number, rowId: number): Promise<void> =>
+  workerCall('hardDeleteIncludingRefs', { matrixId, rowId })
+
 export const createTagType = (
   name: string,
   columns?: { name: string; type: string }[],

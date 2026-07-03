@@ -42,6 +42,13 @@ import {
   deleteViewBlock as deleteViewBlockImpl,
 } from '../block-marker'
 import {
+  addPortal as addPortalImpl,
+  removePortal as removePortalImpl,
+  moveOwner as moveOwnerImpl,
+  deleteHomeGhostingPortals as deleteHomeGhostingPortalsImpl,
+  hardDeleteIncludingRefs as hardDeleteIncludingRefsImpl,
+} from '../portal'
+import {
   reparentRow as reparentRowImpl,
   deleteSubtree as deleteSubtreeImpl,
   resolveNodeByGlobalKey,
@@ -803,6 +810,87 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'deleteViewBlockSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'deleteViewBlockError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'addPortal': {
+      const { id, hostMatrixId, hostRowId, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        addPortalImpl(
+          db,
+          { matrixId: hostMatrixId, rowId: hostRowId },
+          { matrixId: targetMatrixId, rowId: targetRowId },
+        )
+        postMessage({ type: 'addPortalSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'addPortalError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'removePortal': {
+      const { id, hostMatrixId, hostRowId, targetMatrixId, targetRowId } = message
+      try {
+        const { db } = await sqliteWasm
+        removePortalImpl(
+          db,
+          { matrixId: hostMatrixId, rowId: hostRowId },
+          { matrixId: targetMatrixId, rowId: targetRowId },
+        )
+        postMessage({ type: 'removePortalSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'removePortalError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'moveOwner': {
+      const {
+        id,
+        matrixId,
+        rowId,
+        newParentMatrixId,
+        newParentRowId,
+        prevSiblingKey,
+        nextSiblingKey,
+      } = message
+      try {
+        const { db } = await sqliteWasm
+        moveOwnerImpl(
+          db,
+          { matrixId, rowId },
+          { matrixId: newParentMatrixId, rowId: newParentRowId },
+          { prevSiblingKey, nextSiblingKey },
+        )
+        postMessage({ type: 'moveOwnerSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'moveOwnerError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'deleteHomeGhostingPortals': {
+      const { id, matrixId, rowId } = message
+      try {
+        const { db } = await sqliteWasm
+        const ghosts = deleteHomeGhostingPortalsImpl(db, { matrixId, rowId })
+        postMessage({ type: 'deleteHomeGhostingPortalsSuccess', id, result: ghosts })
+      } catch (err: unknown) {
+        postMessage({ type: 'deleteHomeGhostingPortalsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'hardDeleteIncludingRefs': {
+      const { id, matrixId, rowId } = message
+      try {
+        const { db } = await sqliteWasm
+        hardDeleteIncludingRefsImpl(db, { matrixId, rowId })
+        postMessage({ type: 'hardDeleteIncludingRefsSuccess', id, result: undefined })
+      } catch (err: unknown) {
+        postMessage({ type: 'hardDeleteIncludingRefsError', id, error: toError(err) })
       }
       break
     }

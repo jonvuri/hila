@@ -210,6 +210,48 @@ export type MatrixOperationMap = {
     params: { markerMatrixId: number; markerRowId: number }
     result: void
   }
+  // Phase 9.7 Stage C — portal / move-owner / two-tier-delete gestures.
+  // Ownership stays single (the one `own`-edge); a portal is a non-owning extra
+  // position. See src/core/portal.ts.
+  addPortal: {
+    params: {
+      hostMatrixId: number
+      hostRowId: number
+      targetMatrixId: number
+      targetRowId: number
+    }
+    result: void
+  }
+  removePortal: {
+    params: {
+      hostMatrixId: number
+      hostRowId: number
+      targetMatrixId: number
+      targetRowId: number
+    }
+    result: void
+  }
+  moveOwner: {
+    params: {
+      matrixId: number
+      rowId: number
+      newParentMatrixId: number
+      newParentRowId: number
+      prevSiblingKey?: Uint8Array
+      nextSiblingKey?: Uint8Array
+    }
+    result: void
+  }
+  // Default home-delete: cascades the home subtree, ghosts surviving portals.
+  deleteHomeGhostingPortals: {
+    params: { matrixId: number; rowId: number }
+    result: number
+  }
+  // The escalation tier: cascade everywhere (home + every portal), no ghosts.
+  hardDeleteIncludingRefs: {
+    params: { matrixId: number; rowId: number }
+    result: void
+  }
   createTagType: {
     params: { name: string; columns?: { name: string; type: string }[] }
     result: TagType

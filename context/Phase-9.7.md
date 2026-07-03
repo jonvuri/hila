@@ -320,7 +320,9 @@ underneath (invisible to the ownership question). Sources:
    canonical docs. **Done.**
 5. **The build proper** — three staged sessions ([§13](#13-the-build-proper--implementation-prompts)):
    A (data layer / portals) **— landed**, B (block markers + count+slice windowing) **— landed**,
-   C (renderer unification + gestures) — next. See each stage's build note for what the next inherits.
+   C (renderer unification + gestures) — **C1 landed** (focus-panel band unification + gesture/data
+   wiring + position-keyed outline + ghosts); **C2 next** (outline substrate merge + inline block
+   folding). See each stage's build note for what the next inherits.
 6. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
    over the substrate floor.
 
@@ -556,3 +558,66 @@ The paging/windowing layer is wired and the `bands` table is gone. What Stage C 
 > add coverage for portal appearance/detach, move-owner, and two-tier delete; run the full
 > battery. This closes the Phase 9.7 build — update the [§12 Forward](#12-forward) status and
 > hand off to [Phase 10](Phase-10.md).
+
+#### Stage C — build note (C1 landed; C2 next)
+
+Stage C ran as one session but decomposes into two increments along the seam the spikes
+implied: enabling the portal gesture makes the outline show a row at its home **and** each
+portal, which the old `(matrix_id, row_id)` DOM key collapses — so position-keying + ghost
+rendering are prerequisites of the gesture (C1), while routing every loose cell through the
+substrate renderer inline is genuinely separable (C2). **C1 is landed.** What it did and what
+C2 inherits:
+
+- **§9.6 sharp edge dissolved ([tag-queries.ts](../src/tags/tag-queries.ts)).** The host-matrix
+  scope (`p.matrix_id = wsMatrixId`) is gone from `buildTagsForRowQuery` /
+  `buildTagsForRowsQuery` (and the `wsMatrixId` param); the `promoted_nodes` join **stays** — it
+  is what distinguishes a genuine tag aspect from other `kind='own'` edges (a loose own-child, a
+  `view` block marker), whose target matrix has no promoted-node owner. Aspects on non-workspace
+  nodes now surface and edit in place. Callers ([SubstrateRegion](../src/workspace/SubstrateRegion.tsx),
+  [usePagedWorkspaceData](../src/workspace/usePagedWorkspaceData.ts), tags-plugin descriptor)
+  updated; `tag-queries.test.ts` green.
+- **Gestures wired end-to-end ([portal.ts](../src/core/portal.ts) → worker → client).** The
+  Stage-A ops (`addPortal`/`removePortal`/`moveOwner`/`deleteHomeGhostingPortals`/
+  `hardDeleteIncludingRefs`) are added to `MatrixOperationMap`
+  ([matrix-types.ts](../src/core/matrix-types.ts)), the worker
+  ([matrix-handler.ts](../src/core/worker/matrix-handler.ts)), and the client
+  ([matrix-client.ts](../src/core/client/matrix-client.ts)) — thin passthrough over the existing
+  update-hook/tables-visited invalidation (no new machinery, the firewall holds).
+- **Position-keyed outline (`pk` = hex `global_lexkey`).**
+  [usePagedWorkspaceData](../src/workspace/usePagedWorkspaceData.ts) now carries `pk` and
+  `is_ghost` per row and **reconciles by `pk`** (home + portal appearances of one row are
+  distinct store/DOM rows); [NavigationPanel](../src/workspace/NavigationPanel.tsx) keys focus/
+  handle maps, drag-drop ([drag-drop.ts](../src/workspace/drag-drop.ts) `RowInfo.pk`), and the
+  `data-row-ck` attribute by `pk`, and focuses freshly-inserted rows by the returned key's hex.
+  The row *renderer* (the PM editors) is otherwise untouched — that is C2.
+- **Ghost tombstones.** `buildPaginatedOutlineQuery` projects `is_ghost`; NavigationPanel renders
+  an `is_ghost` row as a read-only "(deleted)" tombstone (`outline-row-ghost`) — no editor, no
+  drag, no drill. **Subtlety worth carrying to C2:** the ghost guard must be a *reactive*
+  accessor (`() => row.is_ghost === 1`), because the tombstone replaces the live portal
+  appearance in place at the same `pk`, flipping `is_ghost` 0→1 on the same store row without
+  changing its identity (a captured `const` never re-runs).
+- **Substrate region ([SubstrateRegion.tsx](../src/workspace/SubstrateRegion.tsx)).** The three
+  focus-panel bands unify into **one mode-dispatching component**, mounted in
+  [FocusPanel](../src/workspace/FocusPanel.tsx): `loose` (owned aspects, absorbing the deleted
+  `AspectBand` — per-cell editable `PropertyRow`s, grouped into same-schema blocks with a
+  **coalesced** column header and an **owner-legibility** affix), plus the `RowGestureMenu`
+  (portal / move-owner / detach / delete / confirmation-gated hard-delete). The `container`
+  (`SubTableBand`/`TableFace`) and `view` (`QueryBand`) mode renderers are **composed** by
+  SubstrateRegion rather than re-implemented — `TableFace` is itself the coalesced-grid rendering
+  of a same-schema span, and both are load-bearing for the passing `focus-panel`/`query-band`
+  e2e suites. **Deviation from the prompt** (which said render containers via `PropertyRow` and
+  delete `SubTableBand`): keeping them avoids a large, risky rewrite of the most-tested panel and
+  a UX regression at substrate; the full container→`PropertyRow` collapse folds into the C2
+  outline merge.
+- **Gate.** New `e2e/portals.spec.ts` (3 tests: portal appearance + non-destructive detach;
+  move-owner relocates home + leaves a portal; two-tier delete = default-ghost vs.
+  hard-delete-everywhere) — green. The four "`test.fixme`" entries the prompt names **no longer
+  exist** in the e2e suite (removed in a prior phase); the type-node rendering policy is covered
+  by the passing `tags.spec.ts` tests, so that gate item is satisfied. Full unit battery + format/
+  lint/typecheck green.
+- **C2 inherits:** route NavigationPanel's loose outline rows through the substrate renderer
+  (every hydrated cell editable inline, not just the PM label; grid coalescing at outline scale);
+  fold `view`/`container` block *content* inline via the Stage-B `gatherWindow` + the worker↔client
+  gather RPC ([window-flatten.ts](../src/workspace/window-flatten.ts), deferred from Stage B);
+  collapse `container` rendering to `PropertyRow`; surface the gestures on outline rows too. The
+  `lazy` portal path stays off (v1); composed/`TableFace` fidelity is [Phase 10](Phase-10.md).

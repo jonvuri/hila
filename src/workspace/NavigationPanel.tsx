@@ -124,7 +124,7 @@ const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
   key ? new Uint8Array(key) : undefined
 
 const findRowIndex = (rows: WorkspaceRowData[], ck: string): number =>
-  rows.findIndex((r) => r.ck === ck)
+  rows.findIndex((r) => r.rk === ck)
 
 const findParentRow = (
   rows: WorkspaceRowData[],
@@ -681,7 +681,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   createEffect(() => {
     const vRows = visibleRows()
     if (vRows.length > 0 && focusedCk() === null) {
-      requestFocus(vRows[0]!.ck, 'start')
+      requestFocus(vRows[0]!.rk, 'start')
     }
   })
 
@@ -748,7 +748,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     }
 
     const vRows = visibleRows()
-    const nonDragged = vRows.filter((r) => !drag.subtreeCks.has(r.ck))
+    const nonDragged = vRows.filter((r) => !drag.subtreeCks.has(r.rk))
     const rowEls = getRowElements()
 
     const target = computeDropTarget(
@@ -800,11 +800,12 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     if (index === -1) return
 
     const row = vRows[index]!
+    if (row.is_ghost === 1) return
     if (!isPlainWorkspaceRow(row)) return
     const subtreeCks = new Set<string>([ck])
     for (let i = index + 1; i < vRows.length; i++) {
       if (vRows[i]!.depth <= row.depth) break
-      subtreeCks.add(vRows[i]!.ck)
+      subtreeCks.add(vRows[i]!.rk)
     }
 
     const originParentRow = findParentRow(vRows, index)
@@ -930,18 +931,18 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const hasChildren = row.has_children === 1
 
       if (isEmpty && !hasChildren) {
-        const targetCk = prevRow.ck
+        const targetCk = prevRow.rk
         void deleteRow(props.matrixId, row.row_id).then(() => {
           requestFocus(targetCk, 'end')
         })
       } else if (isEmpty && hasChildren) {
         const firstChild = findFirstChild(vRows, index)
-        const targetCk = firstChild?.ck ?? prevRow.ck
+        const targetCk = firstChild?.rk ?? prevRow.rk
         void deleteRow(props.matrixId, row.row_id).then(() => {
           requestFocus(targetCk, 'start')
         })
       } else {
-        const prevHandle = handleMap.get(prevRow.ck)
+        const prevHandle = handleMap.get(prevRow.rk)
         if (!prevHandle) return
         const prevView = prevHandle.getView()
         if (!prevView) return
@@ -957,7 +958,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         prevHandle.flushSave()
 
         void deleteRow(props.matrixId, row.row_id).then(() => {
-          requestFocus(prevRow.ck, mergePoint)
+          requestFocus(prevRow.rk, mergePoint)
         })
       }
     },
@@ -972,7 +973,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const prevSibling = findPrevSibling(vRows, index)
       if (!prevSibling) return
 
-      const prevSiblingIndex = findRowIndex(vRows, prevSibling.ck)
+      const prevSiblingIndex = findRowIndex(vRows, prevSibling.rk)
       const lastChild = findLastDirectChild(vRows, prevSiblingIndex)
 
       void reparentRow(props.matrixId, copyKey(row.key)!, {
@@ -993,7 +994,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const parentRow = findParentRow(vRows, index)
       if (!parentRow) return
 
-      const grandparentIndex = findRowIndex(vRows, parentRow.ck)
+      const grandparentIndex = findRowIndex(vRows, parentRow.rk)
       const grandparent = findParentRow(vRows, grandparentIndex)
       const newParentKey =
         grandparent ? copyKey(grandparent.key) : resolveParentKey(vRows, grandparentIndex)
@@ -1015,7 +1016,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const index = findRowIndex(vRows, ck)
       if (index <= 0) return
       const prevRow = vRows[index - 1]!
-      requestFocus(prevRow.ck, 'end')
+      requestFocus(prevRow.rk, 'end')
     },
 
     onArrowDown: () => {
@@ -1023,7 +1024,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const index = findRowIndex(vRows, ck)
       if (index === -1 || index >= vRows.length - 1) return
       const nextRow = vRows[index + 1]!
-      requestFocus(nextRow.ck, 'start')
+      requestFocus(nextRow.rk, 'start')
     },
 
     onInsertLink: () => {},
@@ -1081,12 +1082,21 @@ const NavigationPanel = (props: NavigationPanelProps) => {
             const globalIdx = () => startIdx() + localI()
             const rowId = row.row_id
             const rowMatrixId = row.matrix_id
-            const rowCk = row.ck
+            const rowCk = row.rk
             const callbacks = makeCallbacks(rowCk)
             const isExpanded = () => expandedContentRows().has(rowCk)
             const isFocusTarget = () =>
               rowMatrixId === props.matrixId && props.focusedRowId === rowId
             const chip = chipFor(row)
+
+            // Phase 9.7 Stage C — ghost tombstone. A portal whose home was
+            // deleted survives as an `is_ghost` scroll_index entry holding the
+            // position; its data row is gone, so it renders read-only from the
+            // ref-family ghost visual language (no editor mount, no drag/drill).
+            // Reactive: the ghost tombstone replaces the live portal appearance
+            // *in place* at the same position key (reconcile by `pk`), flipping
+            // `is_ghost` 0→1 on this same store row, so the guard must re-run.
+            const isGhost = () => row.is_ghost === 1
 
             // Compact owned-aspect previews for host workspace rows (Phase 9.2):
             // key-field values per owned aspect, type-colored, click → focus.
@@ -1182,15 +1192,36 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                             </span>
                           )}
                         </Show>
-                        <LabelEditor
-                          rowId={rowId}
-                          label={row.label ?? ''}
-                          matrixId={rowMatrixId}
-                          pageIndex={wIdx}
-                          callbacks={callbacks}
-                          onHandle={(handle) => registerHandle(rowCk, handle)}
-                          onEditorFocus={() => setFocusedCk(rowCk)}
-                        />
+                        <Show
+                          when={!isGhost()}
+                          fallback={
+                            <span
+                              class="nav-row-ghost"
+                              data-testid="outline-row-ghost"
+                              title="The original of this mirror was deleted"
+                              style={{
+                                flex: 1,
+                                'min-width': 0,
+                                'font-size': '13px',
+                                'font-style': 'italic',
+                                color: 'var(--text-muted)',
+                                'user-select': 'none',
+                              }}
+                            >
+                              🗑 (deleted)
+                            </span>
+                          }
+                        >
+                          <LabelEditor
+                            rowId={rowId}
+                            label={row.label ?? ''}
+                            matrixId={rowMatrixId}
+                            pageIndex={wIdx}
+                            callbacks={callbacks}
+                            onHandle={(handle) => registerHandle(rowCk, handle)}
+                            onEditorFocus={() => setFocusedCk(rowCk)}
+                          />
+                        </Show>
                         {/* Compact aspect preview chips (host workspace rows only) */}
                         <For each={previews()}>
                           {(preview) => (
@@ -1231,7 +1262,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   />
 
                   {/* Content area: preview or expanded editor */}
-                  <Show when={row.content || isExpanded()}>
+                  <Show when={!isGhost() && (row.content || isExpanded())}>
                     <div
                       style={{
                         'padding-left': '20px',
@@ -1276,32 +1307,35 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
                 {/* Right-arrow button: open focus panel. Every rendered row gets it,
                     including meshed cross-matrix aspect rows — drilling into one whose
-                    own-parent is a host in this matrix is the Phase 9.5 boundary hop. */}
-                <button
-                  class="nav-row-open-focus"
-                  data-testid="open-focus-btn"
-                  aria-label="Open focus panel"
-                  style={{
-                    position: 'absolute',
-                    right: '4px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    'font-size': '14px',
-                    color: 'var(--text-muted)',
-                    padding: '2px 4px',
-                    'border-radius': '3px',
-                    opacity: 0,
-                    transition: 'opacity 0.15s, color 0.15s',
-                  }}
-                  onClick={() =>
-                    props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
-                  }
-                >
-                  →
-                </button>
+                    own-parent is a host in this matrix is the Phase 9.5 boundary hop.
+                    Ghost tombstones have no target to open. */}
+                <Show when={!isGhost()}>
+                  <button
+                    class="nav-row-open-focus"
+                    data-testid="open-focus-btn"
+                    aria-label="Open focus panel"
+                    style={{
+                      position: 'absolute',
+                      right: '4px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      'font-size': '14px',
+                      color: 'var(--text-muted)',
+                      padding: '2px 4px',
+                      'border-radius': '3px',
+                      opacity: 0,
+                      transition: 'opacity 0.15s, color 0.15s',
+                    }}
+                    onClick={() =>
+                      props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
+                    }
+                  >
+                    →
+                  </button>
+                </Show>
               </div>
             )
           }}

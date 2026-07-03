@@ -75,7 +75,7 @@ describe('Tag lookup queries', () => {
       createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
       createDependentRow(db, outlineMatrixId, sourceRowId, reviewTag.matrixId)
 
-      const sql = buildTagsForRowQuery(wsMatrixId, outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(2)
@@ -88,7 +88,7 @@ describe('Tag lookup queries', () => {
     test('returns empty when row has no tags', () => {
       const sourceRowId = createSourceRow()
 
-      const sql = buildTagsForRowQuery(wsMatrixId, outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(0)
@@ -104,7 +104,7 @@ describe('Tag lookup queries', () => {
       const otherRowId = insertDataRow(db, otherMatrixId, { title: 'ref target' })
       insertJoin(db, outlineMatrixId, sourceRowId, otherMatrixId, otherRowId, 'ref')
 
-      const sql = buildTagsForRowQuery(wsMatrixId, outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)
@@ -116,7 +116,7 @@ describe('Tag lookup queries', () => {
       const sourceRowId = createSourceRow()
       const targetRowId = createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
 
-      const sql = buildTagsForRowQuery(wsMatrixId, outlineMatrixId, sourceRowId)
+      const sql = buildTagsForRowQuery(outlineMatrixId, sourceRowId)
       const results = execAll(db, sql)
 
       expect(results).toHaveLength(1)

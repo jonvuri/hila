@@ -32,7 +32,7 @@ export const tagsPlugin: PluginDefinition = {
   faceTypes: [tagBrowserFaceTypeDefinition],
   matrixes: [],
   namedQueries: {
-    tagsForRow: 'buildTagsForRowQuery(wsMatrixId, sourceMatrixId, sourceRowId)',
+    tagsForRow: 'buildTagsForRowQuery(sourceMatrixId, sourceRowId)',
     taggedRows: 'buildTaggedRowsQuery(tagMatrixId, sourceMatrixId)',
     aspectForRow: 'buildAspectForRowQuery(sourceMatrixId, sourceRowId, tagMatrixId)',
   },

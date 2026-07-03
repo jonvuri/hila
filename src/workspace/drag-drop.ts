@@ -1,7 +1,10 @@
 const INDENT_PX = 24
 
 export type RowInfo = {
-  ck: string
+  // Render key — the DOM/element identity (`data-row-ck`). Move-stable
+  // `compositeKey` for a single-appearance row; position-disambiguated for a
+  // portaled row's multiple appearances (Phase 9.7 Stage C).
+  rk: string
   key: Uint8Array
   depth: number
 }
@@ -127,7 +130,7 @@ export const computeDropTarget = (
 
   const rects: { row: RowInfo; rect: DOMRect }[] = []
   for (const row of nonDraggedRows) {
-    const el = rowElements.get(row.ck)
+    const el = rowElements.get(row.rk)
     if (el) rects.push({ row, rect: el.getBoundingClientRect() })
   }
   if (rects.length === 0) return null

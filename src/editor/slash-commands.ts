@@ -15,13 +15,14 @@ import { openSlashTypePicker } from './slash-type-picker'
  *
  * - `/table` → mint a new **dedicated** own-matrix (`createOwnedMatrix`), seeded
  *   with a `label` + `content` column so it is a full row↔table-continuum
- *   participant from birth. Renders in the focus panel's `SubTableBand`; the run
- *   hands off to that band's name input via the `pending-table` signal so the
- *   user can name it next.
+ *   participant from birth. Renders in the focus panel's `container` mode (the
+ *   `SubstrateRegion` → `SubTableBand`); the run hands off to that table's name
+ *   input via the `pending-table` signal so the user can name it next.
  * - `/attach` → open a standalone type picker (`slash-type-picker`); picking a
  *   promoted type instantiates a **structurally-anchored** own-row of it
  *   (`createDependentRow`), the structural complement of an inline `#`-ref.
- *   Renders in the `AspectBand`, untethered.
+ *   Renders in the `SubstrateRegion` `loose` mode (Phase 9.7 Stage C; formerly
+ *   the AspectBand), untethered.
  *
  * The command matching here is DOM-free and unit-testable; each `run` delegates
  * its side effects (op dispatch, the second menu, the focus handoff) to the
