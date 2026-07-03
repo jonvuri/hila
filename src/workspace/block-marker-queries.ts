@@ -1,5 +1,6 @@
 /**
- * Query builders for bands (Phase 9.3; see context/Phase-9.3.md).
+ * Query builders for view-block markers (Phase 9.7 Stage B; see
+ * context/Phase-9.7.md §6). The successor to the Phase 9.3 band query builders.
  *
  * These return SQL strings for use with `useQuery`. Dynamic table names
  * (`mx_{id}_data`) prevent parameterized binding, so IDs are interpolated
@@ -7,14 +8,22 @@
  */
 
 /**
- * The list subscription: a focal node's bands in display order. Reactive via
- * the SQLite update hook on the `bands` table.
+ * A focal node's view-block markers in position (`edge_key`) order. Reactive via
+ * the SQLite update hook on `block_sources` / `joins`. Mirrors
+ * `getViewBlocksForNode` in src/core/block-marker.ts.
  */
-export const buildBandsForNodeQuery = (focalMatrixId: number, focalRowId: number): string => `
-SELECT id, focal_matrix_id, focal_row_id, sql, face, integration, "order"
-FROM bands
-WHERE focal_matrix_id = ${focalMatrixId} AND focal_row_id = ${focalRowId}
-ORDER BY "order", id
+export const buildViewBlocksForNodeQuery = (
+  focalMatrixId: number,
+  focalRowId: number,
+): string => `
+SELECT bs.marker_matrix_id, bs.marker_row_id, bs.sql
+FROM block_sources bs
+JOIN joins j
+  ON j.kind = 'own'
+ AND j.target_matrix_id = bs.marker_matrix_id
+ AND j.target_row_id = bs.marker_row_id
+WHERE j.source_matrix_id = ${focalMatrixId} AND j.source_row_id = ${focalRowId}
+ORDER BY j.edge_key
 `
 
 /**

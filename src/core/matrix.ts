@@ -373,31 +373,31 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
   `)
 
-  // -- Bands (Phase 9.3: persisted query-binding live views) ------------------
+  // -- Block sources (Phase 9.7 Stage B: view-block SQL persistence) ----------
   //
-  // A band is a node-scoped live view: `(query, face, integration)` keyed by the
-  // focal (matrix_id, row_id). The read slice persists query-binding bands only
-  // (raw SQL rendered read-only through the schema-adaptive renderer).
+  // The Phase 9.7 convergence replaces the three bands with three child-sourcing
+  // modes (loose / container / view). A block marker is a real `scroll_index`
+  // participant (a node); of the three, only a `view` needs any persistence
+  // beyond its position — its SQL. A `container` persists nothing new
+  // (`matrix.owner` + membership suffice). So the former `bands` table collapses
+  // to this minimal store: the marker node's identity → its view SQL. Ordering /
+  // focal association are carried by the marker node's own `edge_key` position
+  // (context/Phase-9.7.md §6: "a view persists only its SQL + its block marker's
+  // position").
   //
-  // LOCAL-ONLY this phase: the table deliberately gets NO change-tracking/sync
-  // triggers (it is absent from installCoreTableTriggers), so bands are treated
-  // as local view state and do not sync. The SQLite update hook still fires for
-  // it, so `useQuery` subscriptions over `bands` stay reactive. Promoting it to
-  // synced source-of-truth (like joins/promoted_nodes) is additive — deferred
-  // until multi-device matters (see context/Phase-9.3.md open questions).
+  // LOCAL-ONLY this phase (as `bands` was): no change-tracking/sync triggers
+  // (absent from installCoreTableTriggers), so view SQL is local view state. The
+  // SQLite update hook still fires, so `useQuery` subscriptions stay reactive.
+  // The marker node itself (own-edge in `joins`) syncs normally; promoting the
+  // SQL to synced source-of-truth is additive, deferred until multi-device.
   db.exec(`
-    CREATE TABLE IF NOT EXISTS bands (
-      id              INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
-      focal_matrix_id INTEGER NOT NULL,
-      focal_row_id    INTEGER NOT NULL,
-      sql             TEXT    NOT NULL,
-      face            TEXT    NOT NULL DEFAULT 'property-list',
-      integration     TEXT    NOT NULL DEFAULT 'query',
-      "order"         INTEGER NOT NULL DEFAULT 0
+    CREATE TABLE IF NOT EXISTS block_sources (
+      marker_matrix_id INTEGER NOT NULL,
+      marker_row_id    INTEGER NOT NULL,
+      kind             TEXT    NOT NULL DEFAULT 'view' CHECK (kind IN ('view')),
+      sql              TEXT    NOT NULL,
+      PRIMARY KEY (marker_matrix_id, marker_row_id)
     ) STRICT;
-
-    CREATE INDEX IF NOT EXISTS bands_by_focal
-      ON bands(focal_matrix_id, focal_row_id);
   `)
 
   // -- Normalized face config tables ------------------------------------------
@@ -738,6 +738,9 @@ const dropOwnedMatrixCascade = (db: Database, matrixId: number, depth: number): 
 
   // Remove promoted_nodes entries for rows in this matrix
   db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ?', { bind: [matrixId] })
+
+  // Remove any block-source (view SQL) entries for marker nodes in this matrix
+  db.exec('DELETE FROM block_sources WHERE marker_matrix_id = ?', { bind: [matrixId] })
 
   // Drop change-tracking triggers before dropping the data table
   dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)

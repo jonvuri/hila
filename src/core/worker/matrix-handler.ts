@@ -37,10 +37,10 @@ import {
   deleteTagType as deleteTagTypeImpl,
 } from '../../tags/tag-types'
 import {
-  createBand as createBandImpl,
-  updateBandSql as updateBandSqlImpl,
-  deleteBand as deleteBandImpl,
-} from '../bands'
+  createViewBlock as createViewBlockImpl,
+  updateViewBlockSql as updateViewBlockSqlImpl,
+  deleteViewBlock as deleteViewBlockImpl,
+} from '../block-marker'
 import {
   reparentRow as reparentRowImpl,
   deleteSubtree as deleteSubtreeImpl,
@@ -767,38 +767,42 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       break
     }
 
-    case 'createBand': {
+    case 'createViewBlock': {
       const { id, focalMatrixId, focalRowId, sql } = message
       try {
         const { db } = await sqliteWasm
-        const bandId = createBandImpl(db, { matrixId: focalMatrixId, rowId: focalRowId }, sql)
-        postMessage({ type: 'createBandSuccess', id, result: bandId })
+        const marker = createViewBlockImpl(
+          db,
+          { matrixId: focalMatrixId, rowId: focalRowId },
+          sql,
+        )
+        postMessage({ type: 'createViewBlockSuccess', id, result: marker })
       } catch (err: unknown) {
-        postMessage({ type: 'createBandError', id, error: toError(err) })
+        postMessage({ type: 'createViewBlockError', id, error: toError(err) })
       }
       break
     }
 
-    case 'updateBand': {
-      const { id, bandId, sql } = message
+    case 'updateViewBlock': {
+      const { id, markerMatrixId, markerRowId, sql } = message
       try {
         const { db } = await sqliteWasm
-        updateBandSqlImpl(db, bandId, sql)
-        postMessage({ type: 'updateBandSuccess', id, result: undefined })
+        updateViewBlockSqlImpl(db, { matrixId: markerMatrixId, rowId: markerRowId }, sql)
+        postMessage({ type: 'updateViewBlockSuccess', id, result: undefined })
       } catch (err: unknown) {
-        postMessage({ type: 'updateBandError', id, error: toError(err) })
+        postMessage({ type: 'updateViewBlockError', id, error: toError(err) })
       }
       break
     }
 
-    case 'deleteBand': {
-      const { id, bandId } = message
+    case 'deleteViewBlock': {
+      const { id, markerMatrixId, markerRowId } = message
       try {
         const { db } = await sqliteWasm
-        deleteBandImpl(db, bandId)
-        postMessage({ type: 'deleteBandSuccess', id, result: undefined })
+        deleteViewBlockImpl(db, { matrixId: markerMatrixId, rowId: markerRowId })
+        postMessage({ type: 'deleteViewBlockSuccess', id, result: undefined })
       } catch (err: unknown) {
-        postMessage({ type: 'deleteBandError', id, error: toError(err) })
+        postMessage({ type: 'deleteViewBlockError', id, error: toError(err) })
       }
       break
     }

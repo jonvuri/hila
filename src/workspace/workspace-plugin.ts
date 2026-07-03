@@ -61,12 +61,23 @@ export const registerWorkspaceFaceType = async (): Promise<void> => {
 
 const nextPrefixHex = (hex: string): string => hex.slice(0, -2) + '01'
 
+// Phase 9.7 Stage B: block markers (view/shared-container) are real
+// `scroll_index` participants, but their *content* is drawn via count+slice
+// flattening (src/workspace/window-flatten.ts), not as a plain loose-outline
+// row. Exclude the marker rows themselves from the loose scan. Only `view`
+// markers carry a `block_sources` row today; folding their content inline is the
+// renderer stage (Stage C).
+const EXCLUDE_BLOCK_MARKERS = `AND NOT EXISTS (
+  SELECT 1 FROM block_sources bs
+  WHERE bs.marker_matrix_id = r.matrix_id AND bs.marker_row_id = r.row_id
+)`
+
 const buildFilterClauses = (opts: {
   focusRootHex?: string | null
   collapsedKeyHexes?: string[]
   afterKeyHex?: string | null
 }): string => {
-  const parts: string[] = []
+  const parts: string[] = [EXCLUDE_BLOCK_MARKERS]
 
   if (opts.focusRootHex) {
     parts.push(
@@ -128,6 +139,11 @@ SELECT r.global_lexkey AS key, r.matrix_id, r.row_id, r.depth,
          SELECT 1 FROM joins ch
          WHERE ch.kind = 'own' AND ch.source_matrix_id = r.matrix_id
            AND ch.source_row_id = r.row_id
+           AND NOT EXISTS (
+             SELECT 1 FROM block_sources bs
+             WHERE bs.marker_matrix_id = ch.target_matrix_id
+               AND bs.marker_row_id = ch.target_row_id
+           )
        ) THEN 1 ELSE 0 END as has_children,
        CASE WHEN EXISTS (
          SELECT 1 FROM promoted_nodes p
@@ -203,9 +219,14 @@ ORDER BY c.descendant_matrix_id, c.descendant_row_id, s.depth
 // boundary-hop row whose children live in another matrix isn't miscounted — the
 // children NavigationPanel it gates is already cross-matrix.
 export const buildChildCountQuery = (matrixId: number, rowId: number): string =>
-  `SELECT COUNT(*) as cnt FROM joins
-   WHERE kind = 'own'
-     AND source_matrix_id = ${matrixId} AND source_row_id = ${rowId}`
+  `SELECT COUNT(*) as cnt FROM joins ch
+   WHERE ch.kind = 'own'
+     AND ch.source_matrix_id = ${matrixId} AND ch.source_row_id = ${rowId}
+     AND NOT EXISTS (
+       SELECT 1 FROM block_sources bs
+       WHERE bs.marker_matrix_id = ch.target_matrix_id
+         AND bs.marker_row_id = ch.target_row_id
+     )`
 
 export const buildSingleRowQuery = (matrixId: number, rowId: number): string => `
 SELECT d.* FROM "mx_${matrixId}_data" d WHERE d.id = ${rowId}

@@ -122,8 +122,8 @@ test.describe('Query bands (read slice)', () => {
     await page.getByTestId('query-band-save').click()
     await expect(page.getByTestId('query-band')).toBeVisible({ timeout: 5000 })
 
-    // Reload the page — the band is persisted in the bands table (read back from
-    // storage), not just live view state.
+    // Reload the page — the view block is persisted (its marker node + its SQL
+    // in block_sources, read back from storage), not just live view state.
     await page.reload()
     await goToWorkspace(page)
     await waitForRows(page, 1)

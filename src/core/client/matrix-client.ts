@@ -235,17 +235,21 @@ export const deleteJoinByTarget = (
   targetRowId: number,
 ): Promise<JoinRow | null> => workerCall('deleteJoinByTarget', { targetMatrixId, targetRowId })
 
-export const createBand = (
+export const createViewBlock = (
   focalMatrixId: number,
   focalRowId: number,
   sql: string,
-): Promise<number> => workerCall('createBand', { focalMatrixId, focalRowId, sql })
+): Promise<{ matrixId: number; rowId: number }> =>
+  workerCall('createViewBlock', { focalMatrixId, focalRowId, sql })
 
-export const updateBand = (bandId: number, sql: string): Promise<void> =>
-  workerCall('updateBand', { bandId, sql })
+export const updateViewBlock = (
+  markerMatrixId: number,
+  markerRowId: number,
+  sql: string,
+): Promise<void> => workerCall('updateViewBlock', { markerMatrixId, markerRowId, sql })
 
-export const deleteBand = (bandId: number): Promise<void> =>
-  workerCall('deleteBand', { bandId })
+export const deleteViewBlock = (markerMatrixId: number, markerRowId: number): Promise<void> =>
+  workerCall('deleteViewBlock', { markerMatrixId, markerRowId })
 
 export const createTagType = (
   name: string,

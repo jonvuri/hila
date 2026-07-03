@@ -2,10 +2,10 @@ import { createEffect, createMemo, createSignal, For, Show, type Component } fro
 
 import type { ColumnDefinition } from '../core/matrix'
 import {
-  createBand,
-  deleteBand,
+  createViewBlock,
+  deleteViewBlock,
   getColumns,
-  updateBand,
+  updateViewBlock,
   updateRow,
 } from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
@@ -17,35 +17,34 @@ import {
 import { PropertyRow } from '../shared/PropertyRow'
 import { buildTagTypesWithCountsQuery } from '../tags/tag-queries'
 
-import { buildBandsForNodeQuery, buildTypeInSubtreeQuery } from './band-queries'
+import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-marker-queries'
 
 /**
- * Query bands (Phase 9.3; see context/Phase-9.3.md).
+ * View blocks (Phase 9.7 Stage B; successor to the Phase 9.3 query band).
  *
- * The unanchored cousin of the aspect band: a focal node's persisted live SQL
- * views. Each band runs its SQL via `useQuery` and renders the result set
- * through the schema-adaptive `PropertyRow`, with a `query:` header. The rows are
- * foreign (owned by various hosts, not the focal node), so the band has no tether
- * and cannot mesh — it is a view, not a collection.
+ * A focal node's persisted live SQL views, now backed by `view` block markers
+ * (a real forest node + its SQL in `block_sources`) rather than the removed
+ * `bands` table. Each block runs its SQL via `useQuery` and renders the result
+ * set through the schema-adaptive `PropertyRow`, with a `query:` header. The rows
+ * are foreign (owned by various hosts), so the block has no tether and cannot
+ * mesh — it is a view, not a collection.
  *
- * Write-back (Session 2): the band runs `recognizeUpdatableQuery` over its SQL.
- * For a recognized single-base-table view, passthrough cells light up as live
+ * Rendered here in the focus panel (the FocusPanel section). Folding the view
+ * block's content inline into the loose outline via count+slice
+ * (src/workspace/window-flatten.ts) is the renderer stage (Stage C).
+ *
+ * Write-back: the block runs `recognizeUpdatableQuery` over its SQL. For a
+ * recognized single-base-table view, passthrough cells light up as live
  * `FieldEditor`s (with the base column's real display type) writing through
  * `updateRow(baseMatrixId, row.id, baseColumn)`; derived/aggregate cells and
- * unrecognized bands stay read-only. Editing requires `id` in the result set —
- * the row-identity gate (see `resolveEditableColumns`). Authoring is
- * dev-tool-grade — a raw SQL box plus the "in this subtree" snippet; the
- * schema-aware editor is Session 3.
+ * unrecognized blocks stay read-only. Editing requires `id` in the result set —
+ * the row-identity gate (see `resolveEditableColumns`).
  */
 
-type BandRow = {
-  id: number
-  focal_matrix_id: number
-  focal_row_id: number
+type ViewBlockRow = {
+  marker_matrix_id: number
+  marker_row_id: number
   sql: string
-  face: string
-  integration: string
-  order: number
 }
 
 type TagTypeOption = {
@@ -76,8 +75,8 @@ const synthesizeColumn = (name: string, order: number): ColumnDefinition => ({
   role: null,
 })
 
-const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) => {
-  const { result, error } = useQuery(() => props.band.sql)
+const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (props) => {
+  const { result, error } = useQuery(() => props.block.sql)
 
   const rows = createMemo<Record<string, unknown>[]>(() => {
     const data = result()
@@ -85,8 +84,8 @@ const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) =>
     return data as Record<string, unknown>[]
   })
 
-  // Recognize whether this band is a sound single-base-table updatable view.
-  const recognition = createMemo(() => recognizeUpdatableQuery(props.band.sql))
+  // Recognize whether this block is a sound single-base-table updatable view.
+  const recognition = createMemo(() => recognizeUpdatableQuery(props.block.sql))
 
   // The base table's real catalog columns (for editable display types + formula
   // exclusion). Fetched only when the band recognizes as updatable.
@@ -112,8 +111,9 @@ const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) =>
   const canEnableWithId = createMemo(() => resolution()?.enableableWithId ?? false)
 
   const enableEditing = () => {
-    const next = addIdToProjection(props.band.sql)
-    if (next) void updateBand(props.band.id, next)
+    const next = addIdToProjection(props.block.sql)
+    if (next)
+      void updateViewBlock(props.block.marker_matrix_id, props.block.marker_row_id, next)
   }
 
   // Render columns synthesized from result keys, with editable passthrough
@@ -278,13 +278,13 @@ const QueryBand: Component<{ band: BandRow; onDelete: () => void }> = (props) =>
  * Mounted in the focus panel like the aspect band.
  */
 export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> = (props) => {
-  const { result: bandsResult } = useQuery(() =>
-    buildBandsForNodeQuery(props.matrixId, props.rowId),
+  const { result: blocksResult } = useQuery(() =>
+    buildViewBlocksForNodeQuery(props.matrixId, props.rowId),
   )
-  const bands = createMemo<BandRow[]>(() => {
-    const data = bandsResult()
+  const blocks = createMemo<ViewBlockRow[]>(() => {
+    const data = blocksResult()
     if (!data) return []
-    return data as unknown as BandRow[]
+    return data as unknown as ViewBlockRow[]
   })
 
   // Promoted type-nodes for the "in this subtree" snippet. Scoped to the focal
@@ -309,7 +309,7 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
   const saveBand = () => {
     const sql = sqlDraft().trim()
     if (!sql) return
-    void createBand(props.matrixId, props.rowId, sql).then(() => setSqlDraft(''))
+    void createViewBlock(props.matrixId, props.rowId, sql).then(() => setSqlDraft(''))
   }
 
   return (
@@ -325,9 +325,14 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
         gap: '8px',
       }}
     >
-      <Show when={bands().length > 0}>
-        <For each={bands()}>
-          {(band) => <QueryBand band={band} onDelete={() => void deleteBand(band.id)} />}
+      <Show when={blocks().length > 0}>
+        <For each={blocks()}>
+          {(block) => (
+            <QueryBand
+              block={block}
+              onDelete={() => void deleteViewBlock(block.marker_matrix_id, block.marker_row_id)}
+            />
+          )}
         </For>
       </Show>
 

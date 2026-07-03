@@ -5,9 +5,9 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 import { initMatrixSchema, createMatrix, insertRow, createDependentRow } from '../core/matrix'
 import { recognizeUpdatableQuery } from '../sql/recognize-updatable'
 
-import { buildBandsForNodeQuery, buildTypeInSubtreeQuery } from './band-queries'
+import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-marker-queries'
 
-describe('band query builders (Phase 9.3)', () => {
+describe('view-block query builders (Phase 9.7 Stage B)', () => {
   let db: Database
   let wsMatrixId: number
   let typeMatrixId: number
@@ -28,9 +28,9 @@ describe('band query builders (Phase 9.3)', () => {
     typeMatrixId = createMatrix(db, 'Task', [{ name: 'label', type: 'TEXT', role: 'label' }])
   })
 
-  test('buildBandsForNodeQuery is a runnable SELECT scoped to the focal node', () => {
-    // No bands yet — runs and returns nothing, no error.
-    expect(runIds(buildBandsForNodeQuery(wsMatrixId, 1))).toEqual([])
+  test('buildViewBlocksForNodeQuery is a runnable SELECT scoped to the focal node', () => {
+    // No view blocks yet — runs and returns nothing, no error.
+    expect(runIds(buildViewBlocksForNodeQuery(wsMatrixId, 1))).toEqual([])
   })
 
   test('buildTypeInSubtreeQuery returns hosts of {node} ∪ descendants(node)', () => {

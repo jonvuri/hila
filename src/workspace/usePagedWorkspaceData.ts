@@ -106,6 +106,19 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
 
   // -----------------------------------------------------------------------
   // Window layer: the index-only pre-order scan for the loaded page range.
+  //
+  // Phase 9.7 Stage B — count + slice flattening. The displayed sequence is the
+  // flattened `scroll_index` with each block marker (a `view` result or a shared
+  // container's extent) expanded inline to its cached COUNT
+  // (src/workspace/window-flatten.ts: computeSegments / sliceWindow /
+  // gatherWindow, guarded in window-flatten.test.ts). In this stage the loose
+  // outline scan *excludes* block markers (EXCLUDE_BLOCK_MARKERS in
+  // workspace-plugin.ts) — `view` blocks render in the focus panel, not inline —
+  // so the flattened loose sequence is a single **materialized segment** whose
+  // slice IS `buildPaginatedOutlineQuery` below (segments = [materialized], no
+  // block segments). Folding block content inline (feeding real blocks +
+  // per-block COUNT subscriptions to `gatherWindow`, rendered by the unified
+  // renderer) is the renderer stage (Stage C) — this is the wiring point.
   // -----------------------------------------------------------------------
   const [neededWindows, setNeededWindows] = createSignal<Set<number>>(INITIAL_NEEDED_WINDOWS)
   const [windowRows, setWindowRows] = createStore<WindowRow[]>([])

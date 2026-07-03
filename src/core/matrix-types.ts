@@ -198,16 +198,16 @@ export type MatrixOperationMap = {
     params: { targetMatrixId: number; targetRowId: number }
     result: JoinRow | null
   }
-  createBand: {
+  createViewBlock: {
     params: { focalMatrixId: number; focalRowId: number; sql: string }
-    result: number
+    result: { matrixId: number; rowId: number }
   }
-  updateBand: {
-    params: { bandId: number; sql: string }
+  updateViewBlock: {
+    params: { markerMatrixId: number; markerRowId: number; sql: string }
     result: void
   }
-  deleteBand: {
-    params: { bandId: number }
+  deleteViewBlock: {
+    params: { markerMatrixId: number; markerRowId: number }
     result: void
   }
   createTagType: {

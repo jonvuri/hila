@@ -319,8 +319,8 @@ underneath (invisible to the ownership question). Sources:
 4. **[Phase 9.7c](Phase-9.7c-reconciliation.md)** — reconcile both spikes' outcomes into the
    canonical docs. **Done.**
 5. **The build proper** — three staged sessions ([§13](#13-the-build-proper--implementation-prompts)):
-   A (data layer / portals), B (block markers + count+slice windowing), C (renderer unification
-   + gestures).
+   A (data layer / portals) **— landed**, B (block markers + count+slice windowing) **— landed**,
+   C (renderer unification + gestures) — next. See each stage's build note for what the next inherits.
 6. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
    over the substrate floor.
 
@@ -464,6 +464,56 @@ The data layer is wired. What Stage B inherits:
 > scale independence; no-sort EQP for both source kinds) to the wired path; confirm
 > `e2e/virtualizer-multiwindow.spec.ts` still passes; run the full battery. Leave a build note so
 > Stage C starts clean.
+
+#### Stage B — build note (landed)
+
+The paging/windowing layer is wired and the `bands` table is gone. What Stage C inherits:
+
+- **The flattener ([window-flatten.ts](../src/workspace/window-flatten.ts)).** The spike's
+  `computeSegments` / `sliceWindow` / `gatherWindow` promoted onto the real schema, plus the two
+  production source-kind builders: `viewBlock` (wraps a persisted SQL in `COUNT` / `LIMIT`+`OFFSET`)
+  and `containerBlock` (a shared matrix's extent in rowid/matrix-rank order — trait-rank ordering is
+  a Phase 10 refinement). `MATERIALIZED_SLICE_COLUMNS` mirrors the outline scan
+  (`global_lexkey, matrix_id, row_id, depth, is_ghost, lazy`). Render-only: no `own`-edges minted
+  (the firewall); nested blocks stay out of scope (`Block.slice` returns plain rows).
+- **Gate — the Stage-P0 guards are ported ([window-flatten.test.ts](../src/workspace/window-flatten.test.ts),
+  4 tests, all green):** exact coverage of a 730-virtual-row flattened sequence; straddling window
+  touches exactly the sources it crosses; a 1-row block gets no lonely window; per-window gather cost
+  is bounded by `ROWS_PER_WINDOW` (flat across a 10× forest+block increase); and no-sort EQP
+  (`noAutoIndex` + `noTempBTree`) for **all three** hot queries — the materialized-segment slice, the
+  `container` slice, and the `view` slice.
+- **Block markers = real `scroll_index` participants ([block-marker.ts](../src/core/block-marker.ts)).**
+  A `view` marker is minted as an own-child of its focal (its `edge_key` carries position — the former
+  `bands.order`), and only its SQL persists — in the new **`block_sources`** table (`marker_matrix_id`,
+  `marker_row_id`, `kind`, `sql`), keyed by the marker's identity. A `container` persists nothing new.
+  `createViewBlock` / `updateViewBlockSql` / `deleteViewBlock` / `getViewBlocksForNode` own the
+  lifecycle; wired through the worker (`createViewBlock` / `updateViewBlock` / `deleteViewBlock`) and
+  client. `block_sources` is **local-only** (no sync triggers), exactly as `bands` was; the marker node
+  itself (its `own`-edge in `joins`) syncs normally.
+- **`bands` table + ops removed.** `src/core/bands.ts`, `bands.test.ts`, and `band-queries.ts` are
+  deleted; the query builder is `buildViewBlocksForNodeQuery`
+  ([block-marker-queries.ts](../src/workspace/block-marker-queries.ts)). `dropMatrix` cleans
+  `block_sources` for the matrix. Reset-not-migrate (fresh-DB `CREATE TABLE`, no live DBs).
+- **View components repointed, still focus-panel-rendered.** `QueryBand` / `QueryBandsSection`
+  ([QueryBand.tsx](../src/workspace/QueryBand.tsx)) read/create/update/delete view **blocks** (not
+  bands) and still render in the focus-panel section — the full `query-band.spec.ts` battery stays green.
+  `SubTableBand` was already a `container` (live-derived from `matrix.owner`) and needed no change.
+- **Marker rows are excluded from the loose scan.** `buildPaginatedOutlineQuery` /
+  `buildOutlineCountQuery` (via a shared `EXCLUDE_BLOCK_MARKERS` clause), `has_children`, and
+  `buildChildCountQuery` all `NOT EXISTS` against `block_sources`, so a `view` marker never appears as
+  a stray plain outline row and never inflates a parent's child count.
+- **`usePagedWorkspaceData` seam.** With markers excluded from the loose scan, the production loose
+  sequence is a **single materialized segment** whose slice IS today's `buildPaginatedOutlineQuery` —
+  i.e. `computeSegments` degenerates to `[materialized]` with no block segments, behavior-preserving.
+  The count+slice engine + per-block `COUNT` subscription + inline block rendering are documented at
+  the window-layer seam in the hook and belong with **Stage C** (block *content* rendering is renderer
+  work; the client hook subscribes to SQL strings, while the flattener runs worker-side against a live
+  `Database` — the gather RPC that bridges them lands with the renderer).
+- **Deferred to Stage C (not Stage B):** folding block *content* inline into the outline (feeding real
+  blocks + reactive per-block `COUNT` to `gatherWindow`, rendered by the unified substrate renderer);
+  shared-container block discovery in the production hook (the `containerBlock` builder exists and is
+  guarded, but nothing in the production hook mints a container block yet); the `lazy` marker path
+  (out of scope for v1, as in Stage A).
 
 ### Stage C — Renderer unification + gestures
 
