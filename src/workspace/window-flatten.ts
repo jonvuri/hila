@@ -74,8 +74,31 @@ const compareBytes = (a: Uint8Array, b: Uint8Array): number => {
   return a.length - b.length
 }
 
+/**
+ * Count the materialized (ordinary) rows in the open interval (start, end).
+ * Injectable so the production wiring can supply the *filtered* outline count
+ * (focus scope, collapse, block-marker exclusion — see
+ * src/workspace/gather-handler.ts) while the spike/tests use the bare
+ * `scroll_index` range count below.
+ */
+export type CountGap = (
+  db: Database,
+  start: Uint8Array | null,
+  end: Uint8Array | null,
+) => number
+
+/**
+ * Execute a materialized-segment slice request. Injectable for the same reason
+ * as `CountGap`: production supplies the full outline-row projection + filters,
+ * the spike/tests use the bare `scroll_index` slice below.
+ */
+export type GatherMaterialized = (
+  db: Database,
+  req: Extract<SliceRequest, { kind: 'materialized' }>,
+) => Record<string, unknown>[]
+
 /** Count ordinary `scroll_index` rows in the open interval (start, end). */
-const countGap = (db: Database, start: Uint8Array | null, end: Uint8Array | null): number => {
+const defaultCountGap: CountGap = (db, start, end): number => {
   const clauses: string[] = []
   const params: Uint8Array[] = []
   if (start) {
@@ -109,6 +132,7 @@ export const computeSegments = (
   blocks: Block[],
   rangeStart: Uint8Array | null,
   rangeEnd: Uint8Array | null,
+  countGap: CountGap = defaultCountGap,
 ): Segment[] => {
   const inRange = blocks
     .filter(
@@ -211,10 +235,7 @@ export const sliceWindow = (
 export const MATERIALIZED_SLICE_COLUMNS =
   'global_lexkey, matrix_id, row_id, depth, is_ghost, lazy'
 
-const gatherMaterialized = (
-  db: Database,
-  req: Extract<SliceRequest, { kind: 'materialized' }>,
-): Record<string, unknown>[] => {
+const defaultGatherMaterialized: GatherMaterialized = (db, req): Record<string, unknown>[] => {
   const clauses: string[] = []
   const params: (Uint8Array | number)[] = []
   if (req.rangeStart) {
@@ -243,6 +264,7 @@ const gatherMaterialized = (
 export const gatherWindow = (
   db: Database,
   requests: SliceRequest[],
+  gatherMaterialized: GatherMaterialized = defaultGatherMaterialized,
 ): Record<string, unknown>[] => {
   const out: Record<string, unknown>[] = []
   for (const req of requests) {
@@ -273,9 +295,17 @@ export const materializedSliceSql = (): string =>
 /** The COUNT query for a `view` block (wrap the persisted SQL). */
 export const viewBlockCountSql = (sql: string): string => `SELECT COUNT(*) AS n FROM (${sql})`
 
-/** The slice query for a `view` block (wrap + LIMIT/OFFSET into the view order). */
-export const viewBlockSliceSql = (sql: string): string =>
-  `SELECT * FROM (${sql}) LIMIT ? OFFSET ?`
+/**
+ * The slice query for a `view` block: `LIMIT`/`OFFSET` *appended* to the view
+ * SQL, not wrapped in a subquery. A subquery wrapper (`SELECT * FROM (sql) LIMIT
+ * ? OFFSET ?`) does NOT preserve the inner `ORDER BY` under SQLite's flattening,
+ * so consecutive offset slices would cover the set but in scrambled order.
+ * Appending keeps the view's own order (its trailing `ORDER BY`, or the stable
+ * rowid scan order when it has none), which the count+slice model requires for
+ * consistent slices across windows. (The recognized single-base-table views this
+ * folds carry no trailing `LIMIT`; arbitrary trailing clauses are out of scope.)
+ */
+export const viewBlockSliceSql = (sql: string): string => `${sql} LIMIT ? OFFSET ?`
 
 /**
  * A `view` block: its rows are the persisted SQL's result set, in the SQL's own

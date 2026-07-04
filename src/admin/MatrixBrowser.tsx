@@ -6,9 +6,14 @@ import {
   resetDatabase,
   insertRow,
   createDependentRow,
+  createOwnedMatrix,
+  createRefJoin,
+  createViewBlock,
+  addPortal,
   getTagType,
   createTagType,
 } from '../core/client/matrix-client'
+import { execQuery } from '../core/client/sql-client'
 import { useQuery } from '../sql/useQuery'
 
 // Wrap a plain string as a minimal ProseMirror doc (the label/content encoding
@@ -18,6 +23,22 @@ const pmDoc = (text: string): string =>
     type: 'doc',
     content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
   })
+
+const hexToBytes = (hex: string): Uint8Array => {
+  const out = new Uint8Array(hex.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+// A row's real `scroll_index` position key, looked up by identity — needed to
+// attach a child under a row we only have `(matrixId, rowId)` for (e.g. a
+// `#task` aspect created via `createDependentRow`, which returns just the id).
+const rowKeyOf = async (matrixId: number, rowId: number): Promise<Uint8Array> => {
+  const rows = (await execQuery(
+    `SELECT hex(global_lexkey) AS h FROM scroll_index WHERE matrix_id = ${matrixId} AND row_id = ${rowId}`,
+  )) as { h: string }[]
+  return hexToBytes(rows[0]!.h)
+}
 
 // Ensure a tag type exists (with a `label` column so its aspect rows show a
 // label in the outline), returning its instance matrix id.
@@ -31,48 +52,162 @@ const ensureTagType = async (
   return created.matrixId
 }
 
-// Phase 9.1 demo: build a subtree under the workspace root that exercises
-// heterogeneous children — plain bullets interleaved with `#task` and `#note`
-// aspect rows from other matrixes, plus a nested host owning its own task.
+// A guided demo subtree that exercises the Phase 8 (ownership spine) and Phase 9
+// (paradigm convergence) feature set. Unlike a use-case fixture, every node's
+// label/content *names the capability it demonstrates* — the tree is meant to be
+// read. Each branch is self-contained and collapsible; a few gestures that mutate
+// state (move-owner, two-tier delete) are exercised manually, noted in the app.
 const buildDemoSubtree = async (workspaceMatrixId: number): Promise<void> => {
+  const ws = workspaceMatrixId
+
+  // Shared tag types (Phase 8c): each is a promoted **type-node** at the root
+  // (navigable, with a "type" chip) and a **shared** matrix (its rows are owned
+  // by various hosts). `#task` carries fields so the property surface has cells.
   const taskMatrixId = await ensureTagType('task', [
     { name: 'status', type: 'TEXT' },
     { name: 'due', type: 'TEXT' },
   ])
   const noteMatrixId = await ensureTagType('note', [{ name: 'body', type: 'TEXT' }])
 
-  const host = await insertRow(workspaceMatrixId, {
-    values: { label: pmDoc('Trip planning') },
+  const child = (
+    parentKey: Uint8Array | undefined,
+    label: string,
+    content?: string,
+  ): ReturnType<typeof insertRow> =>
+    insertRow(ws, {
+      parentKey,
+      values: { label: pmDoc(label), ...(content ? { content: pmDoc(content) } : {}) },
+    })
+
+  const root = await insertRow(ws, {
+    values: {
+      label: pmDoc('Phases 8–9 feature tour'),
+      content: pmDoc(
+        'Each branch demonstrates one capability, named in its label. Open a focus panel (hover a row, click ▸) where a label says so; edit a cell to watch live updates.',
+      ),
+    },
+  })
+  const rk = root.key ?? undefined
+
+  // --- 9.1 heterogeneous children + 8c owned aspects + 9.2 property surface ---
+  const het = await child(
+    rk,
+    '9.1 Heterogeneous children — plain bullets and cross-matrix aspect rows thread into one ordered mesh',
+    'This host OWNS the #task/#note rows below (Phase 8c `#`). Its bullet shows their key-field preview chips (9.2 property surface).',
+  )
+  const hk = het.key ?? undefined
+  await child(
+    hk,
+    'Plain bullet — a loose own-child in the workspace matrix (Phase 8: the own-edge is the universal tree edge)',
+  )
+  // A run of two same-schema #task aspects — consecutive so their column headers
+  // coalesce into one grid header (9.7 §3 "grid = coalescing, not a mode").
+  const firstTaskRowId = await createDependentRow(ws, het.rowId, taskMatrixId, {
+    label: pmDoc(
+      '#task aspect — created by `#`, OWNED by this host (8c). Its status/due cells are editable inline right here (9.6 sharp edge gone; 9.7 C2 inline substrate cells)',
+    ),
+    status: 'in-progress',
+    due: '2026-08-01',
+  })
+  // This task also gets a real owned child — and this SAME task is folded
+  // inline again in the "9.3/9.7 View block" section below. Open the folded
+  // copy's focus panel there and its children come up empty: a known,
+  // open gap (folded-row drill-in "teleport"; tracked as Stage C3, see
+  // context/Phase-9.7.md §13).
+  await insertRow(ws, {
+    parentKey: await rowKeyOf(taskMatrixId, firstTaskRowId),
+    values: {
+      label: pmDoc(
+        'A real child, homed on the task above — its folded copy below cannot show this yet (Stage C3 open gap)',
+      ),
+    },
+  })
+  await createDependentRow(ws, het.rowId, taskMatrixId, {
+    label: pmDoc(
+      'Second #task in a row — a contiguous same-schema run hoists its column labels into one coalesced grid header (9.7 §3)',
+    ),
+    status: 'todo',
+    due: '2026-08-05',
+  })
+  const noteRowId = await createDependentRow(ws, het.rowId, noteMatrixId, {
+    label: pmDoc(
+      '#note aspect — a different matrix/schema in the same mesh (9.1). Deleting the host cascades this owned row (owner = where created, 8c)',
+    ),
+    body: 'Notes carry a body field instead of status/due.',
   })
 
-  // Children append in call order, so bullets and aspect rows interleave.
-  await insertRow(workspaceMatrixId, {
-    parentKey: host.key ?? undefined,
-    values: { label: pmDoc('Book flights') },
-  })
-  await createDependentRow(workspaceMatrixId, host.rowId, taskMatrixId, {
-    label: pmDoc('Reserve hotel'),
+  // --- 9.5 boundary hop -------------------------------------------------------
+  const nested = await child(
+    rk,
+    '9.5 Boundary hop — drill into this node (▸) to open it in its own panel; its child below lives in another matrix',
+  )
+  await createDependentRow(ws, nested.rowId, taskMatrixId, {
+    label: pmDoc(
+      "#task owned by the nested host — drilling into it (▸) hops the matrix boundary into a task-matrix panel; the breadcrumb is this appearance's lexkey ancestry",
+    ),
     status: 'todo',
-    due: '2026-07-01',
-  })
-  await insertRow(workspaceMatrixId, {
-    parentKey: host.key ?? undefined,
-    values: { label: pmDoc('Pack bags') },
-  })
-  await createDependentRow(workspaceMatrixId, host.rowId, noteMatrixId, {
-    label: pmDoc('Trip notes'),
-    body: 'Remember passports and travel adapters.',
+    due: '2026-08-10',
   })
 
-  const nested = await insertRow(workspaceMatrixId, {
-    parentKey: host.key ?? undefined,
-    values: { label: pmDoc('Day 1 itinerary') },
+  // --- 8c/9.6 @-mention (the non-owning `ref` edge) + backlink ----------------
+  const refSection = await child(
+    rk,
+    '8c/9.6 @-mention — a non-owning `ref` link (contrast the owning `#`). Severing it is non-destructive (the two-edge model)',
+  )
+  const rsk = refSection.key ?? undefined
+  const refTarget = await child(
+    rsk,
+    'Mention TARGET — open its focus panel (▸); its backlinks list the row that @-mentions it',
+  )
+  const refSource = await child(
+    rsk,
+    'Mention SOURCE — @-references the target above (a `ref`, not an `own`); it does not own or position the target',
+  )
+  await createRefJoin(ws, refSource.rowId, ws, refTarget.rowId)
+
+  // --- 9.4 dedicated sub-table (a node that OWNS a matrix) ---------------------
+  const containerHost = await child(
+    rk,
+    '9.4 Dedicated sub-table — this node OWNS a matrix (matrix-axis ownership, 8c). Open its panel (▸) to see the bordered container',
+    'Every row in the container is homed here. Dropping the container deletes all its rows (matrix-drop cascade, 8c §8.1).',
+  )
+  const checklistMatrixId = await createOwnedMatrix(
+    { matrixId: ws, rowId: containerHost.rowId },
+    'Checklist',
+    [
+      { name: 'label', type: 'TEXT', role: 'label' },
+      { name: 'done', type: 'TEXT' },
+    ],
+  )
+  await createDependentRow(ws, containerHost.rowId, checklistMatrixId, {
+    label: pmDoc(
+      'Checklist item A — homed in this dedicated container (dedicated = every row owned by the container host)',
+    ),
+    done: 'no',
   })
-  await createDependentRow(workspaceMatrixId, nested.rowId, taskMatrixId, {
-    label: pmDoc('Visit the museum'),
-    status: 'todo',
-    due: '2026-07-02',
+  await createDependentRow(ws, containerHost.rowId, checklistMatrixId, {
+    label: pmDoc('Checklist item B'),
+    done: 'yes',
   })
+
+  // --- 9.3 / 9.7 C2 view block folded inline ---------------------------------
+  const viewHost = await child(
+    rk,
+    '9.3/9.7 View block — the rows below are a live SQL view FOLDED INLINE (count+slice, 9.7 C2). A view owns nothing (the firewall) — it is a lens, not a collection',
+    'These are the SAME #task rows shown elsewhere, gathered by query — not new rows. Edit any task’s status and the matching folded row updates live.',
+  )
+  await createViewBlock(ws, viewHost.rowId, `SELECT * FROM "mx_${taskMatrixId}_data"`)
+
+  // --- 9.7 portal (position is plural; ownership is single) -------------------
+  const portalHost = await child(
+    rk,
+    '9.7 Portal — the row below is a MIRROR (opt-in, deep). Its home is the #note under the 9.1 branch; this is a second position, not a second owner',
+    'Detaching the mirror is non-destructive. Deleting the home ghosts this mirror (a “(deleted)” tombstone).',
+  )
+  await addPortal(
+    { matrixId: ws, rowId: portalHost.rowId },
+    { matrixId: noteMatrixId, rowId: noteRowId },
+  )
 }
 
 type MatrixRow = {

@@ -32,6 +32,22 @@ const tablesBySql: Map<Sql, Set<string>> = new Map()
 const subscribersByTable: Map<string, Set<Sql>> = new Map()
 const scopesBySql: Map<Sql, SubscriptionScope> = new Map()
 
+// Phase 9.7 Stage C2 — gather subscriptions (inline block folding). A gather is
+// not a single prepared statement (it's the count+slice flattener over
+// scroll_index + each block's source), so it can't ride `preparedStatementsBySql`.
+// It registers a table-grained runner here; the same update-hook flush re-runs it
+// when any table it visits changes (no new invalidation machinery — 9.7b §1).
+type GatherRunner = { tables: Set<string>; run: () => void }
+const gatherRunners: Map<string, GatherRunner> = new Map()
+
+export const registerGatherRunner = (key: string, tables: Set<string>, run: () => void) => {
+  gatherRunners.set(key, { tables, run })
+}
+
+export const unregisterGatherRunner = (key: string) => {
+  gatherRunners.delete(key)
+}
+
 const subscribe = async (sql: Sql) => {
   const existing = preparedStatementsBySql.get(sql)
 
@@ -161,6 +177,19 @@ const flushPendingTriggers = () => {
             firedSqls.add(sql)
             runSubscribedSql(sql)
           }
+        }
+      }
+    }
+  }
+
+  // Re-run gather subscriptions whose visited tables intersect this batch's
+  // writes (table-grained; the flattener isn't a single prepared statement).
+  if (gatherRunners.size > 0) {
+    for (const runner of gatherRunners.values()) {
+      for (const table of tables) {
+        if (runner.tables.has(table)) {
+          runner.run()
+          break
         }
       }
     }

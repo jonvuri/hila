@@ -45,11 +45,13 @@ import {
 } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
-import { buildAspectPreview } from '../shared/property-surface'
+import { buildAspectPreview, partitionPropertyColumns } from '../shared/property-surface'
 import type { AspectPreview } from '../shared/property-surface'
+import { FieldEditor } from '../shared/FieldEditor'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import { buildMatrixTitleQuery } from './workspace-plugin'
+import { RowGestureMenu, CoalescedHeader, type GestureRef } from './row-gestures'
 import {
   usePagedWorkspaceData,
   compositeKey,
@@ -518,6 +520,56 @@ const ContentInlineEditor = (props: ContentEditorProps) => (
 )
 
 // ---------------------------------------------------------------------------
+// Inline substrate cell strip (Phase 9.7 Stage C2)
+// ---------------------------------------------------------------------------
+
+// A meshed cross-matrix row's own non-label cells, rendered editable inline
+// beneath its label. This is the C2 outline-substrate merge: a loose outline row
+// is no longer label-edit-only (the §9.6 sharp edge) — every hydrated cell is an
+// always-live seamless `FieldEditor`, editability computed per-cell uniformly
+// (there is no per-band host-matrix scope). The field *names* hoist to the
+// same-schema run's coalesced header (grid = coalescing, §3), so the per-row
+// cells show values only. Label/content-role columns are the PM editors above,
+// so only the `fields` partition renders here (empty → nothing, e.g. a plain
+// workspace row).
+const OutlineCellStrip = (props: {
+  matrixId: number
+  rowId: number
+  columns: ColumnDefinition[]
+  data: Record<string, unknown> | null
+}) => {
+  const fields = createMemo(() => partitionPropertyColumns(props.columns).fields)
+  return (
+    <Show when={fields().length > 0}>
+      <div
+        class="outline-cell-strip"
+        data-testid="outline-cell-strip"
+        style={{
+          display: 'flex',
+          'flex-wrap': 'wrap',
+          'align-items': 'flex-start',
+          gap: '4px 16px',
+          'padding-left': '20px',
+          'padding-top': '2px',
+        }}
+      >
+        <For each={fields()}>
+          {(col) => (
+            <FieldEditor
+              column={col}
+              value={String(props.data?.[col.name] ?? '')}
+              seamless
+              showLabel={false}
+              onSave={(v) => void updateRow(props.matrixId, props.rowId, { [col.name]: v })}
+            />
+          )}
+        </For>
+      </div>
+    </Show>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // NavigationPanel
 // ---------------------------------------------------------------------------
 
@@ -560,8 +612,14 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   createEffect(() => {
     const seenMatrixIds = new Set<number>()
     for (const row of rows) {
+      // Owned-aspect matrixes of host workspace rows (the preview chips).
       for (const a of aspectsByHostCk[row.ck] ?? []) {
         seenMatrixIds.add(a.target_matrix_id)
+      }
+      // The row's *own* matrix when it is a meshed cross-matrix loose row — its
+      // non-label cells now render editable inline (the C2 substrate merge).
+      if (row.matrix_id !== props.matrixId) {
+        seenMatrixIds.add(row.matrix_id)
       }
     }
     for (const mid of seenMatrixIds) {
@@ -1112,231 +1170,308 @@ const NavigationPanel = (props: NavigationPanelProps) => {
               })
             })
 
+            // A folded block row (Phase 9.7 Stage C2): a `view`/`container`
+            // block's content, gathered inline at its marker's position. It
+            // renders through the same substrate cell path as a meshed
+            // cross-matrix row, but is **render-only** — no own-edge positions it
+            // (the firewall), so the ownership gestures (portal / move-owner /
+            // detach) are suppressed.
+            const isBlockRow = row.is_block_row === 1
+
+            // C2 substrate merge: a meshed cross-matrix loose row (its own home
+            // is a host in this matrix — the Phase 9.5 boundary) renders its own
+            // non-label cells editable inline.
+            const isCrossMatrix = rowMatrixId !== props.matrixId
+            const rowColumns = () => (isCrossMatrix ? (colCache[rowMatrixId] ?? []) : [])
+
+            // Grid coalescing (§3): the first row of a contiguous same-matrix run
+            // hoists that run's field column names to one shared header. A lone
+            // cross-matrix row is a run of one and still gets its header.
+            const isRunStart = createMemo(() => {
+              if (!isCrossMatrix) return false
+              const vRows = visibleRows()
+              const idx = globalIdx()
+              const prev = vRows[idx - 1]
+              return !prev || prev.matrix_id !== rowMatrixId
+            })
+
+            // Gesture host: the row's own-parent position (portal/move-owner act
+            // "here" = under that parent). Root-level rows fall back to the focus
+            // root, or have no host (the top-level outline), hiding those gestures.
+            const parentRef = createMemo<GestureRef | undefined>(() => {
+              const vRows = visibleRows()
+              const idx = findRowIndex(vRows, rowCk)
+              const parent = idx >= 0 ? findParentRow(vRows, idx) : undefined
+              if (parent) return { matrixId: parent.matrix_id, rowId: parent.row_id }
+              const fr = focusRootRow()
+              return fr ? { matrixId: fr.matrix_id, rowId: fr.row_id } : undefined
+            })
+
             onCleanup(() => {
               unregisterHandle(rowCk)
               unregisterContentHandle(rowCk)
             })
 
             return (
-              <div
-                class="outline-row"
-                data-row-id={rowId}
-                data-row-ck={rowCk}
-                data-depth={row.depth - depthOffset()}
-                style={{
-                  display: 'flex',
-                  'align-items': 'flex-start',
-                  position: 'relative',
-                  opacity:
-                    dragState()?.subtreeCks.has(rowCk) && dragState()?.activated ? 0.25 : 1,
-                  transition: 'opacity 0.15s',
-                  background: isFocusTarget() ? 'hsla(225, 60%, 50%, 0.08)' : undefined,
-                }}
-              >
-                {/* Drag handle */}
+              <>
+                <Show when={isRunStart()}>
+                  <CoalescedHeader columns={rowColumns()} />
+                </Show>
                 <div
-                  class="outline-row-handle"
+                  class="outline-row"
+                  data-row-id={rowId}
+                  data-row-ck={rowCk}
+                  data-depth={row.depth - depthOffset()}
                   style={{
-                    width: '20px',
-                    'flex-shrink': 0,
-                    cursor: 'grab',
                     display: 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'center',
-                    'user-select': 'none',
-                    opacity: 0.4,
-                    'padding-top': '2px',
-                  }}
-                  onPointerDown={(e: PointerEvent) => {
-                    e.preventDefault()
-                    startDrag(rowCk, e)
+                    'align-items': 'flex-start',
+                    position: 'relative',
+                    opacity:
+                      dragState()?.subtreeCks.has(rowCk) && dragState()?.activated ? 0.25 : 1,
+                    transition: 'opacity 0.15s',
+                    background: isFocusTarget() ? 'hsla(225, 60%, 50%, 0.08)' : undefined,
                   }}
                 >
-                  ⠿
-                </div>
+                  {/* Drag handle */}
+                  <div
+                    class="outline-row-handle"
+                    style={{
+                      width: '20px',
+                      'flex-shrink': 0,
+                      cursor: 'grab',
+                      display: 'flex',
+                      'align-items': 'center',
+                      'justify-content': 'center',
+                      'user-select': 'none',
+                      opacity: 0.4,
+                      'padding-top': '2px',
+                    }}
+                    onPointerDown={(e: PointerEvent) => {
+                      e.preventDefault()
+                      startDrag(rowCk, e)
+                    }}
+                  >
+                    ⠿
+                  </div>
 
-                {/* Row content: bullet + label + content preview */}
-                <div style={{ flex: 1, 'min-width': 0 }}>
-                  <DesignOutlineRow
-                    theme={theme()}
-                    row={flatRows()[globalIdx()]!}
-                    decoration={decorations()[globalIdx()]!}
-                    onToggle={toggleCollapseByHex}
-                    renderContent={() => (
+                  {/* Row content: bullet + label + content preview */}
+                  <div style={{ flex: 1, 'min-width': 0 }}>
+                    <DesignOutlineRow
+                      theme={theme()}
+                      row={flatRows()[globalIdx()]!}
+                      decoration={decorations()[globalIdx()]!}
+                      onToggle={toggleCollapseByHex}
+                      renderContent={() => (
+                        <div
+                          style={{
+                            display: 'flex',
+                            'align-items': 'baseline',
+                            gap: '6px',
+                            flex: 1,
+                            'min-width': 0,
+                          }}
+                        >
+                          <Show when={chip}>
+                            {(c) => (
+                              <span
+                                class="nav-row-type-chip"
+                                data-testid="row-type-chip"
+                                style={{
+                                  'flex-shrink': 0,
+                                  'font-size': '11px',
+                                  'font-weight': '600',
+                                  'line-height': '1.4',
+                                  padding: '0 6px',
+                                  'border-radius': '4px',
+                                  color: c().color,
+                                  background: tagBadgeBackground(c().color),
+                                }}
+                              >
+                                {c().text}
+                              </span>
+                            )}
+                          </Show>
+                          <Show
+                            when={!isGhost()}
+                            fallback={
+                              <span
+                                class="nav-row-ghost"
+                                data-testid="outline-row-ghost"
+                                title="The original of this mirror was deleted"
+                                style={{
+                                  flex: 1,
+                                  'min-width': 0,
+                                  'font-size': '13px',
+                                  'font-style': 'italic',
+                                  color: 'var(--text-muted)',
+                                  'user-select': 'none',
+                                }}
+                              >
+                                🗑 (deleted)
+                              </span>
+                            }
+                          >
+                            <LabelEditor
+                              rowId={rowId}
+                              label={row.label ?? ''}
+                              matrixId={rowMatrixId}
+                              pageIndex={wIdx}
+                              callbacks={callbacks}
+                              onHandle={(handle) => registerHandle(rowCk, handle)}
+                              onEditorFocus={() => setFocusedCk(rowCk)}
+                            />
+                          </Show>
+                          {/* Compact aspect preview chips (host workspace rows only) */}
+                          <For each={previews()}>
+                            {(preview) => (
+                              <For each={preview.fields}>
+                                {(f) => (
+                                  <span
+                                    class="nav-row-property-chip"
+                                    data-testid="nav-row-property-chip"
+                                    title={`#${preview.tagName} · ${f.name}`}
+                                    style={{
+                                      'flex-shrink': 0,
+                                      'font-size': '11px',
+                                      'font-weight': '500',
+                                      'line-height': '1.4',
+                                      padding: '0 5px',
+                                      'border-radius': '3px',
+                                      color: preview.color,
+                                      background: tagBadgeBackground(preview.color),
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      props.onOpenFocus(
+                                        row.matrix_id,
+                                        row.row_id,
+                                        new Uint8Array(row.key),
+                                      )
+                                    }}
+                                  >
+                                    {f.value}
+                                  </span>
+                                )}
+                              </For>
+                            )}
+                          </For>
+                        </div>
+                      )}
+                    />
+
+                    {/* Content area: preview or expanded editor */}
+                    <Show when={!isGhost() && (row.content || isExpanded())}>
                       <div
                         style={{
-                          display: 'flex',
-                          'align-items': 'baseline',
-                          gap: '6px',
-                          flex: 1,
-                          'min-width': 0,
+                          'padding-left': '20px',
+                          'padding-right': '28px',
                         }}
                       >
-                        <Show when={chip}>
-                          {(c) => (
-                            <span
-                              class="nav-row-type-chip"
-                              data-testid="row-type-chip"
-                              style={{
-                                'flex-shrink': 0,
-                                'font-size': '11px',
-                                'font-weight': '600',
-                                'line-height': '1.4',
-                                padding: '0 6px',
-                                'border-radius': '4px',
-                                color: c().color,
-                                background: tagBadgeBackground(c().color),
-                              }}
-                            >
-                              {c().text}
-                            </span>
-                          )}
-                        </Show>
                         <Show
-                          when={!isGhost()}
+                          when={isExpanded()}
                           fallback={
-                            <span
-                              class="nav-row-ghost"
-                              data-testid="outline-row-ghost"
-                              title="The original of this mirror was deleted"
+                            <div
+                              class="nav-content-preview"
+                              data-testid="content-preview"
                               style={{
-                                flex: 1,
-                                'min-width': 0,
                                 'font-size': '13px',
-                                'font-style': 'italic',
                                 color: 'var(--text-muted)',
-                                'user-select': 'none',
+                                cursor: 'pointer',
+                                display: '-webkit-box',
+                                '-webkit-line-clamp': '2',
+                                '-webkit-box-orient': 'vertical',
+                                overflow: 'hidden',
+                                'padding-bottom': '2px',
+                                'line-height': '1.4',
                               }}
+                              onClick={() => expandAndFocusContent(rowCk)}
                             >
-                              🗑 (deleted)
-                            </span>
+                              {extractTextFromPmDoc(row.content) || '\u00A0'}
+                            </div>
                           }
                         >
-                          <LabelEditor
+                          <ContentInlineEditor
                             rowId={rowId}
-                            label={row.label ?? ''}
+                            content={row.content ?? EMPTY_CONTENT_JSON}
                             matrixId={rowMatrixId}
                             pageIndex={wIdx}
-                            callbacks={callbacks}
-                            onHandle={(handle) => registerHandle(rowCk, handle)}
-                            onEditorFocus={() => setFocusedCk(rowCk)}
+                            onHandle={(handle) => registerContentHandle(rowCk, handle)}
+                            onFocus={() => setFocusedCk(rowCk)}
                           />
                         </Show>
-                        {/* Compact aspect preview chips (host workspace rows only) */}
-                        <For each={previews()}>
-                          {(preview) => (
-                            <For each={preview.fields}>
-                              {(f) => (
-                                <span
-                                  class="nav-row-property-chip"
-                                  data-testid="nav-row-property-chip"
-                                  title={`#${preview.tagName} · ${f.name}`}
-                                  style={{
-                                    'flex-shrink': 0,
-                                    'font-size': '11px',
-                                    'font-weight': '500',
-                                    'line-height': '1.4',
-                                    padding: '0 5px',
-                                    'border-radius': '3px',
-                                    color: preview.color,
-                                    background: tagBadgeBackground(preview.color),
-                                    cursor: 'pointer',
-                                  }}
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    props.onOpenFocus(
-                                      row.matrix_id,
-                                      row.row_id,
-                                      new Uint8Array(row.key),
-                                    )
-                                  }}
-                                >
-                                  {f.value}
-                                </span>
-                              )}
-                            </For>
-                          )}
-                        </For>
                       </div>
-                    )}
-                  />
+                    </Show>
 
-                  {/* Content area: preview or expanded editor */}
-                  <Show when={!isGhost() && (row.content || isExpanded())}>
-                    <div
+                    {/* Inline substrate cells: a meshed cross-matrix row's own
+                      non-label fields, editable in place (C2 — no host-matrix
+                      scope). Empty for plain workspace rows. */}
+                    <Show when={!isGhost() && isCrossMatrix}>
+                      <OutlineCellStrip
+                        matrixId={rowMatrixId}
+                        rowId={rowId}
+                        columns={rowColumns()}
+                        data={row.data}
+                      />
+                    </Show>
+                  </div>
+
+                  {/* Row-action gestures (portal / move-owner / two-tier delete).
+                    Surfaced on every live *owned* outline row; the position
+                    gestures need a parent host (hidden at the top level). A
+                    folded block row is render-only (no own-edge — the firewall),
+                    so it gets no ownership gestures. */}
+                  <Show when={!isGhost() && !isBlockRow}>
+                    <span
+                      class="nav-row-gestures"
                       style={{
-                        'padding-left': '20px',
-                        'padding-right': '28px',
+                        position: 'absolute',
+                        right: '26px',
+                        top: '2px',
+                        opacity: 0,
+                        transition: 'opacity 0.15s',
                       }}
                     >
-                      <Show
-                        when={isExpanded()}
-                        fallback={
-                          <div
-                            class="nav-content-preview"
-                            data-testid="content-preview"
-                            style={{
-                              'font-size': '13px',
-                              color: 'var(--text-muted)',
-                              cursor: 'pointer',
-                              display: '-webkit-box',
-                              '-webkit-line-clamp': '2',
-                              '-webkit-box-orient': 'vertical',
-                              overflow: 'hidden',
-                              'padding-bottom': '2px',
-                              'line-height': '1.4',
-                            }}
-                            onClick={() => expandAndFocusContent(rowCk)}
-                          >
-                            {extractTextFromPmDoc(row.content) || '\u00A0'}
-                          </div>
-                        }
-                      >
-                        <ContentInlineEditor
-                          rowId={rowId}
-                          content={row.content ?? EMPTY_CONTENT_JSON}
-                          matrixId={rowMatrixId}
-                          pageIndex={wIdx}
-                          onHandle={(handle) => registerContentHandle(rowCk, handle)}
-                          onFocus={() => setFocusedCk(rowCk)}
-                        />
-                      </Show>
-                    </div>
+                      <RowGestureMenu
+                        host={parentRef()}
+                        target={{ matrixId: rowMatrixId, rowId }}
+                      />
+                    </span>
                   </Show>
-                </div>
 
-                {/* Right-arrow button: open focus panel. Every rendered row gets it,
+                  {/* Right-arrow button: open focus panel. Every rendered row gets it,
                     including meshed cross-matrix aspect rows — drilling into one whose
                     own-parent is a host in this matrix is the Phase 9.5 boundary hop.
                     Ghost tombstones have no target to open. */}
-                <Show when={!isGhost()}>
-                  <button
-                    class="nav-row-open-focus"
-                    data-testid="open-focus-btn"
-                    aria-label="Open focus panel"
-                    style={{
-                      position: 'absolute',
-                      right: '4px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      'font-size': '14px',
-                      color: 'var(--text-muted)',
-                      padding: '2px 4px',
-                      'border-radius': '3px',
-                      opacity: 0,
-                      transition: 'opacity 0.15s, color 0.15s',
-                    }}
-                    onClick={() =>
-                      props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
-                    }
-                  >
-                    →
-                  </button>
-                </Show>
-              </div>
+                  <Show when={!isGhost()}>
+                    <button
+                      class="nav-row-open-focus"
+                      data-testid="open-focus-btn"
+                      aria-label="Open focus panel"
+                      style={{
+                        position: 'absolute',
+                        right: '4px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        'font-size': '14px',
+                        color: 'var(--text-muted)',
+                        padding: '2px 4px',
+                        'border-radius': '3px',
+                        opacity: 0,
+                        transition: 'opacity 0.15s, color 0.15s',
+                      }}
+                      onClick={() =>
+                        props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
+                      }
+                    >
+                      →
+                    </button>
+                  </Show>
+                </div>
+              </>
             )
           }}
         </For>
@@ -1474,6 +1609,13 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         }
         .outline-row:focus-within .nav-row-open-focus {
           opacity: 0.5 !important;
+        }
+        .outline-row:hover .nav-row-gestures {
+          opacity: 0.5 !important;
+        }
+        .outline-row:hover .nav-row-gestures:hover,
+        .outline-row:focus-within .nav-row-gestures {
+          opacity: 1 !important;
         }
       `}</style>
     </div>

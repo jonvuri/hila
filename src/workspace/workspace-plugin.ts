@@ -52,137 +52,19 @@ export const registerWorkspaceFaceType = async (): Promise<void> => {
 
 // -- Query builders -----------------------------------------------------------
 //
-// Reads use the global pre-order scroll index (`scroll_index` table): each
-// row's `global_lexkey` is the concatenation of edge_keys from the sentinel
-// down to the node. It has the same prefix-ordering properties the old
-// recursive CTE derived on-the-fly (a parent's key is a strict prefix of its
-// children's), so focus/collapse/after filtering and ORDER BY work unchanged
-// — but now as a single keyset range scan on a materialized index.
+// The pre-order scroll-index outline builders live in a worker-safe module
+// (outline-queries.ts) so the worker's count+slice flattener can import them
+// without the client-only plugin wiring; re-exported here so existing
+// `from './workspace-plugin'` imports keep resolving.
 
-const nextPrefixHex = (hex: string): string => hex.slice(0, -2) + '01'
-
-// Phase 9.7 Stage B: block markers (view/shared-container) are real
-// `scroll_index` participants, but their *content* is drawn via count+slice
-// flattening (src/workspace/window-flatten.ts), not as a plain loose-outline
-// row. Exclude the marker rows themselves from the loose scan. Only `view`
-// markers carry a `block_sources` row today; folding their content inline is the
-// renderer stage (Stage C).
-const EXCLUDE_BLOCK_MARKERS = `AND NOT EXISTS (
-  SELECT 1 FROM block_sources bs
-  WHERE bs.marker_matrix_id = r.matrix_id AND bs.marker_row_id = r.row_id
-)`
-
-const buildFilterClauses = (opts: {
-  focusRootHex?: string | null
-  collapsedKeyHexes?: string[]
-  afterKeyHex?: string | null
-}): string => {
-  const parts: string[] = [EXCLUDE_BLOCK_MARKERS]
-
-  if (opts.focusRootHex) {
-    parts.push(
-      `AND r.global_lexkey >= X'${opts.focusRootHex}' AND r.global_lexkey < X'${nextPrefixHex(opts.focusRootHex)}'`,
-    )
-  }
-
-  if (opts.collapsedKeyHexes) {
-    for (const hex of opts.collapsedKeyHexes) {
-      parts.push(
-        `AND NOT (r.global_lexkey > X'${hex}' AND r.global_lexkey < X'${nextPrefixHex(hex)}')`,
-      )
-    }
-  }
-
-  if (opts.afterKeyHex) {
-    parts.push(`AND r.global_lexkey > X'${opts.afterKeyHex}'`)
-  }
-
-  return parts.join('\n')
-}
-
-export type PaginatedOutlineQueryOpts = {
-  focusRootHex?: string | null
-  collapsedKeyHexes?: string[]
-  afterKeyHex?: string | null
-  offset?: number
-  limit?: number
-}
-
-// Phase 9.1: the outline window is now an **index-only** scan over the global
-// pre-order `scroll_index`, spanning every matrix in the reachable own-forest.
-// It no longer joins a single `mx_{id}_data` table (heterogeneous children come
-// from different matrixes); the caller hydrates the returned `(matrix_id, row_id)`
-// pairs via a multi-table gather (`buildHydrationQuery`, batched by matrix).
-//
-//   - `has_children` counts own-children in *any* matrix (cross-matrix children).
-//   - `is_type_node` flags promoted type-nodes so the renderer can present them
-//     distinctly at the workspace root (Phase 8c carry-over).
-export const buildPaginatedOutlineQuery = (opts: PaginatedOutlineQueryOpts = {}): string => {
-  const filterClauses = buildFilterClauses({
-    focusRootHex: opts.focusRootHex ?? null,
-    collapsedKeyHexes: opts.collapsedKeyHexes,
-    afterKeyHex: opts.afterKeyHex ?? null,
-  })
-
-  const effectiveLimit = opts.limit ?? 10000
-  const limitClause = `LIMIT ${effectiveLimit}`
-  const offsetClause =
-    opts.offset !== undefined && opts.offset > 0 ? `OFFSET ${opts.offset}` : ''
-
-  // The row's matrix title travels inline (a join to the global `matrix` table)
-  // so the renderer's type chip resolves without a second subscription — this
-  // avoids cross-query id-type/timing mismatches between panels.
-  return `
-SELECT r.global_lexkey AS key, r.matrix_id, r.row_id, r.depth,
-       r.is_ghost,
-       mt.title AS matrix_title,
-       CASE WHEN EXISTS (
-         SELECT 1 FROM joins ch
-         WHERE ch.kind = 'own' AND ch.source_matrix_id = r.matrix_id
-           AND ch.source_row_id = r.row_id
-           AND NOT EXISTS (
-             SELECT 1 FROM block_sources bs
-             WHERE bs.marker_matrix_id = ch.target_matrix_id
-               AND bs.marker_row_id = ch.target_row_id
-           )
-       ) THEN 1 ELSE 0 END as has_children,
-       CASE WHEN EXISTS (
-         SELECT 1 FROM promoted_nodes p
-         WHERE p.matrix_id = r.matrix_id AND p.row_id = r.row_id
-       ) THEN 1 ELSE 0 END as is_type_node
-FROM scroll_index r
-LEFT JOIN matrix mt ON mt.id = r.matrix_id
-WHERE 1 = 1
-${filterClauses}
-ORDER BY r.global_lexkey
-${limitClause}${offsetClause ? ` ${offsetClause}` : ''}
-`
-}
-
-// Hydrate a window's rows for a single matrix: one batched query per distinct
-// matrix in the window (the Phase 8b §5 multi-table gather bound). Schemas differ
-// across matrixes, so each matrix is fetched separately rather than UNION-ed.
-export const buildHydrationQuery = (matrixId: number, rowIds: number[]): string =>
-  `SELECT * FROM "mx_${matrixId}_data" WHERE id IN (${rowIds.join(', ')})`
-
-export type OutlineCountQueryOpts = {
-  focusRootHex?: string | null
-  collapsedKeyHexes?: string[]
-}
-
-export const buildOutlineCountQuery = (opts: OutlineCountQueryOpts = {}): string => {
-  const filterClauses = buildFilterClauses({
-    focusRootHex: opts.focusRootHex ?? null,
-    collapsedKeyHexes: opts.collapsedKeyHexes,
-  })
-
-  return `
-SELECT COUNT(*) as row_count
-FROM scroll_index r
-WHERE 1 = 1
-${filterClauses}
-`
-}
+export {
+  buildPaginatedOutlineQuery,
+  buildOutlineCountQuery,
+  buildHydrationQuery,
+  buildInRangeBlockMarkersQuery,
+  type PaginatedOutlineQueryOpts,
+  type OutlineCountQueryOpts,
+} from './outline-queries'
 
 // Ancestor chains for a set of descendant `(matrix_id, row_id)` pairs, returned in
 // a single query (Phase 9.5 — boundary-hop panel stack). The global closure table

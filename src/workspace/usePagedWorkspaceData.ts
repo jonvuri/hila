@@ -1,16 +1,28 @@
 import { createSignal, createEffect, createMemo, onCleanup, type Accessor } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 
-import { addObserver, removeObserver } from '../core/client/sql-client'
-import type { SqlObserver } from '../core/sql-types'
+import {
+  addObserver,
+  removeObserver,
+  addGatherObserver,
+  removeGatherObserver,
+} from '../core/client/sql-client'
+import type {
+  GatherBlockSpec,
+  GatherObserver,
+  GatherSpec,
+  SqlObserver,
+} from '../core/sql-types'
 import { useQuery } from '../sql/useQuery'
 import type { AspectAttachment } from '../shared/property-surface'
 import { buildTagsForRowsQuery } from '../tags/tag-queries'
+import { recognizeUpdatableQuery } from '../sql/recognize-updatable'
 
 import {
   buildPaginatedOutlineQuery,
   buildOutlineCountQuery,
   buildHydrationQuery,
+  buildInRangeBlockMarkersQuery,
 } from './workspace-plugin'
 
 export const ROWS_PER_WINDOW = 100
@@ -51,6 +63,12 @@ type WindowRow = {
   is_type_node: number
   is_ghost: number
   matrix_title: string | null
+  /** Phase 9.7 Stage C2 — a folded block row (a `view`/`container` block's
+   *  content, gathered inline at its marker's position). Carries its data inline
+   *  (`block_data`) rather than through the per-window hydration gather, and is
+   *  render-only (no own-edge, not draggable/reparentable — the firewall). */
+  is_block_row: number
+  block_data: Record<string, unknown> | null
 }
 
 /**
@@ -97,6 +115,8 @@ const toWindowRow = (raw: Record<string, unknown>): WindowRow => {
     is_type_node: (raw.is_type_node as number) ?? 0,
     is_ghost: (raw.is_ghost as number) ?? 0,
     matrix_title: (raw.matrix_title as string | null) ?? null,
+    is_block_row: (raw.is_block_row as number) ?? 0,
+    block_data: (raw.block_data as Record<string, unknown> | null) ?? null,
   }
 }
 
@@ -116,7 +136,56 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     return (data[0] as { row_count: number }).row_count
   })
 
+  // -----------------------------------------------------------------------
+  // Block discovery (Phase 9.7 Stage C2 — inline block folding). The in-range
+  // `view` block markers under the focus scope (respecting collapse), each
+  // recognized to a base matrix so its folded rows carry `(sourceMatrixId, id)`
+  // identity. Reactive via scroll_index / block_sources. Unrecognized views
+  // (not single-base-table updatable) stay focus-panel-only for v1 — folding
+  // them has no sound row identity to render/edit through.
+  // -----------------------------------------------------------------------
+  const blockMarkersQuery = createMemo(() =>
+    buildInRangeBlockMarkersQuery({
+      focusRootHex: opts.focusRootHex(),
+      collapsedKeyHexes: opts.collapsedKeyHexes(),
+    }),
+  )
+  const { result: blockMarkersResult } = useQuery(() => blockMarkersQuery())
+
+  const keyToHex = (key: Uint8Array): string =>
+    Array.from(key)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+
+  const blockSpecs = createMemo<GatherBlockSpec[]>(() => {
+    const data = blockMarkersResult()
+    if (!data) return []
+    const specs: GatherBlockSpec[] = []
+    for (const raw of data as Record<string, unknown>[]) {
+      const sql = raw.sql as string
+      const rec = recognizeUpdatableQuery(sql)
+      if (!rec.updatable) continue
+      specs.push({
+        keyHex: keyToHex(raw.key as Uint8Array),
+        kind: 'view',
+        sourceMatrixId: rec.baseMatrixId,
+        markerDepth: raw.depth as number,
+        sql,
+      })
+    }
+    return specs
+  })
+
+  const hasBlocks = createMemo(() => blockSpecs().length > 0)
+
+  // The flattened total (materialized + folded block rows), posted back by the
+  // gather (worker recomputes it per run — consistent with the folded content).
+  const [gatherTotal, setGatherTotal] = createSignal<number | null>(null)
+
   const visibleRowCount = createMemo(() => {
+    // Gather path: the flattened total already excludes the focus root (the
+    // materialized segments start `> focusRootHex`).
+    if (hasBlocks()) return gatherTotal() ?? 0
     const count = totalRows()
     return opts.focusRootHex() ? Math.max(0, count - 1) : count
   })
@@ -168,40 +237,64 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     return [sorted[0]!, sorted[sorted.length - 1]!]
   })
 
-  const rangeQuery = createMemo(() => {
-    const range = loadedRange()
-    if (!range) return ''
-
-    const [minPage, maxPage] = range
-    const offset = minPage * ROWS_PER_WINDOW
-    const limit = (maxPage - minPage + 1) * ROWS_PER_WINDOW
-
-    return buildPaginatedOutlineQuery({
-      focusRootHex: opts.focusRootHex(),
-      collapsedKeyHexes: opts.collapsedKeyHexes(),
-      afterKeyHex: opts.focusRootHex(),
-      limit,
-      offset,
-    })
-  })
+  const applyWindowResult = (raw: Record<string, unknown>[]) => {
+    const mapped = raw.map(toWindowRow)
+    assignRenderKeys(mapped)
+    setWindowRows(reconcile(mapped, { key: 'rk' }))
+  }
 
   createEffect(() => {
-    const sql = rangeQuery()
-    if (!sql) {
+    const range = loadedRange()
+    if (!range) {
       setWindowRows(reconcile([] as WindowRow[], { key: 'rk' }))
       return
     }
+    const [minPage, maxPage] = range
+    const specs = blockSpecs()
+    const focusRootHex = opts.focusRootHex()
+    const collapsedKeyHexes = opts.collapsedKeyHexes()
 
-    const observer: SqlObserver = (result) => {
-      if (result) {
-        const mapped = (result as Record<string, unknown>[]).map(toWindowRow)
-        assignRenderKeys(mapped)
-        setWindowRows(reconcile(mapped, { key: 'rk' }))
+    // Hot path — no in-range block folds. Behaviour-identical to the pre-C2
+    // single-materialized-segment slice: one `buildPaginatedOutlineQuery`
+    // subscription, no gather, no `gatherTotal` (count comes from
+    // `buildOutlineCountQuery`).
+    if (specs.length === 0) {
+      const offset = minPage * ROWS_PER_WINDOW
+      const limit = (maxPage - minPage + 1) * ROWS_PER_WINDOW
+      const sql = buildPaginatedOutlineQuery({
+        focusRootHex,
+        collapsedKeyHexes,
+        afterKeyHex: focusRootHex,
+        limit,
+        offset,
+      })
+      const observer: SqlObserver = (result) => {
+        if (result) applyWindowResult(result as Record<string, unknown>[])
       }
+      addObserver(sql, observer)
+      onCleanup(() => removeObserver(sql, observer))
+      return
     }
 
-    addObserver(sql, observer)
-    onCleanup(() => removeObserver(sql, observer))
+    // Fold path — the count+slice gather RPC. The worker flattens `scroll_index`
+    // with each in-range marker expanded inline to its rows and posts the window
+    // range's rows + the flattened total (window-flatten.ts via gather-handler).
+    const spec: GatherSpec = {
+      focusRootHex,
+      collapsedKeyHexes,
+      afterKeyHex: focusRootHex,
+      minPage,
+      maxPage,
+      rowsPerWindow: ROWS_PER_WINDOW,
+      blocks: specs,
+    }
+    const observer: GatherObserver = (result) => {
+      if (!result) return
+      applyWindowResult(result.rows)
+      setGatherTotal(result.totalVirtual)
+    }
+    addGatherObserver(spec, observer)
+    onCleanup(() => removeGatherObserver(spec, observer))
   })
 
   // -----------------------------------------------------------------------
@@ -224,9 +317,12 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   }
 
   createEffect(() => {
-    // Group the current window's rows by matrix.
+    // Group the current window's rows by matrix. Folded block rows carry their
+    // data inline (from the gather), so they're excluded from the hydration
+    // gather — their `(matrix_id, id)` need not even be a real materialized row.
     const byMatrix = new Map<number, Set<number>>()
     for (const row of windowRows) {
+      if (row.is_block_row === 1) continue
       let ids = byMatrix.get(row.matrix_id)
       if (!ids) {
         ids = new Set<number>()
@@ -292,7 +388,7 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
   createEffect(() => {
     const wsId = opts.matrixId
     const wsRowIds = windowRows
-      .filter((r) => r.matrix_id === wsId)
+      .filter((r) => r.matrix_id === wsId && r.is_block_row !== 1)
       .map((r) => r.row_id)
       .sort((a, b) => a - b)
 
@@ -334,7 +430,9 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
 
   createEffect(() => {
     const merged: WorkspaceRowData[] = windowRows.map((w) => {
-      const data = hydrated[w.ck] ?? null
+      // Folded block rows carry their data inline from the gather; materialized
+      // rows resolve theirs from the batched hydration store.
+      const data = w.is_block_row === 1 ? w.block_data : (hydrated[w.ck] ?? null)
       return {
         ...w,
         label: (data?.label as string | null) ?? null,

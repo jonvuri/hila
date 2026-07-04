@@ -11,13 +11,18 @@
 > ownership spine ([Phase 8](Phase-8.md)/[8c](Phase-8c.md)) and the development
 > principles (incremental/intentional, gestalt-aware, single-frame perf).
 >
-> **Status:** design converged; not yet implemented. Both gating spikes are complete —
+> **Status:** design converged and **the build is complete**. Both gating spikes landed —
 > [deep-portal materialization](Phase-9.7a.md) (GO, deep-in-v1) and
 > [windowing/height-variance perf](Phase-9.7b.md) (GO, count+slice with no per-row dynamic
-> offsets for v1) — and [Phase 9.7c](Phase-9.7c-reconciliation.md) (doc reconciliation) is
-> **done**, leaving **the build proper**: three staged sessions with ready-to-run handoff
-> prompts in [§13](#13-the-build-proper--implementation-prompts). Composed fidelity and the
-> merged level remain [Phase 10](Phase-10.md).
+> offsets for v1) — [Phase 9.7c](Phase-9.7c-reconciliation.md) (doc reconciliation) is
+> **done**, and all three build stages ([§13](#13-the-build-proper--implementation-prompts))
+> shipped: A (data layer / portals), B (block markers + count+slice windowing), and C
+> (renderer unification + gestures + **inline block folding via the worker↔client gather
+> RPC**). Composed fidelity and the merged level remain [Phase 10](Phase-10.md). **One
+> post-hoc correctness gap surfaced in review** — folded-row drill-in loses the row's real
+> children (a "teleport" concern, not just a wiring bug) — scoped as
+> [**Stage C3**](#stage-c3--folded-row-focus-and-drill-in-identity-open) below; **open, starts
+> next**, before the hand-off to Phase 10 is final.
 
 ---
 
@@ -320,11 +325,21 @@ underneath (invisible to the ownership question). Sources:
    canonical docs. **Done.**
 5. **The build proper** — three staged sessions ([§13](#13-the-build-proper--implementation-prompts)):
    A (data layer / portals) **— landed**, B (block markers + count+slice windowing) **— landed**,
-   C (renderer unification + gestures) — **C1 landed** (focus-panel band unification + gesture/data
-   wiring + position-keyed outline + ghosts); **C2 next** (outline substrate merge + inline block
-   folding). See each stage's build note for what the next inherits.
-6. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
-   over the substrate floor.
+   C (renderer unification + gestures) **— landed**: C1 (focus-panel band unification + gesture/data
+   wiring + position-keyed outline + ghosts), C2-partial (the outline substrate merge — loose rows
+   through the substrate renderer with inline-editable cross-matrix cells + grid coalescing, a shared
+   row-gesture module, gestures on outline rows), and **C2-remainder (inline block folding via the
+   worker↔client gather RPC — landed, the last piece)**. **The Phase 9.7 build is complete.** See
+   each stage's build note for what the next inherited.
+6. **[Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-open) — folded-row focus and drill-in
+   identity.** **Open, starts next.** Post-landing review found that opening a focus panel from a
+   folded (`view`-block) row passes the row's synthetic fold-position key straight through as the
+   nested panel's position scope, so its owned children silently never show — reproducible directly
+   off the demo subtree (see the stage prompt). Scoped as its own session because the fix is a
+   "teleport" with open questions (no-position rows, multi-position rows, navigation legibility),
+   not a one-line lookup.
+7. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
+   over the substrate floor. **Hands off here once Stage C3 lands.**
 
 Also on the books, orthogonal: the **SQL subscription late-joiner race**
 ([Phase-9.md follow-ups](Phase-9.md#sql-subscription-late-joiner-race-latent-correctness-bug)).
@@ -559,7 +574,7 @@ The paging/windowing layer is wired and the `bands` table is gone. What Stage C 
 > battery. This closes the Phase 9.7 build — update the [§12 Forward](#12-forward) status and
 > hand off to [Phase 10](Phase-10.md).
 
-#### Stage C — build note (C1 landed; C2 next)
+#### Stage C — build note (C1 landed; C2 partial — outline substrate merge landed, inline block folding remains)
 
 Stage C ran as one session but decomposes into two increments along the seam the spikes
 implied: enabling the portal gesture makes the outline show a row at its home **and** each
@@ -621,3 +636,158 @@ C2 inherits:
   gather RPC ([window-flatten.ts](../src/workspace/window-flatten.ts), deferred from Stage B);
   collapse `container` rendering to `PropertyRow`; surface the gestures on outline rows too. The
   `lazy` portal path stays off (v1); composed/`TableFace` fidelity is [Phase 10](Phase-10.md).
+
+##### Stage C2 — build note (outline substrate merge + gestures landed; inline block folding landed — Phase 9.7 build complete)
+
+C2 was split along the seam its own inheritance list implies: the **outline substrate merge**
+(routing loose rows through the substrate renderer + gestures) is client-side and separable from
+the **inline block folding** (the new worker↔client gather RPC). Both increments are now landed and
+green — this closes the Phase 9.7 build. What landed:
+
+- **Shared row gestures ([row-gestures.tsx](../src/workspace/row-gestures.tsx)).** `RowGestureMenu`
+  / `OwnerAffix` / `CoalescedHeader` are extracted from the C1 `SubstrateRegion` so the focus-panel
+  substrate region **and** the loose outline mount one implementation. `RowGestureMenu.host` is now
+  optional: the position-anchored gestures (**portal** / **move-owner** / **detach**) render only
+  when a row has a destination host; the target-only deletes (**default-ghost** / **hard-delete
+  everywhere**, still confirmation-gated) always show. `SubstrateRegion` imports them unchanged.
+- **Loose rows through the substrate renderer ([NavigationPanel.tsx](../src/workspace/NavigationPanel.tsx)).**
+  A meshed cross-matrix loose row (its home a host in this matrix — the §9.5 boundary) now renders
+  its **own non-label cells editable inline** via `OutlineCellStrip` (a per-field seamless
+  `FieldEditor`, saving through `updateRow`). Editability is per-cell hydration computed uniformly —
+  **the §9.6 sharp edge is gone in the outline too**, not only the focus panel; a meshed aspect row
+  is no longer label-edit-only. `colCache` now loads columns for any cross-matrix row's matrix (not
+  only owned-aspect matrixes); the row's data is already hydrated by the main multi-table gather.
+- **Grid coalescing at outline scale (§3).** The first row of a contiguous same-matrix run hoists
+  that run's field column names to one `CoalescedHeader`; a lone cross-matrix row is a run of one
+  and still gets its header. Coalescing, not a mode — no new grid layout, substrate floor.
+- **Gestures on every live outline row.** `RowGestureMenu` mounts per loose row (hover/focus-reveal,
+  like the open-focus arrow); `host` = the row's own-parent position (`findParentRow`, falling back
+  to the focus root), hidden at the top level; `target` = the row. Ghost tombstones get no menu.
+- **Gate.** format / lint (0 errors) / typecheck clean; full unit battery green (815); **full e2e
+  green (143)** — including `tags.spec.ts`'s heterogeneous-children cases (where the inline cell
+  strip + coalesced header newly render over meshed `#task`/`#note` rows) and the `focus-panel`
+  sub-table suite (unchanged — `SubTableBand`/`TableFace` kept, per below).
+- **C2 remainder — inline block folding via the worker↔client gather RPC (landed).** A `view`
+  block's *content* now folds inline into the loose outline at its marker's position via a new
+  **gather subscription** — the count+slice flattener run worker-side against the live Database:
+  - **The gather RPC.** A subscription-style worker message (`subscribeGather`/`unsubscribeGather`,
+    keyed by the serialized spec — [sql-types.ts](../src/core/sql-types.ts)) carrying the outline
+    scan params + the in-range block set. The worker
+    ([gather-handler.ts](../src/core/worker/gather-handler.ts) → the pure, unit-testable
+    [gather-flatten.ts](../src/workspace/gather-flatten.ts)) runs
+    `computeSegments`/`sliceWindow`/`gatherWindow` over the requested window range and posts back
+    the flattened rows **+ the flattened total**. It registers its tables-visited (union of
+    `scroll_index` + `block_sources` + each block's source tables) with the existing update-hook
+    flush ([sql-handler.ts](../src/core/worker/sql-handler.ts) `registerGatherRunner`), so writes
+    re-run it — **no new invalidation machinery** (9.7b §1). The client mirrors `addObserver`
+    ([sql-client.ts](../src/core/client/sql-client.ts) `addGatherObserver`).
+  - **The materialized source is the *filtered* outline query.** `computeSegments`/`gatherWindow`
+    take injectable `countGap`/`gatherMaterialized` ([window-flatten.ts](../src/workspace/window-flatten.ts));
+    the gather supplies `buildOutlineCountQuery`/`buildPaginatedOutlineQuery` bounded to each
+    marker-delimited gap via a new **`beforeKeyHex`** sub-range (focus scope, collapse, and
+    `EXCLUDE_BLOCK_MARKERS` all preserved). So a **no-block** gather degenerates to today's single
+    materialized slice — the hot path stays behaviour-identical (guarded in
+    [gather-flatten.test.ts](../src/workspace/gather-flatten.test.ts)). The pure query builders were
+    extracted to a worker-safe [outline-queries.ts](../src/workspace/outline-queries.ts) (re-exported
+    from `workspace-plugin.ts`) so the worker doesn't pull in client code.
+  - **Block discovery + paging.** [usePagedWorkspaceData](../src/workspace/usePagedWorkspaceData.ts)
+    subscribes the in-range markers (`buildInRangeBlockMarkersQuery` over `block_sources ⋈
+    scroll_index` within the focus scope), recognizes each (`recognizeUpdatableQuery` → the base
+    matrix, so folded rows carry `(sourceMatrixId, id)` identity), and — **only when a block is in
+    range** — rewires the window-range effect off the single `buildPaginatedOutlineQuery`
+    subscription onto the gather RPC; the flattened total drives `totalWindows`. `pk`-keyed
+    reconcile, `assignRenderKeys`, ghosts, and the hydration/aspect gathers are preserved (folded
+    rows carry data inline and are excluded from the hydration gather). Unrecognized views stay
+    focus-panel-only for v1 (no sound row identity to fold).
+  - **Folded rows render through the substrate cell renderer.** A folded row is a cross-matrix
+    substrate row — [NavigationPanel](../src/workspace/NavigationPanel.tsx) draws it through the same
+    `OutlineCellStrip`/`CoalescedHeader` path as a meshed loose row (the `container`→`PropertyRow`
+    collapse at substrate). It is **render-only** — no `own`-edge positions it (the firewall) — so the
+    ownership gestures (portal/move-owner/detach) are suppressed on it. The `view` slice SQL was
+    fixed to **append** `LIMIT/OFFSET` (not wrap in a subquery) so consecutive offset slices keep the
+    view's order.
+  - **Gate.** New [inline-block-fold.spec.ts](../../e2e/inline-block-fold.spec.ts) (2 e2e: a view
+    block folds inline + updates live; a 120-row block folds correctly across the window-0/1
+    boundary) and [gather-flatten.test.ts](../src/workspace/gather-flatten.test.ts) (3 unit: exact
+    coverage in view order, straddling, no-block behaviour-identical) — with the Stage-B
+    `window-flatten.test.ts` guards and `virtualizer-multiwindow.spec.ts` still green. Full battery:
+    format / lint (0 errors) / typecheck clean, **818 unit**, **145 e2e**.
+
+  Deferred as before: shared-container discovery (the `containerBlock` builder + gather `kind:
+  'container'` exist and are guarded, but nothing mints a container marker yet — the additive path);
+  nested blocks; the `lazy` portal path; composed/`TableFace` fidelity ([Phase 10](Phase-10.md)).
+  **This closes the planned Phase 9.7 build.** Post-landing review surfaced one more correctness
+  gap in what C2 shipped — [Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-open), below —
+  so the hand-off to [Phase 10](Phase-10.md) waits on it.
+
+### Stage C3 — Folded-row focus and drill-in identity (open)
+
+> **Build Phase 9.7 — Stage C3: folded-row focus/drill-in identity.** Follow-up to Stage C2;
+> **requires Stage C2 landed** (the gather RPC + folded rows exist). Narrow in surface area — one
+> navigation path — but the fix has real design tension, so it gets its own focused session rather
+> than a drive-by patch.
+>
+> **The bug.** A folded block row (a `view` block's content, gathered inline at its marker's
+> position — [gather-flatten.ts](../src/workspace/gather-flatten.ts) `foldedKey`) carries a
+> **synthetic** position key: the marker's key plus the row's offset within the block. This key does
+> not exist in `scroll_index` — it positions nothing (the firewall: a gather mints no `own`-edges).
+> [NavigationPanel](../src/workspace/NavigationPanel.tsx)'s "open focus" (`→`) button is not
+> suppressed on folded rows (only the ownership gesture menu is, via `isBlockRow`), and passes this
+> synthetic key straight through as `onOpenFocus`'s `key` →
+> [FocusPanel](../src/workspace/FocusPanel.tsx)'s `rowKey` → the nested NavigationPanel's `rootKey`
+> ([NavigationPanel.tsx:583-584](../src/workspace/NavigationPanel.tsx#L583)), which scopes the
+> panel's **children** section. Since no real row has that key, the children list is always empty —
+> even when the folded row has real owned children positioned elsewhere in the outline.
+>
+> **Reproduce directly off the demo subtree** (no console needed — [MatrixBrowser.tsx](../src/admin/MatrixBrowser.tsx)
+> seeds this on purpose): under "9.1 Heterogeneous children," the first `#task` aspect (`status:
+> in-progress`) owns a real child labelled *"A real child, homed on the task above…"*. That same
+> task is folded again under "9.3/9.7 View block" (the view folds the whole Tasks matrix). Open the
+> **folded** copy's focus panel (hover it under "View block," click `→`; it has no `⋯` gesture menu —
+> that's how you tell it apart from the real one) — the children section shows the empty state
+> ("Press Enter to create your first row"), not the real child. Opening the **real** copy's focus
+> panel (under "9.1 Heterogeneous children") shows the child correctly — same underlying row, two
+> different outcomes depending on which appearance you drilled in from.
+>
+> **Why this isn't a one-line fix — the "teleport" concern.** The obvious patch (look up the row's
+> real `scroll_index` position by `(matrixId, rowId)` identity when opening focus from a folded row,
+> instead of trusting the synthetic key) raises questions worth deciding deliberately, not
+> discovering in production:
+>
+> - **No real position.** A folded row may have **no** home in `scroll_index` at all — e.g. a bare
+>   data row inserted directly into its matrix, never given a tree position (exactly what
+>   [inline-block-fold.spec.ts](../../e2e/inline-block-fold.spec.ts)'s `seedFoldedView` does on
+>   purpose, "positioning them would make them appear both loose and folded"). The lookup must
+>   degrade gracefully — legitimately empty children, not an error — and the UI should probably say
+>   *why* (unhomed vs. "loading").
+> - **Multiple real positions.** Ownership is single but position is plural (portals — [§5](#5-portals-and-refs-one-family-split-by-anchoring)).
+>   A folded row's identity can resolve to a home **and** N portals. Which does "children" scope to?
+>   All interleaved? Just the home? Does the user get to pick?
+> - **Navigational legibility ("teleport").** The row rendered inline in one part of the tree (under
+>   a `view` block, in whatever branch that block lives) may have its *real* position somewhere
+>   structurally unrelated. Jumping there via `→` is a legitimate drill-in, but with no signal that
+>   you left the branch you were reading — unlike a normal boundary-hop ([§9.5](Phase-9.md#95-boundary-hop--panel-stack)),
+>   where the breadcrumb tracks a real lexkey-prefix ancestry the whole time. Does the folded row's
+>   `→` need a distinct affordance/tooltip ("go to real position") vs. the plain boundary-hop arrow?
+>   Does the breadcrumb need to show the discontinuity?
+> - **Ghost interplay.** If the real position is itself a ghosted portal appearance (home deleted),
+>   what should drilling in show?
+>
+> **Orient first.** Read this section in full, then trace the path live using the repro above (or
+> `git log`/this session's transcript) before touching code. Read
+> [NavigationPanel.tsx](../src/workspace/NavigationPanel.tsx) (`onOpenFocus` wiring, the `isBlockRow`
+> suppression precedent for the gesture menu), [FocusPanel.tsx](../src/workspace/FocusPanel.tsx)
+> (`rowKey`/`rootKey` — its only consumer is the nested NavigationPanel's children list),
+> [gather-flatten.ts](../src/workspace/gather-flatten.ts) (`foldedKey`), and
+> [scroll-index.ts](../src/core/scroll-index.ts) (`positionsOf` — the Stage-A primitive that already
+> enumerates a node's real positions; likely the lookup's foundation).
+>
+> **Decide, then build.** Resolve the open questions above (a short design note is fine — this
+> doesn't need another spike), then wire the chosen behavior. At minimum: a folded row with exactly
+> one real position drills in correctly; a folded row with zero real positions shows an
+> intentional, legible empty state (not today's silent, indistinguishable-from-a-bug one); the
+> firewall holds (still no `own`-edges minted by any part of this fix).
+>
+> **Gate.** Add e2e coverage for the repro above (folded row with a real child → children show after
+> drill-in) plus the zero-position and multi-position cases; run the full battery. Update this
+> section's status to landed and fold the outcome into [§12 Forward](#12-forward).

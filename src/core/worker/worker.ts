@@ -9,6 +9,7 @@ import type { ClientMessage, CoreWorkerMessage } from '../types'
 
 import { handleMatrixClientMessage, initMatrixHandler } from './matrix-handler'
 import { handleSqlClientMessage, initSqlHandler } from './sql-handler'
+import { handleGatherMessage } from './gather-handler'
 import { sqliteWasm } from './worker-db'
 
 const post = (message: CoreWorkerMessage) => {
@@ -27,6 +28,10 @@ const handleMessage = async (event: MessageEvent<ClientMessage>) => {
     case 'unsubscribe':
     case 'execute':
       await handleSqlClientMessage(message)
+      return
+    case 'subscribeGather':
+    case 'unsubscribeGather':
+      await handleGatherMessage(message)
       return
     default:
       await handleMatrixClientMessage(message)

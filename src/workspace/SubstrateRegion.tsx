@@ -1,25 +1,17 @@
 import { createEffect, createMemo, createSignal, For, Show, type Component } from 'solid-js'
 
-import {
-  getColumns,
-  updateRow,
-  addPortal,
-  removePortal,
-  moveOwner,
-  deleteHomeGhostingPortals,
-  hardDeleteIncludingRefs,
-} from '../core/client/matrix-client'
+import { getColumns, updateRow } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import { useRowData } from '../sql/useRowData'
 import { buildTagsForRowQuery } from '../tags/tag-queries'
 import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
-import { partitionPropertyColumns } from '../shared/property-surface'
 import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../editor/aspect-tether'
 import { PropertyRow } from '../shared/PropertyRow'
 
 import { QueryBandsSection } from './QueryBand'
 import SubTableBand from './SubTableBand'
+import { RowGestureMenu, OwnerAffix, CoalescedHeader } from './row-gestures'
 
 /**
  * Substrate region (Phase 9.7 Stage C; see context/Phase-9.7.md §3, §5).
@@ -51,201 +43,6 @@ import SubTableBand from './SubTableBand'
  */
 
 type Focal = { matrixId: number; rowId: number }
-type RowRef = { matrixId: number; rowId: number }
-
-// ---------------------------------------------------------------------------
-// Gesture menu (portal / move-owner / two-tier delete)
-// ---------------------------------------------------------------------------
-
-/**
- * Dev-grade per-row gesture affordance. `host` is the panel's focal node;
- * `target` is the row the gesture acts on. The escalation (hard delete) is
- * confirmation-gated; the default delete ghosts surviving portals.
- */
-const RowGestureMenu: Component<{ host: Focal; target: RowRef }> = (props) => {
-  const [open, setOpen] = createSignal(false)
-
-  const run = (fn: () => Promise<unknown>) => {
-    setOpen(false)
-    void fn().catch((e) => console.error('gesture failed', e))
-  }
-
-  return (
-    <span style={{ position: 'relative', 'flex-shrink': 0 }}>
-      <button
-        type="button"
-        class="substrate-gesture-toggle"
-        data-testid="substrate-gesture-toggle"
-        aria-label="Row actions"
-        title="Row actions (portal, move-owner, delete)"
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen((o) => !o)
-        }}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--text-muted)',
-          'font-size': '14px',
-          padding: '0 4px',
-          'line-height': '1',
-        }}
-      >
-        ⋯
-      </button>
-      <Show when={open()}>
-        <div
-          class="substrate-gesture-menu"
-          data-testid="substrate-gesture-menu"
-          style={{
-            position: 'absolute',
-            right: '0',
-            top: '18px',
-            'z-index': 20,
-            background: 'var(--card-focused-bg, #1b1e27)',
-            border: '1px solid hsl(230, 15%, 22%)',
-            'border-radius': '4px',
-            padding: '4px',
-            display: 'flex',
-            'flex-direction': 'column',
-            gap: '2px',
-            'min-width': '160px',
-            'box-shadow': '0 4px 12px rgba(0,0,0,0.3)',
-          }}
-        >
-          <GestureButton
-            testid="substrate-gesture-portal"
-            label="Portal here"
-            onClick={() => run(() => addPortal(props.host, props.target))}
-          />
-          <GestureButton
-            testid="substrate-gesture-move-owner"
-            label="Move home here"
-            onClick={() => run(() => moveOwner(props.target, props.host))}
-          />
-          <GestureButton
-            testid="substrate-gesture-detach"
-            label="Detach from here"
-            onClick={() => run(() => removePortal(props.host, props.target))}
-          />
-          <GestureButton
-            testid="substrate-gesture-delete"
-            label="Delete (ghost mirrors)"
-            onClick={() =>
-              run(() => deleteHomeGhostingPortals(props.target.matrixId, props.target.rowId))
-            }
-          />
-          <GestureButton
-            testid="substrate-gesture-hard-delete"
-            label="Delete everywhere…"
-            danger
-            onClick={() => {
-              if (confirm('Hard-delete this row and every reference to it, everywhere?')) {
-                run(() => hardDeleteIncludingRefs(props.target.matrixId, props.target.rowId))
-              } else {
-                setOpen(false)
-              }
-            }}
-          />
-        </div>
-      </Show>
-    </span>
-  )
-}
-
-const GestureButton: Component<{
-  testid: string
-  label: string
-  danger?: boolean
-  onClick: () => void
-}> = (props) => (
-  <button
-    type="button"
-    data-testid={props.testid}
-    onClick={(e) => {
-      e.stopPropagation()
-      props.onClick()
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      'text-align': 'left',
-      'font-size': '12px',
-      padding: '3px 6px',
-      'border-radius': '3px',
-      color: props.danger ? 'var(--danger, #d66)' : 'var(--text-dim)',
-    }}
-  >
-    {props.label}
-  </button>
-)
-
-// ---------------------------------------------------------------------------
-// Owner-legibility affix — "what dies if I delete here"
-// ---------------------------------------------------------------------------
-
-const OwnerAffix: Component<{ label: string; title: string }> = (props) => (
-  <span
-    class="substrate-owner-affix"
-    data-testid="substrate-owner-affix"
-    title={props.title}
-    style={{
-      'font-size': '9px',
-      'font-weight': 600,
-      'letter-spacing': '0.4px',
-      'text-transform': 'uppercase',
-      color: 'var(--c-fg-3, #888)',
-      'user-select': 'none',
-    }}
-  >
-    {props.label}
-  </span>
-)
-
-// ---------------------------------------------------------------------------
-// Coalesced grid header — a same-schema run hoists its column labels up
-// ---------------------------------------------------------------------------
-
-/** The field column names of a same-schema block, hoisted to one shared header
- *  (grid coalescing — §3). Empty when the block has no non-label field columns. */
-const CoalescedHeader: Component<{ columns: ColumnDefinition[] }> = (props) => {
-  const fieldNames = createMemo(() =>
-    partitionPropertyColumns(props.columns).fields.map((c) => c.name),
-  )
-  return (
-    <Show when={fieldNames().length > 0}>
-      <div
-        class="substrate-grid-header"
-        data-testid="substrate-grid-header"
-        style={{
-          display: 'flex',
-          'flex-wrap': 'wrap',
-          gap: '6px 16px',
-          'padding-left': '23px',
-          'margin-bottom': '2px',
-        }}
-      >
-        <For each={fieldNames()}>
-          {(name) => (
-            <span
-              style={{
-                'font-size': '9px',
-                'font-weight': 600,
-                'letter-spacing': '0.4px',
-                'text-transform': 'uppercase',
-                color: 'var(--c-fg-3, #888)',
-              }}
-            >
-              {name}
-            </span>
-          )}
-        </For>
-      </div>
-    </Show>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Loose mode — owned aspects (absorbs the former AspectBand)

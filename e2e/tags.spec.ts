@@ -966,20 +966,20 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     await openSidebar(page)
     await page.getByTestId('add-demo-subtree-btn').click()
 
-    // The host bullet and its plain workspace children render.
-    await expect(page.locator('.outline-row', { hasText: 'Trip planning' })).toBeVisible({
+    // The tour root and a plain workspace child render.
+    await expect(page.locator('.outline-row', { hasText: 'feature tour' })).toBeVisible({
       timeout: 5000,
     })
-    await expect(page.locator('.outline-row', { hasText: 'Book flights' })).toBeVisible({
+    await expect(page.locator('.outline-row', { hasText: 'a loose own-child' })).toBeVisible({
       timeout: 5000,
     })
 
     // Cross-matrix aspect rows render in the same outline, each with a type chip
     // labelled by its matrix (task / note) — distinct from a plain bullet.
-    await expect(page.locator('.outline-row', { hasText: 'Reserve hotel' })).toBeVisible({
+    await expect(page.locator('.outline-row', { hasText: '#task aspect' })).toBeVisible({
       timeout: 5000,
     })
-    await expect(page.locator('.outline-row', { hasText: 'Trip notes' })).toBeVisible({
+    await expect(page.locator('.outline-row', { hasText: '#note aspect' })).toBeVisible({
       timeout: 5000,
     })
 
@@ -991,7 +991,7 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     ).toBeVisible({ timeout: 5000 })
 
     // A nested host owns its own task — heterogeneous children nest, too.
-    await expect(page.locator('.outline-row', { hasText: 'Visit the museum' })).toBeVisible({
+    await expect(page.locator('.outline-row', { hasText: 'nested host' })).toBeVisible({
       timeout: 5000,
     })
   })
@@ -1002,7 +1002,10 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     await openSidebar(page)
     await page.getByTestId('add-demo-subtree-btn').click()
 
-    const hostRow = page.locator('.outline-row', { hasText: 'Trip planning' }).first()
+    // Open the 9.1 host that owns the #task/#note aspects.
+    const hostRow = page
+      .locator('.outline-row', { hasText: 'Heterogeneous children' })
+      .first()
     await expect(hostRow).toBeVisible({ timeout: 5000 })
     await hostRow.hover()
     await hostRow.locator('.nav-row-open-focus').click()
@@ -1014,12 +1017,12 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
       .getByTestId('stream-focus-column')
       .last()
       .getByTestId('focus-panel-children')
-    const reserveRow = focusChildren
+    const taskRow = focusChildren
       .locator('.outline-row')
-      .filter({ hasText: 'Reserve hotel' })
+      .filter({ hasText: '#task aspect' })
       .first()
-    await expect(reserveRow).toBeVisible({ timeout: 5000 })
-    const chip = reserveRow.getByTestId('row-type-chip')
+    await expect(taskRow).toBeVisible({ timeout: 5000 })
+    const chip = taskRow.getByTestId('row-type-chip')
     await expect(chip).toHaveText('task', { timeout: 5000 })
   })
 })

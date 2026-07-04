@@ -3,7 +3,7 @@
 
 import type { SqlWorkerMessage } from '../sql-types'
 
-import { pendingExecs, subscribedObservers } from './sql-client-promises'
+import { pendingExecs, subscribedObservers, gatherObservers } from './sql-client-promises'
 
 export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
   const { type } = message
@@ -46,6 +46,20 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
         resolver.reject(error)
         pendingExecs.delete(id)
       }
+      break
+    }
+
+    // Gather subscriptions (Phase 9.7 Stage C2 — inline block folding).
+    case 'gatherResult': {
+      const entry = gatherObservers.get(message.key)
+      if (!entry) break
+      for (const observer of entry.observers) observer(message.result, null)
+      break
+    }
+    case 'gatherError': {
+      const entry = gatherObservers.get(message.key)
+      if (!entry) break
+      for (const observer of entry.observers) observer(null, message.error)
       break
     }
   }

@@ -57,6 +57,8 @@ worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
     case 'subscribeError':
     case 'executeResult':
     case 'executeError':
+    case 'gatherResult':
+    case 'gatherError':
       handleSqlWorkerMessage(message)
       return
     default:
