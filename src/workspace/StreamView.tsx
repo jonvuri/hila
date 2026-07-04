@@ -20,6 +20,7 @@ import {
 } from 'solid-js'
 
 import { execQuery } from '../core/client/sql-client'
+import { resolveDrillInPosition } from '../core/client/matrix-client'
 import { useQuery } from '../sql/useQuery'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import OverlaidCards from '../design/overlaid-cards/OverlaidCards'
@@ -41,7 +42,19 @@ import {
 // row id, so the stack can render boundary hops into rows owned in another matrix.
 type PanelState =
   | { type: 'navigation'; rootKey?: Uint8Array }
-  | { type: 'focus'; matrixId: number; rowId: number; rowKey: Uint8Array }
+  | {
+      type: 'focus'
+      matrixId: number
+      rowId: number
+      rowKey: Uint8Array
+      // Phase 9.7 Stage C3: this focus panel was opened by drilling into a
+      // folded block row's real position, not a plain boundary hop.
+      foldedOrigin?: boolean
+      // No live position was found for the row at all (a bare data row never
+      // given a tree position, or every position is ghosted); `rowKey` is a
+      // placeholder and the children section must not scope to it.
+      unresolvedPosition?: boolean
+    }
 
 type StreamViewProps = {
   matrixId: number
@@ -85,11 +98,12 @@ const StreamView = (props: StreamViewProps) => {
     matrixId: number,
     rowId: number,
     rowKey: Uint8Array,
+    opts?: { foldedOrigin?: boolean; unresolvedPosition?: boolean },
   ) => {
     setPanels((prev) => {
       const next: PanelState[] = [
         ...prev.slice(0, fromIndex + 1),
-        { type: 'focus', matrixId, rowId, rowKey },
+        { type: 'focus', matrixId, rowId, rowKey, ...opts },
       ]
       return enforceColumnLimit(next)
     })
@@ -146,6 +160,26 @@ const StreamView = (props: StreamViewProps) => {
   }
 
   const navigateToRow = (rowId: number) => void openRowRefAt(0, props.matrixId, rowId)
+
+  // Phase 9.7 Stage C3: drill into a folded block row (its rendered key is
+  // synthetic — Stage C2's gather, positions nothing). Resolve its real
+  // position (home if live, else the lowest-keyed live portal) and open a
+  // focus panel there instead of trusting the synthetic key. A row with no
+  // live position at all still gets a focus panel, flagged so it renders an
+  // intentional empty state rather than silently showing nothing.
+  const openFoldedFocusAt = async (fromIndex: number, matrixId: number, rowId: number) => {
+    const resolved = await resolveDrillInPosition(matrixId, rowId)
+    if (resolved) {
+      handleAppendAfter(fromIndex, matrixId, rowId, new Uint8Array(resolved.key), {
+        foldedOrigin: true,
+      })
+    } else {
+      handleAppendAfter(fromIndex, matrixId, rowId, new Uint8Array(0), {
+        foldedOrigin: true,
+        unresolvedPosition: true,
+      })
+    }
+  }
 
   createEffect(
     on(
@@ -315,6 +349,9 @@ const StreamView = (props: StreamViewProps) => {
           onOpenFocus={(matrixId, rowId, key) =>
             handleAppendAfter(index, matrixId, rowId, new Uint8Array(key))
           }
+          onOpenFoldedFocus={(matrixId, rowId) =>
+            void openFoldedFocusAt(index, matrixId, rowId)
+          }
           focusedRowId={focusedRowForNav().get(index)}
         />
       )
@@ -325,6 +362,8 @@ const StreamView = (props: StreamViewProps) => {
         matrixId={panel.matrixId}
         rowId={panel.rowId}
         rowKey={panel.rowKey}
+        foldedOrigin={panel.foldedOrigin}
+        unresolvedPosition={panel.unresolvedPosition}
         active={index === panels().length - 1}
         onAppendFocus={(matrixId, rowId, key) =>
           handleAppendAfter(index, matrixId, rowId, new Uint8Array(key))
@@ -333,6 +372,7 @@ const StreamView = (props: StreamViewProps) => {
           handleReplaceAt(index, matrixId, rowId, new Uint8Array(key))
         }
         onOpenRowRef={(matrixId, rowId) => void openRowRefAt(index, matrixId, rowId)}
+        onOpenFoldedFocus={(matrixId, rowId) => void openFoldedFocusAt(index, matrixId, rowId)}
         onCollapse={() => handleClose(index + 1)}
         onClose={() => handleClose(index)}
       />

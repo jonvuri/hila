@@ -69,6 +69,14 @@ type FocusPanelProps = {
   matrixId: number
   rowId: number
   rowKey: Uint8Array
+  // Phase 9.7 Stage C3: this panel was opened by drilling into a folded block
+  // row's real position, not a plain boundary hop — shows a small notice so
+  // the jump to a (possibly structurally unrelated) real position is legible.
+  foldedOrigin?: boolean
+  // No live position was found for the row at all — `rowKey` is a placeholder;
+  // the children section shows an intentional empty state instead of scoping
+  // the nested outline to it.
+  unresolvedPosition?: boolean
   // Boundary-hop aware (Phase 9.5): focus callbacks carry the target row's matrix.
   onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
   onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
@@ -76,6 +84,9 @@ type FocusPanelProps = {
   // the stack resolves the key and appends a focus panel. Used by the embedded
   // sub-table boundary-hop drill-in.
   onOpenRowRef: (matrixId: number, rowId: number) => void
+  // Same shape, but resolves via identity (Stage C3) for a folded child row of
+  // this panel's own children section.
+  onOpenFoldedFocus: (matrixId: number, rowId: number) => void
   onClose: () => void
   // Every focus panel shows a prominent header. On the active (rightmost) panel
   // the header is an editable title; on non-active panels the whole header is a
@@ -546,6 +557,26 @@ const FocusPanel = (props: FocusPanelProps) => {
         >
           {
             <>
+              {/* Phase 9.7 Stage C3: this panel was opened by drilling into a
+                  folded block row — its real position may be structurally
+                  unrelated to where it was rendered as folded, so flag the jump
+                  (no existing breadcrumb mechanism tracks this discontinuity;
+                  a fuller teleport-aware breadcrumb is a possible future
+                  evolution if this notice proves insufficient). */}
+              <Show when={props.foldedOrigin}>
+                <div
+                  data-testid="focus-panel-folded-origin"
+                  style={{
+                    'font-size': '11px',
+                    color: 'var(--text-muted)',
+                    'font-style': 'italic',
+                    'padding-bottom': '6px',
+                  }}
+                >
+                  Opened from a folded view — showing this row's real position.
+                </div>
+              </Show>
+
               {/* Label header. Active (rightmost) panel: an editable title.
                   Non-active panels: the same-looking header is a clickable
                   collapse target (with an integrated chevron) that closes deeper
@@ -757,10 +788,10 @@ const FocusPanel = (props: FocusPanelProps) => {
                 }}
               >
                 <Show
-                  when={hasChildren()}
+                  when={!props.unresolvedPosition}
                   fallback={
                     <div
-                      data-testid="focus-no-children"
+                      data-testid="focus-no-position"
                       style={{
                         color: 'var(--text-muted)',
                         'font-size': '13px',
@@ -768,23 +799,42 @@ const FocusPanel = (props: FocusPanelProps) => {
                         padding: '8px 0',
                       }}
                     >
-                      No children. Press Enter in the outline to add items.
+                      This row isn't placed in the outline, so it has no separate children view
+                      here.
                     </div>
                   }
                 >
-                  <Suspense
+                  <Show
+                    when={hasChildren()}
                     fallback={
-                      <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
-                        Loading children...
+                      <div
+                        data-testid="focus-no-children"
+                        style={{
+                          color: 'var(--text-muted)',
+                          'font-size': '13px',
+                          'font-style': 'italic',
+                          padding: '8px 0',
+                        }}
+                      >
+                        No children. Press Enter in the outline to add items.
                       </div>
                     }
                   >
-                    <NavigationPanel
-                      matrixId={props.matrixId}
-                      rootKey={props.rowKey}
-                      onOpenFocus={props.onAppendFocus}
-                    />
-                  </Suspense>
+                    <Suspense
+                      fallback={
+                        <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
+                          Loading children...
+                        </div>
+                      }
+                    >
+                      <NavigationPanel
+                        matrixId={props.matrixId}
+                        rootKey={props.rowKey}
+                        onOpenFocus={props.onAppendFocus}
+                        onOpenFoldedFocus={props.onOpenFoldedFocus}
+                      />
+                    </Suspense>
+                  </Show>
                 </Show>
               </div>
             </>

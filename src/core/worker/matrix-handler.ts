@@ -47,6 +47,7 @@ import {
   moveOwner as moveOwnerImpl,
   deleteHomeGhostingPortals as deleteHomeGhostingPortalsImpl,
   hardDeleteIncludingRefs as hardDeleteIncludingRefsImpl,
+  resolveDrillInPosition as resolveDrillInPositionImpl,
 } from '../portal'
 import {
   reparentRow as reparentRowImpl,
@@ -891,6 +892,18 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'hardDeleteIncludingRefsSuccess', id, result: undefined })
       } catch (err: unknown) {
         postMessage({ type: 'hardDeleteIncludingRefsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'resolveDrillInPosition': {
+      const { id, matrixId, rowId } = message
+      try {
+        const { db } = await sqliteWasm
+        const resolved = resolveDrillInPositionImpl(db, { matrixId, rowId })
+        postMessage({ type: 'resolveDrillInPositionSuccess', id, result: resolved })
+      } catch (err: unknown) {
+        postMessage({ type: 'resolveDrillInPositionError', id, error: toError(err) })
       }
       break
     }

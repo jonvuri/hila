@@ -87,6 +87,10 @@ type NavigationPanelProps = {
   // Boundary-hop aware (Phase 9.5): carries the row's matrix so a meshed cross-matrix
   // aspect row can drill into a focus panel keyed by `(matrix_id, row_id)`.
   onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  // Phase 9.7 Stage C3: a folded block row's `key` is synthetic (positions
+  // nothing — the firewall), so drill-in must resolve its real position by
+  // identity instead of trusting the key. See resolveDrillInPosition.
+  onOpenFoldedFocus: (matrixId: number, rowId: number) => void
   focusedRowId?: number
 }
 
@@ -1108,6 +1112,12 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       const index = findRowIndex(vRows, ck)
       if (index === -1) return
       const row = vRows[index]!
+      // A folded block row's key is synthetic (Stage C3) — resolve its real
+      // position instead of passing the synthetic key straight through.
+      if (row.is_block_row === 1) {
+        props.onOpenFoldedFocus(row.matrix_id, row.row_id)
+        return
+      }
       // Any rendered row can drill in, including meshed cross-matrix aspect rows
       // (the Phase 9.5 boundary hop) — the focus panel is keyed by its matrix.
       props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
@@ -1442,12 +1452,17 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   {/* Right-arrow button: open focus panel. Every rendered row gets it,
                     including meshed cross-matrix aspect rows — drilling into one whose
                     own-parent is a host in this matrix is the Phase 9.5 boundary hop.
-                    Ghost tombstones have no target to open. */}
+                    Ghost tombstones have no target to open. A folded block row (Stage
+                    C3) drills in via identity resolution, not its synthetic key — the
+                    label/tooltip flags this as a jump to the row's real position
+                    (its real position may be structurally unrelated to where it's
+                    folded in here), rather than an in-place boundary hop. */}
                   <Show when={!isGhost()}>
                     <button
                       class="nav-row-open-focus"
                       data-testid="open-focus-btn"
-                      aria-label="Open focus panel"
+                      aria-label={isBlockRow ? 'Open real position' : 'Open focus panel'}
+                      title={isBlockRow ? 'Open real position' : undefined}
                       style={{
                         position: 'absolute',
                         right: '4px',
@@ -1464,7 +1479,9 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                         transition: 'opacity 0.15s, color 0.15s',
                       }}
                       onClick={() =>
-                        props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
+                        isBlockRow ?
+                          props.onOpenFoldedFocus(row.matrix_id, row.row_id)
+                        : props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
                       }
                     >
                       →

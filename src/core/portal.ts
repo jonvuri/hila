@@ -325,6 +325,47 @@ export const hardDeleteIncludingRefs = (db: Database, node: NodeRef): void => {
   })
 }
 
+// -- Drill-in resolution (Phase 9.7 Stage C3) ---------------------------------
+
+export type ResolvedPosition = { key: Uint8Array; isHome: boolean }
+
+const isGhostAt = (db: Database, key: Uint8Array): boolean => {
+  const stmt = db.prepare('SELECT is_ghost FROM scroll_index WHERE global_lexkey = ?')
+  stmt.bind([key])
+  let ghost = false
+  if (stmt.step()) ghost = (stmt.get({}) as { is_ghost: number }).is_ghost === 1
+  stmt.finalize()
+  return ghost
+}
+
+/**
+ * Resolve the real position a render-only, identity-only row (e.g. a folded
+ * block row's synthetic key — Stage C2) should scope a drill-in to: prefer the
+ * home appearance if it's live, else the lowest-keyed live portal appearance,
+ * else `null` (no live position at all — the row may be a bare data row never
+ * given a tree position, or all its positions are ghosted).
+ *
+ * INTERMEDIATE CHOICE: deep-portal materialization already fans a node's owned
+ * children out to every live appearance (`materializeSubtreeAtPrefix`), so home
+ * vs. portal resolves to equivalent children — this tiebreak only affects which
+ * ancestry/breadcrumb the drilled-in panel shows, not which children appear.
+ * Revisit with a real tiebreak or a chooser if a node with no home and several
+ * portals ever makes "lowest key" a surprising pick — not built now as
+ * unnecessary for v1.
+ */
+export const resolveDrillInPosition = (
+  db: Database,
+  node: NodeRef,
+): ResolvedPosition | null => {
+  const home = homeKeyOf(db, node)
+  if (home && !isGhostAt(db, home)) return { key: home, isHome: true }
+
+  const livePositions = positionsOf(db, node).filter((p) => !isGhostAt(db, p.key))
+  if (livePositions.length === 0) return null
+  livePositions.sort((a, b) => compareBytes(a.key, b.key))
+  return { key: livePositions[0]!.key, isHome: false }
+}
+
 // -- Closure-per-location (free, from the lexkey prefix) ----------------------
 
 /**

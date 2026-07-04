@@ -252,6 +252,12 @@ export type MatrixOperationMap = {
     params: { matrixId: number; rowId: number }
     result: void
   }
+  // Phase 9.7 Stage C3 — resolve a render-only row's real position (e.g. a
+  // folded block row's synthetic key) for drill-in. See resolveDrillInPosition.
+  resolveDrillInPosition: {
+    params: { matrixId: number; rowId: number }
+    result: { key: Uint8Array; isHome: boolean } | null
+  }
   createTagType: {
     params: { name: string; columns?: { name: string; type: string }[] }
     result: TagType

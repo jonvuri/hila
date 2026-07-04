@@ -300,6 +300,17 @@ export const deleteHomeGhostingPortals = (matrixId: number, rowId: number): Prom
 export const hardDeleteIncludingRefs = (matrixId: number, rowId: number): Promise<void> =>
   workerCall('hardDeleteIncludingRefs', { matrixId, rowId })
 
+/**
+ * Resolve a render-only row's real position (Stage C3 — e.g. a folded block
+ * row's synthetic key) for drill-in: home if live, else the lowest-keyed live
+ * portal, else `null` (no live position at all).
+ */
+export const resolveDrillInPosition = (
+  matrixId: number,
+  rowId: number,
+): Promise<{ key: Uint8Array; isHome: boolean } | null> =>
+  workerCall('resolveDrillInPosition', { matrixId, rowId })
+
 export const createTagType = (
   name: string,
   columns?: { name: string; type: string }[],

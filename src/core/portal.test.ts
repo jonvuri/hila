@@ -24,7 +24,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import { createPerfDb, type PerfHarness } from '../perf/index'
 import { assertQueryPlan } from '../perf/query-plan'
 
-import { createMatrix, insertRow } from './matrix'
+import { createMatrix, insertDataRow, insertRow } from './matrix'
 import {
   addPortal,
   ancestryOfAppearance,
@@ -33,6 +33,7 @@ import {
   isPositionDescendantOrSelf,
   moveOwner,
   removePortal,
+  resolveDrillInPosition,
 } from './portal'
 import { positionsOf } from './scroll-index'
 import { getOwnEdge, type NodeRef } from './tree'
@@ -409,5 +410,86 @@ describe('Phase 9.7a — deep portals + multi-location scroll_index (production 
       [x.matrixId, x.rowId],
     ) as { n: number }[]
     expect(owners[0]!.n).toBe(1)
+  })
+
+  // -- Drill-in resolution (Phase 9.7 Stage C3) ---------------------------------
+
+  describe('resolveDrillInPosition', () => {
+    test('resolves a home-only row to its home', () => {
+      const parent = mkRow()
+      const x = mkRow(parent)
+      const positions = positionsOf(h.db, x)
+      expect(positions.length).toBe(1)
+
+      const resolved = resolveDrillInPosition(h.db, x)
+      expect(resolved).not.toBeNull()
+      expect(resolved!.isHome).toBe(true)
+      expect(resolved!.key).toEqual(positions[0]!.key)
+    })
+
+    test('prefers home over a portal when both are live', () => {
+      const parent = mkRow()
+      const x = mkRow(parent)
+      const host = mkRow()
+      addPortal(h.db, host, x)
+      expect(positionsOf(h.db, x).length).toBe(2) // home + portal
+
+      const resolved = resolveDrillInPosition(h.db, x)
+      expect(resolved).not.toBeNull()
+      expect(resolved!.isHome).toBe(true)
+    })
+
+    test('ghosting the home also ghosts every portal appearance — resolves to null (Q4)', () => {
+      const parent = mkRow()
+      const x = mkRow(parent)
+      const hostA = mkRow()
+      const hostB = mkRow()
+      addPortal(h.db, hostA, x)
+      addPortal(h.db, hostB, x)
+      deleteHomeGhostingPortals(h.db, x)
+
+      // Home-delete ghosts every surviving portal appearance too (portal.ts's
+      // ghostPortals) — there is no "live portal, ghosted home" state. Every
+      // remaining scroll_index row for x is a tombstone, so the resolver must
+      // treat all of them as absent, same as zero live positions.
+      expect(positionsOf(h.db, x).length).toBe(2)
+      expect(resolveDrillInPosition(h.db, x)).toBeNull()
+    })
+
+    test('with no home, resolves to the lowest-keyed live portal among several', () => {
+      const bareRowId = insertDataRow(h.db, mx, { label: 'bare' })
+      const bareRow: NodeRef = { matrixId: mx, rowId: bareRowId }
+      const hostA = mkRow()
+      const hostB = mkRow()
+      addPortal(h.db, hostA, bareRow)
+      addPortal(h.db, hostB, bareRow)
+
+      // Ownership is single but position is plural (§5) — a portal-only row
+      // (no own-edge, e.g. inserted directly into its matrix) can still carry
+      // multiple live positions. No home exists to prefer, so the resolver
+      // deterministically picks the lowest-keyed one (Q2's intermediate
+      // tiebreak — revisit if a real need for a smarter choice arises).
+      const positions = positionsOf(h.db, bareRow)
+      expect(positions.length).toBe(2)
+      const expectedLowest = [...positions].sort((a, b) => {
+        const n = Math.min(a.key.length, b.key.length)
+        for (let i = 0; i < n; i++) {
+          if (a.key[i]! !== b.key[i]!) return a.key[i]! - b.key[i]!
+        }
+        return a.key.length - b.key.length
+      })[0]!.key
+
+      const resolved = resolveDrillInPosition(h.db, bareRow)
+      expect(resolved).not.toBeNull()
+      expect(resolved!.isHome).toBe(false)
+      expect(resolved!.key).toEqual(expectedLowest)
+    })
+
+    test('resolves to null for a bare data row never given a tree position', () => {
+      const bareRowId = insertDataRow(h.db, mx, { label: 'bare' })
+      const resolved = resolveDrillInPosition(h.db, { matrixId: mx, rowId: bareRowId })
+      expect(resolved).toBeNull()
+      expect(positionsOf(h.db, { matrixId: mx, rowId: bareRowId }).length).toBe(0)
+    })
   })
 })

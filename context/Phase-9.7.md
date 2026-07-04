@@ -11,18 +11,16 @@
 > ownership spine ([Phase 8](Phase-8.md)/[8c](Phase-8c.md)) and the development
 > principles (incremental/intentional, gestalt-aware, single-frame perf).
 >
-> **Status:** design converged and **the build is complete**. Both gating spikes landed —
-> [deep-portal materialization](Phase-9.7a.md) (GO, deep-in-v1) and
+> **Status:** design converged and **the build is complete, including Stage C3**. Both gating
+> spikes landed — [deep-portal materialization](Phase-9.7a.md) (GO, deep-in-v1) and
 > [windowing/height-variance perf](Phase-9.7b.md) (GO, count+slice with no per-row dynamic
 > offsets for v1) — [Phase 9.7c](Phase-9.7c-reconciliation.md) (doc reconciliation) is
-> **done**, and all three build stages ([§13](#13-the-build-proper--implementation-prompts))
-> shipped: A (data layer / portals), B (block markers + count+slice windowing), and C
-> (renderer unification + gestures + **inline block folding via the worker↔client gather
-> RPC**). Composed fidelity and the merged level remain [Phase 10](Phase-10.md). **One
-> post-hoc correctness gap surfaced in review** — folded-row drill-in loses the row's real
-> children (a "teleport" concern, not just a wiring bug) — scoped as
-> [**Stage C3**](#stage-c3--folded-row-focus-and-drill-in-identity-open) below; **open, starts
-> next**, before the hand-off to Phase 10 is final.
+> **done**, and all four build stages ([§13](#13-the-build-proper--implementation-prompts))
+> shipped: A (data layer / portals), B (block markers + count+slice windowing), C
+> (renderer unification + gestures + inline block folding via the worker↔client gather RPC),
+> and [**C3**](#stage-c3--folded-row-focus-and-drill-in-identity-landed) (folded-row drill-in
+> identity — **landed**). Composed fidelity and the merged level remain
+> [Phase 10](Phase-10.md), which this hands off to now.
 
 ---
 
@@ -331,15 +329,14 @@ underneath (invisible to the ownership question). Sources:
    row-gesture module, gestures on outline rows), and **C2-remainder (inline block folding via the
    worker↔client gather RPC — landed, the last piece)**. **The Phase 9.7 build is complete.** See
    each stage's build note for what the next inherited.
-6. **[Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-open) — folded-row focus and drill-in
-   identity.** **Open, starts next.** Post-landing review found that opening a focus panel from a
-   folded (`view`-block) row passes the row's synthetic fold-position key straight through as the
-   nested panel's position scope, so its owned children silently never show — reproducible directly
-   off the demo subtree (see the stage prompt). Scoped as its own session because the fix is a
-   "teleport" with open questions (no-position rows, multi-position rows, navigation legibility),
-   not a one-line lookup.
+6. **[Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-landed) — folded-row focus and drill-in
+   identity.** **Landed.** Post-landing review had found that opening a focus panel from a folded
+   (`view`-block) row passed the row's synthetic fold-position key straight through as the nested
+   panel's position scope, so its owned children silently never showed. Fixed by resolving the row's
+   real position by identity before opening the panel (home if live, else the lowest-keyed live
+   portal, else none) — see the stage's build note for what landed.
 7. **Phase 10** — composed fidelity (bullets, the merged level, drawn tethers, pretty grids)
-   over the substrate floor. **Hands off here once Stage C3 lands.**
+   over the substrate floor. **Hands off here now that Stage C3 has landed.**
 
 Also on the books, orthogonal: the **SQL subscription late-joiner race**
 ([Phase-9.md follow-ups](Phase-9.md#sql-subscription-late-joiner-race-latent-correctness-bug)).
@@ -717,10 +714,10 @@ green — this closes the Phase 9.7 build. What landed:
   'container'` exist and are guarded, but nothing mints a container marker yet — the additive path);
   nested blocks; the `lazy` portal path; composed/`TableFace` fidelity ([Phase 10](Phase-10.md)).
   **This closes the planned Phase 9.7 build.** Post-landing review surfaced one more correctness
-  gap in what C2 shipped — [Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-open), below —
+  gap in what C2 shipped — [Stage C3](#stage-c3--folded-row-focus-and-drill-in-identity-landed), below —
   so the hand-off to [Phase 10](Phase-10.md) waits on it.
 
-### Stage C3 — Folded-row focus and drill-in identity (open)
+### Stage C3 — Folded-row focus and drill-in identity (landed)
 
 > **Build Phase 9.7 — Stage C3: folded-row focus/drill-in identity.** Follow-up to Stage C2;
 > **requires Stage C2 landed** (the gather RPC + folded rows exist). Narrow in surface area — one
@@ -773,6 +770,34 @@ green — this closes the Phase 9.7 build. What landed:
 > - **Ghost interplay.** If the real position is itself a ghosted portal appearance (home deleted),
 >   what should drilling in show?
 >
+> **Decided (this session).** Resolution happens lazily, on click, via a new server-side primitive
+> (`resolveDrillInPosition` in `portal.ts`) rather than reusing the existing `onOpenRowRef`/
+> `buildRowGlobalKeyQuery` path as-is — that path takes `result[0]` unconditionally and silently
+> no-ops on zero rows, which would just relocate this bug, not fix it.
+>
+> - **No real position** ([§ zero-position](#stage-c3--folded-row-focus-and-drill-in-identity-landed)):
+>   the drill-in arrow stays clickable (identity is real even without a position). If resolution
+>   finds zero live positions, the focus panel still opens but renders a distinct, intentional empty
+>   state ("not placed in the outline — no children to show here") and **disables child creation**
+>   in that panel (there is no position to attach a new own-edge to).
+> - **Multiple real positions:** prefer **home** (live, non-ghost) when it exists; else the
+>   lowest-keyed live portal, deterministically. No "all interleaved" and no user-picker — deep-portal
+>   materialization ([§ Stage A](#stage-a--data-layer-deep-portals--multi-location-scroll_index)) already
+>   fans a node's owned children out to every live position, so home vs. portal shows equivalent
+>   children; only the ancestry/breadcrumb differs, which isn't worth extra UI for v1. **Intentionally
+>   provisional** — code comments at the tiebreak call this out so a future need (e.g. a node with no
+>   home and several portals, where "lowest key" is surprising) can revisit with a real tiebreak or a
+>   chooser, rather than rediscovering the gap silently.
+> - **Navigational legibility:** lightweight only — the folded row's → tooltip changes to something
+>   like "Open real position," and the opened focus panel shows a one-line header notice ("opened from
+>   a folded view"). No breadcrumb-discontinuity rework: there's no existing precedent to extend, and a
+>   full teleport-aware breadcrumb is disproportionate infrastructure for a narrow, occasional
+>   interaction. **Also intentionally provisional** — flagged in code as the seam a real
+>   discontinuity-aware breadcrumb would attach to, if drift/confusion reports justify it later.
+> - **Ghost interplay:** folds into the zero-position case — a ghosted position is filtered out during
+>   resolution and treated as absent, reusing the existing ghost precedent (ghosts already get no
+>   drill-in elsewhere).
+>
 > **Orient first.** Read this section in full, then trace the path live using the repro above (or
 > `git log`/this session's transcript) before touching code. Read
 > [NavigationPanel.tsx](../src/workspace/NavigationPanel.tsx) (`onOpenFocus` wiring, the `isBlockRow`
@@ -791,3 +816,41 @@ green — this closes the Phase 9.7 build. What landed:
 > **Gate.** Add e2e coverage for the repro above (folded row with a real child → children show after
 > drill-in) plus the zero-position and multi-position cases; run the full battery. Update this
 > section's status to landed and fold the outcome into [§12 Forward](#12-forward).
+
+#### Stage C3 — build note (landed)
+
+Fixed per the "Decided (this session)" note above. What landed:
+
+- **Resolution primitive ([portal.ts](../src/core/portal.ts) `resolveDrillInPosition`).** Prefers
+  the home (via the existing, now-exported-in-spirit `homeKeyOf` walk) when it's live; else the
+  lowest-keyed live portal appearance (from `positionsOf`, filtering out `is_ghost` positions); else
+  `null`. Ghost interplay folds into the zero-position case — a ghosted position is filtered out,
+  not treated as a resolvable target. Unit-tested in
+  [portal.test.ts](../src/core/portal.test.ts) (7 new cases: home-only, home-preferred-over-portal,
+  every-portal-ghosted-with-the-home → `null`, no-home-multi-portal lowest-key tiebreak, and a bare
+  data row with no position at all).
+- **Wired op ([matrix-types.ts](../src/core/matrix-types.ts) / `matrix-handler.ts` /
+  `matrix-client.ts`).** `resolveDrillInPosition` follows the same thin-passthrough op pattern as the
+  Stage-A/C1 portal ops — no new invalidation machinery (it's a one-shot read, not a subscription).
+- **Client wiring.** `NavigationPanel`'s `onOpenFocus` (both the keyboard callback and the arrow
+  button) branches on `row.is_block_row`: a folded row calls a new `onOpenFoldedFocus(matrixId,
+  rowId)` prop instead of passing its synthetic key. `StreamView.openFoldedFocusAt` (mirroring the
+  existing `openRowRefAt`, which the naive reuse would have inherited the same-result-only /
+  no-op-on-zero bug from) calls the client op and appends a focus panel tagged `foldedOrigin` (and
+  `unresolvedPosition` when resolution comes back `null`). `FocusPanel` shows a one-line "opened from
+  a folded view" notice on `foldedOrigin`, and — when `unresolvedPosition` — renders a distinct
+  `focus-no-position` empty state instead of mounting the nested `NavigationPanel` at all (so there
+  is no dangling child-creation UI scoped to a non-existent position), rather than the generic
+  `focus-no-children` state.
+- **Gate.** New [folded-row-drill-in.spec.ts](../../e2e/folded-row-drill-in.spec.ts) (3 e2e: a real
+  positioned child shows after drill-in; a zero-position folded row shows the distinct empty state;
+  a folded row with both a home and a portal resolves to the home) — green, alongside the full
+  battery: format / lint (0 errors) / typecheck clean, **823 unit**, **151 e2e**.
+- **Intentionally provisional, flagged in code for later evolution (not built now):** the no-home
+  multi-portal tiebreak (`resolveDrillInPosition`'s "lowest key" pick) and the lack of a
+  discontinuity-aware breadcrumb (the `foldedOrigin` notice is a one-liner, not a structural
+  breadcrumb signal) — both noted at their call sites as seams a future increment can revisit if
+  real usage shows the provisional choice is insufficient.
+
+**This closes the Phase 9.7 build in full**, including the post-landing correctness gap. Hand-off to
+[Phase 10](Phase-10.md) is final.
