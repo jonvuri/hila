@@ -14,9 +14,9 @@ This builds on the existing design system ([Design.md](Design.md), [Design-Faces
 
 Survey what exists before deciding what it should become.
 
-- [ ] **Catalog every view and surface** currently in the app: workspace stream view (navigation + focus panels, overlaid cards), table face, tag browser, matrix browser, SQL runner, sidebar/dev tools, face config, app shell tabs. For each: what it is, who opens it, what it contains, and how it is currently styled (tokens vs ad-hoc `global.css` vs inline).
-- [ ] **Catalog the styling reality.** Where the canonical design tokens (`src/design/tokens.css`) are used vs where the app uses ad-hoc values (the dark-mode `global.css`, the overlaid-cards `--card-*` properties, inline colors). Identify conflicts with the stated design language (sharp geometry, monochrome + violet) introduced by recent exploration.
-- [ ] **Output:** a short written inventory (this doc or a companion) that the rest of the phase plans against.
+- [x] **Catalog every view and surface** currently in the app: workspace stream view (navigation + focus panels, overlaid cards), table face, tag browser, matrix browser, SQL runner, sidebar/dev tools, face config, app shell tabs. For each: what it is, who opens it, what it contains, and how it is currently styled (tokens vs ad-hoc `global.css` vs inline).
+- [x] **Catalog the styling reality.** Where the canonical design tokens (`src/design/tokens.css`) are used vs where the app uses ad-hoc values (the dark-mode `global.css`, the overlaid-cards `--card-*` properties, inline colors). Identify conflicts with the stated design language (sharp geometry, monochrome + violet) introduced by recent exploration.
+- [x] **Output:** a short written inventory (this doc or a companion) that the rest of the phase plans against. See [Phase-10-Inventory.md](Phase-10-Inventory.md).
 
 ## 2. View hierarchy and navigation model
 
