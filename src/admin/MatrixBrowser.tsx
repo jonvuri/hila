@@ -231,10 +231,6 @@ type ColumnDef = {
   formula: string | null
 }
 
-type TraitRow = {
-  trait_type: string
-}
-
 type OwnEdgeRow = {
   edge_key: Uint8Array
   source_row_id: number
@@ -256,7 +252,7 @@ type FaceConfigRow = {
   created_by_plugin: string | null
 }
 
-type DetailTab = 'data' | 'traits' | 'joins' | 'faces' | 'schema'
+type DetailTab = 'data' | 'edges' | 'joins' | 'faces' | 'schema'
 
 const formatKey = (key: Uint8Array | string): string => {
   if (typeof key === 'string') return key
@@ -287,10 +283,6 @@ const MatrixDetail: Component<{
     () =>
       `SELECT id, name, type, display_type, "order", options, formula FROM matrix_columns WHERE matrix_id = ${props.matrix.id} ORDER BY "order"`,
   )
-  const { result: traitResult } = useQuery(
-    () =>
-      `SELECT trait_type FROM matrix_traits WHERE matrix_id = ${props.matrix.id} ORDER BY trait_type`,
-  )
   const { result: ownEdgeResult } = useQuery(
     () =>
       `SELECT edge_key, source_row_id, target_row_id FROM joins
@@ -313,7 +305,6 @@ const MatrixDetail: Component<{
   )
 
   const columns = () => (colResult() as unknown as ColumnDef[]) ?? []
-  const traits = () => (traitResult() as unknown as TraitRow[]) ?? []
   const ownEdges = () => (ownEdgeResult() as unknown as OwnEdgeRow[]) ?? []
   const forwardJoins = () => (forwardJoinResult() as unknown as JoinRow[]) ?? []
   const reverseJoins = () => (reverseJoinResult() as unknown as JoinRow[]) ?? []
@@ -337,7 +328,7 @@ const MatrixDetail: Component<{
 
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'data', label: 'Data' },
-    { id: 'traits', label: 'Traits' },
+    { id: 'edges', label: 'Edges' },
     { id: 'joins', label: 'Joins' },
     { id: 'faces', label: 'Face Configs' },
     { id: 'schema', label: 'Schema' },
@@ -440,19 +431,9 @@ const MatrixDetail: Component<{
           </div>
         </Show>
 
-        {/* Traits tab */}
-        <Show when={activeTab() === 'traits'}>
-          <div class="mb-tab-content" data-testid="detail-panel-traits">
-            <h4 class="mb-section-title">Provisioned Traits</h4>
-            <Show
-              when={traits().length > 0}
-              fallback={<div class="mb-empty">No traits provisioned</div>}
-            >
-              <div class="mb-badge-list">
-                <For each={traits()}>{(t) => <span class="mb-badge">{t.trait_type}</span>}</For>
-              </div>
-            </Show>
-
+        {/* Edges tab */}
+        <Show when={activeTab() === 'edges'}>
+          <div class="mb-tab-content" data-testid="detail-panel-edges">
             <h4 class="mb-section-title">Own-Forest Edges</h4>
             <Show
               when={ownEdges().length > 0}

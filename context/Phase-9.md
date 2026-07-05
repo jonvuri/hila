@@ -190,6 +190,32 @@ The client SQL subscription layer has a latent race where a **second observer jo
 - **Fix direction** (prototyped and reverted in §9.6 to keep that diff focused — it's a shared hot path): (a) post `subscribe` **only when creating a new pool**; (b) cache the last `subscribeResult` per SQL (`lastResultBySql`) and **replay it synchronously** to an observer that joins an existing pool, clearing it on unsubscribe. Add a targeted regression test — the bug is currently **invisible to the suite** because the §9.5 boundary-hop e2e was deliberately decoupled (it now seeds its sub-table via the data layer instead of the slash UX) to stop triggering it.
 - **Touches:** `src/core/client/sql-client.ts`, `src/core/client/sql-client-promises.ts`, `src/core/worker/sql-handler.ts`.
 
+> **Post-Phase-9.7 re-examination (2026-07-04, deferred to a focused session).** Reviewing the
+> current tree before Phase 10, the **root cause above no longer matches the code** and step 1
+> of any fix must be to re-confirm the bug still reproduces:
+> - The worker's `subscribe` case in `handleSqlClientMessage` (`sql-handler.ts`) is
+>   `await subscribe(sql); await runSubscribedSql(sql)` — the re-run is a **separate,
+>   unconditional call**, *not* inside `subscribe()`. `subscribe()` early-returns on a duplicate
+>   (still logging the scary `already subscribed` line), but `runSubscribedSql(sql)` then **runs
+>   anyway and posts a `subscribeResult`**, which the client broadcasts to the *whole* pool —
+>   including the late joiner. So the worker **does** re-post; the "returns without re-posting"
+>   description is stale (the `subscribe` + `runSubscribedSql` split has been present since well
+>   before §9.6 per `git log -S`, so the doc likely described a hypothetical/older shape).
+> - Static tracing of the remount orderings (dup-subscribe with pool non-empty; unsubscribe-then-
+>   resubscribe) all deliver a result to the late joiner in the current code; post-init worker
+>   messages are dispatched via a non-serialized async `onmessage` (`worker.ts`), so any surviving
+>   race would be a subtle async interleaving, not the simple "dead-on-arrival subscribe" above.
+> - **Consequence for the follow-up:** it is now genuinely uncertain whether this is still live.
+>   The session should (1) write a runtime/worker-level repro (or a failing test) to confirm, then
+>   decide between: **leave as-is** (correct but re-runs the SQL for *every* observer join — a
+>   hot-path perf smell — and emits `console.error` spam on every legitimate remount);
+>   **implement the clean fix** (post-only-on-new-pool + client `lastResultBySql` replay, matching
+>   the already-correct `addGatherObserver` pattern in `sql-client.ts`) which removes both the
+>   redundant re-runs and the error spam but couples the two halves (dropping the unconditional
+>   re-post without adding the replay cache **reintroduces** the original bug); or a minimal
+>   middle path. Either way it's an options call on a shared hot path — correctly deferred, not a
+>   drive-by.
+
 ### Aspect band host-matrix scope (cross-matrix `/attach`)
 
 See the **"Known sharp edge"** bullet under §9.6 above: `/attach` onto a non-workspace node creates the row correctly but it's absent from the aspect band (fields uneditable). Local fix in that bullet; deeper resolution is the §9.7 convergence.
