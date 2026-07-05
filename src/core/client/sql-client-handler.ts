@@ -3,7 +3,13 @@
 
 import type { SqlWorkerMessage } from '../sql-types'
 
-import { pendingExecs, subscribedObservers, gatherObservers } from './sql-client-promises'
+import {
+  pendingExecs,
+  subscribedObservers,
+  gatherObservers,
+  lastOutcomeBySql,
+  lastGatherOutcomeByKey,
+} from './sql-client-promises'
 
 export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
   const { type } = message
@@ -13,7 +19,10 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
     case 'subscribeResult': {
       const { sql } = message
       const observers = subscribedObservers.get(sql)
+      // Only cache while a pool is live, so the entry can't outlive its
+      // subscription (a result in flight past an unsubscribe finds no pool).
       if (!observers) break
+      lastOutcomeBySql.set(sql, { result: message.result, error: null })
       for (const observer of observers) {
         observer(message.result, null)
       }
@@ -23,6 +32,7 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
       const { sql } = message
       const observers = subscribedObservers.get(sql)
       if (!observers) break
+      lastOutcomeBySql.set(sql, { result: null, error: message.error })
       for (const observer of observers) {
         observer(null, message.error)
       }
@@ -52,13 +62,17 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
     // Gather subscriptions (Phase 9.7 Stage C2 — inline block folding).
     case 'gatherResult': {
       const entry = gatherObservers.get(message.key)
+      // Only cache while a pool is live, so the entry can't outlive its
+      // subscription (a result in flight past an unsubscribe finds no pool).
       if (!entry) break
+      lastGatherOutcomeByKey.set(message.key, { result: message.result, error: null })
       for (const observer of entry.observers) observer(message.result, null)
       break
     }
     case 'gatherError': {
       const entry = gatherObservers.get(message.key)
       if (!entry) break
+      lastGatherOutcomeByKey.set(message.key, { result: null, error: message.error })
       for (const observer of entry.observers) observer(null, message.error)
       break
     }

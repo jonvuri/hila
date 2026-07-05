@@ -178,7 +178,19 @@ Depends on the data-layer ownership spine ([Phase 8](Phase-8.md) → [8b](Phase-
 
 Captured during Phase 9 but deferred to keep their fix-diffs focused. Not blocking; each is a real bug or sharp edge with a known fix direction.
 
-### SQL subscription late-joiner race (latent correctness bug)
+### SQL subscription late-joiner race (latent correctness bug) — RESOLVED 2026-07-04
+
+**Resolution.** Re-confirmed the post-9.7 re-examination below: the original *blank-panel* correctness bug is **not live** in the current tree — the worker's `subscribe` case runs `runSubscribedSql` **unconditionally** after `subscribe()`, and the client broadcasts `subscribeResult` to the **whole pool** (`sql-client-handler.ts`), so a late joiner always receives a result. What remained were the two costs that masking leaves behind: the worker **re-runs the SQL for the entire pool on every observer join** (a hot-path smell, hit on panel-stack remounts) and `console.error('…already subscribed…')` **spam on every legitimate remount**. Applied the **clean fix** (the preferred option below) to remove both while preserving late-joiner correctness:
+
+- `addObserver` now posts `subscribe` **only when creating a new pool**; a late joiner is added to the existing pool and **replayed synchronously** from a client-side `lastOutcomeBySql` cache (result *or* error), mirroring `addGatherObserver`'s post-once model.
+- `handleSqlWorkerMessage` caches the last outcome **only while a pool is live** (guarded by `subscribedObservers.get(sql)`), so a result in flight past an unsubscribe can't resurrect a stale entry; `removeObserver` drops the cache when the pool empties.
+- The **worker was left untouched** — with duplicates no longer posted, its `subscribe` duplicate-guard becomes a true (unreached) invariant guard, and the unconditional `runSubscribedSql` now runs exactly once per genuine new pool. No `sql-handler.ts` change was needed.
+- Regression test added: `src/core/client/sql-client.test.ts` (subscribe-once, synchronous result/error replay to a late joiner, cache cleared on pool-empty, no cache resurrection after teardown). Full unit suite + typecheck/lint green.
+- **Touched:** `src/core/client/sql-client.ts`, `src/core/client/sql-client-handler.ts`, `src/core/client/sql-client-promises.ts` (+ new `sql-client.test.ts`). `sql-handler.ts` unchanged (the doc's original touch-list predates the unconditional-re-run masking).
+
+**Also fixed: the gather twin (Phase 9.7 C2 inline block folding).** The `addGatherObserver` path had the *same* late-joiner shape but **unmasked** — unlike the SQL path, the client posts `subscribeGather` only when creating a pool (no per-join re-run), so a gather late joiner genuinely got **nothing** until the next invalidation. Trigger: two observers sharing an identical `gatherKey` across a remount-before-cleanup (e.g. the same folded outline window in two stacked panels / panel-stack churn); symptom is a blank/stale folded block while the surrounding loose rows render fine. Low-probability today (folding is a corner surface), higher as 9.7 convergence makes `view`/`container` folding central. Applied the exact symmetric fix: a `lastGatherOutcomeByKey` cache (result *or* error), cached in `handleSqlWorkerMessage`'s `gatherResult`/`gatherError` cases only while a pool is live, replayed synchronously in `addGatherObserver`, cleared on pool-empty in `removeGatherObserver`. Regression tests mirror the SQL ones in the same file (gather describe block). `gather-handler.ts` unchanged.
+
+<details><summary>Original follow-up write-up (kept for history)</summary>
 
 The client SQL subscription layer has a latent race where a **second observer joining an already-subscribed SQL pool gets no initial result**, which can blank a panel.
 
@@ -215,6 +227,8 @@ The client SQL subscription layer has a latent race where a **second observer jo
 >   re-post without adding the replay cache **reintroduces** the original bug); or a minimal
 >   middle path. Either way it's an options call on a shared hot path — correctly deferred, not a
 >   drive-by.
+
+</details>
 
 ### Aspect band host-matrix scope (cross-matrix `/attach`)
 
