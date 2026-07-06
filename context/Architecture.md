@@ -459,6 +459,63 @@ The [Phase 9.7 convergence](Phase-9.7.md#5-portals-and-refs-one-family-split-by-
 
 The ref machinery is **reused**, not replaced. One intentional divergence in the ghost state: an `@`-ref ghost renders from cached ProseMirror doc attrs, but a structural portal has no doc cache, so a deleted home leaves a surviving `is_ghost` tombstone *entry* that holds the position at each portal appearance (see [Phase 9.7a §2](Phase-9.7a.md#2-incremental-maintenance--cases-covered)). Portal storage is a `joins` row with `kind='portal'` ([Traits — Join kinds](./Traits.md#join-kinds)); the maintenance and windowing of the deep-mirror subtrees were validated in [Phase 9.7a](Phase-9.7a.md) / [Phase 9.7b](Phase-9.7b.md) and are pending the 9.7 build.
 
+## View hierarchy and navigation
+
+> Decided in [Phase 10 §2](Phase-10.md#2-view-hierarchy-and-navigation-model) (visual companion: [Phase-10-Session-2-visuals.html](Phase-10-Session-2-visuals.html)). The detailed face composition contract is formalized in [Phase 10 §3](Phase-10.md#3-plugin-view-composition-model); the launcher's own design is [Phase 10 §3b](Phase-10.md#3b-launcher-deep-dive-scheduled-session).
+
+Everything the user touches at the view layer is one of exactly three kinds:
+
+- **Places** — positions in the one forest. Every node, container, and view is somewhere; the stream renders it.
+- **Gestures** — transient, keyboard-first surfaces that act and vanish: **`⌘K` (go)** finds and navigates to anything; **`/` (make)** creates and acts (the [Phase 9 §9.6](Phase-9.md#96-the-unified-creation-gesture) slash surface). Gestures are never places — they jump you or create, then disappear.
+- **The system edge** — the few surfaces that live above/outside the database: settings (account, sync, filesystem locations) and the dev-tools drawer. Deliberately paradigm-free and dead simple to find. Kept tight: configuring faces/blocks/views is *not* settings — it is expressed idiomatically as per-panel/per-block chrome (arriving with composed fidelity in Phase 10 §4).
+
+No fourth kind. In particular, there are no top-level feature tabs: the early Workspace/Table/Tags tabs were prototyping scaffolding and are retired. After the [Phase 9.7 convergence](Phase-9.7.md), every former tab's content is expressible as a place or a lens (a container node's grid rendering; a launcher lens over type-nodes), so tabs would be a second, redundant index over the same space — the same fragmentation the three bands had. Tabs may return later as **saved stream states** (browser-tab-like session contexts): a convenience layer, not a navigation paradigm.
+
+### One root; focus, not zoom
+
+The stream (panel stack) is the app's single primary surface, and it hangs from the one global root — literally. **Ancestry up to the root is never hidden**: compressing deep breadcrumbs into ancestor edge tabs is what the overlaid-cards stream exists to do. Consequently there is no "zoom" primitive. The only re-rooting mechanic is the existing **focus** (ancestor tabs, collapse-to-panel headers, the title tab). "Open matrix X as a table" is a focus state on its container node; "browse all types" is a launcher lens. Identity-based entry (launcher, backlinks, notifications) reconstructs a focus state — root + ancestor tabs + focus panel — never a rootless view.
+
+The workspace root matrix's identity-face content is the root panel at substrate fidelity (x-ray); a truly flat all-rows grid, if ever wanted, is just a `view` node — no dedicated surface is minted.
+
+### Two planes: position and membership
+
+The view layer navigates one fabric and lenses the other:
+
+- The **position fabric** — the forest of `own`/`portal` edges — is what users compose and traverse. It holds order, ancestry, and breadcrumbs. Navigation follows position; the forest is the one root.
+- The **membership fabric** — matrixes (extent + schema) — is a grouping with no order or ancestry to walk. It is exposed through **lenses**: `view` nodes and launcher dimension filters ("all containers", "#task where …"), never as a second root. The database-app root analog ("browse all matrixes") is a lens.
+
+The membership plane is load-bearing underneath: it powers the launcher's dimension filters and the ancestry fallback below.
+
+### Cross-cutting CRUD: views find, faces edit, commands make
+
+There are no management surfaces. Any cross-cutting management need (tag management was the motivating instance) is served by one triad, meshed into the stream:
+
+- **`view` nodes find** the set — live queries with a place.
+- **Faces edit** the members where they render — hydrated cells, with the substrate floor guaranteeing every field is reachable.
+- **Commands make and destroy** — `/` commands and promotion ops to create, label edit to rename, node delete to destroy (confirmation-gated where cascades are large).
+
+### Ancestry resolution ladder
+
+A panel's breadcrumb/ancestry resolves down a fixed ladder; an arbitrary portal appearance is **never** auto-chosen:
+
+1. **Provenance** — the appearance actually traversed, via its lexkey-prefix ancestry (the [Phase 9.7](Phase-9.7.md#6-the-one-interleaved-index) rule). Covers nearly all navigation.
+2. **Home** — for identity-based entry: the single distinguished position every live row has (owner = where created).
+3. **Membership** — for ghost-homed or positionless rows: matrix → owner node → its home chain, with the row's surviving appearances listed. The state is surfaced honestly rather than silently adopting a portal.
+
+### Placeless creation homes by provenance
+
+Creation from a placeless gesture (e.g. saving a launcher search as a `view` node) homes under the node/panel that was focused when the gesture was invoked — owner-where-created, extended to placeless gestures.
+
+### What plugins contribute
+
+The shell — stream + launcher + system edge — is fixed core infrastructure, like the table face type. Plugins contribute **face types**, renderable in the two host contexts — **row** (a participant in a parent's region; blocks are container/view nodes in row context expanding a region inline) and **panel** (a node opened as its own surface) — and **commands** (`/` entries and `⌘K` actions). The substrate is the guaranteed floor in both contexts. The host-context contract (sizing, chrome, density/fidelity per context) is formalized in [Phase 10 §3](Phase-10.md#3-plugin-view-composition-model).
+
+### Deferred
+
+- **URLs / deep links** — deferred until sharing/publishing matters. The only standing requirement: stream state stays a plain serializable value (focus root + panel identities), so history, saved stream states, and eventual URLs remain cheap.
+- **Saved stream states** (tabs-as-sessions).
+- **Split view** — dropped as a design driver; the real side-by-side workflows (e.g. a grid of tasks beside the outline hosting them) render inline as blocks in one stream.
+
 ## UI concepts
 
 - Performance is king - everything in a single frame.
