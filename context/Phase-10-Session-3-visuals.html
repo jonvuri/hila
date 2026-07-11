@@ -1,0 +1,865 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase 10 · Session 3 — Plugin view composition model (proposed)</title>
+    <style>
+      :root {
+        --bg: #14161d;
+        --panel: #1b1e27;
+        --panel-2: #20242f;
+        --line: #2c3140;
+        --text: #c9cfdb;
+        --dim: #99a1b3;
+        --muted: #6b7488;
+        --accent: #6ea8fe;
+        --own: #6ea8fe;      /* own-edge / lifecycle / home */
+        --portal: #c08cf0;   /* portal / non-owning structural */
+        --ref: #5bbf9a;      /* ref / non-owning content */
+        --tag: #e0a352;      /* membership plane / matrix extent */
+        --border: #7f8aa3;   /* container border */
+        --danger: #e0696b;
+        --gesture: #d8c08a;  /* transient gestures */
+        --chrome: #6ea8fe;   /* host-owned chrome */
+        --face: #5bbf9a;     /* face-owned interior */
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 32px 28px 80px;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 {
+        font-size: 16px; margin: 40px 0 6px; padding-bottom: 6px;
+        border-bottom: 1px solid var(--line); color: #e6eaf2;
+      }
+      .lede { color: var(--dim); margin: 0 0 8px; }
+      .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+      figure { margin: 14px 0 0; }
+      svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: block; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; color: #d8c08a; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+      .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .card h3 { margin: 0 0 6px; font-size: 13.5px; color: #e6eaf2; }
+      .card p { margin: 0; font-size: 12.5px; color: var(--dim); }
+      .card .verb { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+      table.map { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+      table.map th, table.map td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      table.map th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+      table.map td:first-child { color: #e6eaf2; white-space: nowrap; }
+      .badge {
+        display: inline-block; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 1px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted);
+        vertical-align: 2px; margin-left: 8px;
+      }
+      .badge.q { color: var(--gesture); border-color: #4a3f28; }
+      ul.tight { margin: 8px 0 0; padding-left: 20px; }
+      ul.tight li { margin: 5px 0; color: var(--dim); }
+      ul.tight li strong { color: var(--text); }
+      .strike { text-decoration: line-through; text-decoration-color: var(--danger); }
+      pre.def {
+        background: #191c25; border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px; font-size: 12.5px; line-height: 1.5; overflow-x: auto;
+        color: var(--dim); margin: 14px 0 0;
+      }
+      pre.def .k { color: #e6eaf2; }
+      pre.def .c { color: var(--muted); }
+      pre.def .s { color: var(--gesture); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase 10 · Session 3 — Plugin view composition model</h1>
+      <p class="lede">
+        Session 2 fixed the frame: plugins contribute <strong>face types</strong> and
+        <strong>commands</strong>; the shell — stream + launcher + system edge — is fixed core
+        infrastructure. This session pins the contract underneath: what a face type declares,
+        what hosts provide, how a subject resolves which face renders it, and where
+        configuration lives. Companion to <code>context/Phase-10.md</code> §3.
+      </p>
+      <p class="note">
+        Givens, not reopened: no plugin top-level views · substrate is the guaranteed floor ·
+        v1 fidelity is substrate-first (9.7); composed faces are this phase's sugar · nodes
+        source children via <code>loose</code> / <code>container</code> / <code>view</code> ·
+        grid is coalescing, not a paradigm.<br />
+        Round 1 → 2: D1 (query/recipe split) and D3 rung-1 deferral <strong>accepted</strong>;
+        the recursion-through-hosts direction agreed · D4 <strong>reopened</strong> — the
+        regioned-host proposal flagged as potentially deciding layout ahead of proven need;
+        §4 now carries the full option space with tradeoffs and a revised recommendation.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>0 · The one-sentence model</h2>
+      <p class="lede">
+        <strong>Hosts own chrome and recursion; faces own interiors; subjects own their data;
+        a fixed ladder decides which face renders which subject.</strong> Every box below is
+        one of those four words.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 210" role="img" aria-label="The four roles: subject supplies data, ladder resolves the face, host provides chrome, face renders the interior">
+          <defs>
+            <marker id="flowA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--dim)" />
+            </marker>
+          </defs>
+          <g font-size="12.5">
+            <rect x="24" y="50" width="196" height="110" rx="8" fill="#191c25" stroke="var(--tag)" stroke-opacity="0.5" />
+            <text x="42" y="78" fill="#e6eaf2" font-weight="600">subject</text>
+            <text x="42" y="98" fill="var(--muted)" font-size="11.5">a node + its child source:</text>
+            <text x="42" y="116" fill="var(--dim)" font-size="11.5">• loose — the mesh</text>
+            <text x="42" y="134" fill="var(--dim)" font-size="11.5">▣ container — an extent</text>
+            <text x="42" y="152" fill="var(--dim)" font-size="11.5">≔ view — a query</text>
+
+            <rect x="256" y="50" width="196" height="110" rx="8" fill="#191c25" stroke="var(--line)" />
+            <text x="274" y="78" fill="#e6eaf2" font-weight="600">ladder</text>
+            <text x="274" y="98" fill="var(--muted)" font-size="11.5">resolves the recipe:</text>
+            <text x="274" y="116" fill="var(--dim)" font-size="11.5">1 · appearance override*</text>
+            <text x="274" y="134" fill="var(--dim)" font-size="11.5">2 · subject's preferred face</text>
+            <text x="274" y="152" fill="var(--dim)" font-size="11.5">3 · substrate floor</text>
+
+            <rect x="488" y="50" width="196" height="110" rx="8" fill="#191c25" stroke="var(--chrome)" stroke-opacity="0.55" />
+            <text x="506" y="78" fill="#e6eaf2" font-weight="600">host</text>
+            <text x="506" y="98" fill="var(--muted)" font-size="11.5">row slot or panel:</text>
+            <text x="506" y="116" fill="var(--dim)" font-size="11.5">chrome · sizing · density</text>
+            <text x="506" y="134" fill="var(--dim)" font-size="11.5">fidelity · drill-in · recursion</text>
+            <text x="506" y="152" fill="var(--dim)" font-size="11.5">(faces never mount faces)</text>
+
+            <rect x="720" y="50" width="176" height="110" rx="8" fill="#191c25" stroke="var(--face)" stroke-opacity="0.55" />
+            <text x="738" y="78" fill="#e6eaf2" font-weight="600">face</text>
+            <text x="738" y="98" fill="var(--muted)" font-size="11.5">interior rendering only,</text>
+            <text x="738" y="116" fill="var(--dim)" font-size="11.5">per context (row / panel),</text>
+            <text x="738" y="134" fill="var(--dim)" font-size="11.5">adapted to density +</text>
+            <text x="738" y="152" fill="var(--dim)" font-size="11.5">fidelity handed to it</text>
+
+            <path d="M220,105 L252,105" stroke="var(--dim)" stroke-width="1.6" marker-end="url(#flowA)" />
+            <path d="M452,105 L484,105" stroke="var(--dim)" stroke-width="1.6" marker-end="url(#flowA)" />
+            <path d="M684,105 L716,105" stroke="var(--dim)" stroke-width="1.6" marker-end="url(#flowA)" />
+          </g>
+          <text x="42" y="190" fill="var(--muted)" font-size="11">* proposed deferred in v1 — see D3</text>
+        </svg>
+      </figure>
+
+      <!-- ============================================================ -->
+      <h2>1 · D1 — The face config splits: queries belong to subjects, recipes to rendering</h2>
+      <p class="lede">
+        Today's <code>FaceConfig</code> bundles a <code>query</code> with the rendering
+        choices. Under 9.7 the data source is already the subject's own business — a
+        container node <em>is</em> its extent, a view node <em>is</em> its query, the mesh is
+        the mesh. Proposal: the face config sheds its query and becomes a pure
+        <strong>rendering recipe</strong> — <code>{ faceTypeId, slotBindings, settings }</code> —
+        attachable to any subject whose row shape it can bind. The slot-resolution chain
+        (explicit → name → type+position → fallback) is unchanged and is what makes recipes
+        portable.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 250" role="img" aria-label="The old FaceConfig with query struck out; subject supplies rows, recipe supplies rendering; both feed the rendered face">
+          <defs>
+            <marker id="cfgA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--dim)" />
+            </marker>
+          </defs>
+          <!-- old -->
+          <g opacity="0.7">
+            <rect x="24" y="46" width="230" height="150" rx="8" fill="#191c25" stroke="var(--line)" />
+            <text x="42" y="34" fill="var(--muted)" font-size="12" class="mono">FaceConfig today</text>
+            <g font-size="12" class="mono">
+              <text x="44" y="76" fill="var(--danger)" class="strike">query: "SELECT …"</text>
+              <text x="44" y="100" fill="var(--dim)">faceTypeId</text>
+              <text x="44" y="124" fill="var(--dim)">slotBindings</text>
+              <text x="44" y="148" fill="var(--dim)">settings · sort · filters</text>
+              <text x="44" y="180" fill="var(--muted)" font-size="10.5">one object, married to one matrix</text>
+            </g>
+            <line x1="44" y1="70" x2="196" y2="70" stroke="var(--danger)" stroke-width="1.6" />
+          </g>
+
+          <!-- subject -->
+          <rect x="330" y="34" width="250" height="86" rx="8" fill="#191c25" stroke="var(--tag)" stroke-opacity="0.5" />
+          <text x="348" y="58" fill="#e6eaf2" font-size="12.5" font-weight="600">subject supplies the rows</text>
+          <text x="348" y="78" fill="var(--dim)" font-size="11.5">▣ container → its extent, matrix-ranked</text>
+          <text x="348" y="96" fill="var(--dim)" font-size="11.5">≔ view → its query’s result + ORDER BY</text>
+
+          <!-- recipe -->
+          <rect x="330" y="140" width="250" height="86" rx="8" fill="#191c25" stroke="var(--face)" stroke-opacity="0.5" />
+          <text x="348" y="164" fill="#e6eaf2" font-size="12.5" font-weight="600">recipe supplies the rendering</text>
+          <text x="348" y="184" fill="var(--dim)" font-size="11.5" class="mono">{ faceTypeId, slotBindings, settings }</text>
+          <text x="348" y="202" fill="var(--dim)" font-size="11.5">serializable · portable across subjects</text>
+
+          <!-- rendered -->
+          <rect x="660" y="86" width="236" height="90" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="678" y="112" fill="#e6eaf2" font-size="12.5" font-weight="600">rendered face</text>
+          <text x="678" y="132" fill="var(--dim)" font-size="11.5">rows × recipe × context ×</text>
+          <text x="678" y="150" fill="var(--dim)" font-size="11.5">density × fidelity</text>
+
+          <path d="M580,77 C 620,80 630,100 656,110" fill="none" stroke="var(--tag)" stroke-width="1.6" marker-end="url(#cfgA)" />
+          <path d="M580,183 C 620,180 630,160 656,150" fill="none" stroke="var(--face)" stroke-width="1.6" marker-end="url(#cfgA)" />
+        </svg>
+      </figure>
+      <p class="note">
+        Why it matters: the §3b launcher continuum (transient search ↔ persisted
+        <code>≔ view</code>) only carries the <em>query</em> across; recipes attach to either
+        end without duplication. Sort/filter live with whichever plane they modify: a view's
+        <code>ORDER BY</code>/<code>WHERE</code> is subject (data); a grid's column widths or a
+        kanban's lane column is recipe (rendering). The sugar-level sort/filter gestures
+        (§3b's shared authoring layer) compile into the subject's query, not into the recipe.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>2 · D2 — Chrome is host-owned, interiors are face-owned; hosts do the recursion</h2>
+      <p class="lede">
+        The host-context contract in one split: everything that says <em>where you are and
+        how to move</em> is drawn by the host, identically for every face; everything
+        <em>inside</em> is the face's. And composition is recursive only through hosts: when a
+        face's interior contains another subject (a container block inside a panel's children
+        region), the face yields a <strong>row slot</strong> back to the host, which runs the
+        ladder again. Faces never instantiate faces.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 330" role="img" aria-label="Row context and panel context with host chrome highlighted in blue and face interiors in green">
+          <!-- legend -->
+          <g font-size="11.5" class="mono">
+            <rect x="24" y="16" width="12" height="12" fill="none" stroke="var(--chrome)" />
+            <text x="44" y="26" fill="var(--chrome)">host chrome</text>
+            <rect x="160" y="16" width="12" height="12" fill="none" stroke="var(--face)" />
+            <text x="180" y="26" fill="var(--face)">face interior</text>
+          </g>
+
+          <!-- row context -->
+          <rect x="24" y="48" width="420" height="258" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="42" y="72" fill="var(--dim)" font-size="12" class="mono">row context — a slot in a parent's children region</text>
+
+          <!-- plain row -->
+          <rect x="42" y="86" width="384" height="28" rx="4" fill="#191c25" />
+          <rect x="42" y="86" width="26" height="28" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="50" y="105" fill="var(--chrome)" font-size="12">•</text>
+          <rect x="72" y="89" width="350" height="22" fill="none" stroke="var(--face)" stroke-opacity="0.7" />
+          <text x="80" y="105" fill="var(--text)" font-size="12">Email vendor <tspan fill="var(--tag)" font-size="10.5">#task</tspan> <tspan fill="var(--muted)" font-size="10.5">○ · Fri</tspan></text>
+
+          <!-- block row -->
+          <rect x="42" y="126" width="384" height="28" rx="4" fill="#191c25" />
+          <rect x="42" y="126" width="26" height="28" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="48" y="145" fill="var(--chrome)" font-size="12">▣</text>
+          <rect x="72" y="129" width="350" height="22" fill="none" stroke="var(--face)" stroke-opacity="0.7" />
+          <text x="80" y="145" fill="var(--text)" font-size="12">Tasks <tspan fill="var(--muted)" font-size="10.5">container node — line by its face…</tspan></text>
+
+          <!-- block region -->
+          <rect x="68" y="162" width="358" height="96" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="78" y="180" fill="var(--chrome)" font-size="10.5" class="mono">block frame + border = chrome (9.7 container border)</text>
+          <rect x="80" y="190" width="334" height="58" fill="none" stroke="var(--face)" stroke-opacity="0.7" />
+          <text x="92" y="208" fill="var(--muted)" font-size="10.5" class="mono">title          status   due</text>
+          <text x="92" y="226" fill="var(--text)" font-size="11.5">File report     ⊙       —</text>
+          <text x="92" y="242" fill="var(--text)" font-size="11.5">Buy domain      ○       Mon</text>
+
+          <text x="42" y="286" fill="var(--muted)" font-size="11">chrome here: bullet/handle, indent guides, drag targets,</text>
+          <text x="42" y="300" fill="var(--muted)" font-size="11">block frame + container border, height budget + "open" affordance</text>
+
+          <!-- panel context -->
+          <rect x="476" y="48" width="420" height="258" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="494" y="72" fill="var(--dim)" font-size="12" class="mono">panel context — a node opened as its own surface</text>
+
+          <rect x="494" y="84" width="384" height="30" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="504" y="104" fill="#e6eaf2" font-size="13.5" font-weight="600">Email vendor <tspan fill="var(--chrome)" font-size="10" class="mono">   title tab · breadcrumb · config chrome</tspan></text>
+
+          <rect x="494" y="122" width="384" height="150" fill="none" stroke="var(--face)" stroke-opacity="0.7" />
+          <text x="506" y="142" fill="var(--muted)" font-size="11.5">content — notes about the vendor thread…</text>
+          <line x1="506" y1="154" x2="866" y2="154" stroke="var(--line)" />
+          <text x="506" y="174" fill="var(--text)" font-size="11.5">status <tspan fill="var(--dim)">○ todo</tspan>   due <tspan fill="var(--dim)">Fri</tspan>   priority <tspan fill="var(--dim)">high</tspan></text>
+          <line x1="506" y1="186" x2="866" y2="186" stroke="var(--line)" />
+          <text x="506" y="206" fill="var(--muted)" font-size="11" class="mono">children region — each slot recurses through the host ↺</text>
+          <text x="518" y="226" fill="var(--text)" font-size="11.5">• follow-up call</text>
+          <text x="518" y="246" fill="var(--text)" font-size="11.5">▣ Quotes <tspan fill="var(--muted)" font-size="10.5">← a nested subject: ladder runs again</tspan></text>
+
+          <text x="494" y="290" fill="var(--muted)" font-size="11">chrome here: panel card + focus header, ancestor tabs, breadcrumb,</text>
+          <text x="494" y="304" fill="var(--muted)" font-size="11">face-config-as-panel-chrome (the retired "View as…" modal re-homed)</text>
+        </svg>
+      </figure>
+      <p class="note">
+        Sizing follows the same split: hosts always own width (panel column width; row slot
+        width) and hand the face a <strong>density tier</strong>, not pixels. In row context
+        the host also owns the <strong>height budget</strong> of an expanded block region
+        (windowing/paging past it — the 9.7b deep-mirror machinery), with exact budgets a §4
+        token-pass detail. Drill-in is chrome too: clicking a block's frame focuses the node
+        (boundary hop); clicking inside it is the face's interaction.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>3 · D3 — Face affinity is a ladder; the preferred face lives on the subject <span class="badge">resolves Plan.md #5</span></h2>
+      <p class="lede">
+        Which face renders a given subject? A fixed three-rung ladder, run by the host at
+        every slot. The <strong>preferred face</strong> is a fact on the subject node —
+        equivalently, on the matrix, via its 1-to-1 owner — set by the plugin at creation
+        (declarative manifest) or by the user through panel/block chrome. It rides the
+        membership plane: "tasks render as a grid" follows the Tasks container everywhere it
+        appears. Per-appearance overrides (rung 1) are <em>modeled but deferred</em>: nothing
+        in v1 stores them, and the ladder leaves room without them.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 240" role="img" aria-label="Resolution ladder: appearance override, subject preferred recipe, substrate floor">
+          <g font-size="12.5">
+            <rect x="24" y="40" width="560" height="176" rx="8" fill="#191c25" stroke="var(--line)" />
+            <text x="42" y="66" fill="#e6eaf2" font-weight="600">resolution ladder <tspan fill="var(--muted)" font-size="11" font-weight="400">(run per slot, per context)</tspan></text>
+            <text x="42" y="96" fill="var(--text)"><tspan fill="var(--muted)" class="mono">1</tspan>  appearance override — this position renders it differently</text>
+            <text x="58" y="114" fill="var(--muted)" font-size="11.5">deferred in v1: no storage minted until a concrete need appears</text>
+            <text x="42" y="140" fill="var(--text)"><tspan fill="var(--muted)" class="mono">2</tspan>  preferred recipe — a fact on the subject node / its matrix</text>
+            <text x="58" y="158" fill="var(--muted)" font-size="11.5">plugin-declared at creation, user-set via panel/block chrome</text>
+            <text x="42" y="184" fill="var(--text)"><tspan fill="var(--muted)" class="mono">3</tspan>  substrate floor — always renders, both contexts, every field</text>
+            <text x="58" y="202" fill="var(--muted)" font-size="11.5">the 9.7 schema-adaptive renderer; grids are its coalesced runs</text>
+          </g>
+          <g font-size="12">
+            <rect x="620" y="40" width="276" height="176" rx="8" fill="#191c25" stroke="var(--tag)" stroke-opacity="0.5" />
+            <text x="638" y="66" fill="#e6eaf2" font-weight="600" font-size="12.5">where the fact lives</text>
+            <text x="638" y="94" fill="var(--dim)" font-size="11.5">▣ Tasks node <tspan fill="var(--muted)">·</tspan> matrix mx_5</text>
+            <text x="638" y="114" fill="var(--dim)" font-size="11.5" class="mono">preferred: { grid, bindings… }</text>
+            <text x="638" y="142" fill="var(--muted)" font-size="11.5">membership-plane fact → follows the</text>
+            <text x="638" y="160" fill="var(--muted)" font-size="11.5">container to every appearance</text>
+            <text x="638" y="188" fill="var(--muted)" font-size="11.5">mirrors the ownership/position split:</text>
+            <text x="638" y="206" fill="var(--muted)" font-size="11.5">affinity = membership · override = position</text>
+          </g>
+        </svg>
+      </figure>
+      <p class="note">
+        The recipe's face type carries both context renderings, so one preferred recipe
+        answers both "as a block" and "as a panel" — no per-context affinity slot. If a face
+        type lacks one context's rendering, that context falls to rung 3 (the floor), never to
+        a different recipe. Plan.md open question #5 closes: <em>the preferred face is a
+        subject-level recipe; the substrate remains the universal fallback.</em>
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>4 · D4 — Interior ownership: the option space <span class="badge q">round-2 deep dive</span></h2>
+      <p class="lede">
+        Round 1 proposed a regioned host; the flag against it is real — a region framework
+        minted ahead of any second consumer, freezing layout decisions early. The deep dive
+        splits the question in two. First, the <strong>invariants</strong>: four guarantees
+        every option needs, small, and the part that genuinely must be decided <em>this
+        session</em>. Second, <strong>layout ownership</strong> — the actual open axis — where
+        a survey of every contemplated face collapses the scope considerably.
+      </p>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:24px 0 0;">4.1 · The invariants (option-independent — the real contract)</h3>
+      <div class="cards" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="card">
+          <div class="verb">I1 · recursion</div>
+          <h3>Faces never mount faces</h3>
+          <p>A face's interior containing another subject yields a slot back to the host,
+          which re-runs the ladder. Composition depth belongs to hosts; the ladder stays the
+          single authority.</p>
+        </div>
+        <div class="card">
+          <div class="verb">I2 · reachability</div>
+          <h3>Every hydrated column stays reachable</h3>
+          <p>Whatever a face doesn't consume, the host guarantees access to (a disclosure
+          affordance, at minimum). Reachability is a contract term, not face discipline.</p>
+        </div>
+        <div class="card">
+          <div class="verb">I3 · chrome</div>
+          <h3>Chrome is host-owned</h3>
+          <p>Frames, container borders, drill-in, breadcrumbs, focus headers — identical for
+          every face. Clicking chrome navigates; clicking inside is the face's interaction.</p>
+        </div>
+        <div class="card">
+          <div class="verb">I4 · x-ray</div>
+          <h3>X-ray snaps to substrate</h3>
+          <p>The global toggle renders the substrate structure regardless of what any face
+          does — the conformance escape hatch is unconditional.</p>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:28px 0 0;">4.2 · What actually varies by face type — the scope-collapsing survey</h3>
+      <p class="lede" style="margin-top:8px;">
+        Before choosing who owns panel layout, check what any contemplated face would
+        <em>do</em> with it. Surveying every face named anywhere in the docs: each one is a
+        <strong>line</strong> rendering (a row as a participant), a <strong>collection</strong>
+        rendering (a row-set arranged some way), or not a face at all.
+      </p>
+      <table class="map">
+        <thead><tr><th>contemplated face</th><th>what it actually is</th></tr></thead>
+        <tbody>
+          <tr><td>outline list</td><td><strong>collection</strong> — the loose mesh; the substrate default</td></tr>
+          <tr><td>grid / table</td><td><strong>collection</strong> — the coalesced same-schema run (9.7) + composed sugar (widths, pinning)</td></tr>
+          <tr><td>kanban</td><td><strong>collection</strong> — rows grouped by a select column into lanes</td></tr>
+          <tr><td>calendar</td><td><strong>collection</strong> — rows positioned by a date column</td></tr>
+          <tr><td>gallery / cards</td><td><strong>collection</strong> — a card-shaped <em>line</em> rendering, repeated</td></tr>
+          <tr><td>flashcard review</td><td><strong>collection</strong> — one row at a time + flip/grade interaction</td></tr>
+          <tr><td>note / document</td><td>not a face type — scaffold prominence of the <code>content</code> role at panel density</td></tr>
+          <tr><td>tag chip / ref badge</td><td><strong>line</strong> — compact rendering of an aspect/target row</td></tr>
+          <tr><td>dashboard <span style="color:var(--muted)">(hypothetical)</span></td><td>the only true whole-interior case — nothing near-term needs it</td></tr>
+        </tbody>
+      </table>
+      <p class="note">
+        Nothing contemplated wants to rearrange identity/fields/relations; everything that
+        varies, varies in how <em>rows and row-sets</em> render. That observation is itself a
+        candidate answer (option F below): maybe faces shouldn't own panel layout because no
+        face has anything to say about it.
+      </p>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:28px 0 0;">4.3 · The options, on one axis</h3>
+      <figure>
+        <svg viewBox="0 0 920 210" role="img" aria-label="Five options on an axis from host-owned layout to face-owned layout">
+          <line x1="60" y1="70" x2="860" y2="70" stroke="var(--line)" stroke-width="2" />
+          <text x="60" y="36" fill="var(--chrome)" font-size="11.5" class="mono">host owns layout</text>
+          <text x="860" y="36" fill="var(--face)" font-size="11.5" class="mono" text-anchor="end">face owns layout</text>
+          <g font-size="12.5">
+            <circle cx="100" cy="70" r="5" fill="var(--chrome)" />
+            <text x="100" y="98" fill="#e6eaf2" font-weight="600" text-anchor="middle">A</text>
+            <text x="100" y="116" fill="var(--dim)" font-size="10.5" text-anchor="middle">regioned host</text>
+            <text x="100" y="130" fill="var(--muted)" font-size="10.5" text-anchor="middle">fixed slots, faces</text>
+            <text x="100" y="144" fill="var(--muted)" font-size="10.5" text-anchor="middle">substitute per region</text>
+
+            <circle cx="290" cy="70" r="5" fill="var(--chrome)" />
+            <text x="290" y="98" fill="#e6eaf2" font-weight="600" text-anchor="middle">C</text>
+            <text x="290" y="116" fill="var(--dim)" font-size="10.5" text-anchor="middle">styling over substrate</text>
+            <text x="290" y="130" fill="var(--muted)" font-size="10.5" text-anchor="middle">one renderer; composed =</text>
+            <text x="290" y="144" fill="var(--muted)" font-size="10.5" text-anchor="middle">fidelity styling params</text>
+
+            <circle cx="470" cy="70" r="7" fill="var(--gesture)" />
+            <text x="470" y="98" fill="var(--gesture)" font-weight="600" text-anchor="middle">F ★</text>
+            <text x="470" y="116" fill="var(--dim)" font-size="10.5" text-anchor="middle">line + collection scope</text>
+            <text x="470" y="130" fill="var(--muted)" font-size="10.5" text-anchor="middle">scaffold host-fixed; faces own</text>
+            <text x="470" y="144" fill="var(--muted)" font-size="10.5" text-anchor="middle">row + row-set renderings only</text>
+
+            <circle cx="650" cy="70" r="5" fill="var(--face)" />
+            <text x="650" y="98" fill="#e6eaf2" font-weight="600" text-anchor="middle">D</text>
+            <text x="650" y="116" fill="var(--dim)" font-size="10.5" text-anchor="middle">region services</text>
+            <text x="650" y="130" fill="var(--muted)" font-size="10.5" text-anchor="middle">faces arrange; host provides</text>
+            <text x="650" y="144" fill="var(--muted)" font-size="10.5" text-anchor="middle">regions as invariant-bearing parts</text>
+
+            <circle cx="830" cy="70" r="5" fill="var(--face)" />
+            <text x="830" y="98" fill="#e6eaf2" font-weight="600" text-anchor="middle">B</text>
+            <text x="830" y="116" fill="var(--dim)" font-size="10.5" text-anchor="middle">full takeover + kit</text>
+            <text x="830" y="130" fill="var(--muted)" font-size="10.5" text-anchor="middle">whole interior; shared kit</text>
+            <text x="830" y="144" fill="var(--muted)" font-size="10.5" text-anchor="middle">is convention, not contract</text>
+          </g>
+          <text x="60" y="184" fill="var(--muted)" font-size="11">All five keep I1–I4 — the axis is only where layout decisions live. C and F are compatible: C is how F's v1 is implemented.</text>
+        </svg>
+      </figure>
+      <table class="map">
+        <thead><tr><th>option</th><th>a face author writes</th><th>ceiling — can't express</th><th>I2 reachability</th><th>cost to mint now</th><th>failure mode</th></tr></thead>
+        <tbody>
+          <tr><td>A · regioned host</td><td>per-region substitutions</td><td>novel arrangements (fields woven into children; layouts spanning regions)</td><td>by construction</td><td>full region framework + taxonomy, decided ahead of any 2nd consumer</td><td>wrong taxonomy ossifies; regions become the API everyone fights</td></tr>
+          <tr><td>B · takeover + kit</td><td>the whole interior, composing a shared kit</td><td>nothing</td><td>convention only (x-ray as backstop)</td><td>kit + every face pays full interior cost from day one</td><td>drift: each face a snowflake; guarantees erode to "check x-ray"</td></tr>
+          <tr><td>C · styling over substrate</td><td>styling/coalescing parameters only</td><td>anything not a restyle — kanban, calendar</td><td>by construction</td><td>~zero — this is what 9.7 is already building</td><td>styling vocabulary creeps into an ad-hoc layout DSL</td></tr>
+          <tr><td>D · region services</td><td>an arrangement, composed from host-provided region parts</td><td>~nothing within the parts</td><td>by contract (host appends disclosure for unconsumed columns)</td><td>a service API that needs ≥2 real consumers to extract well — premature today</td><td>API extracted from imagination instead of usage</td></tr>
+          <tr><td style="color:var(--gesture)">F · line + collection ★</td><td>a line rendering and/or a collection rendering</td><td>whole-interior faces (dashboards) — none contemplated</td><td>by construction (scaffold owns fields)</td><td>smallest: names what 9.7 already builds; no framework minted</td><td>if a whole-interior face arrives soon, the contract must grow (→ D)</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:28px 0 0;">4.4 · Recommendation: F now, D as the growth path, A never frozen, B never</h3>
+      <p class="lede" style="margin-top:8px;">
+        A face type declares up to two renderings — <strong>line</strong> and
+        <strong>collection</strong> — and hosts map presentation to them. The panel scaffold
+        (identity · fields · collection region(s) · relations) is <em>not part of the plugin
+        contract at all</em>: it is shell-owned substrate structure, free to evolve in the §4
+        token pass without breaking any plugin. Session 2's "row and panel host contexts"
+        refines rather than changes: row/panel are <em>host presentations</em>; line/collection
+        are what faces <em>supply</em>.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 350" role="img" aria-label="A face type supplies line and collection renderings; host presentations request them; the panel scaffold is fixed with a delegated collection region">
+          <defs>
+            <marker id="reqA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--dim)" />
+            </marker>
+          </defs>
+          <!-- face type -->
+          <rect x="24" y="40" width="300" height="160" rx="8" fill="#191c25" stroke="var(--face)" stroke-opacity="0.55" />
+          <text x="42" y="28" fill="var(--dim)" font-size="12.5" class="mono">face type — declares ≤ 2 renderings</text>
+          <g font-size="11.5">
+            <text x="42" y="68" fill="#e6eaf2" font-weight="600">line</text>
+            <rect x="42" y="76" width="264" height="24" fill="var(--panel-2)" stroke="var(--face)" stroke-opacity="0.6" />
+            <text x="52" y="93" fill="var(--text)" font-size="11">• Email vendor <tspan fill="var(--tag)" font-size="10">#task</tspan> <tspan fill="var(--muted)" font-size="10">○ · Fri</tspan></text>
+            <text x="42" y="128" fill="#e6eaf2" font-weight="600">collection</text>
+            <rect x="42" y="136" width="264" height="52" fill="var(--panel-2)" stroke="var(--face)" stroke-opacity="0.6" />
+            <text x="52" y="152" fill="var(--muted)" font-size="10" class="mono">title          status   due</text>
+            <text x="52" y="168" fill="var(--text)" font-size="10.5">File report     ⊙       —</text>
+            <text x="52" y="182" fill="var(--text)" font-size="10.5">Buy domain      ○       Mon</text>
+          </g>
+
+          <!-- host presentations -->
+          <g font-size="11.5">
+            <rect x="560" y="34" width="336" height="30" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+            <text x="574" y="54" fill="var(--text)">row slot <tspan fill="var(--muted)" font-size="10.5">→ requests</tspan> <tspan fill="var(--face)">line</tspan></text>
+            <rect x="560" y="76" width="336" height="30" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+            <text x="574" y="96" fill="var(--text)">block region <tspan fill="var(--muted)" font-size="10.5">→</tspan> <tspan fill="var(--face)">line + collection</tspan></text>
+            <rect x="560" y="118" width="336" height="30" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+            <text x="574" y="138" fill="var(--text)">panel collection region <tspan fill="var(--muted)" font-size="10.5">→</tspan> <tspan fill="var(--face)">collection</tspan></text>
+            <rect x="560" y="160" width="336" height="30" rx="6" fill="var(--panel-2)" stroke="var(--line)" />
+            <text x="574" y="180" fill="var(--text)">popover <tspan fill="var(--muted)" font-size="10.5">→ scaffold-mini (identity + fields; no face)</tspan></text>
+          </g>
+          <path d="M324,88 C 440,80 480,55 556,50" fill="none" stroke="var(--dim)" stroke-width="1.4" marker-end="url(#reqA)" />
+          <path d="M324,110 C 440,100 480,92 556,91" fill="none" stroke="var(--dim)" stroke-width="1.4" marker-end="url(#reqA)" />
+          <path d="M324,160 C 440,155 480,136 556,133" fill="none" stroke="var(--dim)" stroke-width="1.4" marker-end="url(#reqA)" />
+
+          <!-- scaffold -->
+          <rect x="24" y="232" width="872" height="86" rx="8" fill="var(--panel-2)" stroke="var(--chrome)" stroke-opacity="0.45" />
+          <text x="42" y="224" fill="var(--dim)" font-size="12" class="mono">the panel scaffold — shell-owned substrate structure, outside the plugin contract</text>
+          <g font-size="11.5">
+            <rect x="42" y="248" width="150" height="54" fill="#191c25" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="54" y="270" fill="var(--text)">identity</text>
+            <text x="54" y="288" fill="var(--muted)" font-size="10">label · type chip</text>
+            <rect x="204" y="248" width="200" height="54" fill="#191c25" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="216" y="270" fill="var(--text)">fields</text>
+            <text x="216" y="288" fill="var(--muted)" font-size="10">content + properties; unbound columns land here (I2)</text>
+            <rect x="416" y="248" width="290" height="54" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="428" y="270" fill="var(--text)">collection region <tspan fill="var(--face)" font-size="10">← delegated to the resolved face</tspan></text>
+            <text x="428" y="288" fill="var(--muted)" font-size="10">slots inside recurse via the host ↺ (I1)</text>
+            <rect x="718" y="248" width="160" height="54" fill="#191c25" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="730" y="270" fill="var(--text)">relations</text>
+            <text x="730" y="288" fill="var(--muted)" font-size="10">backlinks · appearances</text>
+          </g>
+          <text x="42" y="340" fill="var(--muted)" font-size="11">Arrangement of the dashed parts can change in §4 (tokens) or later without touching any plugin — that's the point.</text>
+        </svg>
+      </figure>
+      <p class="note">
+        Why this and not the others: <strong>vs A</strong> — no region-substitution framework
+        is minted, and the scaffold's arrangement stays a design decision instead of an API;
+        <strong>vs B</strong> — I2 stays by-construction instead of becoming face discipline,
+        and no face pays whole-interior cost; <strong>vs C alone</strong> — kanban/calendar
+        get a home (collection renderings) instead of stretching a styling vocabulary;
+        <strong>vs D now</strong> — D is exactly what to extract <em>when the first real
+        whole-interior face appears</em>, from real consumers, the same way the plugin API
+        itself was extracted ("once patterns were clear from multiple real consumers").
+        F is forward-compatible with D: line/collection renderings become two of D's parts
+        unchanged. The current <code>overflowBehavior</code> enum still dissolves (unbound
+        columns land in the scaffold's fields part). <strong>The check for this round:</strong>
+        does the line/collection scope reduction hold for you, or do you see a near-term face
+        that genuinely needs to own panel layout?
+      </p>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:28px 0 0;">4.5 · F in action — four rendering walkthroughs</h3>
+      <p class="lede" style="margin-top:8px;">
+        The same machinery — subject → ladder → host requests a rendering — traced through
+        the four situations that cover the model. Blue dashes are host chrome and scaffold
+        (I3); green boxes are what the resolved face actually drew.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 650" role="img" aria-label="Four walkthroughs: a container block in the mesh, the same node focused as a panel, a view node with a kanban recipe, and the substrate floor with x-ray">
+          <!-- ①: container block in the mesh -->
+          <rect x="24" y="40" width="430" height="270" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="42" y="28" fill="var(--dim)" font-size="12" class="mono">① container block in the mesh — row presentation</text>
+          <!-- bullet chrome -->
+          <rect x="42" y="56" width="26" height="24" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="49" y="73" fill="var(--chrome)" font-size="12">▣</text>
+          <!-- line rendering -->
+          <rect x="74" y="56" width="358" height="24" fill="none" stroke="var(--face)" stroke-opacity="0.75" />
+          <text x="84" y="73" fill="var(--text)" font-size="11.5">Tasks <tspan fill="var(--muted)" font-size="10.5">· 3 rows</tspan> <tspan fill="var(--face)" font-size="10" class="mono">   ← line (grid recipe)</tspan></text>
+          <!-- block frame chrome -->
+          <rect x="68" y="90" width="364" height="130" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="78" y="107" fill="var(--chrome)" font-size="10" class="mono">block frame + container border + height budget — chrome (I3)</text>
+          <!-- collection rendering -->
+          <rect x="80" y="116" width="340" height="94" fill="#191c25" stroke="var(--face)" stroke-opacity="0.75" />
+          <text x="92" y="134" fill="var(--muted)" font-size="10.5" class="mono">title          status   due</text>
+          <text x="92" y="154" fill="var(--text)" font-size="11">Email vendor    ○        Fri</text>
+          <text x="92" y="172" fill="var(--text)" font-size="11">File report     ⊙        —</text>
+          <text x="92" y="190" fill="var(--text)" font-size="11">Buy domain      ○        Mon</text>
+          <text x="330" y="134" fill="var(--face)" font-size="10" class="mono">← collection</text>
+          <g font-size="10.5">
+            <text x="42" y="248" fill="var(--muted)">subject: ▣ Tasks (extent supplies rows — D1)</text>
+            <text x="42" y="266" fill="var(--muted)">ladder: rung 2 — preferred recipe on the Tasks node = <tspan fill="var(--gesture)" class="mono">grid</tspan></text>
+            <text x="42" y="284" fill="var(--muted)">host requests: <tspan fill="var(--face)">line</tspan> for the slot, <tspan fill="var(--face)">collection</tspan> for the region</text>
+          </g>
+
+          <!-- ②: same node focused -->
+          <rect x="466" y="40" width="430" height="270" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="484" y="28" fill="var(--dim)" font-size="12" class="mono">② the same node, focused — panel presentation</text>
+          <rect x="484" y="56" width="394" height="28" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="496" y="75" fill="#e6eaf2" font-size="12.5" font-weight="600">Tasks <tspan fill="var(--chrome)" font-size="10" class="mono">   identity — scaffold, not the face</tspan></text>
+          <rect x="484" y="92" width="394" height="26" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="496" y="109" fill="var(--dim)" font-size="10.5">fields — the container node's own columns; unbound columns land here (I2)</text>
+          <rect x="484" y="126" width="394" height="94" fill="#191c25" stroke="var(--face)" stroke-opacity="0.75" />
+          <text x="496" y="144" fill="var(--muted)" font-size="10.5" class="mono">title          status   due</text>
+          <text x="496" y="164" fill="var(--text)" font-size="11">Email vendor    ○        Fri</text>
+          <text x="496" y="182" fill="var(--text)" font-size="11">File report     ⊙        —</text>
+          <text x="496" y="200" fill="var(--text)" font-size="11">Buy domain      ○        Mon</text>
+          <text x="750" y="144" fill="var(--face)" font-size="10" class="mono">← collection</text>
+          <rect x="484" y="228" width="394" height="26" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="496" y="245" fill="var(--dim)" font-size="10.5">relations — backlinks · appearances (scaffold)</text>
+          <g font-size="10.5">
+            <text x="484" y="272" fill="var(--muted)">same subject, same rung-2 recipe — a <tspan fill="#e6eaf2">second presentation</tspan> of the</text>
+            <text x="484" y="288" fill="var(--muted)">same <tspan fill="var(--face)">collection</tspan> rendering; the face is never asked about the scaffold</text>
+          </g>
+
+          <!-- ③: view node, kanban -->
+          <rect x="24" y="360" width="430" height="270" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="42" y="348" fill="var(--dim)" font-size="12" class="mono">③ view node with a kanban recipe — the firewall visible</text>
+          <rect x="42" y="376" width="26" height="24" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <text x="47" y="393" fill="var(--tag)" font-size="12">≔</text>
+          <rect x="74" y="376" width="358" height="24" fill="none" stroke="var(--face)" stroke-opacity="0.75" />
+          <text x="84" y="393" fill="var(--text)" font-size="11.5">This week's #tasks <tspan fill="var(--face)" font-size="10" class="mono">   ← line (kanban recipe)</tspan></text>
+          <rect x="68" y="410" width="364" height="140" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+          <rect x="80" y="424" width="340" height="114" fill="#191c25" stroke="var(--face)" stroke-opacity="0.75" />
+          <g font-size="10">
+            <rect x="90" y="434" width="102" height="94" fill="var(--panel)" stroke="var(--line)" />
+            <rect x="200" y="434" width="102" height="94" fill="var(--panel)" stroke="var(--line)" />
+            <rect x="310" y="434" width="100" height="94" fill="var(--panel)" stroke="var(--line)" />
+            <text x="98" y="450" fill="var(--muted)">todo</text>
+            <text x="208" y="450" fill="var(--muted)">doing</text>
+            <text x="318" y="450" fill="var(--muted)">done</text>
+            <rect x="96" y="458" width="90" height="18" fill="#242938" />
+            <rect x="96" y="482" width="90" height="18" fill="#242938" />
+            <rect x="206" y="458" width="90" height="18" fill="#242938" />
+            <rect x="316" y="458" width="88" height="18" fill="#242938" />
+            <text x="102" y="471" fill="var(--dim)">Email vendor</text>
+            <text x="102" y="495" fill="var(--dim)">Buy domain</text>
+            <text x="212" y="471" fill="var(--dim)">File report</text>
+            <text x="322" y="471" fill="var(--dim)">Book travel</text>
+          </g>
+          <g font-size="10.5">
+            <text x="42" y="572" fill="var(--muted)">subject: ≔ view — its <tspan fill="var(--tag)">query</tspan> supplies rows + order (D1) · ladder: rung 2 (kanban)</text>
+            <text x="42" y="590" fill="var(--muted)">no insert affordance: the firewall is the <tspan fill="#e6eaf2">subject's kind</tspan> — the host omits</text>
+            <text x="42" y="608" fill="var(--muted)">the add-row chrome; the face never gets to decide (drag between lanes is</text>
+            <text x="42" y="626" fill="var(--muted)">fine: it's a hydrated cell edit on the status column, not a structural op)</text>
+          </g>
+
+          <!-- ④: substrate floor + x-ray -->
+          <rect x="466" y="360" width="430" height="270" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <text x="484" y="348" fill="var(--dim)" font-size="12" class="mono">④ no recipe → the floor · and x-ray</text>
+          <rect x="484" y="376" width="394" height="150" fill="#191c25" stroke="var(--face)" stroke-opacity="0.75" />
+          <g font-size="10.5" class="mono">
+            <text x="496" y="396" fill="var(--muted)">matrix: Quotes (mx_12) · homogeneous run → coalesced</text>
+            <line x1="496" y1="404" x2="866" y2="404" stroke="var(--line)" />
+            <text x="496" y="420" fill="var(--muted)">vendor        amount    status    owner</text>
+            <text x="496" y="440" fill="var(--text)">Acme Corp     $1,200    sent      <tspan fill="var(--own)">→ Email vendor</tspan></text>
+            <text x="496" y="460" fill="var(--text)">Globex        $980      draft     <tspan fill="var(--own)">→ Email vendor</tspan></text>
+            <line x1="496" y1="472" x2="866" y2="472" stroke="var(--line)" />
+            <text x="496" y="490" fill="var(--muted)">heterogeneous row → per-cell labels:</text>
+            <text x="496" y="510" fill="var(--text)">label: Call notes │ kind: <tspan fill="var(--tag)">#meeting</tspan> │ when: Tue</text>
+          </g>
+          <g font-size="10.5">
+            <text x="484" y="548" fill="var(--muted)">ladder: rung 3 — the 9.7 schema-adaptive renderer; every column a</text>
+            <text x="484" y="566" fill="var(--muted)">labeled cell, relationship metadata visible; grid = its coalesced run</text>
+            <text x="484" y="592" fill="var(--gesture)">x-ray on → frames ①–③ all snap to exactly this (I4), recipes</text>
+            <text x="484" y="610" fill="var(--gesture)">untouched underneath — flip it back and the kanban returns</text>
+          </g>
+        </svg>
+      </figure>
+      <p class="note">
+        The recurring shape: the face only ever draws the green boxes. Chrome, scaffold,
+        insert affordances, height budgets, and the drill-in gestures are identical across
+        all four — which is what makes a new face type cheap and the stream feel like one
+        surface.
+      </p>
+
+      <h3 style="font-size:14px; color:#e6eaf2; margin:28px 0 0;">4.6 · F vs A, concretely</h3>
+      <p class="lede" style="margin-top:8px;">
+        For every contemplated face, <strong>A and F render identical pixels</strong> — a
+        kanban children-region substitution (A) and a kanban collection rendering (F) look
+        the same on screen. The difference is the <em>promised surface</em>: A promises
+        plugins the panel; F promises them two renderings. Promises are what you can't take
+        back.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 340" role="img" aria-label="Option A promises four substitutable regions of the panel to plugins; option F promises only line and collection renderings, keeping the panel shell-owned">
+          <!-- A side -->
+          <text x="24" y="28" fill="var(--dim)" font-size="12.5" class="mono">A · the panel is the API</text>
+          <rect x="24" y="44" width="180" height="196" rx="8" fill="#191c25" stroke="var(--face)" stroke-opacity="0.55" />
+          <text x="40" y="68" fill="#e6eaf2" font-size="12" font-weight="600">face type</text>
+          <g font-size="11" class="mono">
+            <text x="40" y="94" fill="var(--face)">identity?</text>
+            <text x="40" y="116" fill="var(--face)">fields?</text>
+            <text x="40" y="138" fill="var(--face)">children?</text>
+            <text x="40" y="160" fill="var(--face)">relations?</text>
+            <text x="40" y="188" fill="var(--muted)" font-size="10">4 extension points</text>
+            <text x="40" y="204" fill="var(--muted)" font-size="10">into host layout</text>
+          </g>
+          <rect x="234" y="44" width="210" height="252" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <g font-size="10.5">
+            <rect x="248" y="58" width="182" height="40" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="258" y="82" fill="var(--text)">identity <tspan fill="var(--face)">⊙</tspan></text>
+            <rect x="248" y="106" width="182" height="40" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="258" y="130" fill="var(--text)">fields <tspan fill="var(--face)">⊙</tspan></text>
+            <rect x="248" y="154" width="182" height="50" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="258" y="182" fill="var(--text)">children <tspan fill="var(--face)">⊙</tspan></text>
+            <rect x="248" y="212" width="182" height="40" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="258" y="236" fill="var(--text)">relations <tspan fill="var(--face)">⊙</tspan></text>
+            <text x="248" y="278" fill="var(--muted)" font-size="10">⊙ = socket: substitutable by any plugin,</text>
+            <text x="248" y="292" fill="var(--muted)" font-size="10">so order + taxonomy are frozen contract</text>
+          </g>
+
+          <!-- divider -->
+          <line x1="462" y1="44" x2="462" y2="296" stroke="var(--line)" stroke-dasharray="3 4" />
+
+          <!-- F side -->
+          <text x="484" y="28" fill="var(--dim)" font-size="12.5" class="mono">F · two renderings are the API</text>
+          <rect x="484" y="44" width="180" height="196" rx="8" fill="#191c25" stroke="var(--face)" stroke-opacity="0.55" />
+          <text x="500" y="68" fill="#e6eaf2" font-size="12" font-weight="600">face type</text>
+          <g font-size="11" class="mono">
+            <text x="500" y="94" fill="var(--face)">line?</text>
+            <text x="500" y="116" fill="var(--face)">collection?</text>
+            <text x="500" y="148" fill="var(--muted)" font-size="10">2 renderings; no</text>
+            <text x="500" y="164" fill="var(--muted)" font-size="10">access to the panel</text>
+            <text x="500" y="180" fill="var(--muted)" font-size="10">— hosts place them</text>
+          </g>
+          <rect x="694" y="44" width="210" height="252" rx="8" fill="var(--panel-2)" stroke="var(--line)" />
+          <g font-size="10.5">
+            <rect x="708" y="58" width="182" height="40" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="718" y="82" fill="var(--text)">identity</text>
+            <rect x="708" y="106" width="182" height="40" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="718" y="130" fill="var(--text)">fields</text>
+            <rect x="708" y="154" width="182" height="50" fill="#191c25" stroke="var(--face)" stroke-opacity="0.7" />
+            <text x="718" y="182" fill="var(--text)">collection region <tspan fill="var(--face)">⊙</tspan></text>
+            <rect x="708" y="212" width="182" height="40" fill="none" stroke="var(--chrome)" stroke-dasharray="4 3" />
+            <text x="718" y="236" fill="var(--text)">relations</text>
+            <text x="708" y="278" fill="var(--muted)" font-size="10">dashed parts: shell design, invisible to</text>
+            <text x="708" y="292" fill="var(--muted)" font-size="10">plugins — reorder/merge/restyle freely</text>
+          </g>
+
+          <text x="24" y="330" fill="var(--muted)" font-size="11.5">Same green kanban either way. A makes the panel's anatomy public; F keeps it private. Public anatomy can never be revised without breaking plugins.</text>
+        </svg>
+      </figure>
+      <table class="map">
+        <thead><tr><th>difference</th><th>A · regioned host</th><th>F · line + collection</th></tr></thead>
+        <tbody>
+          <tr><td>face-type API</td><td>4 optional region substitutions</td><td>2 renderings (line, collection)</td></tr>
+          <tr><td>panel arrangement</td><td>part of the plugin contract — reordering or merging regions breaks face types</td><td>shell-owned — the §4 token pass (and anything after) can rearrange freely</td></tr>
+          <tr><td>region taxonomy</td><td>public, decided now, forever ("is relations its own region?")</td><td>internal to the shell; mergeable/renameable at will</td></tr>
+          <tr><td>a "note"-like face</td><td>a face type substituting the fields region to foreground content</td><td>not a face — scaffold prominence from schema roles + density</td></tr>
+          <tr><td>popover presentation</td><td>the contract must define which regions a popover hosts</td><td>scaffold-mini by definition; faces uninvolved</td></tr>
+          <tr><td>kanban · calendar · grid · review</td><td>children-region substitutions</td><td>collection renderings — <em>identical result</em></td></tr>
+          <tr><td>I2 reachability</td><td>by construction (fields region always laid out)</td><td>by construction (scaffold owns fields) — a tie</td></tr>
+          <tr><td>cost to mint now</td><td>region framework + layout API before any second consumer exists</td><td>names the two renderings 9.7 already draws</td></tr>
+          <tr><td>growth to whole-interior faces</td><td>widen the region API — against an already-frozen taxonomy</td><td>extract D's region services from the scaffold, with real consumers in hand</td></tr>
+        </tbody>
+      </table>
+      <p class="note">
+        The one thing A buys that F doesn't: a plugin could restyle identity/fields/relations
+        <em>today</em>. Nothing contemplated wants to (§4.2) — and if something eventually
+        does, that's the D-extraction trigger, paid then instead of now.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>5 · D5 — Density and fidelity are view state, never stored in recipes</h2>
+      <p class="lede">
+        The substrate renderer is already keyed <code>(row, columns, density, fidelity)</code>.
+        The contract generalizes that key to every face: <strong>density</strong> is a small
+        ordered tier computed by the host from available width (never raw pixels, never
+        persisted); <strong>fidelity</strong> (composed ↔ substrate) cascades down scopes —
+        shell → panel → block — with the global x-ray toggle living in shell state (session 2)
+        and finer overrides as ephemeral view state. Recipes stay pure rendering
+        <em>preferences</em>; what you'd get on any given screen is always reconstructible.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 170" role="img" aria-label="Fidelity cascades from shell through panel to block; density tiers derive from width">
+          <defs>
+            <marker id="casA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--gesture)" />
+            </marker>
+          </defs>
+          <g font-size="12">
+            <rect x="24" y="40" width="180" height="52" rx="6" fill="#191c25" stroke="var(--line)" />
+            <text x="40" y="62" fill="#e6eaf2" font-weight="600">shell</text>
+            <text x="40" y="80" fill="var(--gesture)" font-size="11" class="mono">x-ray: off | on (global)</text>
+            <rect x="254" y="40" width="180" height="52" rx="6" fill="#191c25" stroke="var(--line)" />
+            <text x="270" y="62" fill="#e6eaf2" font-weight="600">panel</text>
+            <text x="270" y="80" fill="var(--muted)" font-size="11" class="mono">fidelity override?</text>
+            <rect x="484" y="40" width="180" height="52" rx="6" fill="#191c25" stroke="var(--line)" />
+            <text x="500" y="62" fill="#e6eaf2" font-weight="600">block</text>
+            <text x="500" y="80" fill="var(--muted)" font-size="11" class="mono">fidelity override?</text>
+            <path d="M204,66 L250,66" stroke="var(--gesture)" stroke-width="1.6" marker-end="url(#casA)" />
+            <path d="M434,66 L480,66" stroke="var(--gesture)" stroke-width="1.6" marker-end="url(#casA)" />
+            <text x="710" y="56" fill="var(--dim)" font-size="11.5">density: host-computed tier</text>
+            <text x="710" y="74" fill="var(--muted)" font-size="11" class="mono">from width · tiers = §4 tokens</text>
+          </g>
+          <text x="24" y="130" fill="var(--muted)" font-size="11.5">Recipes may express density <em>preferences</em> (e.g. a grid's minimum useful tier); the host decides.</text>
+          <text x="24" y="150" fill="var(--muted)" font-size="11.5">Exact tier names/breakpoints and how fidelity reads visually are §4 (token pass) — this session fixes only the plumbing.</text>
+        </svg>
+      </figure>
+
+      <!-- ============================================================ -->
+      <h2>6 · D6 — One command registry, two exposure surfaces</h2>
+      <p class="lede">
+        The other half of the contribution surface. Plugins register <strong>commands</strong>
+        into one registry; each declares where it surfaces — the <code>/</code> menu (make),
+        the <code>⌘K</code> launcher (act), or both — plus what subject context it needs. The
+        existing <code>slash-commands.ts</code> shape (<code>id · label · keywords · run</code>)
+        is the seed; it gains a <code>surfaces</code> field and moves from a hardcoded array to
+        the registry. Launcher-side ranking/UX is §3b's business; only the registration shape
+        is fixed here.
+      </p>
+      <pre class="def"><span class="k">type</span> Command = {
+  id: <span class="s">'hila.tags.promote'</span>            <span class="c">// namespaced by plugin</span>
+  label, keywords                      <span class="c">// as today</span>
+  surfaces: (<span class="s">'slash'</span> | <span class="s">'launcher'</span>)[]  <span class="c">// where it appears</span>
+  context: <span class="s">'node'</span> | <span class="s">'none'</span>            <span class="c">// needs a subject? (slash always has one;</span>
+                                       <span class="c">//  launcher passes the provenance node)</span>
+  run(subject?, …)                     <span class="c">// delegates to ops, as today</span>
+}</pre>
+      <p class="note">
+        The provenance rule from session 2 carries over for free: a launcher command that
+        creates something homes it under the node focused when <code>⌘K</code> was invoked —
+        the same <code>subject</code> parameter, supplied by the shell.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>7 · The code reality, mapped</h2>
+      <p class="lede">
+        Where each existing surface lands under the model. Nothing here is a build item yet —
+        the migration sequencing belongs to §4 — but the model must be checkable against the
+        code it will absorb.
+      </p>
+      <table class="map">
+        <thead><tr><th>today</th><th>under the model</th></tr></thead>
+        <tbody>
+          <tr><td>StreamView / OverlaidCards</td><td>shell — fixed infrastructure, not a face; owns panel hosts + focus mechanics</td></tr>
+          <tr><td>NavigationPanel · FocusPanel</td><td><strong>hosts</strong> — panel chrome + row slots; interiors resolve via the ladder instead of hardcoding</td></tr>
+          <tr><td>SubstrateRegion</td><td>the rung-3 floor renderer — the recipe that substitutes nothing</td></tr>
+          <tr><td>SubTableBand · QueryBand</td><td>block hosts (container/view subjects in row context); the hardcoded <code>hila.table</code> lookup becomes the ladder</td></tr>
+          <tr><td>TableFace (top-level + identity face)</td><td>dissolves: grid = the substrate's coalesced run; a composed grid recipe (widths, pinned columns) is later sugar. Identity-face <em>authority</em> = substrate at a container subject; the root-matrix authority re-homing stays a carried §4 item</td></tr>
+          <tr><td>TagBrowserFace</td><td>retires with the Tags tab (session 2): launcher lens + container focus states</td></tr>
+          <tr><td>TagPropertyPanel (popover)</td><td>a <strong>presentation</strong> of panel context — same rendering contract at compact density, popover chrome from the host; not a third context</td></tr>
+          <tr><td>FaceConfigPanel ("View as…" modal)</td><td>retires into per-panel/per-block chrome (session 2); edits the subject's preferred recipe (rung 2)</td></tr>
+          <tr><td>face-registry / FaceRenderer / slot-binding</td><td>kept — the registry gains per-context renderings; the slot chain is unchanged; FaceRenderer grows into the host-side ladder + context plumbing</td></tr>
+          <tr><td>slash-commands.ts</td><td>seed of the command registry (D6)</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ============================================================ -->
+      <h2>8 · Where things stand (after round 1)</h2>
+      <ul class="tight">
+        <li><strong>Settled — D1, the query/recipe split.</strong> Queries belong to subjects;
+          face configs become pure rendering recipes; row sourcing and row rendering are
+          decoupled in general. Stored <code>face_configs.query</code> re-homes to
+          view/container subjects at migration.</li>
+        <li><strong>Settled — D3 including the rung-1 deferral.</strong> The affinity ladder
+          stands (closing Plan.md #5); per-appearance overrides stay unmodeled and unstored
+          until a concrete need.</li>
+        <li><strong>Direction agreed — recursion through hosts</strong> (D2's alternating
+          host/face recursion). The chrome/interior split details ride on D4's outcome.</li>
+        <li><strong>Proposed, unobjected:</strong> density/fidelity as view state (D5) · one
+          command registry, two surfaces (D6) · popover = a presentation, not a third
+          context (§7 map).</li>
+        <li><strong>Open — this round: D4, interior ownership.</strong> Round 1's regioned
+          host flagged as deciding layout ahead of proven need. §4 now carries the option
+          space — A regioned host · B takeover + kit · C styling-over-substrate · D region
+          services · F line/collection scope — with the invariants (I1–I4) split out as the
+          option-independent contract. Recommendation: <strong>F now</strong> (faces supply
+          line + collection renderings; the panel scaffold stays shell-owned and outside the
+          plugin contract), <strong>D later</strong> as the extraction path when a real
+          whole-interior face appears.</li>
+        <li><strong>Carried to later stages:</strong> exact density tiers, block height
+          budgets, and how fidelity reads visually (§4 token pass) · launcher command
+          ranking/UX + save-search-as-node (§3b) · root-matrix schema authority under
+          substrate fidelity (§4 carry-in from session 2) · whole-interior faces (→ D
+          extraction, first real consumer) · per-appearance recipe overrides (concrete
+          need).</li>
+      </ul>
+
+      <p class="note" style="margin-top: 40px;">
+        On acceptance this lands as: the composition contract in
+        <code>Plugins.md</code> (face-type declaration shape, host-context contract, ladder) +
+        a tightened "What plugins contribute" in <code>Architecture.md</code> · Plan.md open
+        question #5 marked resolved · Phase-10.md §3 items checked. This page stays as the
+        visual companion and round record.
+      </p>
+    </div>
+  </body>
+</html>

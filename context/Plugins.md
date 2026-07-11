@@ -177,6 +177,82 @@ When a user applies a face to a matrix, a **configuration UI** shows:
 
 When a face type with trait requirements is applied to a matrix, the system auto-provisions the needed traits via `ensureTrait()`. For example, applying the outline face to a note matrix provisions rank and closure traits for that matrix, even though the note plugin never requested them. See [Traits - Provisioning model](./Traits.md#provisioning-model).
 
+## Plugin view composition model
+
+> Decided in [Phase 10 §3](./Phase-10.md#3-plugin-view-composition-model) (visual companion + round-by-round reasoning: [Phase-10-Session-3-visuals.html](./Phase-10-Session-3-visuals.html)). Builds on the [face slot model](#face-slot-model) above and the [view hierarchy and navigation](./Architecture.md#view-hierarchy-and-navigation) model from [§2](./Phase-10.md#2-view-hierarchy-and-navigation-model).
+
+This is the contract for how a rendered view is assembled from a plugin's contributions. It reduces to one sentence: **hosts own chrome and recursion; faces own interiors; subjects own their data; a fixed ladder decides which face renders which subject.** Every concept below is one of those four roles.
+
+### The subject supplies the data; the recipe supplies the rendering
+
+A view renders a **subject**: a node together with its **child-sourcing mode** (`loose` / `container` / `view` — see [Architecture — identity face / container](./Architecture.md#identity-face) and the [Phase 9.7 convergence](./Phase-9.7.md#3-three-child-sourcing-modes-the-unification)). The subject *is* its own data source — a `container` node is its extent (matrix-ranked), a `view` node is its query (with its `ORDER BY`), the `loose` mesh is the mesh. So a face configuration carries **no query**. It is a pure, serializable **rendering recipe**:
+
+```
+{ faceTypeId, slotBindings, settings }   // no query — the subject sources the rows
+```
+
+This decouples **row sourcing** from **row rendering**. A recipe is portable: it attaches to any subject whose row shape its slots can bind, and the [slot-binding resolution chain](#slot-binding-resolution) (explicit → name → type+position → fallback) is unchanged. Data-plane concerns (a view's `WHERE`/`ORDER BY`, sort, filter) live with the subject's query; rendering-plane concerns (which face type, column-to-slot bindings, grid column widths, a kanban's lane column) live in the recipe. The higher-level authoring gestures that compile sort/order/dimension choices into a subject's query are the launcher/`view`-block continuum designed in [§3b](./Phase-10.md#3b-launcher-deep-dive-scheduled-session), shared by both surfaces.
+
+> Migration consequence: the stored `query` on today's `FaceConfig` / `face_configs` row re-homes to the subject (view/container) at migration; the config type loses its `query` field.
+
+### A face type declares up to two renderings: line and collection
+
+A face type contributes at most two renderings, and **nothing about panel layout**:
+
+- **line** — a single row rendered as a participant in a parent's region (the compact bullet, a card, a tag chip, a reference badge). Compact, meshable, expandable in place.
+- **collection** — a row-set rendered as an arrangement (an outline list, a coalesced grid, kanban lanes, a calendar, a one-card-at-a-time review).
+
+Every face type contemplated so far (outline, grid, kanban, calendar, gallery, flashcard review, tag chip) is one or both of these; none is a whole-panel-interior layout. (A "note" is not a face type — it is scaffold prominence of the `content`-role column at panel density.) This is [Phase 10 §3](./Phase-10.md#3-plugin-view-composition-model) **option F**: the alternatives (a host that offers plugins substitutable panel *regions*, or full interior *takeover*) were rejected as minting a layout API ahead of any second consumer. When a genuine whole-interior face (e.g. a dashboard) eventually appears, the growth path is to extract a **region-services** contract *then*, from real consumers — the same discipline by which the plugin API itself was extracted.
+
+### Hosts request renderings; the panel scaffold is shell-owned
+
+**Host presentations** map onto the two renderings; the plugin never sees the panel's anatomy:
+
+| Host presentation | Requests |
+| --- | --- |
+| **row slot** (a participant in a parent's region) | `line` |
+| **block region** (a `container`/`view` subject expanded inline in row context) | `line` + `collection` |
+| **panel collection region** (a node opened as its own surface) | `collection` |
+| **popover** (e.g. the tag property editor) | *scaffold-mini* — identity + fields, no face |
+
+The **panel scaffold** — identity · fields · collection region · relations — is shell-owned substrate structure, **outside the plugin contract**. Only the collection region is delegated to the resolved face; identity, fields, and relations are drawn by the shell. Because the scaffold is private, its arrangement can evolve (in the [§4 token pass](./Phase-10.md#4-cohesive-design-token-and-theming-system) or later) without breaking any plugin. This refines session 2's "row and panel host contexts": **row/panel are host presentations; line/collection are what faces supply.**
+
+The scaffold's **fields** region absorbs the old `overflowBehavior` notion: any hydrated column a face doesn't consume lands there, so **every field stays reachable by construction** — a host guarantee, not face discipline.
+
+### The affinity ladder resolves which face renders a subject
+
+The host runs a fixed ladder at every slot, per context; an arbitrary appearance is never guessed:
+
+1. **Appearance override** — this position renders the subject differently. *Modeled but unstored in v1* — no storage is minted until a concrete need appears.
+2. **Preferred recipe** — a fact on the **subject node / its matrix** (they are 1-to-1). Set by the plugin at creation (declarative manifest) or by the user through panel/block chrome. It rides the membership plane, so "Tasks render as a grid" follows the Tasks container everywhere it appears.
+3. **Substrate floor** — the [substrate](./Architecture.md#composed-and-substrate-fidelity) schema-adaptive renderer, which always renders in both contexts (grids are its coalesced runs). The universal fallback.
+
+This resolves [Plan.md open question #5](./Plan.md#resolved-design-decisions): the preferred face is a subject-level recipe on rung 2; the substrate remains the floor. A recipe's face type carries both renderings, so one preferred recipe answers both "as a block" and "as a panel"; if a face type lacks one rendering, that presentation falls to the floor, never to a different recipe.
+
+### Hosts own recursion, sizing, fidelity, and chrome
+
+- **Recursion.** Faces never mount faces. When a face's interior contains another subject (a container block inside a panel's children region), it yields a **row slot** back to the host, which runs the ladder again. Composition depth belongs to hosts; the ladder stays the single authority.
+- **Chrome.** Bullets/handles, indent guides, drag targets, block frames, the [container border](./Architecture.md#identity-face), panel cards, focus headers, ancestor tabs, breadcrumbs, and drill-in gestures are all host-drawn and identical for every face. Clicking chrome navigates (a boundary hop); clicking inside is the face's interaction. Insert affordances are host-owned too, so the [`view` firewall](./Phase-9.7.md#3-three-child-sourcing-modes-the-unification) (a query owns nothing, so it cannot insert) is enforced by the host omitting the add-row affordance for `view` subjects — the face never decides it.
+- **Sizing.** Hosts own width (panel column width; row slot width) and hand the face a **density tier** (a small ordered scale computed from available width — never raw pixels, never persisted). In row context the host also owns the **height budget** of an expanded block region (windowing/paging past it). Exact tiers and budgets are a [§4 token-pass](./Phase-10.md#4-cohesive-design-token-and-theming-system) detail.
+- **Fidelity.** The composed ↔ substrate axis is view state that cascades down scopes (shell → panel → block), with the global **x-ray** toggle in shell state (session 2). Recipes may express density/fidelity *preferences* but never store the resolved value; what any given screen shows is always reconstructible, and x-ray snaps every face to the substrate (the conformance guarantee) while leaving recipes intact underneath.
+
+### Commands: one registry, two surfaces
+
+The other half of the contribution surface. Plugins register **commands** into one registry; each declares where it surfaces and what subject context it needs:
+
+```
+type Command = {
+  id                              // namespaced by plugin, e.g. 'hila.tags.promote'
+  label, keywords                 // as today (slash-commands.ts)
+  surfaces: ('slash' | 'launcher')[]   // the / menu (make), the ⌘K launcher (act), or both
+  context: 'node' | 'none'        // needs a subject? slash always has one; the launcher
+                                  //   passes the provenance node (session 2 homing rule)
+  run(subject?, …)                // delegates to ops, as today
+}
+```
+
+The existing [`slash-commands.ts`](../src/editor/slash-commands.ts) shape (`id` · `label` · `keywords` · `run`) is the seed; it gains a `surfaces` field and moves from a hardcoded array to the registry. Launcher-side ranking/UX is [§3b](./Phase-10.md#3b-launcher-deep-dive-scheduled-session)'s business; only the registration shape is fixed here. The [session-2 provenance rule](./Architecture.md#placeless-creation-homes-by-provenance) carries over for free: a launcher command that creates something homes it under the node focused when `⌘K` was invoked, via the same `subject` parameter supplied by the shell.
+
 ## Concrete examples
 
 ### Workspace plugin

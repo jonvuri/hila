@@ -36,10 +36,14 @@ Open questions, resolved:
 
 Formalize how plugins share and arrange views, building on the existing face/slot system.
 
-- [ ] Define how a plugin registers top-level views vs faces embedded within other views.
-- [ ] Define how composed views (e.g. a face inside a focus panel, a child-matrix reference rendering a table face) resolve their host context, sizing, and chrome.
-- [ ] Relate to open questions already tracked in Plan.md (face affinity for matrixes, preferred faces).
-- [ ] **Output:** a composition model documented alongside the face system docs ([Plugins.md](Plugins.md), [Architecture.md](Architecture.md)).
+> **Session 3 complete.** The composition contract is captured in [Plugins.md — Plugin view composition model](Plugins.md#plugin-view-composition-model) and a tightened [Architecture.md — What plugins contribute](Architecture.md#what-plugins-contribute), with the visual companion + round-by-round reasoning at [Phase-10-Session-3-visuals.html](Phase-10-Session-3-visuals.html). Six determinations (D1–D6); the interior-ownership question (D4) got its own round-2 deep dive and resolved to **option F** (faces supply *line* + *collection* renderings; the panel scaffold stays shell-owned, outside the plugin contract).
+
+Open questions, resolved:
+
+- [x] Define how a plugin registers top-level views vs faces embedded within other views. — *No plugin top-level views (session 2). Plugins register **face types** (D2/D4) and **commands** (D6); the shell is fixed infrastructure. A face type declares up to two renderings — **line** (a row as a participant) and **collection** (a row-set) — and nothing else about panel layout.*
+- [x] Define how composed views (e.g. a face inside a focus panel, a child-matrix reference rendering a table face) resolve their host context, sizing, and chrome. — *The **subject → ladder → host** contract (D1/D2/D3/D5): the subject supplies rows (its child-sourcing mode — the config sheds its query, D1); a fixed **affinity ladder** (appearance override [deferred] → subject/matrix preferred recipe → substrate floor, D3) resolves the rendering recipe; the **host** owns all chrome, sizing (width + a computed **density** tier, never pixels), **fidelity** cascade (D5), drill-in, and **recursion** (faces never mount faces — a nested subject yields a slot back to the host). Faces draw interiors only.*
+- [x] Relate to open questions already tracked in Plan.md (face affinity for matrixes, preferred faces). — *Resolves [Plan.md open question #5](Plan.md#resolved-design-decisions): the **preferred face is a subject-level (matrix-level) recipe** on rung 2 of the ladder; the substrate remains the universal fallback (rung 3). Affinity rides the membership plane (follows the container everywhere it appears); per-appearance overrides (rung 1) are modeled but **unstored in v1**.*
+- [x] **Output:** a composition model documented alongside the face system docs ([Plugins.md](Plugins.md), [Architecture.md](Architecture.md)). — *Landed: [Plugins.md — Plugin view composition model](Plugins.md#plugin-view-composition-model); refined [Architecture.md — What plugins contribute](Architecture.md#what-plugins-contribute); [Plan.md decision #8](Plan.md#resolved-design-decisions) cross-link + open question #5 marked resolved.*
 
 ## 3b. Launcher deep dive (scheduled session)
 
@@ -79,7 +83,7 @@ These are the crux of the phase and are expected to be answered by its planning 
 
 1. ~~Is the workspace the root/parent of all views, or a peer?~~ **Resolved (session 2):** one literal root; focus, not zoom. See [Architecture.md — View hierarchy and navigation](Architecture.md#view-hierarchy-and-navigation).
 2. ~~What is the full set of top-level views and sub-views, and the navigation between them?~~ **Resolved (session 2):** places / gestures / system edge; no top-level tabs. See §2 above.
-3. How do plugins contribute and compose views into the shell and into each other? **Direction set (session 2):** face types (row/panel host contexts) + commands; shell is fixed infrastructure. The host-context contract remains for §3.
+3. ~~How do plugins contribute and compose views into the shell and into each other?~~ **Resolved (session 3):** plugins contribute **face types** (each declaring up to two renderings — *line* and *collection*; the panel scaffold stays shell-owned) + **commands** (one registry, `/` and `⌘K` surfaces); the shell is fixed infrastructure. Composition follows the **subject → affinity ladder → host** contract, with the host owning chrome, sizing, fidelity, and recursion. See §3 above and [Plugins.md — Plugin view composition model](Plugins.md#plugin-view-composition-model).
 4. What single design language reconciles the design system and the overlaid-cards exploration, and how is depth/elevation tokenized? *(Carry-ins from session 2: deep-ancestry tab overflow; root-matrix schema authority under substrate fidelity; the x-ray toggle's home; face-config-as-panel-chrome.)*
 5. How are global themes vs per-view/face themes layered, and what is the migration order off `global.css`?
 
