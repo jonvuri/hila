@@ -1,0 +1,1455 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase 10 · Session 3b — The query spec &amp; SQL-analog gestures (round 1)</title>
+    <style>
+      :root {
+        --bg: #14161d;
+        --panel: #1b1e27;
+        --panel-2: #20242f;
+        --line: #2c3140;
+        --text: #c9cfdb;
+        --dim: #99a1b3;
+        --muted: #6b7488;
+        --accent: #6ea8fe;
+        --own: #6ea8fe;      /* own-edge / lifecycle / home */
+        --portal: #c08cf0;   /* portal / non-owning structural */
+        --ref: #5bbf9a;      /* ref / non-owning content */
+        --tag: #e0a352;      /* membership plane / matrix extent */
+        --border: #7f8aa3;   /* container border */
+        --danger: #e0696b;
+        --gesture: #d8c08a;  /* transient gestures / SQL text */
+        --spec: #5bbf9a;     /* the structured spec */
+        --sql: #d8c08a;      /* canonical SQL */
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 32px 28px 80px;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 {
+        font-size: 16px; margin: 40px 0 6px; padding-bottom: 6px;
+        border-bottom: 1px solid var(--line); color: #e6eaf2;
+      }
+      h3 { font-size: 13.5px; color: #e6eaf2; margin: 18px 0 4px; }
+      .lede { color: var(--dim); margin: 0 0 8px; }
+      .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+      p { margin: 8px 0 0; color: var(--dim); }
+      p strong, li strong { color: var(--text); }
+      figure { margin: 14px 0 0; }
+      figcaption { color: var(--muted); font-size: 12px; margin-top: 6px; }
+      svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: block; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; color: #d8c08a; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+      .cards.two { grid-template-columns: repeat(2, 1fr); }
+      .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .card h3 { margin: 0 0 6px; font-size: 13.5px; color: #e6eaf2; }
+      .card p { margin: 0 0 4px; font-size: 12.5px; color: var(--dim); }
+      .card .verb { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+      .card .steal { color: var(--ref); font-size: 12.5px; }
+      .card .avoid { color: var(--danger); font-size: 12.5px; }
+      .card .steal b, .card .avoid b { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 600; margin-right: 5px; }
+      table.map { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+      table.map th, table.map td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      table.map th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+      table.map td:first-child { color: #e6eaf2; white-space: nowrap; }
+      .badge {
+        display: inline-block; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 1px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted);
+        vertical-align: 2px; margin-left: 8px;
+      }
+      .badge.rec { color: var(--ref); border-color: #2a4a3d; }
+      .badge.q { color: var(--gesture); border-color: #4a3f28; }
+      .badge.def { color: var(--portal); border-color: #453156; }
+      ul.tight { margin: 8px 0 0; padding-left: 20px; }
+      ul.tight li { margin: 5px 0; color: var(--dim); }
+      pre.def {
+        background: #191c25; border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px; font-size: 12.5px; line-height: 1.5; overflow-x: auto;
+        color: var(--dim); margin: 14px 0 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      pre.def .k { color: #e6eaf2; }
+      pre.def .c { color: var(--muted); }
+      pre.def .s { color: var(--gesture); }
+      pre.def .g { color: var(--ref); }
+
+      /* ---- UI mocks ---- */
+      .mock {
+        background: #10121a; border: 1px solid var(--line); border-radius: 10px;
+        padding: 18px; margin-top: 14px;
+      }
+      .mock .cap { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .qbar {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+        background: var(--panel-2); border: 1px solid #39415a; border-radius: 6px;
+        padding: 8px 10px; font-size: 13px;
+      }
+      .qbar .caret { color: var(--dim); }
+      .qbar .typed { color: #e6eaf2; }
+      .qbar .cursor { display: inline-block; width: 1px; height: 15px; background: var(--accent); vertical-align: -2px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px;
+        font-size: 12px; color: var(--text); background: #232837;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .chip .dim { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .chip.kind { border-color: #4a3a22; } .chip.kind .dim { color: var(--tag); }
+      .chip.scope { border-color: #2b3a55; } .chip.scope .dim { color: var(--own); }
+      .chip.pred { border-color: #2a4a3d; } .chip.pred .dim { color: var(--ref); }
+      .chip.order { border-color: #453156; } .chip.order .dim { color: var(--portal); }
+      .chip.custom { border-color: #5a3233; color: var(--danger); }
+      .chip.leaf { border-style: dashed; border-color: #4a5065; color: var(--text); }
+      .chip.leaf .dim { color: var(--dim); }
+      .chip.invalid { border-color: var(--danger); color: var(--danger); }
+      .chip.focused { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+      .mock .rows { margin-top: 10px; border-top: 1px solid var(--line); }
+      .mock .rrow {
+        display: flex; align-items: baseline; gap: 10px; padding: 6px 4px;
+        border-bottom: 1px solid #1e222d; font-size: 13px;
+      }
+      .mock .rrow .lbl { color: #e6eaf2; }
+      .mock .rrow .ctx { color: var(--muted); font-size: 11.5px; margin-left: auto; }
+      .mock .rrow.sel { background: #222a3e; border-radius: 4px; }
+      .mock .menu {
+        margin-top: 8px; background: var(--panel-2); border: 1px solid #39415a; border-radius: 6px;
+        max-width: 340px; font-size: 12.5px; overflow: hidden;
+      }
+      .mock .menu .mi { padding: 5px 12px; display: flex; gap: 10px; align-items: baseline; }
+      .mock .menu .mi.sel { background: #222a3e; }
+      .mock .menu .mi .key { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; min-width: 44px; }
+      .mock .blockhead {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px 6px 0 0;
+        background: var(--panel-2); font-size: 12px;
+      }
+      .mock .blockhead .glyph { color: var(--portal); font-weight: 600; }
+      .mock .blockbody { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 6px 6px; padding: 8px 10px; }
+      .mock .brow { display: grid; grid-template-columns: 1.4fr 1fr 0.8fr; gap: 8px; padding: 4px 2px; font-size: 12.5px; border-bottom: 1px solid #1e222d; }
+      .mock .brow .h { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .mock .brow .cell-ed { color: var(--text); border-bottom: 1px dotted #3a4256; }
+      .kbd {
+        display: inline-block; border: 1px solid #39415a; border-bottom-width: 2px; border-radius: 4px;
+        padding: 0 5px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--dim); background: #1d2130;
+      }
+      .decision {
+        border-left: 3px solid var(--accent); background: var(--panel);
+        border-radius: 0 8px 8px 0; padding: 12px 16px; margin-top: 14px;
+      }
+      .decision .dq { color: #e6eaf2; font-weight: 600; font-size: 13.5px; }
+      .decision p { font-size: 12.5px; }
+      .opt { margin-top: 10px; }
+      .opt .oname { color: #e6eaf2; font-weight: 600; font-size: 13px; }
+      .opt .pro { color: var(--ref); } .opt .con { color: var(--danger); }
+      .opt p { margin: 3px 0 0; font-size: 12.5px; }
+      .srcs { font-size: 12px; color: var(--muted); }
+      .srcs a { color: var(--dim); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase 10 · Session 3b — The query spec &amp; SQL-analog gestures</h1>
+      <p class="lede">
+        <strong>Session pivot.</strong> §3b was scheduled as the launcher deep dive. Its largest
+        item — <em>shared authoring gestures with view blocks</em> — turned out to be the
+        foundation everything else stands on, so this session now settles <strong>the query
+        spec and its gesture vocabulary first</strong>: the one model of filtering, scoping,
+        ordering, and dimension-picking that the launcher's transient search and persisted
+        <code>view</code> nodes both speak. The launcher's own surface (tempo, layout,
+        result ranking, command integration) follows as <strong>3b-ii</strong>, consuming this
+        model. Companion to <code>context/Phase-10.md</code> §3b · round 1.
+      </p>
+      <p class="note">
+        Givens, not reopened: view blocks store <strong>SQL canonically — executed == stored</strong>,
+        no silent rewriting (§9.3) · the <strong>subject sources rows</strong>; face recipes carry no
+        query (session 3 D1) · sort/filter are data-plane, living with the subject's query
+        (session 3) · v1 search scope is <code>LIKE</code> over label-role columns + matrix titles +
+        a containers/types filter, FTS deferred (session 2) · a query owns nothing — the
+        <code>view</code> firewall (9.7) · commands are one registry, two surfaces (session 3 D6) ·
+        launcher ranking is <strong>stateless in v1</strong> (pre-session call) · taste anchors:
+        Linear ⌘K, Raycast.<br />
+        Round 1 → 2: D1–D5 <strong>held by default</strong>, pending one stress test — does
+        SQL-canonical + recognizer only look good because the v1 subset is tiny? Round 2 (§10–§13)
+        walks every deferred feature through <em>grammar difficulty · theoretical value · chip
+        stretch</em>, adds the <strong>leaf taxonomy</strong>, and takes up the proposed
+        <strong>CTE source chip</strong> (new ground — the only prior CTE touch is
+        <code>recognize-updatable</code> rejecting <code>WITH</code> as a v1 restriction).<br />
+        Round 2 → 3: D1–D13 <strong>accepted</strong>. Round 3 (§14–§16) grinds the
+        <strong>interactive grammar</strong>: how each chip kind is discovered and then signalled —
+        object-first discovery, glyph economy, the <code>#</code>-for-FROM overload and the
+        sigil-vs-label mismatch both retired, and the mastery ladder for op access. The round-1
+        mocks' <code>in:</code> label and <code>#</code> kind-prefix are superseded by D14/D15.<br />
+        Round 3 → 4: D14–D16 <strong>accepted</strong> (with colors explicitly deferred to the §4
+        token pass — and the round-1/2 danger tint on leaf chips called out as wrong: red must
+        mean <em>invalid</em>). Round 4 (§17–§19) settles the four <strong>explicit-glyph
+        slots</strong> — matrix, CTE/source, computed column, predicate fragment — including
+        whether they need to be four at all. Earlier mocks' <code>▣</code> container mark and
+        red-tinted <code>ƒ/WITH</code> leaf chips are superseded by D17–D19.<br />
+        Round 4 → close: D17–D19 <strong>accepted</strong>, with one tweak — the dashed outline
+        is a <em>placeholder treatment</em>: what's settled is the semantic channel (a frame
+        texture, distinct from glyph and color, meaning “opaque SQL inside”); its final visual
+        form is determined for real in the §4 token pass, alongside the chip palette and the
+        invalid treatment. <strong>Session 3b-i closed</strong> — the distilled model is recorded
+        in <code>Query-Spec.md</code>; Phase-10.md §3b carries the pivot + status; this page
+        remains the round-by-round record.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>0 · The one-sentence model</h2>
+      <p class="lede">
+        <strong>Gestures edit a spec; the spec compiles to canonical SQL; SQL is what is stored
+        and run; a recognizer lifts stored SQL back into the spec.</strong> The spec is a
+        <em>view over SQL</em> — never a second source of truth.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 250" role="img" aria-label="The round-trip: gestures edit the spec, the spec compiles to canonical SQL, the recognizer lifts SQL back to the spec; hand-edited SQL outside the dialect degrades honestly">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--dim)" />
+            </marker>
+            <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--danger)" />
+            </marker>
+          </defs>
+          <g font-size="12.5">
+            <!-- spec box -->
+            <rect x="40" y="52" width="250" height="128" rx="8" fill="#191c25" stroke="var(--spec)" stroke-opacity="0.55" />
+            <text x="58" y="80" fill="#e6eaf2" font-weight="600">query spec <tspan fill="var(--muted)" font-size="11" font-weight="400">(in memory, per surface)</tspan></text>
+            <text x="58" y="102" fill="var(--dim)" font-size="11.5" class="mono">kind · scope · text · where[]</text>
+            <text x="58" y="120" fill="var(--dim)" font-size="11.5" class="mono">order · limit</text>
+            <text x="58" y="146" fill="var(--muted)" font-size="11">what chips, pickers, and column-header</text>
+            <text x="58" y="161" fill="var(--muted)" font-size="11">gestures read and write</text>
+
+            <!-- sql box -->
+            <rect x="620" y="52" width="262" height="128" rx="8" fill="#191c25" stroke="var(--sql)" stroke-opacity="0.55" />
+            <text x="638" y="80" fill="#e6eaf2" font-weight="600">canonical SQL <tspan fill="var(--muted)" font-size="11" font-weight="400">(the stored truth)</tspan></text>
+            <text x="638" y="102" fill="var(--dim)" font-size="11.5" class="mono">SELECT d.* FROM "Tasks" d</text>
+            <text x="638" y="118" fill="var(--dim)" font-size="11.5" class="mono">WHERE … EXISTS(subtree) …</text>
+            <text x="638" y="146" fill="var(--muted)" font-size="11">what runs, what syncs, what x-ray and</text>
+            <text x="638" y="161" fill="var(--muted)" font-size="11">agents see — executed == stored (§9.3)</text>
+
+            <!-- arrows -->
+            <path d="M292 92 H616" stroke="var(--dim)" stroke-width="1.4" marker-end="url(#arr)" fill="none" />
+            <text x="454" y="84" fill="var(--dim)" text-anchor="middle" font-size="11.5">compile <tspan fill="var(--muted)">(deterministic, one shape)</tspan></text>
+            <path d="M616 140 H292" stroke="var(--spec)" stroke-width="1.4" marker-end="url(#arr)" fill="none" />
+            <text x="454" y="132" fill="var(--spec)" text-anchor="middle" font-size="11.5">recognize <tspan fill="var(--muted)">(sound on the dialect only)</tspan></text>
+
+            <!-- gestures above spec -->
+            <text x="165" y="30" fill="var(--gesture)" text-anchor="middle" font-size="12" class="mono">⌘K chips · block chrome · column headers</text>
+            <path d="M165 36 V48" stroke="var(--gesture)" stroke-width="1.2" marker-end="url(#arr)" fill="none" />
+
+            <!-- hand edit path -->
+            <text x="751" y="30" fill="var(--gesture)" text-anchor="middle" font-size="12" class="mono">hand-edit SQL · agent-written SQL</text>
+            <path d="M751 36 V48" stroke="var(--gesture)" stroke-width="1.2" marker-end="url(#arr)" fill="none" />
+
+            <!-- cliff -->
+            <path d="M700 184 C660 216, 480 224, 320 216" stroke="var(--danger)" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#arrR)" fill="none" />
+            <text x="500" y="240" fill="var(--danger)" text-anchor="middle" font-size="11.5">outside the dialect → no lift; gestures degrade honestly to a “custom SQL” chip — never silently rewritten</text>
+          </g>
+        </svg>
+      </figure>
+      <p>
+        This inverts Metabase's arrangement (structured spec canonical, SQL an irreversible
+        escape hatch) and instead <strong>generalizes a pattern hila already ships</strong>:
+        <code>recognize-updatable.ts</code> lifts write-back structure out of stored SQL today,
+        and §9.3 already rewrote the subtree snippet so its emitted SQL qualifies. The spec is
+        recomputed from SQL on read, like updatability — there is no conversion moment, hence no
+        one-way door <em>inside</em> the dialect. The door only exists at the dialect's edge, and
+        it's marked.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>1 · Prior art — what to steal, what to avoid</h2>
+      <p class="lede">
+        This space is deeply trodden. Nine systems, one line each on what they settle for us.
+      </p>
+      <div class="cards">
+        <div class="card">
+          <span class="verb">BI tool</span>
+          <h3>Metabase (MBQL)</h3>
+          <p>Structured JSON query canonical; compiled to SQL per backend. “Convert to SQL” is
+          <em>irreversible</em>; SQL→MBQL has been a top feature request for years.</p>
+          <p class="steal"><b>steal</b> a real intermediate query model, database-agnostic clause set</p>
+          <p class="avoid"><b>avoid</b> spec-canonical storage — it makes SQL a cliff you can't climb back up</p>
+        </div>
+        <div class="card">
+          <span class="verb">data explorer</span>
+          <h3>Datasette</h3>
+          <p>Facet/filter UI compiles to SQL; <em>“View and edit SQL”</em> opens the compiled query in
+          the editor. One-way by design, honestly presented, parameterized.</p>
+          <p class="steal"><b>steal</b> the visible compile — “show me the SQL of my chips” as a first-class gesture</p>
+          <p class="avoid"><b>avoid</b> nothing — but it never tries to lift SQL back; we can, on our own dialect</p>
+        </div>
+        <div class="card">
+          <span class="verb">outliner</span>
+          <h3>Tana search nodes</h3>
+          <p>Live queries <em>are nodes in the outline</em> — exactly our <code>view</code> nodes.
+          Builder is operator-per-line, implicit AND; results render as references; 2500-row cap.</p>
+          <p class="steal"><b>steal</b> one-condition-per-line editing at block chrome; implicit AND; result caps</p>
+          <p class="avoid"><b>avoid</b> the closed model — no SQL floor means power users hit the ceiling</p>
+        </div>
+        <div class="card">
+          <span class="verb">notes + db</span>
+          <h3>Obsidian Bases</h3>
+          <p>Stored form is a structured <code>and/or/not</code> tree whose <em>leaves are expression
+          strings</em>. Structure where gestures need it; opaque power at the leaf.</p>
+          <p class="steal"><b>steal</b> the leaf idea — a predicate chip can hold a raw SQL fragment without breaking the tree</p>
+          <p class="avoid"><b>avoid</b> minting a second stored format — our tree must stay derived, not stored</p>
+        </div>
+        <div class="card">
+          <span class="verb">tracker · taste anchor</span>
+          <h3>Linear filters</h3>
+          <p><span class="kbd">F</span> opens the filter menu; type to pick dimension, then value —
+          100% keyboard. Chips always visible; advanced and/or builder behind a second gesture.</p>
+          <p class="steal"><b>steal</b> menu-first + typed accelerators; chips as the persistent, editable filter state</p>
+          <p class="avoid"><b>avoid</b> hiding the boolean structure so deep that saved views are hard to audit</p>
+        </div>
+        <div class="card">
+          <span class="verb">tasks</span>
+          <h3>Todoist filters</h3>
+          <p>A pure text grammar (<code>&amp;</code> <code>|</code> <code>!</code>, parens) — saved filters
+          are live views. Powerful, so undiscoverable they shipped an AI assistant for it.</p>
+          <p class="steal"><b>steal</b> saved-filter-as-view framing (ours is save-search-as-node)</p>
+          <p class="avoid"><b>avoid</b> a bespoke query grammar as the primary UX — we already have SQL as the power tier</p>
+        </div>
+        <div class="card">
+          <span class="verb">db views</span>
+          <h3>Notion filters</h3>
+          <p>Property chips; “advanced filter” unlocks and/or groups, nesting capped at two levels.
+          Simple→advanced conversion is one-way in the UI.</p>
+          <p class="steal"><b>steal</b> the nesting cap — flat AND covers nearly everything; depth is deferrable</p>
+          <p class="avoid"><b>avoid</b> the simple/advanced mode split — one chip row should scale instead</p>
+        </div>
+        <div class="card">
+          <span class="verb">search boxes</span>
+          <h3>GitHub / Slack qualifiers</h3>
+          <p>Token grammar (<code>in:</code>, <code>type:</code>, <code>is:</code>) typed inline with
+          autocomplete; the query is one editable string.</p>
+          <p class="steal"><b>steal</b> typed qualifier accelerators that materialize into chips as they complete</p>
+          <p class="avoid"><b>avoid</b> string-as-state — chips should be the state; the token is just an input method</p>
+        </div>
+        <div class="card">
+          <span class="verb">research (SIGMOD '16)</span>
+          <h3>SIEUFERD / Ultorg</h3>
+          <p>Arbitrary SQL built by <em>direct manipulation of the result</em> — filters born from
+          column headers, query state visible in the data itself.</p>
+          <p class="steal"><b>steal</b> result-surface gestures: sort/filter from a substrate column header emits the same spec ops</p>
+          <p class="avoid"><b>avoid</b> making the result the only authoring surface — transient search needs an input-first tempo</p>
+        </div>
+      </div>
+      <p class="note">
+        Sources: Metabase MBQL wiki + MBQL↔SQL discourse thread · Datasette “Running SQL queries” /
+        facets docs · Tana search-nodes docs · Obsidian Bases syntax help · Linear filters docs +
+        2019 filter changelog · Todoist filter intro + Doist “Filter Assist” engineering post ·
+        Notion advanced-filters guide + API filter reference · Bakke &amp; Karger, “Expressive Query
+        Construction through Direct Manipulation of Nested Relational Results,” SIGMOD 2016.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>2 · The frame: one spec, three surfaces</h2>
+      <p class="lede">
+        The same spec state drives three surfaces at three tempos. Design the vocabulary once;
+        each surface chooses which gestures it exposes and how.
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 300" role="img" aria-label="Three surfaces over one spec: the launcher's transient search, the view block's chrome, and the substrate column headers, with save-as-node moving state from transient to persisted">
+          <g font-size="12">
+            <!-- center spec -->
+            <rect x="330" y="112" width="260" height="76" rx="8" fill="#191c25" stroke="var(--spec)" stroke-opacity="0.6" />
+            <text x="460" y="142" fill="#e6eaf2" text-anchor="middle" font-weight="600">the query spec + its gesture ops</text>
+            <text x="460" y="162" fill="var(--muted)" text-anchor="middle" font-size="11" class="mono">setKind · setScope · setText · addPredicate ·</text>
+            <text x="460" y="176" fill="var(--muted)" text-anchor="middle" font-size="11" class="mono">setOrder · setLimit — one shared module</text>
+
+            <!-- launcher -->
+            <rect x="24" y="24" width="250" height="70" rx="8" fill="#191c25" stroke="var(--gesture)" stroke-opacity="0.5" />
+            <text x="42" y="48" fill="#e6eaf2" font-weight="600">⌘K launcher <tspan fill="var(--muted)" font-size="11" font-weight="400">— transient</tspan></text>
+            <text x="42" y="66" fill="var(--dim)" font-size="11.5">spec lives in memory; compiled SQL runs</text>
+            <text x="42" y="81" fill="var(--dim)" font-size="11.5">per keystroke; nothing stored</text>
+            <path d="M274 60 C310 60, 330 96, 372 108" stroke="var(--dim)" stroke-width="1.2" fill="none" marker-end="url(#arr)" />
+
+            <!-- block chrome -->
+            <rect x="24" y="206" width="250" height="70" rx="8" fill="#191c25" stroke="var(--portal)" stroke-opacity="0.5" />
+            <text x="42" y="230" fill="#e6eaf2" font-weight="600">view-block chrome <tspan fill="var(--muted)" font-size="11" font-weight="400">— persisted</tspan></text>
+            <text x="42" y="248" fill="var(--dim)" font-size="11.5">chips derived by recognizing the block's</text>
+            <text x="42" y="263" fill="var(--dim)" font-size="11.5">stored SQL; edits recompile + store</text>
+            <path d="M274 240 C310 240, 330 204, 372 192" stroke="var(--dim)" stroke-width="1.2" fill="none" marker-end="url(#arr)" />
+
+            <!-- substrate headers -->
+            <rect x="646" y="24" width="250" height="70" rx="8" fill="#191c25" stroke="var(--border)" stroke-opacity="0.5" />
+            <text x="664" y="48" fill="#e6eaf2" font-weight="600">result surface <tspan fill="var(--muted)" font-size="11" font-weight="400">— in place (SIEUFERD)</tspan></text>
+            <text x="664" y="66" fill="var(--dim)" font-size="11.5">substrate/grid column headers: sort here,</text>
+            <text x="664" y="81" fill="var(--dim)" font-size="11.5">filter on this value — same spec ops</text>
+            <path d="M646 60 C610 60, 590 96, 548 108" stroke="var(--dim)" stroke-width="1.2" fill="none" marker-end="url(#arr)" />
+
+            <!-- save as node -->
+            <rect x="646" y="206" width="250" height="70" rx="8" fill="#191c25" stroke="var(--own)" stroke-opacity="0.5" />
+            <text x="664" y="230" fill="#e6eaf2" font-weight="600">save-search-as-node</text>
+            <text x="664" y="248" fill="var(--dim)" font-size="11.5">the escalation: compile the launcher's spec,</text>
+            <text x="664" y="263" fill="var(--dim)" font-size="11.5">store the SQL as a view node, home by provenance</text>
+            <path d="M548 192 C590 204, 610 240, 642 240" stroke="var(--own)" stroke-width="1.2" fill="none" marker-end="url(#arr)" />
+          </g>
+        </svg>
+        <figcaption>
+          Transient ↔ persisted is just “where the compiled SQL goes.” Because a saved node's SQL
+          was compiler-emitted, it recognizes back into chips by construction — the launcher search
+          and the view block are literally the same object at two lifetimes.
+        </figcaption>
+      </figure>
+
+      <!-- ============================================================ -->
+      <h2>3 · D1 — What is canonical? <span class="badge q">the crux</span></h2>
+      <p class="lede">
+        Everything else keys off this. Four defensible arrangements:
+      </p>
+
+      <div class="opt">
+        <span class="oname">A · Spec-canonical (the Metabase arrangement)</span>
+        <p>Store a structured spec on the view node; compile to SQL at run time. Raw-SQL blocks are a
+        separate “native” kind.</p>
+        <p><span class="pro">＋</span> Gestures always work on saved views; no recognizer needed; spec can evolve compile targets freely (LIKE→FTS invisibly).</p>
+        <p><span class="con">－</span> Contradicts §9.3's settled <em>executed == stored</em>; splits view nodes into two kinds; recreates Metabase's one-way door the moment anyone needs raw SQL; agents must write spec JSON instead of the SQL they're fluent in; x-ray shows a derived artifact, not the truth.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B · SQL-canonical + dialect recognizer <span class="badge rec">recommended</span></span>
+        <p>Gestures emit SQL in one deterministic <strong>dialect</strong> (the compiler's only output
+        shape). The recognizer — a sibling of <code>recognize-updatable</code> — lifts dialect SQL back
+        into a spec whenever a gesture surface mounts. Hand-edited SQL that stays in the dialect keeps
+        its chips; SQL outside it degrades to a “custom SQL” chip.</p>
+        <p><span class="pro">＋</span> One storage story (SQL, executed == stored) — consistent with §9.3, sync, x-ray, and the MCP write path; the recognizer pattern is already in production; no conversion moment, so no cliff <em>inside</em> the dialect; agents writing plain dialect SQL get chips for free.</p>
+        <p><span class="con">－</span> The recognizer must grow in lockstep with every new gesture (compiler and recognizer are a matched pair — a conformance test suite keeps them honest); recognition is binary, so a stray hand edit can drop a block from chips to raw (mitigated in §6).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C · Dual storage (spec + SQL sidecar)</span>
+        <p>Store both; spec authoritative until the user edits SQL, then flag the spec stale.</p>
+        <p><span class="con">－</span> Two sources of truth with a divergence bit — precisely what §9.3's <em>executed == stored</em> exists to prevent. Rejected unless B's recognizer proves intractable.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">D · Structured tree with SQL leaves, stored (the Obsidian Bases arrangement)</span>
+        <p>Store an and/or/not tree whose leaves are SQL fragments; assemble at run time.</p>
+        <p><span class="pro">＋</span> Trivial round-trip (storage <em>is</em> the spec) while keeping raw power at the leaves.</p>
+        <p><span class="con">－</span> Still spec-canonical storage: executed SQL becomes derived, a new format is minted, and full-query power (a hand-written join) needs a degenerate one-leaf tree. The <em>leaf idea itself</em> is worth keeping — inside B, as a raw-fragment predicate chip (§4) — without storing the tree.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">Proposed determination D1</div>
+        <p><strong>B.</strong> SQL stays the only stored, executed form (§9.3 unbroken). The spec is a
+        derived, in-memory view over SQL, lifted by a recognizer that is sound on exactly the
+        compiler's output dialect. The compiler and recognizer live together in <code>src/sql/</code>
+        beside <code>recognize-updatable.ts</code>, with a round-trip conformance suite
+        (<code>recognize(compile(spec)) ≡ spec</code> for all specs; property-tested).</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>4 · D2 — The spec's dimensions (v1 cut)</h2>
+      <p class="lede">
+        Six dimensions. Each is one gesture, one chip color, one compile rule — and each compiles
+        into the <em>same single-base-table shape</em> the write-back recognizer already accepts.
+      </p>
+      <pre class="def"><span class="c">// The spec — derived state, never stored (D1). One per gesture surface.</span>
+<span class="k">type</span> QuerySpec = {
+  kind:  <span class="s">{ matrixId }</span> | <span class="s">'containers'</span> | <span class="s">'everything'</span>   <span class="c">// which extent(s) — the FROM</span>
+  scope: <span class="s">{ node }</span> | <span class="s">'all'</span>                             <span class="c">// subtree fence — EXISTS over the position index</span>
+  text:  <span class="s">string</span>                                      <span class="c">// label-role LIKE now; FTS later, spec unchanged</span>
+  where: Predicate[]                                 <span class="c">// flat AND list (v1); each = col · op · value</span>
+         <span class="c">// … or an escape-leaf: a raw SQL fragment chip (the Bases idea)</span>
+  order: <span class="s">{ columnId, dir }</span> | <span class="s">'natural'</span>               <span class="c">// natural = rank for containers, key order for views</span>
+  limit: <span class="s">number</span>                                     <span class="c">// always present — the Tana lesson (result caps)</span>
+}
+<span class="c">// No projection dimension: compiled SQL is always `SELECT d.*` + id —</span>
+<span class="c">// hydration and write-back editability hold by construction; which columns</span>
+<span class="c">// *show* is the face recipe's business (session 3), not the query's.</span></pre>
+
+      <table class="map">
+        <tr><th>dimension</th><th>gesture (chip)</th><th>compiles to</th><th>notes</th></tr>
+        <tr>
+          <td><code>kind</code></td>
+          <td>type/matrix picker — “<span class="mono">#task</span>”, “any container”</td>
+          <td>the base table <code>FROM "Tasks" d</code></td>
+          <td>Values come from the membership plane (promoted types, containers). Session 2's “Types lens” is just <code>kind: containers</code>. Picking a kind is what unlocks field predicates + editability.</td>
+        </tr>
+        <tr>
+          <td><code>scope</code></td>
+          <td>“in: <span class="mono">Research ▾</span>” — defaults to the provenance node</td>
+          <td><code>EXISTS(…)</code> against the position index (the §9.3 subtree snippet, single-table form)</td>
+          <td>The launcher opens scoped to <em>everywhere</em>; view blocks default to <em>this subtree</em> (their home node). One chip toggles between.</td>
+        </tr>
+        <tr>
+          <td><code>text</code></td>
+          <td>the bare typed words — no chip until other dimensions exist</td>
+          <td><code>label LIKE '%…%'</code> (bound param)</td>
+          <td>The insulation win: when FTS lands (Phase 11+), only the compile rule changes — every surface, saved node, and gesture is untouched.</td>
+        </tr>
+        <tr>
+          <td><code>where</code></td>
+          <td>predicate chips — <span class="mono">status ≠ done</span>, <span class="mono">due &lt; today</span></td>
+          <td><code>AND d."status" != :p1 …</code></td>
+          <td>Flat AND only in v1 (the Notion lesson: depth is rarely needed; the Bases leaf covers the rest). Ops per column type: eq/neq, lt/gt, contains, empty/not-empty.</td>
+        </tr>
+        <tr>
+          <td><code>order</code></td>
+          <td>“↓ <span class="mono">due</span>” chip; cycle asc/desc/off from chip or column header</td>
+          <td><code>ORDER BY d."due" DESC</code> tail</td>
+          <td>Default <code>natural</code>: container extents keep matrix-rank order; launcher relevance ordering is presentation (stateless match quality), not spec.</td>
+        </tr>
+        <tr>
+          <td><code>limit</code></td>
+          <td>usually implicit; editable in block chrome</td>
+          <td><code>LIMIT :n</code></td>
+          <td>Launcher: small fixed page. Blocks: the host's height budget (session 3) governs the window; the SQL cap is the safety floor.</td>
+        </tr>
+      </table>
+
+      <p>
+        <strong>Deliberately not in the v1 spec</strong> (raw SQL remains the honest tier for all of
+        these): joins · aggregation/grouping · projection · OR-of-ANDs trees · cross-matrix UNION
+        authoring. Each is a “grow when a second consumer appears” item, per the session-3
+        discipline.
+      </p>
+
+      <div class="decision">
+        <div class="dq">Sub-question D2a — <code>kind: everything</code> and the union problem</div>
+        <p>The launcher's zero-chip state searches labels across <em>all</em> matrixes + matrix titles —
+        a cross-matrix union. That shape is fine transiently, but it is not single-base-table, so a
+        saved union view would be read-only and chip-less. Options: <strong>(i)</strong> allow saving it
+        as a raw (recognizer-rejected) block — honest but a dead end; <strong>(ii)</strong>
+        <span class="badge rec">recommended</span> the save gesture nudges: “pick a type/container to
+        save an editable view” — union saves allowed but flagged read-only; <strong>(iii)</strong> forbid
+        saving unions. (ii) keeps the escalation smooth without pretending unions are editable.</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>5 · D3 — The gesture grammar</h2>
+      <p class="lede">
+        Linear's menu-first keyboard flow, with GitHub-style typed accelerators, materializing into
+        chips. One chip system, rendered by every surface.
+      </p>
+
+      <div class="mock">
+        <div class="cap">⌘K launcher — the same input, escalating left to right in time
+          <span style="color:var(--danger); text-transform:none; letter-spacing:0">· note: the <span class="mono">#</span>/<span class="mono">in:</span> chip treatment shown here is round-1; superseded by §14 (D14/D15)</span></div>
+        <div class="qbar">
+          <span class="caret">⌘K</span>
+          <span class="typed">quarterly</span><span class="cursor"></span>
+        </div>
+        <div class="rows">
+          <div class="rrow sel"><span class="lbl">Quarterly planning</span><span class="ctx">Work / Projects</span></div>
+          <div class="rrow"><span class="lbl">Quarterly review — Q2</span><span class="ctx">Archive</span></div>
+          <div class="rrow"><span class="lbl">quarterly-metrics</span><span class="ctx">container · 12 rows</span></div>
+        </div>
+        <p class="note">Tempo 1 — bare words are just the <code>text</code> dimension: instant fuzzy jump, zero grammar.</p>
+        <div class="qbar" style="margin-top:16px">
+          <span class="caret">⌘K</span>
+          <span class="chip kind"><span class="dim">#</span>task</span>
+          <span class="typed">st</span><span class="cursor"></span>
+        </div>
+        <div class="menu">
+          <div class="mi sel"><span class="key">status</span><span>≠ done · = … · is empty</span></div>
+          <div class="mi"><span class="key">starts</span><span>label starts with “st…”</span></div>
+        </div>
+        <p class="note">Tempo 2 — <span class="kbd">#</span> picked a kind (chip materialized); now typing
+        matches <em>that matrix's columns</em>, Linear-style: type to pick the dimension, then the value.
+        <span class="kbd">Tab</span>/<span class="kbd">Enter</span> completes; <span class="kbd">⌫</span> at
+        the input's start re-enters the last chip for editing.</p>
+        <div class="qbar" style="margin-top:16px">
+          <span class="caret">⌘K</span>
+          <span class="chip kind"><span class="dim">#</span>task</span>
+          <span class="chip scope"><span class="dim">in</span>Research</span>
+          <span class="chip pred focused">status ≠ done</span>
+          <span class="chip order"><span class="dim">↓</span>due</span>
+          <span class="typed"></span><span class="cursor"></span>
+        </div>
+        <div class="rows">
+          <div class="rrow"><span class="lbl">Draft lit-review outline</span><span class="ctx">due Jul 14</span></div>
+          <div class="rrow"><span class="lbl">Chase dataset access</span><span class="ctx">due Jul 18</span></div>
+        </div>
+        <p class="note">Tempo 3 — a full spec: four chips, all keyboard-reachable
+        (<span class="kbd">←</span>/<span class="kbd">→</span> across chips, <span class="kbd">Enter</span>
+        edits, <span class="kbd">⌫</span> removes). <span class="kbd">⌘S</span> = save-search-as-node
+        (homes by provenance, session 2).</p>
+      </div>
+
+      <div class="mock">
+        <div class="cap">The same chips as view-block chrome (replaces the §9.3 dev textarea)</div>
+        <div class="blockhead">
+          <span class="glyph">≔</span>
+          <span class="chip kind"><span class="dim">#</span>task</span>
+          <span class="chip scope"><span class="dim">in</span>this subtree</span>
+          <span class="chip pred">status ≠ done</span>
+          <span class="chip order"><span class="dim">↓</span>due</span>
+          <span style="margin-left:auto; color:var(--muted); font-size:11px" class="mono">view SQL ▸</span>
+        </div>
+        <div class="blockbody">
+          <div class="brow"><span class="h">label</span><span class="h">status</span><span class="h">due</span></div>
+          <div class="brow"><span>Draft lit-review outline</span><span class="cell-ed">todo</span><span class="cell-ed">Jul 14</span></div>
+          <div class="brow"><span>Chase dataset access</span><span class="cell-ed">blocked</span><span class="cell-ed">Jul 18</span></div>
+        </div>
+        <p class="note">Chips here are <em>derived</em>: the block's stored SQL was recognized on mount.
+        Editing a chip recompiles and stores new SQL — executed == stored throughout. “view SQL ▸” is
+        the Datasette gesture: the query's x-ray, always one keystroke away, editable in place.
+        Dotted cells are write-back editable (§7).</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">Proposed determination D3</div>
+        <p><strong>Menu-first with typed accelerators; chips are the state.</strong> No query string to
+        learn (the Todoist lesson) and no sigil-only grammar (the VS Code lesson) — but every menu is
+        type-to-filter so fluent use never touches a pointer (Linear), and <span class="kbd">#</span> /
+        <span class="kbd">in:</span> work as direct accelerators for the two commonest chips (GitHub).
+        The chip components + the spec-ops module ship once, consumed by launcher, block chrome, and
+        column headers.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">Sub-question D3a — result-surface gestures in v1?</div>
+        <p>The SIEUFERD steal: substrate/grid column headers offer <em>sort</em> and <em>filter-on-value</em>,
+        emitting the same spec ops against the enclosing subject's query. It's cheap once the spec-ops
+        module exists and makes the substrate the power surface it wants to be — but it's also scope.
+        <strong>Recommend: sort from headers in v1</strong> (one op, huge daily value);
+        filter-from-header/cell-value as fast-follow. Either way it's the same vocabulary, so nothing
+        is painted in.</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>6 · D4 — Escalation and the honest cliff</h2>
+      <p class="lede">
+        Recognition is recomputed, never stored — so the “mode” of a block is a fact about its SQL,
+        not a sticky state. Three tiers, all visible:
+      </p>
+      <table class="map">
+        <tr><th>tier</th><th>when</th><th>surface shows</th><th>you can</th></tr>
+        <tr>
+          <td>chips <span class="badge rec" style="margin-left:6px">default</span></td>
+          <td>SQL is in the dialect (all compiler output; friendly hand/agent edits)</td>
+          <td>full chip row; “view SQL ▸” collapsed</td>
+          <td>edit any dimension by gesture; open the SQL anytime — closing it re-recognizes</td>
+        </tr>
+        <tr>
+          <td>chips + leaf</td>
+          <td>dialect shape, plus WHERE terms the recognizer can't type as predicates</td>
+          <td>normal chips + a <span class="chip custom" style="vertical-align:-3px">ƒ fragment</span> chip per opaque term</td>
+          <td>keep using every other gesture; the leaf opens as a one-line SQL editor (the Bases idea)</td>
+        </tr>
+        <tr>
+          <td>custom SQL</td>
+          <td>outside the dialect (joins, aggregates, unions, hand-restructured)</td>
+          <td>a single <span class="chip custom" style="vertical-align:-3px">custom SQL</span> chip + the query text</td>
+          <td>edit SQL directly; updatability still applies independently (<code>recognize-updatable</code> is a separate, narrower lift)</td>
+        </tr>
+      </table>
+      <p>
+        The middle tier is the load-bearing one: it means a single exotic condition doesn't evict the
+        whole block from gesture-land. That containment is what makes binary-per-term recognition
+        feel safe, where Metabase's binary-per-query conversion feels like a trapdoor. And the rule
+        <strong>no silent rewriting</strong> carries over from §9.3: gestures never reformat SQL the
+        user hand-wrote unless a gesture is actually used — the first chip edit on a leaf-bearing
+        block recompiles only the terms the recognizer owns, preserving opaque leaves verbatim.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>7 · D5 — Write-back by construction</h2>
+      <p class="lede">
+        The compiler's output shape is chosen to be <em>exactly</em> what the existing machinery
+        already trusts:
+      </p>
+      <ul class="tight">
+        <li><strong>Single base table + <code>d.*</code> + <code>id</code> always</strong> — every
+        compiled view passes <code>recognize-updatable</code>, so hydrated cells are editable with no
+        “+ id to edit” affordance ever needed on gesture-built views. That affordance remains only
+        for hand-written SQL.</li>
+        <li><strong>Subtree scope via single-table <code>EXISTS</code></strong> — the §9.3 rewrite
+        already proved this form keeps updatability recognition sound.</li>
+        <li><strong>Insert stays anchoring-governed</strong> (the view firewall, 9.7): no compiled
+        view gains an add-row affordance from being gesture-built — the host still omits it for
+        <code>view</code> subjects. Gestures change what you <em>see</em>, never what owns.</li>
+        <li><strong>Parseable by the invalidation engine</strong> — compiler output is plain SELECT,
+        so the tables-visited AST machinery and prepared-statement reuse apply unchanged; text/value
+        chips compile to bound parameters, so launcher keystrokes re-bind rather than re-prepare.</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <h2>8 · Smaller determinations proposed</h2>
+      <table class="map">
+        <tr><th>#</th><th>determination</th><th>call</th></tr>
+        <tr>
+          <td>D6</td>
+          <td>Where the code lives</td>
+          <td>A <code>src/sql/query-spec/</code> module: <code>compile(spec) → sql</code>,
+          <code>recognize(sql) → spec | leaves | null</code>, spec-ops, and the round-trip conformance
+          suite — sibling to <code>recognize-updatable.ts</code>, sharing the parser.</td>
+        </tr>
+        <tr>
+          <td>D7</td>
+          <td>OR / nesting</td>
+          <td>Not in v1 gestures. When needed: OR-groups as a chip-group visual (Notion's 2-level cap),
+          arriving as a spec extension — the fragment leaf covers the gap meanwhile.</td>
+        </tr>
+        <tr>
+          <td>D8</td>
+          <td>Launcher ordering vs spec ordering</td>
+          <td>Separate axes. The <code>order</code> chip is data ordering (compiled). The launcher's
+          <em>result ranking</em> (prefix &gt; word-start &gt; substring, then kind) is stateless
+          presentation over results, never serialized. A future frecency signal slots into ranking
+          only — the spec is untouched.</td>
+        </tr>
+        <tr>
+          <td>D9</td>
+          <td>Agent contract</td>
+          <td>The dialect is documented agent-facing guidance: an MCP agent that writes dialect SQL
+          produces views whose chips light up for the user. Nothing enforces it — off-dialect SQL is
+          simply tier-3, exactly like a power user's.</td>
+        </tr>
+        <tr>
+          <td>D10</td>
+          <td>Save-search-as-node mechanics</td>
+          <td>Compile → store SQL as a <code>view</code> node via the existing block path → home by
+          provenance (session 2) → focus it. No new storage; the saved node is indistinguishable from
+          a hand-made block.</td>
+        </tr>
+      </table>
+
+      <!-- ============================================================ -->
+      <h2>9 · Where round 1 left the session</h2>
+      <ul class="tight">
+        <li><strong>Proposed this round:</strong> D1 (SQL-canonical + dialect recognizer) · D2 (the
+        six-dimension spec, no projection, flat AND + fragment leaves) · D2a (union saves nudge,
+        read-only) · D3 (menu-first grammar, chips-as-state, one shared module) · D3a (header sort in
+        v1) · D4 (three honest tiers, per-term containment) · D5 (write-back by construction) ·
+        D6–D10.</li>
+        <li><strong>Deferred to 3b-ii (the launcher surface proper):</strong> result layout and
+        sectioning · command integration and ranking interleave · the quick↔deep visual continuum ·
+        keyboard map details · save-flow polish. All of it consumes the spec settled here.</li>
+        <li><strong>Deferred to a block-chrome follow-up:</strong> the full view-block authoring
+        chrome replacing the dev textarea (chips shown here fix its direction; its panel/density details
+        ride the §4 token pass).</li>
+        <li><strong>Deliberately out of scope:</strong> FTS (compile-rule swap later) · joins,
+        aggregates, projection, OR-trees in gestures · frecency storage.</li>
+      </ul>
+      <p class="note">
+        Round 1 of session 3b (pivoted). Round 2 below stress-tests D1 before the
+        determinations are finalized.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>10 · Round 2 — the stress test: does the dialect survive growing up?</h2>
+      <p class="lede">
+        The worry: SQL-canonical + recognizer looks clean <em>because</em> the v1 subset is
+        tiny. So walk every deferred feature through three lenses — how hard to admit into the
+        recognized grammar, how much theoretical value it carries for this app, and how badly it
+        strains the flat chip row.
+      </p>
+      <table class="map">
+        <tr><th>feature</th><th>1 · grammar difficulty</th><th>2 · theoretical value</th><th>3 · chip stretch</th><th>verdict</th></tr>
+        <tr>
+          <td><code>IN</code> / <code>BETWEEN</code> sugar</td>
+          <td><strong>Trivial.</strong> One predicate-op each; compile and lift are symmetric one-liners.</td>
+          <td><strong>Moderate.</strong> Collapses the commonest disjunctions (“status is todo or blocked”) back into one flat predicate.</td>
+          <td><strong>None.</strong> A multi-value predicate chip.</td>
+          <td>First dialect adds — they <em>relieve</em> OR pressure before it exists.</td>
+        </tr>
+        <tr>
+          <td>OR-groups (boolean nesting)</td>
+          <td><strong>Low–moderate.</strong> Canonicalize to <abbr title="conjunctive normal form">CNF</abbr>: the dialect admits exactly <em>AND of OR-groups</em>. Recognition = a shape check; anything non-CNF stays a fragment leaf.</td>
+          <td><strong>Moderate.</strong> Real disjunctions exist (“due &lt; today OR flagged”) but IN eats most of them — the Notion two-level cap is evidence the tail is short.</td>
+          <td><strong>The first real stretch.</strong> Needs one new primitive: the <strong>compound chip</strong> — a chip containing a flat chip list, joined by a visible OR. One nesting level, capped by design.</td>
+          <td>Growth-ready, capped at CNF. Deeper trees: fragment leaf, forever.</td>
+        </tr>
+        <tr>
+          <td>Relationship traversal predicates<br /><span class="note" style="font-size:11px">has #urgent · references X · aspect.status ≠ done · backlinked-by</span></td>
+          <td><strong>Moderate.</strong> Not general joins — a closed set of <em>canonical EXISTS templates</em> over the joins/position tables, parameterized by edge kind + target matrix + inner predicates. The scope chip already proves the pattern (single-table-preserving EXISTS).</td>
+          <td><strong>Very high — this is the app's soul.</strong> Tags, aspects, refs, and portals make cross-matrix reach the <em>common</em> case: “hosts whose task-aspect is overdue,” “notes referencing this node,” “anything tagged #urgent in this subtree.”</td>
+          <td><strong>Moderate, contained.</strong> A path-prefixed predicate chip (<span class="mono">task.status ≠ done</span>, <span class="mono">has #urgent</span>). Inner predicates reuse the same compound-chip primitive as OR-groups — no third structure.</td>
+          <td>Highest-priority growth. Joins live in WHERE (semi-joins) — filter <em>through</em> relationships, never widen through them (§10a).</td>
+        </tr>
+        <tr>
+          <td>Aggregation / group-by</td>
+          <td><strong>Moderate.</strong> One canonical shape: <code>SELECT &lt;groups&gt;, &lt;measures&gt; … GROUP BY &lt;groups&gt;</code>. MBQL's whole career is evidence this clause set stays flat and finite.</td>
+          <td><strong>High.</strong> Dashboards, “count by status,” rollups in notes, the inline scalar expressions Architecture.md already contemplates — spreadsheet parity is a stated objective.</td>
+          <td><strong>Low on chips — the stretch lands on the result.</strong> Two new flat chips (<span class="mono">group: status</span>, <span class="mono">measure: count</span>); but the result set turns fully dry (no id, nothing hydrated) and wants different renderings (number tile, bars) — a face-recipe concern, exactly where session 3 put it.</td>
+          <td>Growth-ready, second in line. Editability flips off honestly via the existing dry-column rule.</td>
+        </tr>
+        <tr>
+          <td>Multi-kind union (constrained)</td>
+          <td><strong>Moderate.</strong> N structurally-identical arms sharing scope/text/order; recognition is one arm-shape check × N. General unions (heterogeneous arms) stay tier 3.</td>
+          <td><strong>Moderate.</strong> “Everything due this week across types” — a real daily-agenda view; the launcher's zero-chip state already <em>is</em> this, transiently.</td>
+          <td><strong>Low.</strong> The kind chip becomes multi-select (<span class="mono">#task, #event</span>); predicates restrict to columns shared across the selected kinds (role columns first). No new structure.</td>
+          <td>Growth-ready, third. Per-arm write-back (each row knows its matrix) is a later recognizer extension, not a redesign.</td>
+        </tr>
+        <tr>
+          <td>Projection (column choice)</td>
+          <td><strong>Trivial</strong> — and that's a trap.</td>
+          <td><strong>Low, misplaced.</strong> Which columns <em>show</em> is the face recipe's job (session 3); narrowing the <em>fetch</em> for wide matrixes is a host/execution concern (wrap the stored query, like windowing already does) — neither belongs in the user's query.</td>
+          <td>None — but it silently breaks the <code>d.* + id</code> guarantee that makes every compiled view hydrated and editable.</td>
+          <td><strong>Permanent spec non-goal.</strong> The one feature rejected on architecture, not difficulty.</td>
+        </tr>
+        <tr>
+          <td>Computed select items</td>
+          <td><strong>Low.</strong> Select items beyond <code>d.*</code> lift as leaves; the extra column arrives dry.</td>
+          <td><strong>Moderate.</strong> Matrix-level formula columns already cover persistent needs; ad-hoc math in a view is a nice-to-have.</td>
+          <td><strong>Low.</strong> A <span class="mono">ƒ</span> leaf chip in SELECT position — the third leaf (§11).</td>
+          <td>Falls out of the leaf taxonomy; no dedicated work.</td>
+        </tr>
+        <tr>
+          <td>General unions · column-widening joins · arbitrary boolean trees · correlated traversals</td>
+          <td><strong>Hard</strong> — recognition approaches “understand SQL,” the thing this design refuses.</td>
+          <td><strong>Low–moderate</strong>, and mostly served elsewhere: column-widening (“show host rows <em>with</em> their aspect's columns”) is what the scaffold's fields region and aspect rendering already do at the view layer.</td>
+          <td><strong>Breaks flat</strong> — these want real trees, aliases, arity.</td>
+          <td>Tier 3 forever, by design. The honest cost of SQL-canonical.</td>
+        </tr>
+      </table>
+
+      <h3>10a · Why the design holds — three structural properties, not a small subset</h3>
+      <ul class="tight">
+        <li><strong>Growth is per-clause, so complexity is additive, not multiplicative.</strong>
+        The recognizer never has to understand SQL — only the shapes the compiler can emit, clause
+        by clause, plus balanced-blob leaves everywhere else. Each row in the table above touches
+        one clause position; none reopens the others. <code>recognize(compile(spec)) ≡ spec</code>
+        stays property-testable per clause.</li>
+        <li><strong>The flat chip row mirrors SQL's own spine.</strong> A SELECT statement <em>is</em>
+        a flat clause list (FROM · WHERE · GROUP BY · ORDER BY · LIMIT); SQL's hierarchy lives
+        <em>inside</em> clauses (subqueries, boolean trees) — exactly where leaves and the one
+        compound-chip primitive go. Flatness isn't a UI simplification fighting the medium; it's
+        the medium's own shape. MBQL is the long-run evidence: a flat clause map carried a decade
+        of BI usage, and its pain concentrated precisely in joins-for-columns and expression
+        trees — the two places this design routes to tier 3.</li>
+        <li><strong>Hierarchy pressure and write-back loss concentrate in the same features —
+        and the view layer already owns those needs.</strong> Column-widening joins, general
+        unions, projection: each would both break the flat row <em>and</em> kill editability. But
+        showing an aspect's fields beside its host is the scaffold/fields region's job; choosing
+        visible columns is the recipe's; heterogeneous browse is the launcher's. The pressure is
+        <em>diverted architecturally</em>, not deferred and accruing.</li>
+      </ul>
+      <p>
+        <strong>The honest residue:</strong> correlated conditions across paths (“tasks whose due
+        date is past their project's deadline”), N-way column joins, arbitrary trees — leaf or
+        tier-3 territory permanently. A projectional editor could grow without that ceiling; the
+        price would be spec-canonical storage and every cost D1 rejected. The ceiling is the deal.
+      </p>
+      <p class="note">
+        Net new UI machinery across the whole growth path: <strong>one primitive</strong> — the
+        compound chip (a chip containing a flat chip list), shared by OR-groups and traversal
+        inner-predicates, capped at one level.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>11 · The leaf taxonomy — and the CTE source chip <span class="badge q">round-2 proposal</span></h2>
+      <p class="lede">
+        Round 1 minted one escape hatch: the fragment leaf, in WHERE position. The general rule it
+        was an instance of: <strong>every clause position gets either a canonical chip grammar or
+        an opaque leaf.</strong> The proposed CTE chip is the FROM-position leaf — and it's the
+        strongest of the three.
+      </p>
+      <table class="map">
+        <tr><th>position</th><th>leaf</th><th>holds</th><th>the chips around it</th></tr>
+        <tr>
+          <td>WHERE</td>
+          <td><span class="chip custom" style="vertical-align:-3px">ƒ fragment</span></td>
+          <td>one opaque boolean term</td>
+          <td>all other dimensions keep working (round 1, §6)</td>
+        </tr>
+        <tr>
+          <td>FROM</td>
+          <td><span class="chip custom" style="vertical-align:-3px">WITH source</span></td>
+          <td>a full opaque SELECT, as a CTE the outer query reads from</td>
+          <td>scope · text · predicates · order · limit all operate <em>on its output</em></td>
+        </tr>
+        <tr>
+          <td>SELECT</td>
+          <td><span class="chip custom" style="vertical-align:-3px">ƒ computed</span></td>
+          <td>one opaque expression column (dry)</td>
+          <td>untouched; the extra column just appears (later, cheap)</td>
+        </tr>
+      </table>
+
+      <h3>The source chip, concretely</h3>
+      <pre class="def"><span class="c">-- canonical shape: opaque body, dialect outer query</span>
+<span class="k">WITH</span> src <span class="k">AS</span> (
+  <span class="s">SELECT j.source_row_id AS id, d.label, COUNT(*) AS refs</span>
+  <span class="s">FROM joins j JOIN "Notes" d ON … GROUP BY …</span>   <span class="c">← anything the sandbox allows</span>
+)
+<span class="k">SELECT</span> d.* <span class="k">FROM</span> src d          <span class="c">← the chip layer's base is now the CTE</span>
+<span class="k">WHERE</span> d.refs &gt; <span class="g">3</span>               <span class="c">← ordinary predicate chip</span>
+<span class="k">ORDER BY</span> d.refs <span class="k">DESC</span>           <span class="c">← ordinary order chip</span>
+<span class="k">LIMIT</span> <span class="g">50</span></pre>
+      <div class="mock">
+        <div class="cap">block chrome — a source-leaf block: power base, chip refinement</div>
+        <div class="blockhead">
+          <span class="glyph">≔</span>
+          <span class="chip custom"><span class="dim">WITH</span>most-referenced ▸</span>
+          <span class="chip pred">refs &gt; 3</span>
+          <span class="chip order"><span class="dim">↓</span>refs</span>
+          <span style="margin-left:auto; color:var(--muted); font-size:11px" class="mono">view SQL ▸</span>
+        </div>
+        <div class="blockbody">
+          <div class="brow"><span class="h">label</span><span class="h">refs</span><span class="h"></span></div>
+          <div class="brow"><span>Reading inbox</span><span>11</span><span></span></div>
+          <div class="brow"><span>Argument map — thesis</span><span>7</span><span></span></div>
+        </div>
+        <p class="note">The source chip opens into the SQL editor scoped to the CTE body. Cells are
+        dry here (opaque body) — no pretense of editability.</p>
+      </div>
+
+      <p><strong>Why it's sound, mechanically:</strong></p>
+      <ul class="tight">
+        <li><strong>Recognition stays cheap.</strong> The lift needs: a <code>WITH name AS
+        (balanced-blob)</code> prefix + a dialect-shaped outer query whose FROM is the CTE name.
+        The body is never parsed by the recognizer — the existing AST machinery (tables-visited
+        invalidation, sandbox authorization) already walks full statements including CTEs, so
+        those layers are untouched.</li>
+        <li><strong>Column vocabulary by introspection, already precedented.</strong> The chip
+        editors need the CTE's output columns for predicate/order pickers; <code>QueryBand</code>
+        already synthesizes columns from result keys today. Chips that need columns the output
+        lacks (scope needs position identity; text needs a label-role column) <em>disable with a
+        stated reason</em> rather than guessing.</li>
+        <li><strong>Write-back composes recursively.</strong> <code>recognize-updatable</code>
+        rejects <code>WITH</code> today as a v1 restriction, not doctrine. The designed extension:
+        if the CTE body itself lifts as a passthrough of a base table, updatability chases through
+        — chips-over-a-dialect-CTE stay editable. Opaque body → dry, honestly.</li>
+        <li><strong>Prior art is emphatic.</strong> This is exactly Metabase's “saved question as
+        source” — the single feature that most softened their one-way door — and the pipeline
+        framing (the CTE is stage 0; chips are stages 1..n) that PRQL/Kusto users know. It also
+        previews view-node composition: <em>referencing another view node as the source</em> is
+        the same chip with the SQL replaced by a node reference. That flavor rides the ref/ghost
+        machinery and is deferred — but the chip's shape already fits it.</li>
+      </ul>
+      <div class="decision">
+        <div class="dq">Proposed determination D11 — the leaf taxonomy, with the source chip accepted</div>
+        <p>Leaves are per-clause: fragment (WHERE, v1) · <strong>source (FROM, accepted — build
+        when the block SQL editor lands; it's low difficulty and pairs naturally)</strong> ·
+        computed (SELECT, whenever). One inline CTE per query in the canonical shape for now;
+        multiple/chained CTEs and view-node-as-source are the deferred flavors.</p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>12 · Round-2 determinations</h2>
+      <table class="map">
+        <tr><th>#</th><th>determination</th><th>call</th></tr>
+        <tr>
+          <td>D1</td>
+          <td>Stress-test result</td>
+          <td><strong>Held, with sharper reasoning.</strong> The design survives growth not because
+          the subset is small but because growth is per-clause, flat chips mirror SQL's clause
+          spine, and hierarchy/write-back pressure concentrates in features the view layer owns by
+          other means (§10a). The ceiling (correlated/tree-shaped SQL stays leaf/tier-3) is
+          accepted explicitly.</td>
+        </tr>
+        <tr>
+          <td>D7 <span class="badge">revised</span></td>
+          <td>Boolean growth path</td>
+          <td>IN/BETWEEN sugar first (flat, collapses most ORs). Then CNF only: the dialect admits
+          <em>AND of OR-groups</em>, rendered by the compound chip, capped at one level. Non-CNF
+          → fragment leaf, permanently.</td>
+        </tr>
+        <tr>
+          <td>D11 <span class="badge def">new</span></td>
+          <td>Leaf taxonomy + CTE source chip</td>
+          <td>Per-clause leaves: fragment / <strong>source</strong> / computed. Source chip
+          accepted (§11): opaque CTE base + dialect outer; recursive updatability lift; disabled
+          chips state their reason.</td>
+        </tr>
+        <tr>
+          <td>D12 <span class="badge def">new</span></td>
+          <td>Growth sequence</td>
+          <td>By value: <strong>relationship traversal predicates</strong> (the app's soul) →
+          <strong>aggregation/group-by</strong> → <strong>multi-kind union</strong>. The compound
+          chip primitive lands with whichever of traversal/OR arrives first; source chip whenever
+          the SQL editor lands; computed leaves fall out free.</td>
+        </tr>
+        <tr>
+          <td>D13 <span class="badge def">new</span></td>
+          <td>Projection is a permanent spec non-goal</td>
+          <td>Column <em>visibility</em> = face recipe; fetch <em>narrowing</em> = host execution
+          wrapping (like windowing). The user's query never carries a column list; <code>d.* +
+          id</code> stays the editability guarantee.</td>
+        </tr>
+      </table>
+
+      <!-- ============================================================ -->
+      <h2>13 · Where round 2 left the session</h2>
+      <ul class="tight">
+        <li><strong>Accepted after round 2:</strong> D1 (stress-tested) · D2 + D2a · D3 + D3a · D4
+        (three tiers, per-term containment) · D5 · D6 · D7 (revised: IN/BETWEEN → CNF compound
+        chips) · D8–D10 · D11 (leaf taxonomy + source chip) · D12 (growth sequence) · D13
+        (projection non-goal).</li>
+        <li>Round 3 below revisits one layer — the interactive grammar of the chips themselves —
+        before the session closes.</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <h2>14 · Round 3 — the interactive grammar: objects carry the glyphs</h2>
+      <p class="lede">
+        Two awkward spots in the round-1 grammar: <code>#</code> overloaded as a FROM prefix
+        (wrong — kind ranges over <em>any</em> matrix, not just promoted types, so the borrowed
+        sigil lies), and a mixed vocabulary (sigil <code>#</code> for one dimension, label
+        <code>in:</code> for another — two interaction kinds, neither teaching the other). Both
+        have the same root: <strong>the chip was labeling its dimension instead of rendering its
+        object.</strong>
+      </p>
+      <p>
+        The fix is one rule. <strong>A chip is: the object as it renders everywhere else in the
+        app · the op as its operator glyph · the value.</strong> Nothing else — no dimension
+        labels, no chip-type icons. Matrixes, nodes, and columns already have app-wide identity
+        renderings; the op glyphs (<code>≠</code> <code>&lt;</code> <code>↓</code>) are already
+        implicit. The round-1 question “is there a serendipitous implicit glyph for FROM and
+        scope?” answers itself once the chip renders the object: <strong>a matrix badge <em>is</em>
+        the FROM glyph</strong> — a matrix is the only object that <em>is</em> a set of rows, so a
+        bare matrix badge unambiguously reads “rows of this” — and <strong>the breadcrumb's descent
+        chevron is the scope glyph</strong>: a node crumb with a trailing <code>›</code> reads
+        “…and below,” exactly what the app's ancestry chrome already means by it.
+      </p>
+
+      <table class="map">
+        <tr><th>dimension</th><th>object (renders as it does app-wide)</th><th>op glyph</th><th>chip reads as</th><th>what got deleted</th></tr>
+        <tr>
+          <td><code>kind</code></td>
+          <td>a matrix: a promoted type wears its own tag badge (name, color, icon — <code>#task</code> only <em>because that type renders that way everywhere</em>); a plain container wears the container mark (<span class="mono">▣ Groceries</span>)</td>
+          <td><em>none needed</em> — the badge is the glyph</td>
+          <td><span class="chip kind" style="vertical-align:-3px">#task</span> or <span class="chip kind" style="vertical-align:-3px">▣ Groceries</span></td>
+          <td>the <span class="mono">#</span>-as-FROM prefix; the dim <span class="mono">#</span> label</td>
+        </tr>
+        <tr>
+          <td><code>scope</code></td>
+          <td>a node, as a breadcrumb crumb</td>
+          <td>trailing <code>›</code> — “and below”</td>
+          <td><span class="chip scope" style="vertical-align:-3px">Research ›</span></td>
+          <td>the <span class="mono">in:</span> label</td>
+        </tr>
+        <tr>
+          <td><code>where</code></td>
+          <td>a column name (mono); the value renders per the column's display type (a select value wears its option color)</td>
+          <td><code>=</code> <code>≠</code> <code>&lt;</code> <code>&gt;</code> <code>∈</code> <code>∅</code></td>
+          <td><span class="chip pred" style="vertical-align:-3px">status ≠ done</span></td>
+          <td>— (already glyph-only)</td>
+        </tr>
+        <tr>
+          <td><code>order</code></td>
+          <td>a column name</td>
+          <td><code>↓</code> / <code>↑</code></td>
+          <td><span class="chip order" style="vertical-align:-3px">↓ due</span></td>
+          <td>— (already glyph-only)</td>
+        </tr>
+        <tr>
+          <td>leaves</td>
+          <td><em>opaque by definition</em> — nothing inside can signal</td>
+          <td>—</td>
+          <td><span class="chip custom" style="vertical-align:-3px">ƒ fragment</span> <span class="chip custom" style="vertical-align:-3px">WITH source</span></td>
+          <td>nothing — the exception that proves the rule: only chips whose content <em>cannot</em> speak get a type label</td>
+        </tr>
+      </table>
+
+      <p>
+        <strong>Colors reinforce along the architecture's own planes.</strong> The chip frame tint
+        follows the semantic color code the design docs already use: membership-plane orange for
+        kind, position-plane blue for scope, data green for predicates, violet for order, the
+        muted danger tint for leaves. Object identity renders <em>inside</em> the frame (a type's
+        own registry color on its badge) — two signals, no conflict, and the chip row quietly
+        teaches the two-plane data model.
+      </p>
+
+      <h3>14a · Input grammar: names are the only grammar</h3>
+      <p>
+        Discovery unifies the same way signaling does: <strong>you type the object's name;
+        everything else is suggested from what that object is.</strong> There are no labeled
+        qualifiers to learn and no sigil-only paths. The input matches across object families at
+        once — matrixes, nodes, and (once a kind or source fixes the column vocabulary) columns —
+        and each suggestion row pairs the object with the ops its nature affords. Un-committed
+        typed words remain the <code>text</code> dimension: text is the residue, chips are the
+        commitments.
+      </p>
+      <div class="mock">
+        <div class="cap">one input, object suggestions by nature — typing “res”</div>
+        <div class="qbar">
+          <span class="caret">⌘K</span>
+          <span class="typed">res</span><span class="cursor"></span>
+        </div>
+        <div class="rows">
+          <div class="rrow sel"><span class="lbl">Quarterly research</span><span class="ctx">jump · Work › Projects</span></div>
+          <div class="rrow"><span class="lbl">Research ›</span><span class="ctx">search under this node</span></div>
+          <div class="rrow"><span class="lbl">▣ Research-papers</span><span class="ctx">rows of this container</span></div>
+          <div class="rrow"><span class="lbl">#research-note</span><span class="ctx">rows of this type</span></div>
+        </div>
+        <p class="note">One name, four natures: a row (jump), a node (scope ›), a container and a
+        type (kind). The op is read off the object, never chosen first — object-first, op-second,
+        as settled. Picking any suggestion materializes the chip; the typed text it consumed
+        disappears from the text residue.</p>
+      </div>
+      <p>
+        <strong>Sigils survive only as narrowers, with their app-wide meanings intact.</strong>
+        The two content sigils carry over exactly: <code>#</code> narrows suggestions to promoted
+        types (its meaning in prose), <code>@</code> narrows to nodes/rows (its meaning in prose).
+        Neither <em>means</em> a dimension — <code>#gro</code> finds the type <code>#grocery-run</code>,
+        never the container <span class="mono">▣ Groceries</span>; bare names reach everything.
+        This un-muddies the round-1 overload: a sigil never signals FROM; it filters an object
+        family, identically everywhere in the app.
+      </p>
+
+      <h3>14b · The op menu is the teaching surface</h3>
+      <div class="mock">
+        <div class="cap">after picking a column — “due” (a date column)</div>
+        <div class="qbar">
+          <span class="caret">⌘K</span>
+          <span class="chip kind">#task</span>
+          <span class="chip pred focused">due <span style="color:var(--muted)">…</span></span>
+        </div>
+        <div class="menu">
+          <div class="mi sel"><span class="key">&lt;</span><span>before <span style="color:var(--muted)">· type a date</span></span></div>
+          <div class="mi"><span class="key">&gt;</span><span>after</span></div>
+          <div class="mi"><span class="key">=</span><span>on</span></div>
+          <div class="mi"><span class="key">∅</span><span>is empty</span></div>
+          <div class="mi"><span class="key">↓</span><span>sort latest first</span></div>
+          <div class="mi"><span class="key">↑</span><span>sort earliest first</span></div>
+        </div>
+        <p class="note">Glyph leads, plain name follows — the menu <em>is</em> the glyph lesson.
+        Ops offered are the column type's affordances (a date offers before/after; a select offers
+        “is one of”; a text column offers contains). Filter and sort ops share one menu: the
+        object was chosen once, everything it affords is here.</p>
+      </div>
+
+      <h3>14c · The mastery ladder: what you read is what you eventually type</h3>
+      <p class="lede">
+        Three layers, one convergence point — the displayed glyph vocabulary:
+      </p>
+      <ul class="tight">
+        <li><strong>1 · Menu navigation.</strong> Arrows + <span class="kbd">Enter</span> through
+        the op menu. Full discovery, zero knowledge assumed.</li>
+        <li><strong>2 · Typeahead on op names and synonyms.</strong> The menu filters as you type
+        plain words: “not” → <code>≠</code>, “before” → <code>&lt;</code>, “desc” → <code>↓</code>,
+        “empty” → <code>∅</code>. No memorization; synonyms are matched generously.</li>
+        <li><strong>3 · Typed operators — the glyphs themselves.</strong> After an object token,
+        typing an operator character commits it directly: <span class="mono">due&lt;</span>,
+        <span class="mono">status!=</span> (ASCII spellings for non-typeable glyphs:
+        <code>!=</code> for <code>≠</code>; <code>↓</code>/<code>›</code> fall back to layer-2
+        names — “desc”, “under”). The expert path is the SQL-analog itself: fluent input reads
+        like a predicate, and the chip that materializes displays the same symbols that were
+        typed. <strong>Reading chips teaches writing them.</strong></li>
+      </ul>
+      <p>
+        <strong>Jump-keys rejected.</strong> Assigned per-menu keys (Raycast-style <span class="kbd">⌘1</span>…)
+        would conflict with typeahead for letter keys, and they are precisely the thing the glyph
+        economy forbids: a second, arbitrary vocabulary whose only meaning is “this menu slot” —
+        learned per menu, transferring nowhere. The ladder above spends that learning budget on
+        symbols that appear on every saved chip and (at layer 3) in the SQL itself.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>15 · Round-3 determinations</h2>
+      <table class="map">
+        <tr><th>#</th><th>determination</th><th>call</th></tr>
+        <tr>
+          <td>D14 <span class="badge def">new</span></td>
+          <td>Chip anatomy rule</td>
+          <td><strong>Object-as-rendered-app-wide + op glyph + value; nothing else.</strong> No
+          dimension labels, no type icons. FROM's implicit glyph is the matrix badge itself;
+          scope's is the node crumb + trailing <code>›</code>. Only opaque leaves (ƒ / WITH) carry
+          type labels — their content cannot speak. Frame tints follow the architecture's plane
+          colors; object identity (type color/icon) renders inside.</td>
+        </tr>
+        <tr>
+          <td>D15 <span class="badge def">new</span></td>
+          <td>Name-only input grammar</td>
+          <td>Typing matches object names across families; suggestion rows pair each object with
+          the ops its nature affords; uncommitted text is the <code>text</code> dimension.
+          <code>in:</code>-style labeled qualifiers deleted. Sigils survive only as family
+          narrowers with their exact prose meanings (<code>#</code> types, <code>@</code>
+          nodes/rows) — a sigil never signals a dimension.</td>
+        </tr>
+        <tr>
+          <td>D16 <span class="badge def">new</span></td>
+          <td>Mastery ladder</td>
+          <td>Menu → typeahead (names + synonyms) → typed operators identical to displayed glyphs
+          (ASCII spellings where needed). The op menu leads with glyphs to teach them. Jump-keys
+          rejected: they conflict with typeahead and mint a non-transferable vocabulary.</td>
+        </tr>
+      </table>
+
+      <!-- ============================================================ -->
+      <h2>16 · Where round 3 left the session</h2>
+      <ul class="tight">
+        <li><strong>Accepted after round 3:</strong> D14 (chip anatomy) · D15 (name-only grammar,
+        sigils as narrowers) · D16 (mastery ladder) — chip <em>colors</em> explicitly deferred to
+        the §4 token pass.</li>
+        <li><strong>Handed to 3b-ii:</strong> the empty-input state (what teaches that chips exist
+        at all) · suggestion sectioning and ranking between jump results and refine rows · the
+        full keyboard map · value editors per column type.</li>
+        <li>Round 4 below settles the glyph vocabulary for the slots without an intrinsic
+        glyph.</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <h2>17 · Round 4 — the four explicit-glyph slots</h2>
+      <p class="lede">
+        D14 covered chips whose op glyph is intrinsic (<code>≠</code> <code>↓</code> <code>›</code>)
+        and objects that carry their own identity (<code>#task</code>). Four slots have neither:
+        <strong>matrix · CTE/source · computed column · predicate fragment</strong>. Before picking
+        symbols, the two unification questions — and they get <em>different</em> answers.
+      </p>
+
+      <h3>17a · Question 1: are matrix and CTE one FROM glyph? — No.</h3>
+      <p>
+        They are both FROM variants, but the remaining signal (“a single name vs a query”) is
+        <strong>invisible precisely when it matters</strong>: a collapsed CTE chip shows a
+        user-chosen name — <span class="mono">most-referenced</span> — which is indistinguishable
+        from a matrix name. And the property that distinguishes them is the scan-critical one in
+        this app: <strong>ground vs derived</strong>. A matrix base means a real place — navigable,
+        hydrated, editable cells, schema known, the container border waiting on drill-in. A CTE
+        base means locally-defined derived rows — dry unless the recursive lift applies, columns
+        known only by introspection. That's the §6 trust tier, read from the leftmost chip.
+        Merging them would hide the one bit the row exists to show.
+      </p>
+      <p>
+        There's also a serendipity for keeping them apart: the doc mocks already mark view
+        nodes/blocks with <code>≔</code> — and a CTE <em>is</em> a local, anonymous view node
+        (<span class="mono">name ≔ query</span>). One glyph, one concept, two granularities: a
+        <code>≔</code> block is a query with a place; a <code>≔</code> source chip is a query
+        inside a query. And the deferred <em>view-node-as-source</em> flavor (§11) then renders
+        identically — the chip's glyph already means “defined by a query” whether the definition
+        is inline or a node. Reusing the matrix glyph for CTEs would spend this coherence to save
+        one symbol.
+      </p>
+
+      <h3>17b · Question 2: are the two expression leaves one glyph? — Half.</h3>
+      <p>
+        The round-1/2 treatment made leaf-ness a <em>glyph + color</em> (red-tinted
+        <span class="mono">ƒ</span>/<span class="mono">WITH</span> chips). Two corrections. First,
+        yours: red must mean <strong>invalid</strong> — a term that cannot run (a dropped column, a
+        source whose output lost <code>id</code>) — never “power feature.” Second: leaf-ness
+        (“there is raw SQL under this chip”) is a <em>storage-tier</em> fact, orthogonal to what the
+        term <em>means</em> — so it deserves its own channel, not a glyph at all.
+        <strong>Proposal: dashed frame = opaque SQL inside.</strong> One texture, one lesson,
+        applied uniformly to every escape hatch (fragment, source body, computed expression, the
+        tier-3 whole-query chip). That frees the glyph to say what the term means:
+      </p>
+      <ul class="tight">
+        <li><strong>Predicate fragments need no glyph at all.</strong> Their content is
+        self-signaling: a boolean expression almost always contains a comparison
+        (<span class="mono">due &lt; review_by + 7</span>) — the op glyph is already in the text,
+        exactly like a structured predicate chip. The dashed frame alone says “edit this as SQL.”
+        Adding <code>φ</code>/<code>P</code>/<code>ƒ</code> in front would be the redundant
+        type-glyph D14 forbids.</li>
+        <li><strong>Computed columns keep <code>ƒ</code>.</strong> Their collapsed content is just
+        an alias (<span class="mono">total</span>) — a bare name that would masquerade as a plain
+        column, so the glyph must speak: <code>ƒ total</code>. And <code>ƒ</code> is the one
+        symbol here with a household meaning — Excel's <em>fx</em> formula bar — <em>and</em> an
+        in-app sibling: matrix <strong>formula columns</strong> are the same concept (a computed,
+        dry value), so <code>ƒ</code> becomes the app-wide mark for <em>formula</em>, wherever one
+        renders. An alias is required on commit (good SQL hygiene regardless; transient views
+        auto-suggest one).</li>
+      </ul>
+      <p>
+        So: <em>one</em> new leaf glyph (<code>ƒ</code>, and it's really the formula glyph, not a
+        leaf glyph), with leaf-ness carried by texture. The unification instinct was right, but the
+        unifying channel is the frame, not the symbol.
+      </p>
+
+      <h3>17c · Candidate verdicts</h3>
+      <table class="map">
+        <tr><th>slot</th><th>candidate</th><th>verdict</th></tr>
+        <tr>
+          <td rowspan="2">matrix</td>
+          <td><code>[]</code> / <code>[Groceries]</code></td>
+          <td><strong>Adopted (D17), in wrap form on names.</strong> Borrowed from math matrix
+          notation and array literals — a technical audience reads “structured collection of
+          values” on sight, and it's ASCII-typable. As a standalone symbol (menus, lenses, the
+          “all matrixes” family icon) it's bare <code>[]</code>; attached to a name it wraps —
+          <span class="mono">[Groceries]</span> — which mirrors “a matrix contains its rows” and
+          still scans (the category is identifiable from the leading <code>[</code>, so aligned
+          lists stay scannable). Promoted types keep their <code>#type</code> identity per D14;
+          <code>[]</code> marks the unpromoted rest and the family as a concept. Supersedes the
+          docs' informal <code>▣</code>.</td>
+        </tr>
+        <tr>
+          <td>▣ (the doc mocks' container mark)</td>
+          <td>Retired. Icon-only (not typable), no preexisting meaning to borrow, and it never
+          shipped — it was scaffolding notation.</td>
+        </tr>
+        <tr>
+          <td rowspan="3">CTE / source</td>
+          <td><code>≔</code> “defined as”</td>
+          <td><strong>Adopted (D17).</strong> <span class="mono">≔ most-referenced</span> reads
+          “this name is defined by a query.” Harmonizes with the view-node/block mark (same
+          concept at two granularities, §17a) and with Pascal/Go <code>:=</code> for the
+          programming-literate. ASCII spelling <code>:=</code> for layer-3 typing.</td>
+        </tr>
+        <tr>
+          <td><code>∈</code> “element of”</td>
+          <td>Rejected — direct collision: <code>∈</code> is already earmarked as the
+          <em>is-one-of</em> (IN) predicate op glyph (§14 op table), and its meaning is a
+          membership <em>test</em>, not a definition. Putting it in FROM position would teach the
+          wrong algebra.</td>
+        </tr>
+        <tr>
+          <td><code>WITH</code> (readable label)</td>
+          <td>Demoted to its right layer, not rejected: the chip shows <code>≔</code>; the
+          <em>expanded editor</em> and view-SQL show <code>WITH … AS</code>. Keyword at the layer
+          where SQL lives, glyph at the layer you scan — the same reading-teaches-writing ladder
+          as D16 (you learn <code>≔</code> ↔ <code>WITH</code> by opening the chip once).</td>
+        </tr>
+        <tr>
+          <td rowspan="2">computed column</td>
+          <td><code>ƒ</code></td>
+          <td><strong>Adopted (D18)</strong> — and generalized: <code>ƒ</code> is the app-wide
+          <em>formula</em> mark (matrix formula columns and view computed items are one concept,
+          one glyph). Excel's <em>fx</em> gives it the largest borrowed audience of any candidate
+          here.</td>
+        </tr>
+        <tr>
+          <td><code>↦</code> infix with alias (<span class="mono">price*qty ↦ total</span>)</td>
+          <td>Rejected as chip syntax: it implies an always-visible expression + alias (chips
+          collapse to <code>ƒ alias</code>), and maps-to is a mathematician's glyph, not a
+          spreadsheet user's. Welcome as editor-internal hint copy, nothing more.</td>
+        </tr>
+        <tr>
+          <td rowspan="3">predicate fragment</td>
+          <td><em>no glyph</em> — dashed frame + the expression text</td>
+          <td><strong>Adopted (D18).</strong> The comparison operators in the expression are the
+          intrinsic glyph (§17b); the frame carries the tier.</td>
+        </tr>
+        <tr>
+          <td><code>φ</code></td>
+          <td>Rejected — at chip size <code>φ</code> and <code>∅</code> (the is-empty op) are a
+          real visual collision, and predicate-logic φ has the narrowest audience of any candidate
+          in this round.</td>
+        </tr>
+        <tr>
+          <td><code>P</code></td>
+          <td>Rejected — a bare capital letter reads as an identifier (a column named P), the one
+          ambiguity a category mark cannot have.</td>
+        </tr>
+      </table>
+
+      <h3>17d · The glyph sheet, v1</h3>
+      <table class="map">
+        <tr><th>glyph</th><th>means</th><th>borrowed from</th><th>typed as (layer 3)</th></tr>
+        <tr><td><code>[]</code> · <span class="mono">[name]</span></td><td>matrix (the membership plane; a container/extent as an object)</td><td>math matrix notation · array literals</td><td><code>[</code></td></tr>
+        <tr><td><code>#name</code></td><td>a promoted type (its app-wide identity, with its color/icon)</td><td>in-app prose · Tana/Notion</td><td><code>#</code></td></tr>
+        <tr><td><code>≔ name</code></td><td>defined by a query — view node/block; CTE/source chip; tier-3 custom query</td><td>math definition · Pascal/Go <code>:=</code></td><td><code>:=</code></td></tr>
+        <tr><td><code>name ›</code></td><td>scope — this node and below</td><td>the app's own breadcrumb chevron</td><td>“under” (typeahead)</td></tr>
+        <tr><td><code>ƒ name</code></td><td>formula — a computed, dry value (matrix formula column or view computed item)</td><td>Excel <em>fx</em></td><td>“formula” (typeahead)</td></tr>
+        <tr><td><code>=</code> <code>≠</code> <code>&lt;</code> <code>&gt;</code> <code>∈</code> <code>∅</code></td><td>predicate ops</td><td>math</td><td><code>=</code> <code>!=</code> <code>&lt;</code> <code>&gt;</code> “one of” “empty”</td></tr>
+        <tr><td><code>↓</code> <code>↑</code></td><td>order</td><td>ubiquitous sort affordance</td><td>“desc” / “asc”</td></tr>
+        <tr><td><em>opacity texture</em> (dashed frame as placeholder)</td><td>opaque SQL inside — every escape hatch, uniformly. <strong>Semantic channel settled; visual treatment is a §4 token-pass decision</strong></td><td>draft/placeholder convention</td><td>—</td></tr>
+        <tr><td><em>invalid treatment</em> (red frame as placeholder)</td><td><strong>invalid — this term cannot run</strong> (and nothing else; corrected from rounds 1–2). Final treatment rides the §4 token pass with the rest of the palette</td><td>universal error color</td><td>—</td></tr>
+      </table>
+      <p class="note">
+        Every symbol is borrowed from a notation some large audience already owns; none is
+        invented. The chip row becomes the query skeleton read left to right:
+        ground → fence → conditions → shape.
+      </p>
+
+      <div class="mock">
+        <div class="cap">the vocabulary in one row — revised from the §11 mock</div>
+        <div class="blockhead">
+          <span class="glyph">≔</span>
+          <span class="chip kind">[Tasks]</span>
+          <span class="chip scope">Research ›</span>
+          <span class="chip pred">status ≠ done</span>
+          <span class="chip leaf">due &lt; review_by + 7</span>
+          <span class="chip order"><span class="dim">↓</span>due</span>
+          <span style="margin-left:auto; color:var(--muted); font-size:11px" class="mono">view SQL ▸</span>
+        </div>
+        <div class="blockbody" style="border-radius:0; border-bottom:0; padding:6px 10px; color:var(--muted); font-size:11.5px">
+          ground <span style="color:#3a4256">·</span> fence <span style="color:#3a4256">·</span> structured predicate <span style="color:#3a4256">·</span> fragment (dashed = raw SQL, no glyph — the &lt; speaks) <span style="color:#3a4256">·</span> shape
+        </div>
+        <div class="blockhead" style="border-radius:0; border-top:0">
+          <span class="glyph">≔</span>
+          <span class="chip leaf"><span class="dim">≔</span>most-referenced</span>
+          <span class="chip pred">refs &gt; 3</span>
+          <span class="chip leaf"><span class="dim">ƒ</span>refs_per_day</span>
+          <span class="chip order"><span class="dim">↓</span>refs</span>
+          <span style="margin-left:auto; color:var(--muted); font-size:11px" class="mono">view SQL ▸</span>
+        </div>
+        <div class="blockbody" style="padding:6px 10px; color:var(--muted); font-size:11.5px">
+          a source-leaf block: derived ground (<span class="mono">≔</span>, dashed) — visibly <em>not</em> a place —
+          with a structured predicate over its output, a computed column (<span class="mono">ƒ</span>, dashed), and an order chip.
+          <span class="chip invalid" style="vertical-align:-3px; margin-left:6px">priority ≠ …</span>
+          ← red is reserved for this: a term that cannot run (here, a column the source no longer outputs), stated with its reason.
+        </div>
+      </div>
+
+      <p>
+        <strong>A rename footnote the recognizer earns.</strong> Stored SQL references columns by
+        name, so <code>renameColumn</code> would strand it — but dialect SQL can be
+        <em>recognize → recompile</em>d against the catalog as a migration pass, healing every
+        chip-built view automatically. Opaque leaves can't be healed and go red-invalid with the
+        old name stated — honest, visible, and exactly the containment §6 promised: one stranded
+        fragment never invalidates its neighbors.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>18 · Round-4 determinations</h2>
+      <table class="map">
+        <tr><th>#</th><th>determination</th><th>call</th></tr>
+        <tr>
+          <td>D17 <span class="badge def">new</span></td>
+          <td>The FROM glyphs: ground vs derived</td>
+          <td><code>[]</code> (wrapping names: <span class="mono">[Groceries]</span>) is the
+          universal matrix mark, superseding <code>▣</code>; <code>≔</code> marks
+          anything defined by a query — view nodes/blocks, CTE/source chips, tier-3 custom
+          queries — one concept at every granularity. Matrix and CTE stay visually distinct
+          because ground-vs-derived is the scan-critical bit (§17a). <code>∈</code> rejected for
+          FROM (it's the IN op).</td>
+        </tr>
+        <tr>
+          <td>D18 <span class="badge def">new</span></td>
+          <td>Leaf-ness is a texture; <code>ƒ</code> means formula</td>
+          <td><strong>A frame texture = opaque SQL inside</strong> (dashed as the placeholder
+          treatment — semantics settled here, visual form settled in the §4 token pass),
+          uniformly across fragment / source / computed / tier-3 chips. Predicate fragments carry no glyph (their comparison
+          ops self-signal); computed columns collapse to <code>ƒ alias</code> (alias required on
+          commit), and <code>ƒ</code> is adopted app-wide for <em>formula</em> including matrix
+          formula columns. <code>φ</code>, <code>P</code>, <code>↦</code> rejected;
+          <code>WITH</code> lives at the SQL layer, paired with <code>≔</code> by the D16
+          ladder.</td>
+        </tr>
+        <tr>
+          <td>D19 <span class="badge def">new</span></td>
+          <td>Red means invalid, and the glyph sheet is v1-closed</td>
+          <td>The red frame is reserved for terms that cannot run (with the reason stated) —
+          correcting the rounds-1/2 leaf tint. The §17d sheet is the settled v1 vocabulary; chip
+          <em>palette</em> (frame tints per dimension) rides the §4 token pass. Dialect SQL is
+          rename-healable via recognize→recompile; stranded leaves go red-invalid individually.</td>
+        </tr>
+      </table>
+
+      <!-- ============================================================ -->
+      <h2>19 · Session 3b-i closed — the record</h2>
+      <ul class="tight">
+        <li><strong>Accepted (all rounds):</strong> D1–D13 (the model: SQL-canonical + dialect
+        recognizer; the six-dimension spec; escalation tiers; leaf taxonomy incl. the CTE source
+        chip; growth path; projection non-goal) · D14–D16 (the interactive grammar: chip anatomy,
+        name-only input, mastery ladder) · D17–D19 (the glyph vocabulary: <code>[]</code> ground
+        vs <code>≔</code> derived; <code>ƒ</code> = formula; fragments glyph-free; red = invalid
+        only) — with the opacity texture (dashed) and all chip colors recorded as
+        <strong>placeholders whose final treatment is the §4 token pass's</strong>; their
+        semantic intents are settled here.</li>
+        <li><strong>Recorded outputs:</strong> the distilled model in
+        <code>Query-Spec.md</code> · Phase-10.md §3b updated (pivot, session 3b-i status,
+        3b-ii scheduled) · cross-links in Plan.md (resolved decision #9), Plugins.md, and
+        Architecture.md · this page as the round-by-round record.</li>
+        <li><strong>Handed to the §4 token pass:</strong> chip frame palette (plane colors vs
+        object identity) · the opacity + invalid treatments as design tokens ·
+        <code>ƒ</code> rendering on matrix formula columns in the table face.</li>
+        <li><strong>Handed to 3b-ii (the launcher surface proper):</strong> result layout and
+        sectioning · command integration and ranking interleave · the quick↔deep visual
+        continuum · the empty-input state · the full keyboard map · per-type value editors ·
+        save-flow polish · stage-4 build items.</li>
+        <li><strong>Handed to the block-chrome follow-up:</strong> the full view-block authoring
+        chrome replacing the dev textarea (direction fixed by the §5/§17 mocks; panel/density
+        details ride the §4 token pass).</li>
+      </ul>
+    </div>
+  </body>
+</html>

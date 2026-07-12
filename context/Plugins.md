@@ -191,7 +191,7 @@ A view renders a **subject**: a node together with its **child-sourcing mode** (
 { faceTypeId, slotBindings, settings }   // no query — the subject sources the rows
 ```
 
-This decouples **row sourcing** from **row rendering**. A recipe is portable: it attaches to any subject whose row shape its slots can bind, and the [slot-binding resolution chain](#slot-binding-resolution) (explicit → name → type+position → fallback) is unchanged. Data-plane concerns (a view's `WHERE`/`ORDER BY`, sort, filter) live with the subject's query; rendering-plane concerns (which face type, column-to-slot bindings, grid column widths, a kanban's lane column) live in the recipe. The higher-level authoring gestures that compile sort/order/dimension choices into a subject's query are the launcher/`view`-block continuum designed in [§3b](./Phase-10.md#3b-launcher-deep-dive-scheduled-session), shared by both surfaces.
+This decouples **row sourcing** from **row rendering**. A recipe is portable: it attaches to any subject whose row shape its slots can bind, and the [slot-binding resolution chain](#slot-binding-resolution) (explicit → name → type+position → fallback) is unchanged. Data-plane concerns (a view's `WHERE`/`ORDER BY`, sort, filter) live with the subject's query; rendering-plane concerns (which face type, column-to-slot bindings, grid column widths, a kanban's lane column) live in the recipe. The higher-level authoring gestures that compile sort/order/dimension choices into a subject's query are the launcher/`view`-block continuum — settled in [Query-Spec.md](./Query-Spec.md) ([Phase 10 §3b-i](./Phase-10.md#3b-launcher-deep-dive--the-query-spec)): one query spec, edited by chips, compiled to canonical SQL (the stored form), lifted back by a recognizer — shared by both surfaces.
 
 > Migration consequence: the stored `query` on today's `FaceConfig` / `face_configs` row re-homes to the subject (view/container) at migration; the config type loses its `query` field.
 
@@ -251,7 +251,7 @@ type Command = {
 }
 ```
 
-The existing [`slash-commands.ts`](../src/editor/slash-commands.ts) shape (`id` · `label` · `keywords` · `run`) is the seed; it gains a `surfaces` field and moves from a hardcoded array to the registry. Launcher-side ranking/UX is [§3b](./Phase-10.md#3b-launcher-deep-dive-scheduled-session)'s business; only the registration shape is fixed here. The [session-2 provenance rule](./Architecture.md#placeless-creation-homes-by-provenance) carries over for free: a launcher command that creates something homes it under the node focused when `⌘K` was invoked, via the same `subject` parameter supplied by the shell.
+The existing [`slash-commands.ts`](../src/editor/slash-commands.ts) shape (`id` · `label` · `keywords` · `run`) is the seed; it gains a `surfaces` field and moves from a hardcoded array to the registry. Launcher-side ranking/UX is [§3b-ii](./Phase-10.md#3b-launcher-deep-dive--the-query-spec)'s business (the query-spec substrate underneath is [Query-Spec.md](./Query-Spec.md)); only the registration shape is fixed here. The [session-2 provenance rule](./Architecture.md#placeless-creation-homes-by-provenance) carries over for free: a launcher command that creates something homes it under the node focused when `⌘K` was invoked, via the same `subject` parameter supplied by the shell.
 
 ## Concrete examples
 
