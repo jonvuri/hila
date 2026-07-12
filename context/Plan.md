@@ -781,7 +781,7 @@ Full-text search across matrix content, guided by column display roles (Phase 6)
 - Update the index on writes (trigger-based or explicit).
 - Search face: a global search bar that queries FTS5 and presents results with context -- label as the heading, content snippets below.
 
-Introduce when there's enough content to make search useful (Phase 7+). The user-facing surface is the `⌘K` launcher; per the [query spec model](Query-Spec.md), search text is the spec's `text` dimension, which compiles to `LIKE` pre-FTS and to FTS5 after — the migration changes only the compile rule, leaving every surface, gesture, and saved `view` node untouched.
+Introduce when there's enough content to make search useful (Phase 7+). The user-facing surface is the `⌘K` launcher (designed in [Launcher.md](Launcher.md) — Phase 10 §3b-ii); per the [query spec model](Query-Spec.md), search text is the spec's `text` dimension, which compiles to `LIKE` pre-FTS and to FTS5 after — the migration changes only the compile rule, leaving every surface, gesture, and saved `view` node untouched.
 
 ---
 

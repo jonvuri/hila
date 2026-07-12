@@ -127,6 +127,7 @@ Sequence, by value:
 
 ## Deferred
 
-- **Session 3b-ii — the launcher surface proper:** result layout/sectioning, command-integration and ranking interleave (stateless in v1), the quick↔deep visual continuum, empty-input state, keyboard map, per-type value editors, save-flow polish, stage-4 build items.
+- ~~Session 3b-ii — the launcher surface proper~~ **Resolved:** the launcher surface is designed in [Launcher.md](Launcher.md) (Phase 10 §3b-ii, determinations D20–D32) — result layout, ranking, family narrowing, tempo continuum, keyboard map, value editors, save flow, and the stage-4 build items.
+- **Live-relative date tokens** (a saved "today" view that is always today) — the designed dialect extension, deferred on need: the compile rule emits a reserved **runtime parameter** (`:today`-family) that the recognizer lifts back to the token; the executor binds an environment at run time; the invalidation engine gains clock-based invalidation (re-run at date rollover). In v1 relative tokens freeze to literal ranges at compile (stated by a save nudge — [Launcher.md](Launcher.md) D29). No second runtime-parameter consumer exists in the immediate plan (host execution params are a different, already-general layer; Phase 11's `date('now')` column defaults evaluate at write time); identity (`:me`) and context (`:here`) are the eventual siblings that would justify extracting the general environment mechanism.
 - **Block-chrome follow-up:** the full view-block authoring chrome replacing the dev textarea (direction fixed; details ride the §4 token pass).
 - **FTS** (compile-rule swap; Phase 11+) · **frecency ranking** (slots into launcher ranking only; the spec is untouched) · **view-node-as-source** · the growth items above, each on proven need.

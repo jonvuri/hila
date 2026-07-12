@@ -461,7 +461,7 @@ The ref machinery is **reused**, not replaced. One intentional divergence in the
 
 ## View hierarchy and navigation
 
-> Decided in [Phase 10 §2](Phase-10.md#2-view-hierarchy-and-navigation-model) (visual companion: [Phase-10-Session-2-visuals.html](Phase-10-Session-2-visuals.html)). The detailed face composition contract is formalized in [Phase 10 §3](Phase-10.md#3-plugin-view-composition-model). The query/authoring model shared by the launcher and `view` blocks is [Query-Spec.md](Query-Spec.md) ([Phase 10 §3b-i](Phase-10.md#3b-launcher-deep-dive--the-query-spec)); the launcher surface proper is the scheduled §3b-ii session.
+> Decided in [Phase 10 §2](Phase-10.md#2-view-hierarchy-and-navigation-model) (visual companion: [Phase-10-Session-2-visuals.html](Phase-10-Session-2-visuals.html)). The detailed face composition contract is formalized in [Phase 10 §3](Phase-10.md#3-plugin-view-composition-model). The query/authoring model shared by the launcher and `view` blocks is [Query-Spec.md](Query-Spec.md) ([Phase 10 §3b-i](Phase-10.md#3b-launcher-deep-dive--the-query-spec)); the launcher surface itself is [Launcher.md](Launcher.md) (§3b-ii).
 
 Everything the user touches at the view layer is one of exactly three kinds:
 

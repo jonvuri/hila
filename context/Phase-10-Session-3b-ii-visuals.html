@@ -1,0 +1,1273 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phase 10 · Session 3b-ii — The launcher surface (complete)</title>
+    <style>
+      :root {
+        --bg: #14161d;
+        --panel: #1b1e27;
+        --panel-2: #20242f;
+        --line: #2c3140;
+        --text: #c9cfdb;
+        --dim: #99a1b3;
+        --muted: #6b7488;
+        --accent: #6ea8fe;
+        --own: #6ea8fe;      /* own-edge / lifecycle / home */
+        --portal: #c08cf0;   /* portal / non-owning structural */
+        --ref: #5bbf9a;      /* ref / non-owning content */
+        --tag: #e0a352;      /* membership plane / matrix extent */
+        --border: #7f8aa3;   /* container border */
+        --danger: #e0696b;
+        --gesture: #d8c08a;  /* transient gestures / SQL text */
+        --spec: #5bbf9a;     /* the structured spec */
+        --sql: #d8c08a;      /* canonical SQL */
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 32px 28px 80px;
+      }
+      .wrap { max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      h2 {
+        font-size: 16px; margin: 40px 0 6px; padding-bottom: 6px;
+        border-bottom: 1px solid var(--line); color: #e6eaf2;
+      }
+      h3 { font-size: 13.5px; color: #e6eaf2; margin: 18px 0 4px; }
+      .lede { color: var(--dim); margin: 0 0 8px; }
+      .note { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+      p { margin: 8px 0 0; color: var(--dim); }
+      p strong, li strong { color: var(--text); }
+      figure { margin: 14px 0 0; }
+      figcaption { color: var(--muted); font-size: 12px; margin-top: 6px; }
+      svg { width: 100%; height: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; display: block; }
+      code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.92em; color: #d8c08a; }
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+      .cards.two { grid-template-columns: repeat(2, 1fr); }
+      .card {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .card h3 { margin: 0 0 6px; font-size: 13.5px; color: #e6eaf2; }
+      .card p { margin: 0 0 4px; font-size: 12.5px; color: var(--dim); }
+      .card .verb { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+      .card .steal { color: var(--ref); font-size: 12.5px; }
+      .card .avoid { color: var(--danger); font-size: 12.5px; }
+      .card .steal b, .card .avoid b { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 600; margin-right: 5px; }
+      table.map { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+      table.map th, table.map td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      table.map th { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+      table.map td:first-child { color: #e6eaf2; white-space: nowrap; }
+      .badge {
+        display: inline-block; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+        padding: 1px 7px; border: 1px solid var(--line); border-radius: 3px; color: var(--muted);
+        vertical-align: 2px; margin-left: 8px;
+      }
+      .badge.rec { color: var(--ref); border-color: #2a4a3d; }
+      .badge.q { color: var(--gesture); border-color: #4a3f28; }
+      .badge.def { color: var(--portal); border-color: #453156; }
+      ul.tight { margin: 8px 0 0; padding-left: 20px; }
+      ul.tight li { margin: 5px 0; color: var(--dim); }
+      ol.tight { margin: 8px 0 0; padding-left: 22px; }
+      ol.tight li { margin: 5px 0; color: var(--dim); }
+      pre.def {
+        background: #191c25; border: 1px solid var(--line); border-radius: 8px;
+        padding: 14px 16px; font-size: 12.5px; line-height: 1.5; overflow-x: auto;
+        color: var(--dim); margin: 14px 0 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      pre.def .k { color: #e6eaf2; }
+      pre.def .c { color: var(--muted); }
+      pre.def .s { color: var(--gesture); }
+      pre.def .g { color: var(--ref); }
+
+      /* ---- UI mocks ---- */
+      .mock {
+        background: #10121a; border: 1px solid var(--line); border-radius: 10px;
+        padding: 18px; margin-top: 14px;
+      }
+      .mock .cap { font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+      .qbar {
+        display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+        background: var(--panel-2); border: 1px solid #39415a; border-radius: 6px;
+        padding: 8px 10px; font-size: 13px;
+      }
+      .qbar .caret { color: var(--dim); }
+      .qbar .typed { color: #e6eaf2; }
+      .qbar .ghost { color: var(--muted); }
+      .qbar .cursor { display: inline-block; width: 1px; height: 15px; background: var(--accent); vertical-align: -2px; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px;
+        font-size: 12px; color: var(--text); background: #232837;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .chip .dim { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .chip.kind { border-color: #4a3a22; } .chip.kind .g { color: var(--tag); }
+      .chip.scope { border-color: #2b3a55; } .chip.scope .g { color: var(--own); }
+      .chip.pred { border-color: #2a4a3d; } .chip.pred .g { color: var(--ref); }
+      .chip.order { border-color: #453156; } .chip.order .g { color: var(--portal); }
+      .chip.leaf { border-style: dashed; border-color: #4a5065; color: var(--text); }
+      .chip.focused { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+      .fbadge {
+        display: inline-flex; align-items: center; gap: 5px;
+        border: 1px dotted #4a5065; border-radius: 4px; padding: 2px 8px;
+        font-size: 11.5px; color: var(--dim); background: transparent;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .fbadge .g { color: var(--tag); }
+      .minichips { display: inline-flex; gap: 4px; align-items: center; }
+      .minichips .chip { font-size: 10.5px; padding: 1px 6px; }
+      .helpbar {
+        display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 7px 4px 0;
+        border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted);
+      }
+      .helpbar .mono { font-size: 11px; }
+      .mock .rows { margin-top: 10px; border-top: 1px solid var(--line); }
+      .mock .sect {
+        font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+        padding: 8px 4px 3px; display: flex; align-items: baseline; gap: 8px;
+      }
+      .mock .sect .cnt { color: #4a5266; letter-spacing: 0; text-transform: none; }
+      .mock .rrow {
+        display: flex; align-items: baseline; gap: 10px; padding: 6px 4px;
+        border-bottom: 1px solid #1e222d; font-size: 13px;
+      }
+      .mock .rrow .glyph { color: var(--tag); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-width: 18px; }
+      .mock .rrow .glyph.n { color: var(--own); }
+      .mock .rrow .glyph.v { color: var(--portal); }
+      .mock .rrow .glyph.c { color: var(--gesture); }
+      .mock .rrow .lbl { color: #e6eaf2; }
+      .mock .rrow .lbl .hit { color: var(--accent); }
+      .mock .rrow .ctx { color: var(--muted); font-size: 11.5px; margin-left: auto; white-space: nowrap; }
+      .mock .rrow .key { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+      .mock .rrow.sel { background: #222a3e; border-radius: 4px; }
+      .mock .rrow.more { color: var(--muted); font-size: 12px; }
+      .mock .menu {
+        margin-top: 8px; background: var(--panel-2); border: 1px solid #39415a; border-radius: 6px;
+        max-width: 340px; font-size: 12.5px; overflow: hidden;
+      }
+      .mock .menu .mi { padding: 5px 12px; display: flex; gap: 10px; align-items: baseline; }
+      .mock .menu .mi.sel { background: #222a3e; }
+      .mock .menu .mi .key { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; min-width: 44px; }
+      .mock .prow { display: grid; grid-template-columns: 1.6fr 0.9fr 0.7fr; gap: 8px; padding: 4px 2px; font-size: 12.5px; border-bottom: 1px solid #1e222d; }
+      .mock .prow .h { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .mock .prow .val { color: var(--dim); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+      .mock .savebar {
+        display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 7px 10px;
+        border: 1px dashed #39415a; border-radius: 6px; font-size: 12.5px; color: var(--dim);
+      }
+      .kbd {
+        display: inline-block; border: 1px solid #39415a; border-bottom-width: 2px; border-radius: 4px;
+        padding: 0 5px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--dim); background: #1d2130;
+      }
+      .decision {
+        border-left: 3px solid var(--accent); background: var(--panel);
+        border-radius: 0 8px 8px 0; padding: 12px 16px; margin-top: 14px;
+      }
+      .decision .dq { color: #e6eaf2; font-weight: 600; font-size: 13.5px; }
+      .decision p { font-size: 12.5px; }
+      .opt { margin-top: 10px; }
+      .opt .oname { color: #e6eaf2; font-weight: 600; font-size: 13px; }
+      .opt .pro { color: var(--ref); } .opt .con { color: var(--danger); }
+      .opt p { margin: 3px 0 0; font-size: 12.5px; }
+      .srcs { font-size: 12px; color: var(--muted); }
+      .srcs a { color: var(--dim); }
+      .continuum { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 14px; }
+      .continuum .stage { background: #10121a; border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+      .continuum .stage .cap { font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+      .continuum .stage .cap b { color: var(--gesture); }
+      .continuum .qbar { font-size: 12px; padding: 6px 8px; }
+      .continuum .rrow { font-size: 12px; padding: 4px 3px; }
+      .continuum .sect { font-size: 9.5px; padding: 6px 3px 2px; }
+      .stack { margin-top: 14px; }
+      .stack .tier {
+        display: flex; gap: 14px; align-items: baseline; padding: 9px 14px; margin-top: 6px;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+      }
+      .stack .tier .n {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px;
+        color: var(--accent); min-width: 20px;
+      }
+      .stack .tier .t { color: #e6eaf2; font-size: 13px; font-weight: 600; min-width: 170px; }
+      .stack .tier p { margin: 0; font-size: 12.5px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Phase 10 · Session 3b-ii — The launcher surface</h1>
+      <p class="lede">
+        Session 3b-i settled the <strong>substrate</strong>: one query spec (kind · scope · text ·
+        where · order · limit), edited by chips, compiled to canonical SQL, lifted back by a
+        recognizer — shared by the transient launcher and persisted <code>view</code> nodes
+        (<code>Query-Spec.md</code>, D1–D19). This session designs the <strong>surface</strong> that
+        speaks it: the <code>⌘K</code> launcher itself — placement, result layout, command
+        interleave, ranking, the empty state, the quick↔deep continuum, the keyboard map, and the
+        save flow. Companion to <code>context/Phase-10.md</code> §3b-ii · round 1.
+      </p>
+      <p class="note">
+        Givens, not reopened: the launcher is a <strong>gesture, never a place</strong> — it acts
+        and vanishes (session 2) · chips are the state; text is the residue; sigils only as family
+        narrowers; object-first op discovery; the mastery ladder (3b-i D14–D16) · commands are one
+        registry, two surfaces, with the provenance node as subject (session 3 D6) · save-as-node =
+        compile → store SQL via the block path → home by provenance → focus (3b-i) · compiled SQL
+        runs per keystroke, parameters re-bind (3b-i) · frecency deferred; FTS deferred (compile-rule
+        swap only) · visual treatments (chip palette, opacity texture, invalid frame) are
+        <strong>§4 token-pass placeholders</strong> here exactly as in 3b-i.<br />
+        Round 1 → 2: D20 · D22 · D25 · D26 · D28 · D29 <strong>accepted</strong>. Three revisions
+        from user review: <strong>D21</strong> — family sections retired for a flat unified list;
+        round 2 (§14) digs into what <em>active</em> family-narrowing should be instead (sigils vs
+        hotkeys vs other gestures), with the search scope clarified: all named objects + all
+        label/content-role columns, names & labels outranking content. <strong>D24</strong> —
+        jump-back kept, the lens tail dropped; the empty state gains <em>recent deep searches</em>
+        (the recovery point for an accidentally dismissed chip spec) and a <em>help footer</em>
+        (<code>?</code> expands to a full guide) — §15. <strong>D27/D30</strong> — Esc-dismisses-
+        immediately accepted; the quick-tempo save block <strong>conceded as wrong</strong>: it
+        contradicted 3b-i's own call that saving the zero-chip union is allowed (read-only +
+        nudge). Save is always live on a non-empty spec — §16. New determinations D31 (sigil
+        filter tokens) and D32 (the <code>?</code> guide).<br />
+        Round 2 → close: D31 + D32 <strong>accepted</strong> (N-A + N-B together — the name+sigil
+        pairing rhymes with how chip ops pair prose names with glyphs; no view sigil until proven
+        need). One refinement to §14's bands: name/label-vs-content is a <strong>relevance
+        weight, not a band</strong> — a strong content match may outrank; coefficients tuned at
+        implementation (§18). Save binding settled: <span class="mono">⌘S</span>. Caps: jump-back
+        6 · recents 6 · quick results 12; deep tempo <strong>expands viewport-proportionally</strong>
+        (amending D20's fixed width). Live-relative date tokens: designed growth recorded in
+        Query-Spec.md — no second runtime-parameter consumer in the immediate plan (§18).
+        <strong>Session 3b-ii closed</strong> — the distilled model is
+        <code>Launcher.md</code>; Phase-10.md §3b checks off; this page remains the
+        round-by-round record.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>0 · Session inputs — three calls made before round 1</h2>
+      <p class="lede">
+        Three inputs were put to the user ahead of this round because each shapes several
+        determinations at once. They are recorded as inputs (I1–I3), not determinations — but they
+        are load-bearing below.
+      </p>
+      <div class="cards">
+        <div class="card">
+          <div class="verb">I1 · ⌘K ownership</div>
+          <h3>The launcher owns ⌘K everywhere</h3>
+          <p>Including inside the ProseMirror editors, where <code>Mod-k</code> currently means
+          insert-link (<code>src/editor/keymap.ts</code>). One key, one meaning, in every context.
+          Insert-link relocates — and D28 proposes the launcher itself absorbs the job
+          (<span class="mono">⌘K → find → ⌘⏎</span> inserts a ref), recovering the muscle memory
+          rather than just displacing it.</p>
+        </div>
+        <div class="card">
+          <div class="verb">I2 · The statelessness line</div>
+          <h3>In-memory session recency is allowed</h3>
+          <p>"Stateless v1" means <strong>no new persisted stores</strong> — not amnesia. The
+          launcher may read current stream state (what's on screen) and this-session focus
+          history; all of it resets on reload. Deferred frecency becomes "persist what already
+          exists," not a redesign.</p>
+        </div>
+        <div class="card">
+          <div class="verb">I3 · Feel calibration</div>
+          <h3>Raycast/Linear density × Obsidian's two tempos</h3>
+          <p>Dense sectioned results with inline secondary actions, <em>and</em> a thin
+          known-item switcher as the default tempo that escalates into a fuller query surface.
+          Spotlight-minimalism and VS Code's hard mode-split were not selected. This maps
+          directly onto the phase doc's "<strong>one surface, two tempos</strong>."</p>
+        </div>
+      </div>
+
+      <h3>What the launcher is assembled from</h3>
+      <p>
+        Nothing in this session mints new model. The launcher is a <strong>shell surface</strong>
+        composed from four settled parts — this session decides only how they are arranged,
+        ranked, and keyed:
+      </p>
+      <figure>
+        <svg viewBox="0 0 920 300" role="img" aria-label="The launcher surface composes four settled parts: the query spec engine, the command registry, app-wide line renderings, and session memory; save-as-node escalates out to a view node">
+          <!-- launcher box -->
+          <rect x="250" y="24" width="420" height="76" rx="8" fill="#20242f" stroke="#6ea8fe" />
+          <text x="460" y="55" text-anchor="middle" fill="#e6eaf2" font-size="15" font-weight="600">⌘K launcher</text>
+          <text x="460" y="78" text-anchor="middle" fill="#99a1b3" font-size="12">this session: layout · ranking · tempo · keys</text>
+          <!-- escalation arrow out -->
+          <line x1="670" y1="62" x2="800" y2="62" stroke="#5bbf9a" stroke-width="1.5" marker-end="url(#arr)" />
+          <text x="737" y="48" text-anchor="middle" fill="#5bbf9a" font-size="11">save-as-node (settled)</text>
+          <rect x="800" y="38" width="104" height="48" rx="8" fill="#1b1e27" stroke="#c08cf0" />
+          <text x="852" y="58" text-anchor="middle" fill="#c08cf0" font-size="12" font-family="ui-monospace, Menlo, monospace">≔ view</text>
+          <text x="852" y="74" text-anchor="middle" fill="#99a1b3" font-size="10.5">a place</text>
+          <!-- four parts -->
+          <g>
+            <rect x="24" y="170" width="200" height="100" rx="8" fill="#1b1e27" stroke="#2c3140" />
+            <text x="124" y="196" text-anchor="middle" fill="#5bbf9a" font-size="12.5" font-weight="600">query spec engine</text>
+            <text x="124" y="216" text-anchor="middle" fill="#99a1b3" font-size="11">compile · run per keystroke</text>
+            <text x="124" y="232" text-anchor="middle" fill="#99a1b3" font-size="11">chips · glyphs · leaves</text>
+            <text x="124" y="252" text-anchor="middle" fill="#6b7488" font-size="10.5">Query-Spec.md D1–D19</text>
+            <line x1="124" y1="170" x2="350" y2="100" stroke="#39415a" stroke-width="1.5" marker-end="url(#arr2)" />
+          </g>
+          <g>
+            <rect x="252" y="170" width="200" height="100" rx="8" fill="#1b1e27" stroke="#2c3140" />
+            <text x="352" y="196" text-anchor="middle" fill="#d8c08a" font-size="12.5" font-weight="600">command registry</text>
+            <text x="352" y="216" text-anchor="middle" fill="#99a1b3" font-size="11">surfaces: slash · launcher</text>
+            <text x="352" y="232" text-anchor="middle" fill="#99a1b3" font-size="11">provenance node as subject</text>
+            <text x="352" y="252" text-anchor="middle" fill="#6b7488" font-size="10.5">session 3 D6 · slash-commands.ts</text>
+            <line x1="352" y1="170" x2="420" y2="100" stroke="#39415a" stroke-width="1.5" marker-end="url(#arr2)" />
+          </g>
+          <g>
+            <rect x="480" y="170" width="200" height="100" rx="8" fill="#1b1e27" stroke="#2c3140" />
+            <text x="580" y="196" text-anchor="middle" fill="#6ea8fe" font-size="12.5" font-weight="600">line renderings</text>
+            <text x="580" y="216" text-anchor="middle" fill="#99a1b3" font-size="11">objects as rendered app-wide</text>
+            <text x="580" y="232" text-anchor="middle" fill="#99a1b3" font-size="11">+ ancestry ladder breadcrumbs</text>
+            <text x="580" y="252" text-anchor="middle" fill="#6b7488" font-size="10.5">3b-i D14 · session 2 ladder</text>
+            <line x1="580" y1="170" x2="510" y2="100" stroke="#39415a" stroke-width="1.5" marker-end="url(#arr2)" />
+          </g>
+          <g>
+            <rect x="708" y="170" width="196" height="100" rx="8" fill="#1b1e27" stroke="#2c3140" />
+            <text x="806" y="196" text-anchor="middle" fill="#c08cf0" font-size="12.5" font-weight="600">session memory</text>
+            <text x="806" y="216" text-anchor="middle" fill="#99a1b3" font-size="11">stream state · focus history</text>
+            <text x="806" y="232" text-anchor="middle" fill="#99a1b3" font-size="11">in-memory only, resets</text>
+            <text x="806" y="252" text-anchor="middle" fill="#6b7488" font-size="10.5">input I2</text>
+            <line x1="806" y1="170" x2="600" y2="100" stroke="#39415a" stroke-width="1.5" marker-end="url(#arr2)" />
+          </g>
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#5bbf9a"/></marker>
+            <marker id="arr2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#39415a"/></marker>
+          </defs>
+        </svg>
+        <figcaption>The launcher composes four settled parts. Its only exit that persists anything is the settled save-as-node escalation.</figcaption>
+      </figure>
+
+      <!-- ============================================================ -->
+      <h2>1 · D20 — Placement &amp; anatomy <span class="badge q">proposed</span></h2>
+      <p class="lede">Where does the surface physically live when <span class="kbd">⌘K</span> fires?</p>
+
+      <div class="opt">
+        <span class="oname">A — Centered floating palette over a dimmed stream</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> Matches the doctrine exactly: a gesture that is
+        <em>never a place</em> — it floats above all places, acts, and vanishes. The stream stays
+        visible (dimmed) underneath, which keeps the provenance node — the launcher's subject —
+        literally in view.</p>
+        <p><span class="pro">＋</span> Geometry is free to grow downward through the tempos (D25)
+        without reflowing any place.</p>
+        <p><span class="con">−</span> Yet another overlay; the §4 token pass must give overlays a
+        single consistent treatment (launcher, slash menu, system edge).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Top-docked bar that pushes the stream down</span>
+        <p><span class="pro">＋</span> Browser-omnibox familiarity; never covers content.</p>
+        <p><span class="con">−</span> Docked chrome reads as a <em>place</em> — a persistent
+        region of the shell — exactly what session 2 retired tabs for. Reflows the stream on
+        every open. Growth through tempos would keep pushing content around.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — Anchored to the focused panel's header</span>
+        <p><span class="pro">＋</span> Visually pins the gesture to its provenance subject.</p>
+        <p><span class="con">−</span> The launcher's action is <em>global</em> ("go anywhere");
+        anchoring it to local geometry misstates its scope, breaks when no panel is focused, and
+        couples a shell gesture to panel chrome that §4 hasn't settled.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D20 (proposed): centered overlay palette, stream dimmed beneath.</div>
+        <p>
+          Fixed width (~640px at standard density), top-third vertical placement, grows downward
+          only. Opening never disturbs the stream; dismissal restores exactly what was there.
+          The overlay treatment itself (scrim, elevation, radius) is a §4 token placeholder —
+          settled here is only the <em>relationship</em>: floats above places, anchored to none.
+        </p>
+      </div>
+      <p class="note" style="color:var(--danger)">
+        Amended (close): the fixed width is the <em>quick</em> tempo's. Deep tempo expands to a
+        viewport-proportional frame — still floating, clear margin on all sides, never full-bleed
+        — to show as many preview rows as comfortably fit. Proportions ride the §4 pass. See §18.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>2 · D21 — Result layout &amp; sectioning <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        One input matches two different things at once (3b-i D15): <strong>object names</strong>
+        across families (nodes, containers, views, types, matrixes — and commands), and — as the
+        uncommitted-text residue — <strong>row content</strong> via the compiled spec
+        (label-role <code>LIKE</code>, <code>kind: everything</code>). How do those results share
+        one list?
+      </p>
+      <p class="note" style="color:var(--danger)">
+        Superseded (round 2): option A chosen — the family sections are retired for a flat unified
+        list; active family-narrowing replaces passive sectioning. See §14 (D21 revised · D31).
+        The row anatomy (line renderings + ancestry breadcrumbs) and the hoisting/top-hit
+        reasoning below remain the record of why sections were considered.
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — One flat, unified ranked list</span>
+        <p><span class="pro">＋</span> Maximum relevance density; no wasted headers.</p>
+        <p><span class="con">−</span> Family placement jitters per keystroke, so
+        <span class="kbd">⏎</span> becomes a gamble — the top item's <em>kind</em> is
+        unpredictable. Spotlight lives with this; a keyboard-first tool shouldn't.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Fixed family sections, fixed order, no top slot</span>
+        <p><span class="pro">＋</span> Perfect spatial memory: places always live where places
+        live.</p>
+        <p><span class="con">−</span> An exact-name command or view match gets buried beneath
+        weaker place matches purely by section order; the best answer isn't first.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — A small unified top-hits band, then fixed family sections</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> The Raycast/Linear shape (input I3): the top band (≤3) is
+        earned purely by match quality across all families, so <span class="kbd">⏎</span> on the
+        best match stays one keystroke; the sections beneath keep spatial memory for scanning.</p>
+        <p><span class="con">−</span> An item appears "twice" conceptually (top hit + its family);
+        resolved by <em>hoisting</em> — a top-hit item is removed from its section, not
+        duplicated.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D21 (proposed): hybrid — top hits (≤3, hoisted) over fixed family sections.</div>
+        <p>
+          Section order: <strong>Top hits · Places · Commands · Content</strong>. <em>Places</em>
+          is every name-matched object in the forest — containers, views, docs, type-nodes,
+          matrixes (a matrix and its subject node are 1-to-1; one entry). <em>Content</em> is the
+          residue text run through the compiled spec (rows whose label matches). Sections cap at 5
+          with a trailing "<span class="mono">n more…</span>" row that expands in place; sigils
+          (D22) narrow to a single family, uncapped. Every result row is the object's
+          <strong>line rendering as it appears app-wide</strong> (D14) plus a right-aligned
+          ancestry breadcrumb resolved down the session-2 ladder (provenance → home → membership).
+        </p>
+      </div>
+
+      <div class="mock">
+        <div class="cap">quick tempo — typed “road”, no chips</div>
+        <div class="qbar"><span class="typed">road</span><span class="cursor"></span></div>
+        <div class="rows">
+          <div class="sect">top hits</div>
+          <div class="rrow sel"><span class="glyph n">●</span><span class="lbl"><span class="hit">Road</span>map 2026</span><span class="ctx">Projects › Planning</span><span class="key">⏎ go</span></div>
+          <div class="rrow"><span class="glyph v">≔</span><span class="lbl"><span class="hit">road</span>map items open</span><span class="ctx">Projects › Planning</span></div>
+          <div class="sect">places <span class="cnt">4</span></div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl"><span class="hit">Road</span>trips</span><span class="ctx">Personal ›</span></div>
+          <div class="rrow"><span class="glyph n">●</span><span class="lbl">Off-<span class="hit">road</span> notes</span><span class="ctx">Personal › Travel</span></div>
+          <div class="rrow more"><span class="glyph"></span>2 more…</div>
+          <div class="sect">content <span class="cnt">11 rows</span></div>
+          <div class="rrow"><span class="glyph n">·</span><span class="lbl">“…the <span class="hit">road</span> to v1 is…”</span><span class="ctx">Workspace › Log</span></div>
+          <div class="rrow more"><span class="glyph"></span>10 more…</div>
+        </div>
+      </div>
+      <p class="note">
+        Glyphs on result rows are the settled v1 vocabulary (3b-i D17–D19): <code>[]</code> matrix,
+        <code>≔</code> view, <code>#</code> type, node bullets as rendered in the stream. No
+        launcher-only iconography is minted.
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>3 · D22 — Command ↔ result interleave <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        Commands (registry entries with <code>'launcher'</code> in <code>surfaces</code>) compete
+        with objects for the same input. How do they rank, and how does a user say "I mean a
+        command"?
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Commands are ranked citizens + a <code>&gt;</code> family narrower</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> A strong name match ("new table") can earn the top-hits
+        band like any object; otherwise commands sit in their own section. And the settled
+        sigil doctrine (D15: sigils are family narrowers with exact prose meanings —
+        <code>#</code> types, <code>@</code> nodes) extends by one row:
+        <code>&gt;</code> narrows to commands. It's the community-wide convention (VS Code,
+        Raycast) and costs no new grammar.</p>
+        <p><span class="con">−</span> One more sigil to learn — mitigated by it being optional
+        (commands are reachable without it) and standard.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Commands always trail results</span>
+        <p><span class="pro">＋</span> "Go" stays pure; no command ever steals
+        <span class="kbd">⏎</span>.</p>
+        <p><span class="con">−</span> Typing the exact name of a command and still having to
+        arrow past weak place matches is hostile to the fluent path the mastery ladder builds.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — A separate command mode (distinct key, e.g. ⌘⇧K)</span>
+        <p><span class="con">−</span> The VS Code split (I3 explicitly not selected): two
+        surfaces to maintain, and the "one registry, two surfaces" contract (session 3 D6) would
+        become three. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D22 (proposed): commands rank on merit; <code>&gt;</code> narrows to them; subject shown inline.</div>
+        <p>
+          A command row renders as: gesture-tinted glyph (<code>›</code>) · label · its subject
+          when <code>context: 'node'</code> — "<span class="mono">New table — under
+          ⟨Planning⟩</span>" — with the provenance node resolved at open time (session-2 homing
+          rule). A command needing a subject when none exists (empty stream) disables with a
+          stated reason, the same honesty rule chips already follow (3b-i). In the mixed view,
+          the Commands section caps at 3 unless narrowed by <code>&gt;</code>.
+        </p>
+      </div>
+
+      <div class="mock">
+        <div class="cap">narrowed to commands — typed “&gt;ta”</div>
+        <div class="qbar"><span class="ghost">&gt;</span><span class="typed">ta</span><span class="cursor"></span></div>
+        <div class="rows">
+          <div class="sect">commands</div>
+          <div class="rrow sel"><span class="glyph c">›</span><span class="lbl">New <span class="hit">ta</span>ble</span><span class="ctx">under ⟨Planning⟩</span><span class="key">⏎ run</span></div>
+          <div class="rrow"><span class="glyph c">›</span><span class="lbl">Attach a typed row (<span class="hit">ta</span>g)</span><span class="ctx">under ⟨Planning⟩</span></div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>4 · D23 — Matching &amp; ranking, stateless v1 <span class="badge q">proposed</span></h2>
+      <p class="lede">Two sub-decisions: what counts as a name match, and how ties order.</p>
+
+      <h3>The matcher</h3>
+      <div class="opt">
+        <span class="oname">A — Prefix · word-prefix · substring, no fuzzy</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> Predictable, explainable, and — decisively —
+        <strong>congruent with the residue</strong>: the same typed text simultaneously runs as a
+        <code>LIKE</code> over row content (3b-i D2). If names matched fuzzily while content
+        matched by substring, one input would obey two matching physics at once.</p>
+        <p><span class="con">−</span> No "rdmp" → "Roadmap" tricks. Acceptable: typo tolerance is
+        an FTS-era question, and the spec already insulates that migration.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Fuzzy subsequence (VS Code style)</span>
+        <p><span class="pro">＋</span> Forgiving of sloppy typing.</p>
+        <p><span class="con">−</span> Ranking becomes score-soup (why did that win?);
+        incongruent with the <code>LIKE</code> residue; and the failure mode — confidently wrong
+        matches — is worse than the miss it prevents. Rejected for v1.</p>
+      </div>
+
+      <h3>The signal stack</h3>
+      <p>
+        Every signal below is computable from content, current stream state, or session memory
+        (I2) — nothing persisted. Higher tiers strictly dominate lower ones; lower tiers only
+        break ties.
+      </p>
+      <div class="stack">
+        <div class="tier"><span class="n">1</span><span class="t">Match tier</span><p>exact name &gt; name prefix &gt; word prefix &gt; substring. The only signal that can earn the top-hits band.</p></div>
+        <div class="tier"><span class="n">2</span><span class="t">Family prior</span><p>places ≥ commands &gt; content rows — a mild thumb on the scale between equal match tiers, not a veto.</p></div>
+        <div class="tier"><span class="n">3</span><span class="t">On-screen boost</span><p>the object is in the current stream (an open panel, a visible block). Derived from stream state — the launcher's "you probably mean the thing you're looking at."</p></div>
+        <div class="tier"><span class="n">4</span><span class="t">Session recency</span><p>focused earlier this session (in-memory, resets on reload — input I2). Becomes frecency later by persisting, without reordering this stack.</p></div>
+        <div class="tier"><span class="n">5</span><span class="t">Structural tiebreaks</span><p>shallower home depth, then shorter label, then rank order. Deterministic — the list never shuffles between identical inputs.</p></div>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D23 (proposed): word-boundary matching, five-tier dominance stack, deterministic.</div>
+        <p>
+          Determinism is the point: the same input always yields the same list within a session.
+          Frecency (deferred) slots in as tier 4's persistence, changing no other tier — the
+          designed growth, mirroring how FTS swaps into the <code>text</code> compile rule.
+        </p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>5 · D24 — The empty-input state <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        <span class="kbd">⌘K</span> with nothing typed. Session 2 pointedly decided there is
+        <strong>no home/landing surface</strong> — the root nav panel is it. The empty launcher
+        must not quietly become one.
+      </p>
+      <p class="note" style="color:var(--danger)">
+        Superseded (round 2): jump-back kept; the lens tail dropped (sigil-alone browsing absorbs
+        its job — §14). The empty state gains recent deep searches and a help footer instead.
+        See §15 (D24 revised · D32).
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Input only, nothing beneath</span>
+        <p><span class="pro">＋</span> Purest; zero risk of home-surface creep.</p>
+        <p><span class="con">−</span> Wastes the frame's most common moment. "Jump back to the
+        thing from five minutes ago" is the single highest-value launcher act, and it requires
+        zero typing to serve.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Jump back (session memory) + a fixed lens tail</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> The Obsidian-switcher default (I3): this-session focus
+        history, most recent first, current stream panels excluded (you're already there — they'd
+        be dead rows). Below it, a short fixed tail of the two standing <em>lenses</em>:
+        containers (<span class="mono">[] containers</span>) and types
+        (<span class="mono">#types</span>) — the settled launcher-lens answers to "browse all."</p>
+        <p><span class="pro">＋</span> Honest statelessness: fresh session, empty history, and the
+        surface says so and shows the lens tail only.</p>
+        <p><span class="con">−</span> Resets on reload until frecency persists it. Acceptable by
+        construction (I2).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — A curated directory (pinned places, all views, all types)</span>
+        <p><span class="con">−</span> This <em>is</em> the home surface session 2 rejected,
+        wearing an overlay. Browse-alls stay lenses you invoke, not furniture you're shown.
+        Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D24 (proposed): jump-back list (session focus history, ≤6) + the two-lens tail. Never a directory.</div>
+      </div>
+
+      <div class="mock">
+        <div class="cap">empty input — mid-session</div>
+        <div class="qbar"><span class="cursor"></span><span class="ghost" style="margin-left:4px">find, filter, or &gt; command…</span></div>
+        <div class="rows">
+          <div class="sect">jump back</div>
+          <div class="rrow sel"><span class="glyph n">●</span><span class="lbl">Roadmap 2026</span><span class="ctx">Projects › Planning</span><span class="key">⏎ go</span></div>
+          <div class="rrow"><span class="glyph v">≔</span><span class="lbl">overdue this week</span><span class="ctx">Projects ›</span></div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl">Reading list</span><span class="ctx">Personal ›</span></div>
+          <div class="sect">lenses</div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl">containers</span><span class="ctx">every sub-table &amp; matrix</span></div>
+          <div class="rrow"><span class="glyph" style="color:var(--tag)">#</span><span class="lbl">types</span><span class="ctx">every promoted type</span></div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>6 · D25 — The quick↔deep continuum <span class="badge q">the crux</span></h2>
+      <p class="lede">
+        The phase doc calls it "one surface, two tempos." 3b-i settled <em>what</em> both tempos
+        edit (the spec) and <em>how</em> deep escalates out (save-as-node). Remaining: how does
+        the thin switcher become the query workbench — a growth, a mode, or an exit?
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Continuous growth: tempo is a fact about the spec</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> Mirrors the settled escalation-tier principle exactly — "a
+        block's mode is a fact about its SQL, recomputed on read" becomes <strong>"the launcher's
+        tempo is a fact about its spec."</strong> Text-only spec = quick tempo (sectioned go-list,
+        D21). The moment any non-text dimension commits — a chip exists — the surface is in deep
+        tempo: chip row visible, results become a single filtered preview (D26), result count and
+        save affordance appear. No toggle, no mode state to desync; deleting the last chip
+        <em>is</em> returning to quick tempo.</p>
+        <p><span class="con">−</span> The launcher can now be a big surface; the doctrine risk is
+        it starting to feel like a place. Contained by a hard ceiling (below).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — An explicit mode toggle (a key flips quick ↔ query layout)</span>
+        <p><span class="con">−</span> Mints a second state that merely shadows what the spec
+        already says — chips would exist while the surface claims quick mode, or vice versa.
+        "Chips are the state" (D14) forbids exactly this. Rejected.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — Escalate by leaving: first chip materializes an ephemeral view panel</span>
+        <p><span class="pro">＋</span> Doctrine-flattering on the surface: dwelling belongs in
+        places, so make depth a place immediately.</p>
+        <p><span class="con">−</span> Reopens a settled determination: Query-Spec.md's surfaces
+        table gives the launcher a transient in-memory spec with chips — this option deletes that
+        tempo. And "ephemeral" nodes aren't ephemeral here: placeless creation homes by
+        provenance, so abandoned escalations would litter real positions in the forest, or demand
+        a new throwaway-node mechanism. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D25 (proposed): continuous growth; tempo derived from spec shape; a hard ceiling before place-ness.</div>
+        <p>
+          <strong>The ceiling:</strong> the deep launcher shows a read-only preview — line
+          renderings plus spec-touched value columns (D26), windowed, with
+          <span class="kbd">⏎</span> still meaning <em>go to this row</em>. It never mounts a
+          face, never edits a cell, never offers add-row (the <code>view</code> firewall applies
+          even to a preview of a query). Anything past the ceiling — editing results, a real
+          grid, a recipe — is exactly one gesture away: save-as-node (D30) turns the spec into a
+          place and focuses it. The launcher remains a gesture at every tempo; depth changes what
+          it <em>shows</em>, never what it <em>is</em>.
+        </p>
+      </div>
+
+      <div class="continuum">
+        <div class="stage">
+          <div class="cap"><b>1 · empty</b> — jump back (D24)</div>
+          <div class="qbar"><span class="cursor"></span></div>
+          <div class="rows">
+            <div class="sect">jump back</div>
+            <div class="rrow"><span class="glyph n">●</span><span class="lbl">Roadmap 2026</span></div>
+            <div class="rrow"><span class="glyph v">≔</span><span class="lbl">overdue this week</span></div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="cap"><b>2 · typing</b> — quick tempo, text is the residue</div>
+          <div class="qbar"><span class="typed">task</span><span class="cursor"></span></div>
+          <div class="rows">
+            <div class="sect">top hits</div>
+            <div class="rrow"><span class="glyph" style="color:var(--tag)">#</span><span class="lbl">task</span></div>
+            <div class="sect">content</div>
+            <div class="rrow"><span class="glyph n">·</span><span class="lbl">“…the task list…”</span></div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="cap"><b>3 · a chip commits</b> — deep tempo, preview (D26)</div>
+          <div class="qbar">
+            <span class="chip kind"><span class="g">#</span>task</span>
+            <span class="chip pred">due <span class="g">&lt;</span> this week</span>
+            <span class="typed"></span><span class="cursor"></span>
+          </div>
+          <div class="rows">
+            <div class="prow"><span class="h">label</span><span class="h">due</span><span class="h"></span></div>
+            <div class="prow"><span class="lbl" style="color:#e6eaf2">Ship 3b-ii doc</span><span class="val">jul 12</span><span class="val"></span></div>
+            <div class="prow"><span class="lbl" style="color:#e6eaf2">Review token pass</span><span class="val">jul 14</span><span class="val"></span></div>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="cap"><b>4 · the exit</b> — save-as-node (D30)</div>
+          <div class="qbar">
+            <span class="chip kind"><span class="g">#</span>task</span>
+            <span class="chip pred">due <span class="g">&lt;</span> this week</span>
+            <span class="chip order"><span class="g">↓</span> due</span>
+          </div>
+          <div class="savebar"><span class="mono" style="color:var(--portal)">≔</span> Save as view — homes under ⟨Planning⟩ <span class="mono" style="margin-left:auto; color:var(--muted); font-size:11px">⌘S</span></div>
+        </div>
+      </div>
+      <figcaption style="color:var(--muted); font-size:12px; margin-top:6px">
+        The continuum: each stage is derived, not toggled. Stage 3's column headers and the
+        stage-4 save bar are §4 token placeholders.
+      </figcaption>
+
+      <!-- ============================================================ -->
+      <h2>7 · D26 — The deep-tempo preview: the spec projects it <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        The spec permanently has no projection dimension (3b-i D2 — compiled SQL is always
+        <code>SELECT d.*</code>). But the <em>preview</em> must choose columns to show. Whose
+        choice is it?
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Label-only list, always</span>
+        <p><span class="pro">＋</span> Simplest; quick and deep tempo look identical.</p>
+        <p><span class="con">−</span> Filtering on <code>due</code> and not seeing due dates makes
+        the preview useless for exactly the verification the deep tempo exists for.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Spec-touched columns project the preview</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> One derived rule, no state: show the label role, plus every
+        column referenced by a committed <code>where</code>/<code>order</code> chip, in chip
+        order, capped by width. The columns you committed to are the columns you see — the
+        preview explains the result set by construction.</p>
+        <p><span class="pro">＋</span> Doctrinally clean: this is a <em>rendering</em> choice by
+        the surface (a host concern, like fetch-narrowing — D2's carve-out), not a projection in
+        the spec. Nothing round-trips through SQL; a saved node's face recipe owns real column
+        visibility later.</p>
+        <p><span class="con">−</span> Opaque-leaf chips reference no recognizable column — they
+        project nothing (honest: their content cannot speak, same as their labels).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — Full substrate grid in the launcher</span>
+        <p><span class="con">−</span> Crosses D25's ceiling: mounting the substrate collection
+        rendering makes the launcher a host with recursion obligations (session 3's ladder), i.e.
+        a place. The grid is one save away. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D26 (proposed): preview = line rendering + spec-touched columns, chip-ordered, width-capped, read-only.</div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>8 · D27 — The keyboard map <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        The full v1 map. Design rule: every binding either <em>is</em> the app-wide convention
+        already (<span class="kbd">⏎</span> commits, <span class="kbd">Esc</span> dismisses,
+        sigils narrow) or teaches the chip grammar (3b-i D16's mastery ladder). No
+        launcher-only cleverness.
+      </p>
+
+      <table class="map">
+        <tr><th>key</th><th>context</th><th>action</th></tr>
+        <tr><td><span class="kbd">⌘K</span></td><td>everywhere (I1)</td><td>open, seeded with the provenance node as subject context; <span class="kbd">⌘K</span> again or <span class="kbd">Esc</span> dismisses. Editor insert-link relocates — its job is absorbed by D28.</td></tr>
+        <tr><td><span class="kbd">⏎</span></td><td>on a result</td><td>the primary act: <strong>go</strong> (focus the place / jump to the row, reconstructing a focus state per session 2) or <strong>run</strong> (a command). Launcher dismisses.</td></tr>
+        <tr><td><span class="kbd">⌘⏎</span></td><td>on a result</td><td>the secondary act — D28.</td></tr>
+        <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span></td><td>list</td><td>move selection across section boundaries as one flat sequence; selection starts on the first top hit.</td></tr>
+        <tr><td><span class="kbd">⇥</span></td><td>on a suggestion</td><td>the object-first commit (D15/D16): commit the highlighted object and open its op menu — the chip-authoring gesture. On a command or plain place, <span class="kbd">⇥</span> does nothing (there is nothing to author).</td></tr>
+        <tr><td><span class="kbd">⌫</span></td><td>input empty</td><td>pop the newest chip back into editing (value selected). A second <span class="kbd">⌫</span> deletes it — symmetric with how it was typed.</td></tr>
+        <tr><td><span class="kbd">←</span> <span class="kbd">→</span></td><td>at input edges</td><td>walk chip focus (a focused chip: <span class="kbd">⏎</span> edits, <span class="kbd">⌫</span> deletes — the D14 grammar).</td></tr>
+        <tr><td><span class="kbd">Esc</span></td><td>layered</td><td>op/value menu open → close it; otherwise → dismiss the launcher, <strong>discarding the spec</strong>. Transient means transient: no draft survives. (Alternative — first Esc clears chips — noted for round 2; the extra layer usually just delays the intended dismissal.)</td></tr>
+        <tr><td><span class="kbd">⌘S</span></td><td>deep tempo</td><td>save-as-node (D30). Disabled with a stated reason in quick tempo (nothing committed to save). (Alternative binding <span class="kbd">⌘⇧⏎</span> noted for round 2.)</td></tr>
+        <tr><td><span class="mono">#</span> <span class="mono">@</span> <span class="mono">&gt;</span></td><td>input</td><td>family narrowers, exactly the settled D15 sigils plus D22's <span class="mono">&gt;</span>: types · nodes · commands. A sigil never signals a dimension.</td></tr>
+        <tr><td><span class="mono">typed ops</span></td><td>input</td><td>the D16 fluent path unchanged: <span class="mono">due&lt;</span>, <span class="mono">status!=</span>… commit chips directly.</td></tr>
+      </table>
+
+      <div class="decision">
+        <div class="dq">D27 (proposed): the map above — conventions + grammar, nothing else.</div>
+        <p>
+          Editor relocation detail: <code>Mod-k</code> leaves <code>keymap.ts</code>;
+          <span class="kbd">⌘⇧K</span> is <em>not</em> claimed for insert-link — the flow becomes
+          <span class="kbd">⌘K</span> → find → <span class="kbd">⌘⏎</span> (D28), one surface
+          doing the whole job the mini-dialog did.
+        </p>
+      </div>
+      <p class="note" style="color:var(--danger)">
+        Amended (round 2): Esc-dismisses-immediately accepted (the clear-chips bounce rejected) —
+        made safe by §15's recovery list. The ⌘S row's quick-tempo gating is retracted: save is
+        always live on a non-empty spec — §16. Sigil set extended by §14 (D31).
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>9 · D28 — The secondary act: ⌘⏎ <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        Raycast/Linear density (I3) wants one inline secondary action. Which one earns the slot in
+        v1?
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Insert a ref at the invoking cursor</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> Closes the loop I1 opened: <span class="kbd">⌘K</span> stole
+        insert-link from the editors, and this gives the job back <em>better</em> — find anything
+        (with chips, scopes, the whole grammar), <span class="kbd">⌘⏎</span>, and an inline ref
+        lands where your cursor was. The launcher's find machinery becomes the link dialog.</p>
+        <p><span class="pro">＋</span> Perfectly scoped availability: enabled only when invoked
+        from an editor with a cursor (the invocation context the launcher already captures for
+        provenance); disabled with a stated reason otherwise — the settled honesty rule.</p>
+        <p><span class="con">−</span> Meaningless for command rows (ignored there).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Peek: preview the object without dismissing</span>
+        <p><span class="pro">＋</span> Nice for verification.</p>
+        <p><span class="con">−</span> A preview pane is real new surface (sizing, fidelity — §3
+        contract questions) for a v1 whose deep tempo already previews rows. Defer.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">C — Open as a block under the provenance node</span>
+        <p><span class="con">−</span> That's a <em>make</em> gesture — structural insertion is
+        the <code>/</code> surface's jurisdiction (session 2: <code>⌘K</code> goes,
+        <code>/</code> makes). Crossing the two gestures' jurisdictions for a shortcut muddies
+        the cleanest line the model has. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D28 (proposed): ⌘⏎ = insert ref at the invoking cursor; editor-context only; commands ignore it.</div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>10 · D29 — Per-type value editors <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        A committed op needs a value. The mastery ladder (D16) already fixes the shape — menu →
+        typeahead → typed — so the only real question is tokens vs widgets.
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Typed tokens with typeahead, per column type</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> One editing physics for every type, fully keyboard-first,
+        and each token has an exact compile rule — the spec stays the only truth:</p>
+      </div>
+      <table class="map">
+        <tr><th>column type</th><th>value entry</th><th>compiles to</th></tr>
+        <tr><td>TEXT</td><td>free text, quoted implicitly</td><td><code>LIKE</code>/equality per op</td></tr>
+        <tr><td>INTEGER / REAL</td><td>literal, validated inline (invalid = red frame, stated reason — the settled channel)</td><td>numeric comparison</td></tr>
+        <tr><td>date-role</td><td>natural tokens via typeahead menu: <span class="mono">today · tomorrow · this week · last n days · an ISO date</span></td><td>closed ranges over the stored representation — relative tokens resolve at compile, so stored SQL stays literal and honest</td></tr>
+        <tr><td>enum-ish TEXT</td><td>distinct-values menu by introspection (the <code>QueryBand</code> pattern, as the CTE chip already uses)</td><td>equality / <code>∈</code> set</td></tr>
+        <tr><td>BOOLEAN-ish</td><td>two-item menu</td><td>equality</td></tr>
+      </table>
+      <div class="opt">
+        <span class="oname">B — Widgets (calendar picker, sliders) in the chip</span>
+        <p><span class="con">−</span> Pointer-first furniture inside a keyboard-first gesture, and
+        every widget is §4-token surface designed ahead of the pass. A calendar can arrive later
+        as menu <em>garnish</em> without changing any compile rule. Deferred, not rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D29 (proposed): token-based editors, one physics; relative dates resolve at compile time.</div>
+        <p>
+          The compile-time resolution has one honest consequence, stated in the save flow: a saved
+          "<span class="mono">due &lt; this week</span>" is frozen to the week it was saved —
+          because stored SQL is literal (D1). A <em>live</em>-relative token needs the spec to
+          store the token, which is a recognizer-dialect extension: flagged as a round-2/growth
+          question, not silently absorbed.
+        </p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>11 · D30 — Save-flow polish <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        The mechanics are settled (compile → store via the block path → home by provenance →
+        focus). Polish = the naming moment and the nudges.
+      </p>
+
+      <div class="opt">
+        <span class="oname">A — Name after: save immediately, focus, name pre-selected</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> The <code>/table</code> precedent exactly
+        (<code>pending-table</code> handoff): <span class="kbd">⌘S</span> creates the node named
+        by its <strong>default name — the chip row's prose rendering</strong>
+        ("<span class="mono">task · due &lt; this week · ↓ due</span>"), focuses it, and hands
+        focus to the name input with the default selected. Zero prompts in the gesture; renaming
+        is one keystroke if wanted, and the default name is honest (it says what the query says —
+        and heals with rename-healing since it derives from the chips).</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Name before: inline prompt in the launcher</span>
+        <p><span class="con">−</span> A modal step inside a gesture, blocking the exit on
+        wordsmithing. The default-name path makes it pure overhead. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D30 (proposed): save-then-name via the pending handoff; nudges render in the save bar.</div>
+        <p>
+          The two settled nudges live in the save bar before commit: <code>kind: everything</code>
+          → "saves read-only — pick a kind for an editable view" (3b-i); frozen relative dates
+          (D29) → "saves as the literal range". Both are informative, neither blocks.
+        </p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>12 · Stage-4 build items <span class="badge def">folds into §4</span></h2>
+      <p class="lede">
+        Ordered so every step ships something usable and the tab-removal gate (§3b gates stage
+        4's tab retirement) is crossed last. Each item names the determinations it implements.
+      </p>
+      <table class="map">
+        <tr><th>#</th><th>item</th><th>implements</th><th>notes</th></tr>
+        <tr><td>1</td><td>Command registry extraction</td><td>session 3 D6</td><td><code>slash-commands.ts</code> → core registry with <code>surfaces</code>; <code>/</code> menu consumes it unchanged. Pure refactor, testable first.</td></tr>
+        <tr><td>2</td><td>Query-spec compiler + recognizer</td><td>3b-i D1–D13</td><td><code>src/sql/query-spec/</code> beside <code>recognize-updatable.ts</code>; round-trip conformance suite. Shared with view blocks — not launcher-only work.</td></tr>
+        <tr><td>3</td><td>Launcher shell</td><td>D20 · D21 · D23 · D24 · D27 (partial) · D31 · D32</td><td>overlay, input, flat ranked results, sigil filter tokens, ranking bands, jump-back + recents + help footer/<code>?</code> guide; name-match over places + commands only. <code>Mod-k</code> leaves <code>keymap.ts</code> here (I1). Ships as a useful switcher before any chip exists.</td></tr>
+        <tr><td>4</td><td>Chips in the launcher + deep tempo</td><td>D25 · D26 · D29 · 3b-i D14–D16</td><td>chip authoring (menu/typeahead/typed), per-keystroke compiled runs, spec-touched preview. First consumer of item 2's engine.</td></tr>
+        <tr><td>5</td><td>Save-as-node + ⌘⏎ insert-ref</td><td>D30 · D28 · D22</td><td>the two exits: escalation to a place; the ref insertion that retires insert-link's job.</td></tr>
+        <tr><td>6</td><td>Session memory wiring</td><td>D23 · D24 · I2</td><td>in-memory focus history + on-screen boost. Small; isolated so frecency later only persists it.</td></tr>
+        <tr><td>7</td><td>Tab retirement</td><td>session 2 · §4 constraint</td><td>Table/Tags tabs captured as Storybook components, then removed. Gated on 3–5 (the launcher must already cover their find/browse duties).</td></tr>
+      </table>
+      <p class="note">
+        Items 1–2 are pre-visual and can precede the §4 token pass entirely; items 3–5 render with
+        placeholder treatments that §4 then formalizes (overlay elevation, chip palette, opacity
+        texture, invalid frame — the standing placeholder list).
+      </p>
+
+      <!-- ============================================================ -->
+      <h2>13 · Where round 1 leaves the session</h2>
+      <ul class="tight">
+        <li><strong>Inputs recorded:</strong> I1 (⌘K everywhere; insert-link relocates) · I2
+        (in-memory session recency allowed) · I3 (Raycast/Linear density × Obsidian two-tempo).</li>
+        <li><strong>Proposed this round:</strong> D20 (centered overlay) · D21 (top hits + family
+        sections, hoisted) · D22 (commands on merit; <code>&gt;</code> narrows; subject inline) ·
+        D23 (word-boundary matcher; five-tier deterministic stack) · D24 (jump-back + lens tail;
+        never a directory) · D25 (continuous growth; tempo is a fact about the spec; the
+        read-only ceiling) · D26 (spec-touched columns project the preview) · D27 (the keyboard
+        map) · D28 (⌘⏎ inserts a ref at the invoking cursor) · D29 (token value editors;
+        relative dates freeze at compile) · D30 (save-then-name via the pending handoff).</li>
+        <li><strong>Explicitly flagged for round 2:</strong> Esc layering (dismiss-discards vs
+        first-Esc-clears) · the save binding (⌘S vs ⌘⇧⏎) · live-relative date tokens as a
+        dialect extension (vs the frozen-literal stance) · cap numbers (top hits 3 · sections 5 ·
+        commands 3 · jump-back 6) as tuning, not structure.</li>
+        <li><strong>On acceptance:</strong> the distilled model lands as a launcher design doc
+        (companion to Query-Spec.md), Phase-10.md §3b-ii checks off, and the build items above
+        fold into the stage-4 sequence. This page remains the round-by-round record.</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <!-- ======================== ROUND 2 =========================== -->
+      <!-- ============================================================ -->
+
+      <h2>14 · Round 2 — quick family-narrowing <span class="badge q">the round-2 crux</span></h2>
+      <p class="lede">
+        The D21 call: <strong>flat unified list</strong> — family sections retired. The insight
+        behind the call: sections answered <em>passively</em> ("here are your matches, grouped")
+        a question the user wants to answer <em>actively</em> ("I mean a type"). And the passive
+        answer was redundant — every result row already carries its family on its face, because
+        rows are the objects' app-wide line renderings with their settled glyphs
+        (<code>[]</code> <code>≔</code> <code>#</code> <code>›</code>). Sectioning duplicated the
+        glyph channel and taxed the common case (scanning one ranked list) to serve the rarer one
+        (family-directed search). So: flat list for reading; a deliberate, fast gesture for
+        narrowing. This section decides that gesture.
+      </p>
+
+      <h3>The clarified search scope, first</h3>
+      <p>
+        Recorded as a scope revision to D23: the launcher searches <strong>all named objects</strong>
+        (nodes of every stripe — docs, containers, views, type-nodes, matrixes — plus commands)
+        and <strong>all label-role and content-role columns</strong>. Names and labels strictly
+        outrank content. In the flat list this replaces D21's sections and D23's family-prior
+        tier with <strong>two relevance bands</strong>:
+      </p>
+      <div class="stack">
+        <div class="tier"><span class="n">A</span><span class="t">Names &amp; labels</span><p>an object's name / a row's label-role match. Within the band: match tier → on-screen boost → session recency → structural tiebreaks (D23's stack, minus the dissolved family prior — merit only, no caps).</p></div>
+        <div class="tier"><span class="n">B</span><span class="t">Content</span><p>content-role column matches, rendered as snippet quotes. Always below band A; same internal ordering. The band boundary is invisible chrome — no header, no divider; the snippet form and glyphs signal it.</p></div>
+      </div>
+      <p class="note" style="color:var(--danger)">
+        Amended (close): the A/B split is softened from strict bands to a <strong>default
+        weight</strong> — names &amp; labels outweigh content, but a significantly more relevant
+        content match may outrank. One blended, deterministic ordering; coefficients are
+        implementation-time tuning, not design. See §18.
+      </p>
+
+      <h3>Use cases — where narrowing actually earns keystrokes</h3>
+      <table class="map">
+        <tr><th>use case</th><th>flat list alone</th><th>with a narrowing gesture</th></tr>
+        <tr><td>Ambiguous name</td><td>“task” → <code>#task</code> the type, “Tasks” the container, and every row mentioning tasks, interleaved by match quality — the right one is <em>probably</em> top 3</td><td><span class="mono">#task</span> — one keystroke narrows to types; certainty replaces probably</td></tr>
+        <tr><td>Command/content collision</td><td>“table” → the New table command vs many rows about tables</td><td><span class="mono">&gt;table</span> — already settled (D22)</td></tr>
+        <tr><td>Browse all of a family</td><td>impossible — no query means no matches (the retired lens-tail rows served this)</td><td>the sigil <em>alone</em>: <span class="mono">#</span> lists every type, <span class="mono">[</span> every container — the browse-lens as a gesture, not furniture</td></tr>
+        <tr><td>Ref insertion mid-writing (D28)</td><td>“ann” → the person node, plus every row containing “ann…”</td><td><span class="mono">@ann</span> — named things only; content noise gone</td></tr>
+        <tr><td>Known view among documents</td><td>“overdue” → the <code>≔</code> glyph identifies it in the flat list</td><td>usually unneeded — view names are distinctive; no dedicated view sigil in v1 (views ride <span class="mono">@</span>)</td></tr>
+      </table>
+      <p class="note">
+        The pattern: narrowing pays off exactly when the name is <em>shared across families</em>
+        or when there is <em>no name at all</em> (browsing). Both are real but secondary — which
+        calibrates how much surface the gesture deserves: one keystroke, zero furniture.
+      </p>
+
+      <h3>The options</h3>
+      <div class="opt">
+        <span class="oname">N-A — Sigil filter tokens: the sigil <em>is</em> the hotkey</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> A sigil typed at the start of the input is already a
+        single unmodified keystroke — the fastest physically possible gesture, needing no new
+        binding. What round 2 adds is <em>reification</em>: the sigil renders as a visible
+        <strong>filter token</strong> (dotted, hollow — visually a different species from spec
+        chips), the rest of the typing matches within the family, <span class="kbd">⌫</span> at
+        the start deletes it.</p>
+        <p><span class="pro">＋</span> <strong>Surface channel, not spec channel</strong> — the
+        honesty line: a filter token narrows what the <em>finder</em> shows; it never compiles,
+        never saves, never appears in a saved node. (Committing an object out of the narrowed
+        family via <span class="kbd">⇥</span> consumes the token into the resulting chip — the
+        sigil is also the fast on-ramp into chip authoring, the "quicker than typing out a whole
+        chip" path.)</p>
+        <p><span class="pro">＋</span> Sigil-alone = family browse, replacing the rejected lens
+        furniture with a gesture.</p>
+        <p><span class="con">−</span> Discoverability — sigils must be learned. Answered by N-B,
+        which is complementary rather than competing.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">N-B — Families as findable objects (the discoverability half)</span>
+        <span class="badge rec">recommended, with N-A</span>
+        <p><span class="pro">＋</span> D15's doctrine is "names are the only grammar" — so let
+        families have names. Typing <span class="mono">types</span> surfaces a suggestion row for
+        the family itself: "<span class="mono">#</span> types — narrow to types";
+        <span class="kbd">⇥</span> applies the filter token. The row displays its sigil, so the
+        menu path <em>teaches</em> the fluent path — precisely the D16 mastery-ladder shape
+        (menu → typeahead → sigil), extended from ops to families. No memorization required to
+        start; one session of use to graduate.</p>
+        <p><span class="pro">＋</span> Pointer garnish for free: every result row already renders
+        its family glyph — clicking the glyph applies that family's filter token ("more like
+        this"). Zero new furniture.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">N-C — A filter strip with counts (segmented control under the input)</span>
+        <p><span class="pro">＋</span> Gives the "scent" sections used to give (All · Places 4 ·
+        Types 1 · Commands 2 · Rows 11) and a pointer path; Linear does this well.</p>
+        <p><span class="con">−</span> It's standing furniture in a gesture surface — paid on
+        every open, used rarely (the calibration above). And its keyboard story lands back on
+        digit-hotkeys (N-D's problem) or a cycle key the map doesn't have spare. Not v1; if scent
+        proves wanted, a match-count can ride the filter token itself
+        ("<span class="mono"># types · 12</span>") without minting the strip.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">N-D — Global hotkeys (⌘2 → <code>@</code>, ⌘3 → <code>#</code>; insert the token, or open pre-narrowed)</span>
+        <p><span class="pro">＋</span> The open-pre-narrowed behavior is genuinely nice ergonomics
+        for a hot workflow.</p>
+        <p><span class="con">−</span> <strong>⌘-digit is the browser's tab-switching range.</strong>
+        Chrome/Safari treat ⌘1–9 as browser-level shortcuts; while hila lives in the browser these
+        are at minimum contested and likely not interceptable at all — a dead-on-arrival home for
+        a core gesture (a desktop shell later could revisit).</p>
+        <p><span class="con">−</span> Matches the user's own skepticism: family-narrowing is a
+        secondary flow (the use-case table), and global keys are the scarcest resource in the
+        map. Inside the launcher, N-A already <em>is</em> a single-keystroke hotkey — a modifier
+        chord would be slower than the sigil it triggers. Deferred entirely; if ever revived, it
+        is additive (a binding that types the sigil), changing nothing designed here.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D21 (revised): one flat ranked list, two relevance bands (names &amp; labels above content), no sections, no caps — family legibility rides the glyphs.</div>
+      </div>
+      <div class="decision">
+        <div class="dq">D31 (proposed): family-narrowing = sigil filter tokens.</div>
+        <p>
+          v1 sigil set — each with its exact prose meaning, per D15: <span class="mono">@</span>
+          named things only (drops the content band), <span class="mono">#</span> types,
+          <span class="mono">&gt;</span> commands (D22), <span class="mono">[</span> containers
+          &amp; matrixes (typing the family symbol's opening bracket). Views ride
+          <span class="mono">@</span>, identified by their <code>≔</code> glyph — a dedicated view
+          sigil waits for proven need. Recognized at input start only (elsewhere a sigil is
+          literal text); rendered as a dotted hollow token (treatment = §4 placeholder, distinct
+          from spec chips by construction — it is surface state, never compiled, never saved);
+          deleted by <span class="kbd">⌫</span>; consumed into the chip on
+          <span class="kbd">⇥</span>-commit; alone = browse the family. Discoverability via
+          family suggestion rows that teach the sigil (N-B) + glyph-click as the pointer path.
+          Hotkeys — local or global — deferred.
+        </p>
+      </div>
+
+      <div class="mock">
+        <div class="cap">narrowed — typed “#ta” (filter token + match within types)</div>
+        <div class="qbar"><span class="fbadge"><span class="g">#</span> types</span><span class="typed">ta</span><span class="cursor"></span></div>
+        <div class="rows">
+          <div class="rrow sel"><span class="glyph" style="color:var(--tag)">#</span><span class="lbl"><span class="hit">ta</span>sk</span><span class="ctx">Types › work</span><span class="key">⏎ go · ⇥ chip</span></div>
+          <div class="rrow"><span class="glyph" style="color:var(--tag)">#</span><span class="lbl"><span class="hit">ta</span>g</span><span class="ctx">Types ›</span></div>
+        </div>
+      </div>
+      <div class="mock">
+        <div class="cap">sigil alone — “[” browses every container (the lens, as a gesture)</div>
+        <div class="qbar"><span class="fbadge"><span class="g">[]</span> containers</span><span class="cursor"></span></div>
+        <div class="rows">
+          <div class="rrow sel"><span class="glyph">[]</span><span class="lbl">Tasks</span><span class="ctx">Projects ›</span></div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl">Reading list</span><span class="ctx">Personal ›</span></div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl">Trips</span><span class="ctx">Personal › Travel</span></div>
+        </div>
+      </div>
+      <div class="mock">
+        <div class="cap">discoverability — typing the family’s name teaches its sigil (N-B)</div>
+        <div class="qbar"><span class="typed">typ</span><span class="cursor"></span></div>
+        <div class="rows">
+          <div class="rrow sel"><span class="glyph" style="color:var(--tag)">#</span><span class="lbl">types — narrow to types</span><span class="ctx">family filter</span><span class="key">⇥ apply</span></div>
+          <div class="rrow"><span class="glyph n">●</span><span class="lbl"><span class="hit">Typ</span>ography notes</span><span class="ctx">Personal › Design</span></div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>15 · The empty state, revised — recovery and guidance <span class="badge q">proposed</span></h2>
+      <p class="lede">
+        D24's jump-back list held; the lens tail didn't — and shouldn't have: §14 makes browsing
+        a gesture (<span class="mono">#</span>, <span class="mono">[</span> alone), so the tail
+        was furniture duplicating a keystroke. Its two replacements both serve the empty frame's
+        real jobs: <strong>recovery</strong> and <strong>guidance</strong>.
+      </p>
+
+      <h3>Recent deep searches — the recovery point</h3>
+      <p>
+        A spec with committed chips is real authored work; Esc discarding it instantly (the
+        accepted D27 call) is only safe if discard is cheap to undo. So: when the launcher is
+        dismissed with ≥1 chip committed, the spec is pushed onto an in-memory
+        <strong>recent deep searches</strong> list (cap 5, identical specs deduped, session-only —
+        squarely inside I2). <span class="kbd">⏎</span> on one <strong>restores</strong> the spec
+        into the launcher — chips, text, deep tempo, exactly as dismissed — it does not execute
+        and jump. Restore-don't-run keeps it a recovery mechanism, not a bookmark system: the
+        durable form of a search worth keeping is save-as-node, and its default name (D30) even
+        matches what these rows display. The Esc call and this list are one design: instant
+        dismissal <em>because</em> recoverable.
+      </p>
+
+      <h3>The help footer and the <code>?</code> guide</h3>
+      <div class="opt">
+        <span class="oname">A — Static footer line + <code>?</code> expands to the full guide</span>
+        <span class="badge rec">recommended</span>
+        <p><span class="pro">＋</span> One quiet line of the load-bearing gestures, always in the
+        same place (spatial memory applies to help too), with <span class="mono">?</span> — on
+        empty input only, where it can't collide with typing — opening a one-screen keyboard
+        guide: the launcher's map (D27) plus the app-wide gestures (<span class="mono">/</span>
+        make, focus keys, editor basics). Sourced from the command/shortcut registries wherever
+        possible so the guide cannot drift from the bindings.</p>
+      </div>
+      <div class="opt">
+        <span class="oname">B — Rotating hints</span>
+        <p><span class="con">−</span> Unpredictable content in a predictable frame; the hint you
+        need is never the one showing, and it reads as noise once learned. Rejected.</p>
+      </div>
+
+      <div class="decision">
+        <div class="dq">D24 (revised): empty state = jump back (≤6) · recent deep searches (≤5, restore-not-run) · static help footer. No lenses, no directory.</div>
+      </div>
+      <div class="decision">
+        <div class="dq">D32 (proposed): <code>?</code> on empty input opens a one-screen keyboard guide (launcher + app-wide), registry-sourced; Esc returns.</div>
+      </div>
+
+      <div class="mock">
+        <div class="cap">empty input — mid-session, one dismissed deep search</div>
+        <div class="qbar"><span class="cursor"></span><span class="ghost" style="margin-left:4px">find, filter, or &gt; command…</span></div>
+        <div class="rows">
+          <div class="sect">jump back</div>
+          <div class="rrow sel"><span class="glyph n">●</span><span class="lbl">Roadmap 2026</span><span class="ctx">Projects › Planning</span><span class="key">⏎ go</span></div>
+          <div class="rrow"><span class="glyph v">≔</span><span class="lbl">overdue this week</span><span class="ctx">Projects ›</span></div>
+          <div class="rrow"><span class="glyph">[]</span><span class="lbl">Reading list</span><span class="ctx">Personal ›</span></div>
+          <div class="sect">recent searches</div>
+          <div class="rrow"><span class="glyph c">⌕</span><span class="minichips"><span class="chip kind"><span class="g">#</span>task</span><span class="chip pred">due <span class="g">&lt;</span> this week</span><span class="chip order"><span class="g">↓</span> due</span></span><span class="ctx">restores the spec</span><span class="key">⏎ restore</span></div>
+        </div>
+        <div class="helpbar">
+          <span><span class="mono">#</span> <span class="mono">@</span> <span class="mono">&gt;</span> <span class="mono">[</span> narrow</span>
+          <span><span class="kbd">⇥</span> chip</span>
+          <span><span class="kbd">⌘⏎</span> insert ref</span>
+          <span><span class="kbd">⌘S</span> save as view</span>
+          <span style="margin-left:auto"><span class="mono">?</span> full guide</span>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>16 · Save-as-node is always live <span class="badge q">correction</span></h2>
+      <p class="lede">
+        Round 1 gated <span class="kbd">⌘S</span> behind deep tempo ("nothing committed to
+        save"). User review asked why — and the answer is the gate was simply wrong: it
+        contradicted a determination this session inherits. 3b-i settled that
+        <code>kind: everything</code> — the zero-chip cross-matrix union — <em>saves fine</em>,
+        flagged read-only, with the pick-a-kind nudge (Query-Spec.md). A text-only quick-tempo
+        search <strong>is</strong> that spec, with a <code>text</code> residue. There is nothing
+        else it could clash with: the spec is always compilable (text-only compiles to the union +
+        label <code>LIKE</code>), homing by provenance doesn't care what the spec contains, and
+        the read-only firewall already handles the editability question.
+      </p>
+      <div class="decision">
+        <div class="dq">D27/D30 (revised): ⌘S is live whenever the spec is non-empty — any text or any chip. Only the truly empty spec disables it (with the stated reason: nothing to save).</div>
+        <p>
+          Quick-tempo save compiles the residue as-is: <code>kind: everything</code> + text →
+          a read-only view node named by the same default-name rule ("<span class="mono">everything ·
+          “road”</span>"), with the pick-a-kind nudge in the save bar. Tempo remains purely a
+          rendering fact (D25) — it never gates a capability. The keyboard-map table's ⌘S row is
+          amended accordingly (noted at §8).
+        </p>
+      </div>
+
+      <!-- ============================================================ -->
+      <h2>17 · Where round 2 leaves the session</h2>
+      <ul class="tight">
+        <li><strong>Accepted after round 2:</strong> D20 (centered overlay) · D22 (commands on
+        merit + <code>&gt;</code>) · D23 (as revised: two bands, family prior dissolved) · D25
+        (continuous growth + ceiling) · D26 (spec-touched preview) · D27 (map, with Esc-instant
+        and the ⌘S amendment) · D28 (⌘⏎ insert ref) · D29 (token editors) · D30 (save-then-name,
+        always live).</li>
+        <li><strong>Proposed this round:</strong> D21 revised (flat list, two bands) · D31 (sigil
+        filter tokens: <span class="mono">@ # &gt; [</span> · surface channel · sigil-alone
+        browse · family rows teach · hotkeys deferred) · D24 revised (jump back · recent deep
+        searches, restore-not-run · help footer) · D32 (the <code>?</code> guide).</li>
+        <li><strong>Still open for round 3 / close:</strong> the save binding (⌘S vs ⌘⇧⏎) ·
+        live-relative date tokens as a dialect extension · cap tuning (jump-back 6 · recents 5)
+        as numbers, not structure · a dedicated view-family sigil, on proven need.</li>
+        <li><strong>On acceptance:</strong> distill into the launcher design doc, check off
+        Phase-10.md §3b-ii, fold build items into stage 4 (item 3's scope already updated
+        above).</li>
+      </ul>
+
+      <!-- ============================================================ -->
+      <h2>18 · Round 3 — final calls, and close</h2>
+      <p class="lede">
+        Every open item resolved on user review; no round-4 questions remained. The calls:
+      </p>
+      <ul class="tight">
+        <li><strong>D21/D23 refined — weights, not bands.</strong> The name/label-vs-content
+        split is a <em>default relevance weight</em> in one blended ordering, not a hard
+        two-band separation: a significantly more relevant content match may outrank a weak name
+        match. The settled structure is: one flat list · blended deterministic ranking · the
+        signal set (match quality, match target, on-screen, session recency, structural
+        tiebreaks). Coefficients are expected implementation-time tuning — deliberately not
+        designed here.</li>
+        <li><strong>D31 + D32 accepted.</strong> N-A and N-B together — the sigil/name pairing
+        for families deliberately rhymes with how chip ops pair glyphs with prose names (D16).
+        No view sigil until proven need; views read fine as nodes.</li>
+        <li><strong>Save binding: <span class="mono">⌘S</span></strong> (the ⌘⇧⏎ alternative
+        retired).</li>
+        <li><strong>Caps:</strong> jump-back 6 · recent deep searches 6 · quick-tempo results 12
+        (expandable). <strong>Deep tempo expands</strong> to a viewport-proportional frame
+        (margin on all sides — floating, never full-bleed, never a place), showing as many
+        preview rows as comfortably fit; amends D20.</li>
+        <li><strong>Live-relative date tokens — designed growth, homed in Query-Spec.md.</strong>
+        Obviously wanted (task lists, "today" views). The audit for a second runtime-parameter
+        consumer to drive a generalization found none in the immediate plan: host-bound
+        execution params (<span class="mono">:window_start</span>,
+        <span class="mono">:collapsed_keys</span>) are a different, already-general layer, and
+        Phase 11's <span class="mono">date('now')</span> column defaults evaluate at
+        <em>write</em> time (no invalidation need). So the shape is recorded — compile to a
+        reserved <span class="mono">:today</span>-family runtime parameter, recognizer lifts it
+        back, executor binds an environment, invalidation gains a clock (re-run at rollover) —
+        and the build waits for a second member of the environment family
+        (<span class="mono">:me</span> identity, <span class="mono">:here</span> context) or
+        proven need. v1 freezes relative tokens to literals with the save nudge (D29).</li>
+      </ul>
+      <h3>Session closed</h3>
+      <p>
+        The distilled model is <strong><code>Launcher.md</code></strong> (D20–D32 + I1–I3,
+        continuing Query-Spec.md's numbering), with the stage-4 build items. Phase-10.md §3b is
+        checked off (the tab-retirement gate is now unblocked, pending the build);
+        Query-Spec.md's deferred ledger points here and carries the live-relative extension;
+        Architecture.md, Plugins.md, and Plan.md cross-links updated. Launcher overlay, filter
+        token, save bar, and expansion treatments join the §4 placeholder list. This page
+        remains the round-by-round record.
+      </p>
+    </div>
+  </body>
+</html>

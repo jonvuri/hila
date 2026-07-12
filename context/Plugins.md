@@ -251,7 +251,7 @@ type Command = {
 }
 ```
 
-The existing [`slash-commands.ts`](../src/editor/slash-commands.ts) shape (`id` · `label` · `keywords` · `run`) is the seed; it gains a `surfaces` field and moves from a hardcoded array to the registry. Launcher-side ranking/UX is [§3b-ii](./Phase-10.md#3b-launcher-deep-dive--the-query-spec)'s business (the query-spec substrate underneath is [Query-Spec.md](./Query-Spec.md)); only the registration shape is fixed here. The [session-2 provenance rule](./Architecture.md#placeless-creation-homes-by-provenance) carries over for free: a launcher command that creates something homes it under the node focused when `⌘K` was invoked, via the same `subject` parameter supplied by the shell.
+The existing [`slash-commands.ts`](../src/editor/slash-commands.ts) shape (`id` · `label` · `keywords` · `run`) is the seed; it gains a `surfaces` field and moves from a hardcoded array to the registry. Launcher-side ranking/UX is settled in [Launcher.md](./Launcher.md) ([Phase 10 §3b-ii](./Phase-10.md#3b-launcher-deep-dive--the-query-spec) D22: commands rank on merit in the one flat list; the `>` sigil narrows to them; the query-spec substrate underneath is [Query-Spec.md](./Query-Spec.md)); only the registration shape is fixed here. The [session-2 provenance rule](./Architecture.md#placeless-creation-homes-by-provenance) carries over for free: a launcher command that creates something homes it under the node focused when `⌘K` was invoked, via the same `subject` parameter supplied by the shell.
 
 ## Concrete examples
 
