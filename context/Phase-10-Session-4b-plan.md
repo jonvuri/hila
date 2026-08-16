@@ -13,7 +13,9 @@ the table; they're now fraying under iteration. This session rebuilds the strong
 `OverlaidCards` variants over shared stub data, iterates them interactively with the user, and ends
 with **theming-direction decisions** that unblock the rest of [Phase 10 §4](Phase-10.md#4-cohesive-design-token-and-theming-system).
 
-**Read this whole doc before starting. Then read the "Reference files" section's code files.**
+> The instruction to read this whole document applied to the original 4b build. Follow-on sessions
+> start at [NOW.md](NOW.md) and load only the closeout, Stage 2f, and archived details their active
+> checklist cites.
 
 ---
 

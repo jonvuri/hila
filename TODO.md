@@ -1,5 +1,5 @@
-## Roadmap
+# Current work
 
-See [context/Plan.md](context/Plan.md) for the phased implementation plan.
+Start with [context/NOW.md](context/NOW.md) for the current session and handoff.
 
-See [context/Phase-1.md](context/Phase-1.md) for current phase tasks.
+See [context/Plan.md](context/Plan.md) for the full roadmap.

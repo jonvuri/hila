@@ -5,6 +5,10 @@ then evaluates Ghost, Null, and Wipeout without committing to final tokens. Each
 focused outcome and ends with the normal static checks plus a Storybook build/spot-check. Nothing is
 wired into the live app and `src/design/tokens.css` is not changed until after session 4i approval.
 
+Use [NOW.md](NOW.md) to identify the active session. For execution, load the fixed decisions, shared
+boundaries, that session's checklist, and the verification section. Read later-session detail only
+when it constrains the active work; `NOW.md` carries the short handoff between sessions.
+
 ## Fixed decisions
 
 - **Ghost** is the common workspace skeleton and minimum affordance layer.
@@ -149,8 +153,9 @@ boundary, run the focused e2e coverage with the repository-required browser perm
 
 ## Starter prompt for session 4c
 
-> Read `context/Phase-10-Session-4b-plan.md` closeout and
-> `context/Phase-10-Session-4c-plan.md` in full. Execute **session 4c only**: clearly archive every
-> session-4/4b HTML and Storybook alternative without deleting it, preserve Sticky Headers as the
-> source reference for the forward structure, and create only the placeholder for the new Ghost
-> workspace group. Do not extract Ghost yet, modify canonical tokens, wire the live app, or commit.
+> Read `context/NOW.md`; the fixed decisions, shared boundaries, Session 4c checklist, and
+> verification section in this plan; and the 4b closeout plus Stage 2f. Execute **session 4c only**:
+> clearly archive every session-4/4b HTML and Storybook alternative without deleting it, preserve
+> Sticky Headers as the source reference for the forward structure, and create only the placeholder
+> for the new Ghost workspace group. Do not extract Ghost yet, modify canonical tokens, wire the live
+> app, or commit.

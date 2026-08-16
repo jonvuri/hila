@@ -109,3 +109,21 @@ These are the crux of the phase and are expected to be answered by its planning 
 ## Dependency notes
 
 Follows [Phase 7b](Phase-7b.md), the row<->table continuum exploration ([Phase 7c](Phase-7c.md)), and its implementation phases ([Phase 8](Phase-8.md) data layer, [Phase 9](Phase-9.md) view layer). Stages 1-3 (inventory, view hierarchy, composition model) plus the [§3b](#3b-launcher-deep-dive--the-query-spec) launcher session gate stage 4 (token/theming unification and migration); §3b specifically gates the tab-removal step. This phase should settle before large new view work or a full `global.css` migration is undertaken. Because Phases 8-9 introduce new surfaces (embedded tables, property surfaces, query views, cross-matrix navigation), this design pass is best done once those surfaces are settled, so the token system spans the final set of surfaces.
+
+## Post-Phase 10 documentation consolidation (planned and deferred)
+
+Do not perform this consolidation during Sessions 4c–4i. Those sessions need stable references while
+the architecture and design system are still moving. Until Phase 10 closes, limit documentation
+cleanup to routing, current-state accuracy, and explicit historical markers.
+
+After Phase 10 settles:
+
+- [ ] Audit every context document as canonical truth, active plan, supporting evidence, or history.
+- [ ] Create a clear archive boundary for completed phase plans and visual explorations without
+      discarding their rationale.
+- [ ] Reconcile duplicated or superseded architecture and design statements across `Architecture.md`,
+      `Plan.md`, `Design*.md`, and the phase records.
+- [ ] Decide whether the largest canonical documents should split by concern, based on actual reading
+      routes rather than file size alone.
+- [ ] Revisit `AGENTS.md`, `README.md`, and `NOW.md` after the new structure exists; remove temporary
+      routing and keep the always-loaded instructions small.
