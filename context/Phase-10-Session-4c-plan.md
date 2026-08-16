@@ -95,15 +95,30 @@ behavior independently of Wipeout chrome.
 
 **Outcome:** the comparison framework and shared specimen inventory exist without theme conclusions.
 
-- [ ] Build one vertically complete, reusable `ThemeCard` specimen with a fixed section order:
+- [x] Build one vertically complete, reusable `ThemeCard` specimen with a fixed section order:
       intent/delta; palette and type; spacing/geometry/lines/motion; semantic states; atomic controls;
       row/sticky-header/focus/property/table/launcher molecules; workspace gestalt; dials and notes.
-- [ ] Render dense, identical content in every specimen and include default, hover, keyboard-focus,
+- [x] Render dense, identical content in every specimen and include default, hover, keyboard-focus,
       selected, disabled, invalid, and armed-danger states without relying on manual interaction alone.
-- [ ] Define a theme input contract using temporary local semantic roles; do not encode Ghost, Null,
+- [x] Define a theme input contract using temporary local semantic roles; do not encode Ghost, Null,
       or Wipeout values yet.
-- [ ] Add top-level dials only for decisions still genuinely open; keep one control schema that later
+- [x] Add top-level dials only for decisions still genuinely open; keep one control schema that later
       cards can share.
+
+### Session 4e closeout
+
+- `Design/Theme comparison` now contains one reusable, vertically complete `ThemeCard`. Its fixed
+  section order covers the shared foundations, seven forced states, atoms, required molecules, the
+  approved workspace gestalt, and dials and notes.
+- The card uses one dense Reading queue specimen. The deep-window workspace reuses the Session 4d
+  fixture and preserves its conditional breadcrumb.
+- The exported input contract has temporary local roles for color, type, space, geometry, lines,
+  icons, motion, and state signals. No Ghost, Null, Wipeout, or canonical token value was added.
+- The shared dial schema is ready for later cards. The grammar card has no dials because Session 4e
+  does not name an open theme decision.
+- Format, lint, typecheck, focused component tests, and the Storybook build passed. The full run
+  passed 836 tests. Two unchanged performance tests exceeded their five-second limits, and both
+  files passed when run alone.
 
 ## Session 4f — Complete the Ghost design card
 
