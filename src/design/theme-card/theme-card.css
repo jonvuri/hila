@@ -53,6 +53,18 @@
   --tc-ghost-danger: #a92934;
 }
 
+[data-theme='dark'] .tc-card[data-theme-card='null'] {
+  --tc-null-accent: #60a5fa;
+  --tc-null-danger: #f87171;
+  --tc-null-shadow-color: rgb(0 0 0 / 0.34);
+}
+
+[data-theme='light'] .tc-card[data-theme-card='null'] {
+  --tc-null-accent: #2563eb;
+  --tc-null-danger: #b42318;
+  --tc-null-shadow-color: rgb(15 23 42 / 0.16);
+}
+
 /* Map local roles into the shared workspace without changing canonical tokens. */
 .tc-card .ws-workspace {
   --ws-bg: var(--tc-color-canvas);
@@ -65,6 +77,48 @@
   --ws-hover: var(--tc-state-hover);
   --ws-selected: var(--tc-state-selected);
   --ws-focus: var(--tc-state-focus);
+}
+
+/* Null adds conventional decoration to shared markup. It does not own structure. */
+.tc-card[data-theme-card='null'] :is(.tc-control, .tc-icon-control, .tc-field input) {
+  background: var(--tc-color-surface);
+}
+
+.tc-card[data-theme-card='null'] .tc-control-primary {
+  color: white;
+  background: var(--tc-color-accent);
+  border-color: var(--tc-color-accent);
+}
+
+.tc-card[data-theme-card='null']
+  :is(
+    .tc-row[data-state='selected'],
+    .tc-launcher-result[data-state='selected'],
+    .tc-table-specimen tr[data-state='selected'],
+    .ws-nav-row-selected
+  ) {
+  box-shadow: inset 3px 0 var(--tc-color-accent);
+}
+
+.tc-card[data-theme-card='null'] :is(.tc-molecule, .tc-state-specimen) {
+  box-shadow: 0 1px 2px var(--tc-null-shadow-color);
+}
+
+.tc-card[data-theme-card='null'] :is(.tc-launcher, .tc-workspace-frame) {
+  box-shadow: 0 8px 24px var(--tc-null-shadow-color);
+}
+
+.tc-card[data-theme-card='null']
+  :is(.tc-sticky-header, .ws-sticky-preview, .ws-workspace-title) {
+  box-shadow: 0 2px 4px var(--tc-null-shadow-color);
+}
+
+.tc-card[data-theme-card='null'] :is(.ws-focus-properties input, .ws-collapse, .ws-drill) {
+  border-radius: var(--tc-geometry-control-radius);
+}
+
+.tc-comparison-page > .tc-card + .tc-card {
+  border-top: 8px solid var(--tc-color-text);
 }
 
 .tc-section {

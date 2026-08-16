@@ -4,36 +4,35 @@ kind: status
 state: active
 updated: 2026-08-16
 phase: phase-10
-session: phase-10-session-4g-null-design-card
+session: phase-10-session-4h-wipeout-design-card
 ---
 
 # Now
 
-Phase 10 Session 4f is closed. `Design/Theme comparison` now has a complete Ghost baseline.
-It assigns every temporary local role, labels treatments by ownership, and shows both
-conditional-breadcrumb workspace states without optional theme chrome.
+Phase 10 Session 4g is closed. `Design/Theme comparison` now renders Ghost and Null
+consecutively through the same `ThemeCard`. Null adds only conventional local role overrides and
+scoped decoration that resolves named Ghost ambiguities.
 
-## Session 4f verification
+## Session 4g verification
 
-- Format, lint, typecheck, five ThemeCard tests, and the Storybook build passed.
-- The full run passed 838 tests. Two unchanged performance tests exceeded their
+- Format, lint, typecheck, seven ThemeCard tests, and the Storybook build passed.
+- The full run passed 840 tests. Two unchanged performance tests exceeded their
   five-second limits. Both files passed when run alone.
-- Dark and light polarity, 360-pixel width, keyboard focus, reduced motion, and long-form
-  density were spot-checked in Storybook.
-- No live-app, production-face, or canonical-token file changed.
+- No live-app, production-face, canonical-token, archived Null, or Wipeout file changed.
 
-## Read for Session 4g
+## Read for Session 4h
 
 1. [Sessions 4c–4i](Phase-10-Session-4c-plan.md): read the fixed decisions, shared
-   boundaries, Session 4g checklist, and verification section.
+   boundaries, Session 4h checklist, and verification section.
 2. The shared [ThemeCard](../src/design/theme-card/ThemeCard.tsx), its
    [input contract](../src/design/theme-card/types.ts), the complete
-   [Ghost input](../src/design/theme-card/ghost.ts), and local
+   [Ghost input](../src/design/theme-card/ghost.ts), the
+   [Null extension](../src/design/theme-card/null.ts), and local
    [exploration styles](../src/design/theme-card/theme-card.css).
 3. The forward [comparison story](../src/design/theme-card/ThemeCard.stories.tsx).
 
-Do not start from archived `NullCards.tsx` or old Null CSS. Build Null as local role
-overrides and optional decoration on the shared Ghost markup.
+Consult archived Wipeout work only for isolated visual moves. Do not revive its overlaid-card
+structure, ancestry tabs, depth gauge, or alternate layout.
 
 ## Settled direction
 
@@ -43,18 +42,17 @@ overrides and optional decoration on the shared Ghost markup.
 - Canonical tokens and shipping-theme choices wait for the Ghost → Null → Wipeout
   comparison page and explicit approval in Session 4i.
 
-## Next session: 4g
+## Next session: 4h
 
-Rebuild Null as a Ghost extension. Add only conventional signals that resolve a named Ghost
-ambiguity. Keep a concise delta ledger and render Ghost and Null consecutively with identical
-content and controls.
+Rebuild Wipeout as a Ghost extension. Apply instrument typography, disciplined accent, hard
+brightness steps, chamfers or notches, and VFD texture as local values or bounded decoration.
+Preserve Ghost structure, behavior, affordances, and legibility under dense content.
 
-Do not set Wipeout values. Do not define canonical tokens, wire the live app, modify
-production faces, or clean up archived renderers.
+Do not define canonical tokens, wire the live app, modify production faces, or clean up
+archived renderers.
 
 ## Following sequence
 
-- **4h:** rebuild Wipeout as a Ghost extension.
 - **4i:** compare, tune, approve, and derive token requirements.
 
 The detailed outcomes and acceptance criteria remain in

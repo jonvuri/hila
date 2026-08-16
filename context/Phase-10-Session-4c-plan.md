@@ -150,14 +150,29 @@ behavior independently of Wipeout chrome.
 
 **Outcome:** a complete Null card adds conventional affordances without owning structure.
 
-- [ ] Start from the Ghost card and shared specimens, not `NullCards.tsx` or the old Null CSS.
-- [ ] Add the most unsurprising conventional signals for boundaries, hierarchy, controls,
+- [x] Start from the Ghost card and shared specimens, not `NullCards.tsx` or the old Null CSS.
+- [x] Add the most unsurprising conventional signals for boundaries, hierarchy, controls,
       hover/focus, selection, validation, overlays, and elevation. Every change should be expressible as
       a variable override or optional decorative primitive on the shared markup.
-- [ ] Keep a concise delta ledger: each Null addition names the Ghost ambiguity it resolves. Remove
+- [x] Keep a concise delta ledger: each Null addition names the Ghost ambiguity it resolves. Remove
       any flourish that does not improve predictability.
-- [ ] Render Ghost and Null consecutively in the comparison page and preserve identical
+- [x] Render Ghost and Null consecutively in the comparison page and preserve identical
       dials/content.
+
+### Session 4g closeout
+
+- Null spreads the complete Ghost role set, then overrides only local exploration values. It adds
+  conventional blue accent states, moderate radius, filled controls, selection rails, and soft
+  elevation through shared variables and scoped decorative CSS.
+- The Null ledger contains no structural claims. Each entry names the Ghost ambiguity that the added
+  signal resolves.
+- `Design/Theme comparison` renders Ghost and Null consecutively through the same `ThemeCard`. A
+  focused test confirms the cards have the same sections, states, controls, workspace fixtures, and
+  long-form content.
+- Format, lint, typecheck, seven ThemeCard tests, and the Storybook build passed. The full run passed
+  840 tests. Two unchanged performance tests exceeded their five-second limits, and both files passed
+  when run alone.
+- No live-app, production-face, canonical-token, archived Null, or Wipeout file changed.
 
 ## Session 4h — Rebuild Wipeout as a Ghost extension
 

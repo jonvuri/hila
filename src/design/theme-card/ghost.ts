@@ -1,6 +1,6 @@
 import type { ThemeCardSemanticRoleId, ThemeCardThemeInput, ThemeCardTreatment } from './types'
 
-const ghostRoles = {
+export const ghostRoles = {
   'color-canvas': 'var(--c-bg)',
   'color-surface': 'var(--c-surface)',
   'color-overlay': 'var(--c-elevated)',

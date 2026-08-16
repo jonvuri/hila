@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { render } from 'solid-js/web'
 
 import { ghostTheme, ghostTreatments } from './ghost'
+import { nullTheme, nullTreatments } from './null'
 import ThemeCard from './ThemeCard'
 import {
   themeCardSectionIds,
@@ -115,5 +116,42 @@ describe('ThemeCard grammar', () => {
       workspaces[1]?.querySelectorAll('[data-testid="workspace-ancestry-breadcrumb"]'),
     ).toHaveLength(1)
     expect(container.querySelectorAll('.tc-long-form p')).toHaveLength(3)
+  })
+
+  test('builds Null as a complete Ghost role override with an ambiguity ledger', () => {
+    expect(Object.keys(nullTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
+    expect(nullTheme.roles?.['geometry-control-radius']).not.toBe(
+      ghostTheme.roles?.['geometry-control-radius'],
+    )
+    expect(nullTreatments.map((treatment) => treatment.kind)).not.toContain('structural')
+    expect(
+      nullTreatments.every((treatment) => treatment.label.startsWith('Ghost ambiguity:')),
+    ).toBe(true)
+  })
+
+  test('keeps Ghost and Null specimen structure identical', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    dispose = render(
+      () => (
+        <>
+          <ThemeCard theme={ghostTheme} />
+          <ThemeCard theme={nullTheme} />
+        </>
+      ),
+      container,
+    )
+
+    const cards = [...container.querySelectorAll<HTMLElement>('[data-testid="theme-card"]')]
+    const specimenShape = (card: HTMLElement) => ({
+      sections: card.querySelectorAll('[data-theme-card-section]').length,
+      states: card.querySelectorAll('.tc-state-specimen').length,
+      controls: card.querySelectorAll('button, input').length,
+      workspaces: card.querySelectorAll('.tc-workspace-specimen').length,
+      longFormParagraphs: card.querySelectorAll('.tc-long-form p').length,
+    })
+
+    expect(cards).toHaveLength(2)
+    expect(specimenShape(cards[1]!)).toEqual(specimenShape(cards[0]!))
   })
 })
