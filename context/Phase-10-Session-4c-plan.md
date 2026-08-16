@@ -67,17 +67,29 @@ reference material.
 **Outcome:** one minimally styled structural story demonstrates the approved layout and ancestry
 behavior independently of Wipeout chrome.
 
-- [ ] Extract theme-neutral workspace, column, focus-panel, and sticky-navigation composition from the
+- [x] Extract theme-neutral workspace, column, focus-panel, and sticky-navigation composition from the
       selected story. Keep state/structure shared; remove `wo-*` assumptions from the forward path.
-- [ ] Define the minimum affordance contract: column boundary, focus/editability, clickable collapse,
+- [x] Define the minimum affordance contract: column boundary, focus/editability, clickable collapse,
       sticky state, drill target/path, keyboard focus, disabled state, and active selection. Ghost should
       expose these clearly but add no decorative flourish.
-- [ ] Add the breadcrumb rule with an explicit predicate: `first visible panel is focus`. It resolves via
+- [x] Add the breadcrumb rule with an explicit predicate: `first visible panel is focus`. It resolves via
       the existing ancestry ladder and appears above that panel's title; root-visible, middle, and
       rightmost focus panels have no breadcrumb.
-- [ ] Add focused stories for root visible, exactly four columns, root shifted offscreen, long labels,
+- [x] Add focused stories for root visible, exactly four columns, root shifted offscreen, long labels,
       and cross-matrix ancestry. Cover the visibility predicate with a small component test.
-- [ ] Keep the implementation presentational and fixture-driven; do not wire it into `StreamView`.
+- [x] Keep the implementation presentational and fixture-driven; do not wire it into `StreamView`.
+
+### Session 4d closeout
+
+- The forward `Design/Workspace` group now uses one theme-neutral Ghost skeleton. It composes shared
+  columns, focus panels, and sticky navigation without `wo-*` classes or Wipeout imports.
+- The skeleton exposes the minimum affordances through semantic markup and local exploration styles.
+  The five required fixture states reuse the Session 4b reading-queue content.
+- `shouldShowWorkspaceBreadcrumb` states the deep-window predicate. The rendered breadcrumb uses the
+  fixture's resolved ancestry source and appears only on the first visible focus panel.
+- Format, lint, typecheck, the component test, and the Storybook build passed. The full unit suite passed
+  833 tests. Two unchanged performance tests exceeded their five-second limits, and both files passed
+  when run alone.
 
 ## Session 4e — Build the design-card grammar
 

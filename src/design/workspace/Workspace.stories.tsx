@@ -1,27 +1,111 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite'
+import type { JSX } from 'solid-js'
 
-const meta: Meta = {
+import Workspace from './Workspace'
+import {
+  crossMatrixPanels,
+  fourColumnPanels,
+  longLabelPanels,
+  longWorkspaceTitle,
+  rootShiftedPanels,
+  rootVisiblePanels,
+  workspaceTitle,
+} from './fixtures'
+import type { WorkspacePanel } from './types'
+
+type StoryArgs = {
+  panels: readonly WorkspacePanel[]
+  workspaceTitle: string
+}
+
+const Frame = (props: { children: JSX.Element }): JSX.Element => (
+  <div style={{ width: '100%', height: '100vh' }}>{props.children}</div>
+)
+
+const meta: Meta<StoryArgs> = {
   title: 'Design/Workspace',
+  args: { workspaceTitle },
   parameters: {
-    layout: 'centered',
+    layout: 'fullscreen',
     docs: {
       description: {
         component:
-          'Forward workspace stories start here. Session 4d will add the theme-neutral Ghost structure.',
+          'Ghost defines the shared workspace structure and minimum affordances. It has column boundaries, editable fields, collapse and drill controls, sticky state, keyboard focus, disabled rows, and active selection. Later themes must preserve this markup and behavior.',
+      },
+    },
+  },
+  render: (args) => (
+    <Frame>
+      <Workspace panels={args.panels} workspaceTitle={args.workspaceTitle} />
+    </Frame>
+  ),
+}
+
+export default meta
+
+type Story = StoryObj<StoryArgs>
+
+export const RootVisible: Story = {
+  name: 'Ghost · Root visible',
+  args: { panels: rootVisiblePanels },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The global-root navigation column is visible. No ancestry breadcrumb appears on a focus panel.',
       },
     },
   },
 }
 
-export default meta
+export const ExactlyFourColumns: Story = {
+  name: 'Ghost · Exactly four columns',
+  args: { panels: fourColumnPanels },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The bounded desktop window holds one root column and three focus columns. The root remains visible.',
+      },
+    },
+  },
+}
 
-type Story = StoryObj
+export const RootShiftedOffscreen: Story = {
+  name: 'Ghost · Root shifted offscreen',
+  args: { panels: rootShiftedPanels },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The fifth column removes the root column. One provenance breadcrumb appears only above the leftmost focus title.',
+      },
+    },
+  },
+}
 
-export const GhostPlaceholder: Story = {
-  name: 'Ghost · Placeholder',
-  render: () => (
-    <p style={{ color: 'var(--c-fg-2)', 'font-family': 'var(--font-sans)' }}>
-      Ghost workspace extraction starts in Session 4d.
-    </p>
-  ),
+export const LongLabels: Story = {
+  name: 'Ghost · Long labels',
+  args: { panels: longLabelPanels, workspaceTitle: longWorkspaceTitle },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Long workspace, panel, and row labels stay inside their columns. Controls remain reachable.',
+      },
+    },
+  },
+}
+
+export const CrossMatrixAncestry: Story = {
+  name: 'Ghost · Cross-matrix ancestry',
+  args: { panels: crossMatrixPanels },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'A provenance-resolved breadcrumb crosses from the workspace matrix into the task matrix without changing the panel structure.',
+      },
+    },
+  },
 }
