@@ -45,6 +45,14 @@
   font-weight: var(--tc-type-body-weight);
 }
 
+[data-theme='dark'] .tc-card[data-theme-card='ghost'] {
+  --tc-ghost-danger: #ef858c;
+}
+
+[data-theme='light'] .tc-card[data-theme-card='ghost'] {
+  --tc-ghost-danger: #a92934;
+}
+
 /* Map local roles into the shared workspace without changing canonical tokens. */
 .tc-card .ws-workspace {
   --ws-bg: var(--tc-color-canvas);
@@ -97,6 +105,37 @@
   line-height: 1.5;
 }
 
+.tc-treatment-ledger {
+  display: grid;
+  max-width: 1100px;
+  margin: 0 0 24px;
+  padding: 0;
+  border-top: var(--tc-line-subtle);
+  list-style: none;
+}
+
+.tc-treatment-ledger li {
+  display: grid;
+  grid-template-columns: minmax(136px, max-content) minmax(0, 1fr);
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: var(--tc-line-subtle);
+}
+
+.tc-treatment-ledger span {
+  color: var(--tc-color-text-faint);
+  font-family: var(--tc-type-label-family);
+  font-size: var(--tc-type-label-size);
+  font-weight: var(--tc-type-label-weight);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tc-treatment-ledger p {
+  color: var(--tc-color-text-muted);
+  line-height: 1.45;
+}
+
 .tc-section-index,
 .tc-section h3,
 .tc-state-label {
@@ -122,10 +161,18 @@
 }
 
 .tc-intent-grid p,
-.tc-focus-specimen > p {
+.tc-long-form {
   margin-top: 10px;
   color: var(--tc-color-text-muted);
   line-height: 1.6;
+}
+
+.tc-long-form p {
+  margin: 0;
+}
+
+.tc-long-form p + p {
+  margin-top: 8px;
 }
 
 .tc-palette {
@@ -249,7 +296,7 @@
   display: block;
   width: calc(var(--tc-space-unit) * 2);
   height: calc(var(--tc-space-unit) * 2);
-  background: var(--tc-color-accent);
+  background: var(--tc-color-text-muted);
 }
 
 .tc-space-stack i:nth-child(2) {
@@ -330,9 +377,9 @@
   left: 0;
   width: 14px;
   height: 14px;
-  background: var(--tc-color-accent);
+  background: var(--tc-color-text-muted);
   border-radius: 50%;
-  animation: tc-motion var(--tc-motion-duration) var(--tc-motion-easing) infinite alternate;
+  animation: tc-motion var(--tc-motion-duration) var(--tc-motion-easing) both;
 }
 
 @keyframes tc-motion {
@@ -344,7 +391,7 @@
 @media (prefers-reduced-motion: reduce) {
   .tc-motion-track i {
     animation: none;
-    transform: translateX(48px);
+    transform: translateX(96px);
   }
 }
 
@@ -378,6 +425,16 @@
   min-height: var(--tc-space-row-height);
   padding: 5px 10px;
   cursor: pointer;
+}
+
+.tc-control:focus-visible,
+.tc-icon-control:focus-visible,
+.tc-field input:focus-visible,
+.tc-check input:focus-visible,
+.tc-row button:focus-visible,
+.tc-launcher input:focus-visible {
+  outline: 2px solid var(--tc-state-focus);
+  outline-offset: 2px;
 }
 
 .tc-control-primary {
@@ -484,6 +541,7 @@
 .tc-molecule-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -663,9 +721,41 @@
   font-family: var(--tc-type-data-family);
 }
 
+.tc-workspace-stack {
+  display: grid;
+  gap: var(--tc-space-section-gap);
+}
+
+.tc-workspace-specimen {
+  min-width: 0;
+  margin: 0;
+}
+
+.tc-workspace-specimen figcaption {
+  display: flex;
+  min-height: var(--tc-space-row-height);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px;
+  color: var(--tc-color-text);
+  border: var(--tc-line-strong);
+  border-bottom: 0;
+  font-family: var(--tc-type-label-family);
+  font-size: var(--tc-type-label-size);
+  font-weight: var(--tc-type-label-weight);
+  text-transform: uppercase;
+}
+
+.tc-workspace-specimen figcaption small {
+  color: var(--tc-color-text-faint);
+  font: inherit;
+  text-align: right;
+}
+
 .tc-workspace-frame {
   width: 100%;
-  height: min(620px, 72vh);
+  height: min(520px, 68vh);
   min-height: 440px;
   overflow: hidden;
   border: var(--tc-line-strong);
@@ -725,6 +815,23 @@
 
   .tc-palette {
     grid-template-columns: repeat(2, minmax(80px, 1fr));
+  }
+
+  .tc-treatment-ledger li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .tc-workspace-specimen figcaption {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .tc-workspace-specimen figcaption small {
+    text-align: left;
   }
 
   .tc-workspace-frame {

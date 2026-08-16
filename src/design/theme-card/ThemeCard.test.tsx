@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import { render } from 'solid-js/web'
 
+import { ghostTheme, ghostTreatments } from './ghost'
 import ThemeCard from './ThemeCard'
-import { themeCardSectionIds, themeCardSemanticRoleIds, themeCardStateIds } from './types'
+import {
+  themeCardSectionIds,
+  themeCardSemanticRoleIds,
+  themeCardStateIds,
+  themeCardTreatmentKindIds,
+} from './types'
 
 describe('ThemeCard grammar', () => {
   let dispose: (() => void) | undefined
@@ -75,5 +81,39 @@ describe('ThemeCard grammar', () => {
     for (const [role, value] of Object.entries(roles)) {
       expect(card?.style.getPropertyValue(`--tc-${role}`)).toBe(value)
     }
+  })
+
+  test('fills the Ghost card with every local role and treatment category', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    dispose = render(() => <ThemeCard theme={ghostTheme} />, container)
+
+    expect(Object.keys(ghostTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
+    expect(
+      new Set(
+        [...container.querySelectorAll('[data-treatment-kind]')].map((treatment) =>
+          treatment.getAttribute('data-treatment-kind'),
+        ),
+      ),
+    ).toEqual(new Set(themeCardTreatmentKindIds))
+    expect(container.querySelectorAll('[data-treatment-kind]')).toHaveLength(
+      ghostTreatments.length,
+    )
+  })
+
+  test('shows both conditional-breadcrumb workspace states', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    dispose = render(() => <ThemeCard theme={ghostTheme} />, container)
+
+    const workspaces = container.querySelectorAll('.tc-workspace-specimen')
+    expect(workspaces).toHaveLength(2)
+    expect(
+      workspaces[0]?.querySelectorAll('[data-testid="workspace-ancestry-breadcrumb"]'),
+    ).toHaveLength(0)
+    expect(
+      workspaces[1]?.querySelectorAll('[data-testid="workspace-ancestry-breadcrumb"]'),
+    ).toHaveLength(1)
+    expect(container.querySelectorAll('.tc-long-form p')).toHaveLength(3)
   })
 })

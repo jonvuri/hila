@@ -124,10 +124,27 @@ behavior independently of Wipeout chrome.
 
 **Outcome:** the full baseline card distinguishes necessary UX signals from optional chrome.
 
-- [ ] Fill every shared specimen section with Ghost values and the minimum visible affordances.
-- [ ] Include the approved sticky-header workspace and conditional-breadcrumb states as the gestalt.
-- [ ] Record beside each mark whether it is structural, semantic state, or optional decoration.
-- [ ] Spot-check both polarities, narrow width, keyboard focus, reduced motion, and long-form density.
+- [x] Fill every shared specimen section with Ghost values and the minimum visible affordances.
+- [x] Include the approved sticky-header workspace and conditional-breadcrumb states as the gestalt.
+- [x] Record beside each mark whether it is structural, semantic state, or optional decoration.
+- [x] Spot-check both polarities, narrow width, keyboard focus, reduced motion, and long-form density.
+
+### Session 4f closeout
+
+- The Ghost card assigns every temporary local role. It uses square geometry, one-pixel lines,
+  neutral brightness steps, and explicit state signals without adding a decorative theme layer.
+- Each section has a treatment ledger that identifies structural marks, semantic state signals, and
+  optional decoration or its intentional absence.
+- The gestalt shows root-visible and root-shifted workspaces. The ancestry breadcrumb appears only
+  in the first visible focus panel of the shifted state. The molecule set includes a dense long-form
+  reading specimen.
+- Dark and light polarity, a 360-pixel viewport, real keyboard focus, and the reduced-motion rule
+  were spot-checked in Storybook. The narrow page has no overflow outside the intentional workspace
+  scroller.
+- Format, lint, typecheck, five ThemeCard tests, and the Storybook build passed. The full run passed
+  838 tests. Two unchanged performance tests exceeded their five-second limits, and both files
+  passed when run alone.
+- No live-app, production-face, canonical-token, Null, or Wipeout file changed.
 
 ## Session 4g — Rebuild Null as a Ghost extension
 

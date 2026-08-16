@@ -84,6 +84,20 @@ export type ThemeCardNote = {
   text: string
 }
 
+export const themeCardTreatmentKindIds = [
+  'structural',
+  'semantic-state',
+  'optional-decoration',
+] as const
+
+export type ThemeCardTreatmentKind = (typeof themeCardTreatmentKindIds)[number]
+
+export type ThemeCardTreatment = {
+  section: ThemeCardSectionId
+  kind: ThemeCardTreatmentKind
+  label: string
+}
+
 export type ThemeCardThemeInput = {
   id: string
   name: string
@@ -92,4 +106,5 @@ export type ThemeCardThemeInput = {
   roles?: ThemeCardSemanticRoles
   dials?: readonly ThemeCardDial[]
   notes?: readonly ThemeCardNote[]
+  treatments?: readonly ThemeCardTreatment[]
 }

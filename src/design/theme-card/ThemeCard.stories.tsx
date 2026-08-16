@@ -1,16 +1,7 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 
+import { ghostTheme } from './ghost'
 import ThemeCard from './ThemeCard'
-import type { ThemeCardThemeInput } from './types'
-
-const grammarTheme: ThemeCardThemeInput = {
-  id: 'unassigned',
-  name: 'Shared theme-card grammar',
-  intent:
-    'Hold content, density, structure, interaction states, and section order constant across theme comparisons.',
-  delta:
-    'None. This card defines the specimen grammar only. It does not assign Ghost, Null, or Wipeout values.',
-}
 
 const meta: Meta<typeof ThemeCard> = {
   title: 'Design/Theme comparison',
@@ -21,7 +12,7 @@ const meta: Meta<typeof ThemeCard> = {
     docs: {
       description: {
         component:
-          'ThemeCard is the fixed comparison grammar for Ghost, Null, and Wipeout. Its semantic roles are local exploration inputs. Its markup, content, and forced states remain identical between cards.',
+          'ThemeCard is the fixed comparison grammar for Ghost, Null, and Wipeout. Ghost supplies the shared structure and minimum affordances. Its semantic roles are local exploration inputs. Later cards must preserve its markup, content, and forced states.',
       },
     },
   },
@@ -31,7 +22,15 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Grammar: Story = {
-  name: 'Shared grammar · no theme values',
-  args: { theme: grammarTheme },
+export const Ghost: Story = {
+  name: 'Ghost · minimum affordances',
+  args: { theme: ghostTheme },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Ghost is the full baseline card. Each section identifies structural marks, semantic state signals, and the deliberate absence of optional decoration.',
+      },
+    },
+  },
 }

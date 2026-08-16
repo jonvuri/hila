@@ -1,7 +1,7 @@
 import { For, type JSX, Show } from 'solid-js'
 
 import Workspace from '../workspace/Workspace'
-import { rootShiftedPanels, workspaceTitle } from '../workspace/fixtures'
+import { rootShiftedPanels, rootVisiblePanels, workspaceTitle } from '../workspace/fixtures'
 
 import './theme-card.css'
 import {
@@ -9,8 +9,11 @@ import {
   themeCardStateIds,
   type ThemeCardDial,
   type ThemeCardSemanticRoleId,
+  type ThemeCardSectionId,
   type ThemeCardStateId,
   type ThemeCardThemeInput,
+  type ThemeCardTreatment,
+  type ThemeCardTreatmentKind,
 } from './types'
 
 type ThemeCardProps = {
@@ -43,6 +46,12 @@ const stateLabels: Record<ThemeCardStateId, string> = {
   'armed-danger': 'Armed danger',
 }
 
+const treatmentKindLabels: Record<ThemeCardTreatmentKind, string> = {
+  structural: 'Structural',
+  'semantic-state': 'Semantic state',
+  'optional-decoration': 'Optional decoration',
+}
+
 const toRoleStyle = (theme: ThemeCardThemeInput): JSX.CSSProperties => {
   const style: Record<string, string> = {}
 
@@ -55,10 +64,11 @@ const toRoleStyle = (theme: ThemeCardThemeInput): JSX.CSSProperties => {
 }
 
 const Section = (props: {
-  id: string
+  id: ThemeCardSectionId
   index: string
   title: string
   summary: string
+  treatments?: readonly ThemeCardTreatment[]
   children: JSX.Element
 }): JSX.Element => (
   <section class="tc-section" data-theme-card-section={props.id}>
@@ -69,9 +79,27 @@ const Section = (props: {
         <p>{props.summary}</p>
       </div>
     </header>
+    <Show when={props.treatments?.length}>
+      <ul class="tc-treatment-ledger" aria-label={`${props.title} treatment ledger`}>
+        <For each={props.treatments}>
+          {(treatment) => (
+            <li data-treatment-kind={treatment.kind}>
+              <span>{treatmentKindLabels[treatment.kind]}</span>
+              <p>{treatment.label}</p>
+            </li>
+          )}
+        </For>
+      </ul>
+    </Show>
     {props.children}
   </section>
 )
+
+const treatmentsFor = (
+  theme: ThemeCardThemeInput,
+  section: ThemeCardSectionId,
+): readonly ThemeCardTreatment[] | undefined =>
+  theme.treatments?.filter((treatment) => treatment.section === section)
 
 const StateControl = (props: { state: ThemeCardStateId }): JSX.Element => {
   const disabled = () => props.state === 'disabled'
@@ -124,7 +152,13 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
     data-testid="theme-card"
     style={toRoleStyle(props.theme)}
   >
-    <Section id="intent" index="01" title={props.theme.name} summary="Intent and delta">
+    <Section
+      id="intent"
+      index="01"
+      title={props.theme.name}
+      summary="Intent and delta"
+      treatments={treatmentsFor(props.theme, 'intent')}
+    >
       <div class="tc-intent-grid">
         <div>
           <h3>Intent</h3>
@@ -142,6 +176,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="02"
       title="Palette and type"
       summary="Semantic color and type roles. The role names are temporary exploration inputs."
+      treatments={treatmentsFor(props.theme, 'palette-type')}
     >
       <div class="tc-split-grid">
         <div>
@@ -176,6 +211,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="03"
       title="Spacing, geometry, lines, icons, and motion"
       summary="Foundation roles stay separate from component specimens."
+      treatments={treatmentsFor(props.theme, 'foundations')}
     >
       <div class="tc-foundation-grid">
         <div>
@@ -219,6 +255,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="04"
       title="Semantic states"
       summary="Each state is forced on. Comparison does not depend on pointer or keyboard input."
+      treatments={treatmentsFor(props.theme, 'states')}
     >
       <div class="tc-state-grid">
         <For each={themeCardStateIds}>{(state) => <StateControl state={state} />}</For>
@@ -230,6 +267,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="05"
       title="Atomic controls"
       summary="Controls, chips, fields, and compact actions use the same semantic state roles."
+      treatments={treatmentsFor(props.theme, 'controls')}
     >
       <div class="tc-control-grid">
         <button type="button" class="tc-control tc-control-primary">
@@ -258,6 +296,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="06"
       title="Molecules"
       summary="Rows, headers, focused content, properties, tables, and the launcher share one dense fixture."
+      treatments={treatmentsFor(props.theme, 'molecules')}
     >
       <div class="tc-molecule-grid">
         <div class="tc-molecule">
@@ -288,10 +327,21 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
             <small>Research / Reading queue / Books</small>
             <h4>Designing Data-Intensive Applications</h4>
           </header>
-          <p>
-            Compare storage-engine trade-offs before the next architecture review. Keep the
-            evidence near the decision.
-          </p>
+          <div class="tc-long-form">
+            <p>
+              Compare storage-engine trade-offs before the next architecture review. Keep the
+              evidence near the decision so a later reader can recover why the choice was made.
+            </p>
+            <p>
+              Log-structured engines favor sustained writes and compaction. Page-oriented trees
+              favor predictable reads and mature operational tools. Workload shape, failure
+              recovery, and maintenance cost decide which trade is useful.
+            </p>
+            <p>
+              Preserve the unresolved measurements with the recommendation. Do not compress the
+              source notes into a status label that hides uncertainty.
+            </p>
+          </div>
           <dl>
             <div>
               <dt>Status</dt>
@@ -366,10 +416,28 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       id="workspace"
       index="07"
       title="Workspace gestalt"
-      summary="The approved sticky-header skeleton shows the deep-window ancestry state."
+      summary="The approved sticky-header skeleton shows both conditional ancestry states."
+      treatments={treatmentsFor(props.theme, 'workspace')}
     >
-      <div class="tc-workspace-frame">
-        <Workspace panels={rootShiftedPanels} workspaceTitle={workspaceTitle} />
+      <div class="tc-workspace-stack">
+        <figure class="tc-workspace-specimen">
+          <figcaption>
+            <span>Root visible</span>
+            <small>No ancestry breadcrumb</small>
+          </figcaption>
+          <div class="tc-workspace-frame">
+            <Workspace panels={rootVisiblePanels} workspaceTitle={workspaceTitle} />
+          </div>
+        </figure>
+        <figure class="tc-workspace-specimen">
+          <figcaption>
+            <span>Root shifted offscreen</span>
+            <small>Breadcrumb on first visible focus panel</small>
+          </figcaption>
+          <div class="tc-workspace-frame">
+            <Workspace panels={rootShiftedPanels} workspaceTitle={workspaceTitle} />
+          </div>
+        </figure>
       </div>
     </Section>
 
@@ -378,6 +446,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       index="08"
       title="Dials and notes"
       summary="A dial exists only while a named visual decision remains open."
+      treatments={treatmentsFor(props.theme, 'dials-notes')}
     >
       <div class="tc-dials-notes">
         <div>
@@ -397,7 +466,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
           <h3>Notes</h3>
           <Show
             when={props.theme.notes?.length}
-            fallback={<p class="tc-empty">No theme conclusions are recorded in Session 4e.</p>}
+            fallback={<p class="tc-empty">No theme notes are recorded.</p>}
           >
             <dl class="tc-notes">
               <For each={props.theme.notes}>
