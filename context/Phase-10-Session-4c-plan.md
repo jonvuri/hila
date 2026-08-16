@@ -1,0 +1,156 @@
+# Phase 10 · Sessions 4c–4i — Ghost convergence and theme-card approval
+
+This sequence turns session 4b's selected **Sticky headers** workspace into a shared structural base,
+then evaluates Ghost, Null, and Wipeout without committing to final tokens. Each session has one
+focused outcome and ends with the normal static checks plus a Storybook build/spot-check. Nothing is
+wired into the live app and `src/design/tokens.css` is not changed until after session 4i approval.
+
+## Fixed decisions
+
+- **Ghost** is the common workspace skeleton and minimum affordance layer.
+- **Null** and **Wipeout** extend Ghost without alternate markup or behavior.
+- The forward layout is the session-4b **Sticky headers** story.
+- A simple ancestry breadcrumb appears only on the leftmost visible focus panel when the global-root
+  navigation panel has shifted out of the four-column window.
+- Ultramodern, all overlaid-card layouts, and all session-4/4b alternatives remain available only as
+  an archive.
+- Canonical tokens and shipping-theme choices wait for one-page comparison and explicit approval.
+
+## Shared boundaries
+
+- Reuse the session-4b fixture so comparisons hold content, density, and interaction state constant.
+- Temporary exploration variables may live beside the stories, but do not add them to the canonical
+  token files or treat their names as settled API.
+- Separate **atoms** (color roles, type roles, space, geometry, lines, icons, motion, state signals)
+  from **molecules** (control, chip, row, sticky header, focus header, property pair, table cell,
+  overlay item). Workspace and launcher specimens compose those parts; they are not new theme forks.
+- Keep structure/behavior testable without a theme. Themes may change values and optional decorative
+  layers, never DOM order, interaction targets, visibility rules, or accessible semantics.
+- “Retired” is a design-status marker, not an instruction to delete the current live renderer. The
+  live overlaid-card implementation remains transitional until the approved post-4i migration slice.
+- Do not migrate `global.css`, the live `StreamView`, or production faces in these sessions.
+
+## Session 4c — Archive the fan-out
+
+**Outcome:** Storybook and the HTML index make the exploration boundary unmistakable, with no loss of
+reference material.
+
+- [ ] Move the session-4b alternative stories under an `Archive/Phase 10/Session 4b` Storybook namespace
+      (or equivalent archive grouping) and add a short retirement notice to their docs/descriptions.
+- [ ] Archive the original `Design/Workspace` FocusPanel and Depth Gauge stories too. Preserve the Sticky
+      Headers story as the named source reference, while making clear that its Wipeout styling is not the
+      forward base.
+- [ ] Add an archive notice to the HTML comparison/index and linked catalogs. Do not delete or rewrite
+      the prototype bodies.
+- [ ] Add a new forward `Design/Workspace` story group placeholder for Ghost work; do not duplicate or
+      rename the underlying experimental renderers solely to make the archive look cleaner.
+- [ ] Verify no live-app imports or defaults changed.
+
+## Session 4d — Extract the Ghost workspace skeleton
+
+**Outcome:** one minimally styled structural story demonstrates the approved layout and ancestry
+behavior independently of Wipeout chrome.
+
+- [ ] Extract theme-neutral workspace, column, focus-panel, and sticky-navigation composition from the
+      selected story. Keep state/structure shared; remove `wo-*` assumptions from the forward path.
+- [ ] Define the minimum affordance contract: column boundary, focus/editability, clickable collapse,
+      sticky state, drill target/path, keyboard focus, disabled state, and active selection. Ghost should
+      expose these clearly but add no decorative flourish.
+- [ ] Add the breadcrumb rule with an explicit predicate: `first visible panel is focus`. It resolves via
+      the existing ancestry ladder and appears above that panel's title; root-visible, middle, and
+      rightmost focus panels have no breadcrumb.
+- [ ] Add focused stories for root visible, exactly four columns, root shifted offscreen, long labels,
+      and cross-matrix ancestry. Cover the visibility predicate with a small component test.
+- [ ] Keep the implementation presentational and fixture-driven; do not wire it into `StreamView`.
+
+## Session 4e — Build the design-card grammar
+
+**Outcome:** the comparison framework and shared specimen inventory exist without theme conclusions.
+
+- [ ] Build one vertically complete, reusable `ThemeCard` specimen with a fixed section order:
+      intent/delta; palette and type; spacing/geometry/lines/motion; semantic states; atomic controls;
+      row/sticky-header/focus/property/table/launcher molecules; workspace gestalt; dials and notes.
+- [ ] Render dense, identical content in every specimen and include default, hover, keyboard-focus,
+      selected, disabled, invalid, and armed-danger states without relying on manual interaction alone.
+- [ ] Define a theme input contract using temporary local semantic roles; do not encode Ghost, Null,
+      or Wipeout values yet.
+- [ ] Add top-level dials only for decisions still genuinely open; keep one control schema that later
+      cards can share.
+
+## Session 4f — Complete the Ghost design card
+
+**Outcome:** the full baseline card distinguishes necessary UX signals from optional chrome.
+
+- [ ] Fill every shared specimen section with Ghost values and the minimum visible affordances.
+- [ ] Include the approved sticky-header workspace and conditional-breadcrumb states as the gestalt.
+- [ ] Record beside each mark whether it is structural, semantic state, or optional decoration.
+- [ ] Spot-check both polarities, narrow width, keyboard focus, reduced motion, and long-form density.
+
+## Session 4g — Rebuild Null as a Ghost extension
+
+**Outcome:** a complete Null card adds conventional affordances without owning structure.
+
+- [ ] Start from the Ghost card and shared specimens, not `NullCards.tsx` or the old Null CSS.
+- [ ] Add the most unsurprising conventional signals for boundaries, hierarchy, controls,
+      hover/focus, selection, validation, overlays, and elevation. Every change should be expressible as
+      a variable override or optional decorative primitive on the shared markup.
+- [ ] Keep a concise delta ledger: each Null addition names the Ghost ambiguity it resolves. Remove
+      any flourish that does not improve predictability.
+- [ ] Render Ghost and Null consecutively in the comparison page and preserve identical
+      dials/content.
+
+## Session 4h — Rebuild Wipeout as a Ghost extension
+
+**Outcome:** a complete Wipeout card applies the theme's character to the approved structure.
+
+- [ ] Start from Ghost and the same specimens. Consult the archived Wipeout work only for isolated
+      moves worth reusing; do not revive overlaid cards, ancestry tabs, the gauge, or alternate layouts.
+- [ ] Apply the established intent — instrument typography, disciplined accent, hard brightness
+      steps, chamfers/notches, VFD texture — as orthogonal value/decorative layers with a bounded quirk
+      budget.
+- [ ] Demonstrate long-form text pressure, dense rows, table/launcher states, both polarities, and
+      reduced motion. Typography or ornament may not obscure Ghost's affordances.
+- [ ] Render Ghost, Null, and Wipeout consecutively in the comparison page with synchronized controls.
+
+## Session 4i — Compare, tune, and approve
+
+**Outcome:** one user-reviewed page fixes the visual inputs needed for token design.
+
+- [ ] Review the single scrollable Ghost → Null → Wipeout page at common desktop and narrow widths,
+      in dark and light polarity, with keyboard focus and reduced-motion/contrast checks.
+- [ ] Tune only shared dials or named theme deltas; if a request requires structural divergence,
+      resolve the Ghost contract instead of patching one theme.
+- [ ] Record approvals and unresolved items directly in this doc. Decide which themes are intended
+      to ship versus remain design-system reference themes.
+- [ ] Produce a semantic token requirements table: base role, Null override, Wipeout override,
+      component consumers, and whether the value is polarity-, density-, or state-dependent. Do not
+      implement the canonical tokens in this session.
+- [ ] Update `Design.md`/`Design-Faces.md` only with approved rules, then draft the small
+      post-approval token implementation and migration sessions in Phase 10 §4.
+
+## Post-approval order (plan after 4i)
+
+1. Define the canonical semantic token contract and Ghost → Null/Wipeout override mechanics.
+2. Implement tokens and refactor the approved Storybook specimens onto them.
+3. Migrate the live shell/stream as one behavior-preserving slice.
+4. Migrate launcher and shared overlays before retiring top-level tabs.
+5. Migrate faces/browsers incrementally, with composed/substrate/x-ray as an orthogonal fidelity axis.
+
+## Verification per session
+
+- `npm run format`
+- `npm run lint`
+- `npm run typecheck`
+- `npm run test:run`
+- `pnpm build-storybook` or a live Storybook spot-check of the changed stories
+
+No Playwright e2e run is required while the live app remains untouched. If a session crosses that
+boundary, run the focused e2e coverage with the repository-required browser permissions.
+
+## Starter prompt for session 4c
+
+> Read `context/Phase-10-Session-4b-plan.md` closeout and
+> `context/Phase-10-Session-4c-plan.md` in full. Execute **session 4c only**: clearly archive every
+> session-4/4b HTML and Storybook alternative without deleting it, preserve Sticky Headers as the
+> source reference for the forward structure, and create only the placeholder for the new Ghost
+> workspace group. Do not extract Ghost yet, modify canonical tokens, wire the live app, or commit.

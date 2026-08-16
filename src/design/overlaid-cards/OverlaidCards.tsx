@@ -34,8 +34,20 @@ import {
 
 import './OverlaidCards.css'
 import type { OverlaidAncestor, OverlaidCardsProps } from './types'
+import NullCards from './variants/NullCards'
+import UltramodernCards from './variants/UltramodernCards'
+import WipeoutGauge from './variants/WipeoutGauge'
+import WipeoutNotches from './variants/WipeoutNotches'
+import WipeoutToplines from './variants/WipeoutToplines'
 
-export type { OverlaidAncestor, OverlaidCardsProps, OverlaidCardsTheme } from './types'
+export type {
+  GaugeOptions,
+  NotchesOptions,
+  OverlaidAncestor,
+  OverlaidCardsProps,
+  OverlaidCardsTheme,
+  ToplinesOptions,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // Layout model (internal)
@@ -635,6 +647,21 @@ const OverlaidCards = <P,>(props: OverlaidCardsProps<P>): JSX.Element => {
     <Switch fallback={<ExpandedStaircase {...props} />}>
       <Match when={theme() === 'collapsed-breadcrumb'}>
         <CollapsedBreadcrumb {...props} />
+      </Match>
+      <Match when={theme() === 'wipeout-notches'}>
+        <WipeoutNotches {...props} />
+      </Match>
+      <Match when={theme() === 'wipeout-toplines'}>
+        <WipeoutToplines {...props} />
+      </Match>
+      <Match when={theme() === 'wipeout-gauge'}>
+        <WipeoutGauge {...props} />
+      </Match>
+      <Match when={theme() === 'null'}>
+        <NullCards {...props} />
+      </Match>
+      <Match when={theme() === 'ultramodern'}>
+        <UltramodernCards {...props} />
       </Match>
     </Switch>
   )

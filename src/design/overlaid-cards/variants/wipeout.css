@@ -1,0 +1,435 @@
+/* ====================================================================
+   Wipeout theme variants -- session 4b (Storybook exploration)
+
+   Token layer + shared classes for the three Wipeout OverlaidCards
+   renderers (notches / top-lines / depth-gauge). Values live in
+   variant-local `--wo-*` custom properties (the OverlaidCards.css
+   `--card-*` pattern); token reconciliation into tokens.css is the
+   Phase 10 §4 pass AFTER the theming-direction decisions.
+
+   Fonts are imported here (not tokens.css) so the canonical token
+   layer stays untouched. Chakra Petch = display voice, Share Tech
+   Mono = instrument mono, Orbitron = the user-liked alternate.
+   ==================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Orbitron:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+
+.wo-cards {
+  --wo-font-display: 'Chakra Petch', sans-serif;
+  --wo-font-mono: 'Share Tech Mono', ui-monospace, monospace;
+
+  /* dark (default) */
+  --wo-bg: #0a0b0d;
+  --wo-bg-2: #0f1013;
+  --wo-ink: #d5d7dd;
+  --wo-ink-2: #9a9da8;
+  --wo-ink-3: #5d6070;
+  --wo-ink-4: #34363f;
+  --wo-line: #26282f;
+  --wo-line-2: #1a1c21;
+  --wo-invert-bg: #e2e3e8;
+  --wo-invert-fg: #0a0b0d;
+  --wo-accent: #8b5cf6;
+  --wo-accent-hi: #b49cff;
+  --wo-ghost: rgba(213, 215, 221, 0.07);
+
+  /* PanelBody styling hooks (fixtures.css) -- Resolution B: no in-panel
+     header on non-active panels; active header = flag + display title. */
+  --pb-title-font: var(--wo-font-display);
+  --pb-title-size: 13px;
+  --pb-title-weight: 600;
+  --pb-title-spacing: 0.12em;
+  --pb-title-transform: uppercase;
+  --pb-title-color: var(--wo-ink-2);
+  --pb-title-color-active: var(--wo-ink);
+  --pb-rule-color: var(--wo-ink-3);
+  --pb-flag-color: var(--wo-accent);
+  --pb-fg: var(--wo-ink);
+  --pb-fg-dim: var(--wo-ink-3);
+  --pb-pad: 0;
+}
+
+[data-theme='light'] .wo-cards {
+  --wo-bg: #f2f2ef;
+  --wo-bg-2: #eaeae6;
+  --wo-ink: #17181c;
+  --wo-ink-2: #4b4d56;
+  --wo-ink-3: #8e9099;
+  --wo-ink-4: #c6c7cb;
+  --wo-line: #c9cacd;
+  --wo-line-2: #dcdcd9;
+  --wo-invert-bg: #1b1c21;
+  --wo-invert-fg: #f2f2ef;
+  --wo-accent: #6d28d9;
+  --wo-accent-hi: #8b5cf6;
+  --wo-ghost: rgba(23, 24, 28, 0.08);
+}
+
+.wo-cards.wo-font-orbitron {
+  --wo-font-display: 'Orbitron', sans-serif;
+}
+
+/* Resolution B: hide non-active in-panel headers under Wipeout (the title
+   lives in the tab layer); the active header keeps the flag + display title. */
+.wo-cards .pb-head-inactive {
+  display: none;
+}
+
+.wo-cards .pb-head-active .pb-flag {
+  display: block;
+}
+
+/* The gauge header already carries the accent flag next to the level index;
+   don't double it inside the panel body. */
+.wo-gauge-viewport .pb-head-active .pb-flag {
+  display: none;
+}
+
+/* -- Viewport -- */
+.wo-viewport {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  background: var(--wo-bg);
+}
+
+/* ====================================================================
+   Tab strip (shared by notches + top-lines)
+   ==================================================================== */
+
+.wo-tab-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.wo-tab-group {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Wrapper carries stagger + the bottom-left tick (a real element, NOT a
+   pseudo-element: the title tab's chamfer clip-path and the ellipsis
+   overflow both swallow ::before/::after -- session-4 gotcha). */
+.wo-tab-wrap {
+  position: relative;
+  flex: none;
+  margin-right: 2px;
+}
+
+.wo-tab {
+  display: block;
+  font: 400 8.5px var(--wo-font-mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 4px 10px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 1px solid var(--wo-line);
+  border-bottom: none;
+  background: none;
+  color: var(--wo-ink-3);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.wo-tab:hover {
+  color: var(--wo-ink);
+  border-color: var(--wo-ink-3);
+}
+
+.wo-tab.wo-tab-title {
+  background: var(--wo-invert-bg);
+  color: var(--wo-invert-fg);
+  border-color: var(--wo-invert-bg);
+  /* chamfer set inline via --wo-chamfer */
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--wo-chamfer, 5px)) 0,
+    100% var(--wo-chamfer, 5px),
+    100% 100%,
+    0 100%
+  );
+}
+
+.wo-tab.wo-tab-title:hover {
+  color: var(--wo-invert-fg);
+  border-color: var(--wo-invert-bg);
+  filter: brightness(1.08);
+}
+
+.wo-tab.wo-tab-panel {
+  color: var(--wo-ink-2);
+  border-color: var(--wo-ink-4);
+  cursor: default;
+}
+
+.wo-tab.wo-tab-panel:hover {
+  color: var(--wo-ink-2);
+  border-color: var(--wo-ink-4);
+}
+
+/* Active panel's tab: small solid accent block, no text, non-interactive. */
+.wo-tab-marker {
+  display: block;
+  background: var(--wo-accent);
+}
+
+/* Thrown from the tab's bottom-left corner; flush against the tab's left
+   edge at its bottom line so tab border + tick read as one continuous line. */
+.wo-tab-tick {
+  position: absolute;
+  right: 100%;
+  bottom: 0;
+  height: 1px;
+  pointer-events: none;
+}
+
+.wo-tab-layer .wo-tab,
+.wo-tab-layer .wo-tab-marker {
+  pointer-events: auto;
+}
+
+/* ====================================================================
+   Notches field (OC-A1 lines <-> OC-A3 ticks)
+   ==================================================================== */
+
+.wo-tick-h {
+  position: absolute;
+  height: 1px;
+  pointer-events: none;
+}
+
+.wo-tick-v {
+  position: absolute;
+  width: 1px;
+  pointer-events: none;
+}
+
+.wo-edge-line {
+  position: absolute;
+  width: 1px;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.wo-panel {
+  position: absolute;
+  bottom: 0;
+}
+
+.wo-panel-inner {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 16px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wo-ink-4) transparent;
+}
+
+/* ====================================================================
+   Top-lines (OC-A2): each tab extends its baseline leftward
+   ==================================================================== */
+
+.wo-topline {
+  position: absolute;
+  right: calc(100% + 1px);
+  bottom: -1px;
+  width: 2000px;
+  pointer-events: none;
+}
+
+.wo-tab-wrap-marker .wo-topline {
+  bottom: 0;
+  right: 100%;
+}
+
+/* ====================================================================
+   Depth gauge (OC-B)
+   ==================================================================== */
+
+.wo-gauge-viewport {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  flex: 1;
+  background: var(--wo-bg);
+}
+
+.wo-gauge-rail {
+  flex: none;
+  padding: 16px 0 14px 18px;
+  border-right: 1px solid var(--wo-line-2);
+  position: relative;
+  overflow: hidden;
+}
+
+/* the ladder's spine, behind the cells */
+.wo-gauge-rail::before {
+  content: '';
+  position: absolute;
+  left: 44px;
+  top: 42px;
+  bottom: 16px;
+  border-left: 1px solid var(--wo-line-2);
+}
+
+.wo-gauge-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 400 9px/1 var(--wo-font-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wo-ink-3);
+  margin-bottom: 12px;
+}
+
+.wo-gauge-head::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background: currentColor;
+  flex: none;
+}
+
+.wo-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 26px;
+  position: relative;
+}
+
+.wo-gauge-idx {
+  font: 400 9px var(--wo-font-mono);
+  color: var(--wo-ink-4);
+  width: 16px;
+  letter-spacing: 0.05em;
+  flex: none;
+}
+
+.wo-gauge-row-ghost .wo-gauge-idx {
+  opacity: 0.5;
+}
+
+.wo-gauge-cell {
+  width: 10px;
+  height: 6px;
+  background: var(--wo-ghost);
+  flex: none;
+  position: relative;
+  z-index: 1;
+}
+
+.wo-gauge-cell-on {
+  background: var(--wo-ink-3);
+}
+
+.wo-gauge-cell-panel {
+  width: 16px;
+  background: var(--wo-ink-2);
+}
+
+.wo-gauge-cell-hot {
+  width: 16px;
+  background: var(--wo-accent);
+}
+
+.wo-gauge-name {
+  font: 400 8.5px var(--wo-font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--wo-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+button.wo-gauge-name {
+  cursor: pointer;
+}
+
+button.wo-gauge-name:hover {
+  color: var(--wo-ink);
+}
+
+.wo-gauge-name-panel {
+  color: var(--wo-ink-2);
+}
+
+.wo-gauge-name-hot {
+  color: var(--wo-ink);
+}
+
+.wo-gauge-panels {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.wo-gauge-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wo-gauge-col + .wo-gauge-col {
+  border-left: 1px solid var(--wo-line-2);
+}
+
+.wo-gauge-phead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 18px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--wo-line);
+  flex: none;
+}
+
+.wo-gauge-pidx {
+  font: 400 10px var(--wo-font-mono);
+  color: var(--wo-ink-4);
+  letter-spacing: 0.05em;
+}
+
+.wo-gauge-col-active .wo-gauge-phead {
+  border-bottom-color: var(--wo-ink-3);
+}
+
+.wo-gauge-col-active .wo-gauge-pidx {
+  color: var(--wo-accent);
+}
+
+.wo-gauge-pflag {
+  width: 5px;
+  height: 5px;
+  background: var(--wo-accent);
+  flex: none;
+}
+
+.wo-gauge-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 18px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--wo-ink-4) transparent;
+}

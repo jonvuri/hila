@@ -65,9 +65,24 @@ Open questions, resolved:
 
 Unify the visual language across every surface into one token + theming system. Mostly a placeholder pending stages 1-3, but the intended shape:
 
-- [ ] **Reconcile the two visual directions:** the canonical design system (Design.md: sharp geometry, monochrome + violet, powers-of-two spacing) and the overlaid-cards exploration (7b: layered surfaces, depth fades, tab shapes). Decide the single intended language and which tokens express depth/elevation, surface layering, and accent.
+> **Sessions 4/4b closed — exploration fan-out and convergence.** The HTML catalogs and Storybook variants explored Wipeout, Null, Ultramodern, and the overlaid-cards family over common fixtures. They are now retained as a **retired exploration archive**; none is a production candidate as-is. The one surviving structural concept is **Wipeout · Sticky headers**, stripped of Wipeout styling to become the **Ghost** base. Null and Wipeout will be rebuilt as visual extensions of Ghost; Ultramodern and every overlaid-cards layout are retired. See the [4b closeout](Phase-10-Session-4b-plan.md#closeout-decisions) and the [4c–4i plan](Phase-10-Session-4c-plan.md).
+
+**Direction fixed before token work:**
+
+- **Skeleton:** Ghost owns the workspace structure, sticky-header navigation, drill-path behavior,
+  focus-panel anatomy, and only the affordances necessary for comprehension and operation.
+- **Deep ancestry:** when the root navigation panel has shifted outside the four-column window, a
+  simple breadcrumb appears only atop the leftmost visible focus panel. Otherwise ancestry remains
+  spatially legible through the sticky headers and drill path.
+- **Theme family:** Ghost is the base; Null adds the most unsurprising conventional affordances;
+  Wipeout adds its distinct chrome and quirk budget. Theme layers must not fork structure.
+- **Approval gate:** first split the design into semantic atoms and orthogonal molecules, then show
+  complete Ghost, Null, and Wipeout cards together on one scrollable page. Do not finalize canonical
+  tokens or start the live-app migration until that page is reviewed.
+
+- [ ] **Reconcile the visual language:** use the Ghost skeleton plus Null/Wipeout extension model to resolve which current Design.md rules remain universal and which become theme values. The overlaid-cards depth language is retired rather than reconciled into the new structure. Complete this item only after the three-card comparison is approved.
 - [ ] **Extend the token set** as needed (elevation/surface scale, depth/fade ramps, motion, focus rings) in `src/design/tokens.css` / `tokens.ts`, keeping the semantic, theme-aware structure. **Incoming from §3b-i ([Query-Spec.md](Query-Spec.md) D17–D19):** the chip frame palette (dimension/plane tints vs object identity colors) · the **opacity texture** ("opaque SQL inside"; dashed frame is the placeholder) · the **invalid treatment** (red = "this term cannot run", and nothing else) · the `ƒ` formula mark's rendering on matrix formula columns in the table face. **Incoming from §3b-ii ([Launcher.md](Launcher.md)):** the launcher overlay treatment (scrim, elevation, the shared overlay language with `/` and the system edge) · the **filter-token treatment** (hollow/dotted placeholder — visibly a different species from spec chips) · deep-tempo expansion proportions + preview density · save-bar and help-footer chrome. Semantic intents are settled; visual treatments are decided here.
-- [ ] **Theming model.** Confirm `data-theme` scoping covers all surfaces; decide how many themes ship (dark/light + any concept themes) and how face/view themes (e.g. overlaid-cards staircase vs breadcrumb) relate to the global theme.
+- [ ] **Theming model.** Confirm `data-theme` scoping covers all surfaces and formalize Ghost as the base contract with Null/Wipeout overrides. Decide after the comparison review which themes ship and how dark/light polarity, face variants, and the orthogonal composed/substrate/x-ray fidelity axis layer without multiplying theme forks.
 - [ ] **Migration plan for `global.css`.** Sequence the incremental migration of app shell, stream view, faces, and browsers onto the token system (the migration deferred in Plan.md). Keep it incremental and behavior-preserving. **Sequencing constraint from session 2:** the launcher ([§3b](#3b-launcher-deep-dive--the-query-spec)) lands before the tab-removal step; the retiring tab views (Table, Tags) are captured as Storybook components at removal.
 - [ ] **Output:** updated [Design.md](Design.md) (and Design-Faces.md if face themes are touched), an updated token system, and a staged migration checklist that subsequent sessions execute.
 
@@ -78,7 +93,7 @@ Unify the visual language across every surface into one token + theming system. 
 ## Design decisions
 
 - **Plan before building.** This phase deliberately front-loads decisions. The deliverables of stages 1-3 are documents and resolved decisions; implementation (stage 4 migration) only begins once the structure and token model are agreed.
-- **One design language.** The recent overlaid-cards exploration and the established design system must converge into a single token + theming system rather than coexisting as parallel styling regimes.
+- **One structural language, layered visual themes.** Ghost is the shared skeleton and interaction grammar; Null and Wipeout may add chrome only through the common semantic contract. Retired explorations remain references, not parallel styling regimes.
 - **Build on what exists.** The face/slot system, design tokens, and Storybook infrastructure are the substrate; this phase organizes and unifies rather than replaces them.
 
 ## Open questions (to resolve during the phase)
@@ -88,8 +103,8 @@ These are the crux of the phase and are expected to be answered by its planning 
 1. ~~Is the workspace the root/parent of all views, or a peer?~~ **Resolved (session 2):** one literal root; focus, not zoom. See [Architecture.md — View hierarchy and navigation](Architecture.md#view-hierarchy-and-navigation).
 2. ~~What is the full set of top-level views and sub-views, and the navigation between them?~~ **Resolved (session 2):** places / gestures / system edge; no top-level tabs. See §2 above.
 3. ~~How do plugins contribute and compose views into the shell and into each other?~~ **Resolved (session 3):** plugins contribute **face types** (each declaring up to two renderings — *line* and *collection*; the panel scaffold stays shell-owned) + **commands** (one registry, `/` and `⌘K` surfaces); the shell is fixed infrastructure. Composition follows the **subject → affinity ladder → host** contract, with the host owning chrome, sizing, fidelity, and recursion. See §3 above and [Plugins.md — Plugin view composition model](Plugins.md#plugin-view-composition-model).
-4. What single design language reconciles the design system and the overlaid-cards exploration, and how is depth/elevation tokenized? *(Carry-ins from session 2: deep-ancestry tab overflow; root-matrix schema authority under substrate fidelity; the x-ray toggle's home; face-config-as-panel-chrome.)*
-5. How are global themes vs per-view/face themes layered, and what is the migration order off `global.css`?
+4. Which current Design.md rules belong to Ghost, which are Null/Wipeout choices, and which semantic atoms/molecules express them without structural forks? *(The overlaid-cards layout and its depth staircase are retired. Carry-ins remain: root-matrix schema authority under substrate fidelity, the x-ray toggle's home, and face-config-as-panel-chrome.)*
+5. After the three-card approval gate, which members of the Ghost/Null/Wipeout family ship, how do dark/light polarity and per-face variants layer beneath them, and what is the migration order off `global.css`?
 
 ## Dependency notes
 
