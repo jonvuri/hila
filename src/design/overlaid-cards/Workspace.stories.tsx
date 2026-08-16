@@ -12,7 +12,7 @@ import WorkspaceFocusPanel from './variants/WorkspaceFocusPanel'
 import WorkspaceSticky from './variants/WorkspaceSticky'
 
 // ---------------------------------------------------------------------------
-// Design/Workspace -- full-screen workspace mockups (session 4b).
+// Archived full-screen workspace mockups from session 4b.
 //
 // Where Design/OverlaidCards iterates on the card/tab chrome in isolation,
 // these stories mock the whole workspace column stream the way the wired app
@@ -37,8 +37,16 @@ const Frame = (props: { children: JSX.Element }): JSX.Element => (
 )
 
 const meta: Meta<StoryArgs> = {
-  title: 'Design/Workspace',
-  parameters: { layout: 'fullscreen' },
+  title: 'Archive/Phase 10/Session 4b/Workspace',
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Retired Phase 10 exploration. Sticky Headers is the source reference for the forward workspace structure. Its Wipeout styling is not the forward base.',
+      },
+    },
+  },
   argTypes: {
     outlineTheme: {
       control: 'select',
@@ -73,6 +81,14 @@ const ddiaPanel = workspacePanels[1]!
  * -- with the children navigation panel below.
  */
 export const FocusPanel: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Archived Wipeout FocusPanel mockup. It is not the forward Ghost implementation.',
+      },
+    },
+  },
   argTypes: {
     active: {
       control: 'boolean',
@@ -116,6 +132,14 @@ export const FocusPanel: Story = {
  */
 export const StickyHeaders: Story = {
   name: 'Wipeout · Sticky headers',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Source reference for the forward workspace structure. Preserve its layout and hierarchy behavior, but do not treat its Wipeout styling as the Ghost base.',
+      },
+    },
+  },
   render: (args) => (
     <Frame>
       <WorkspaceSticky
@@ -139,6 +163,14 @@ export const StickyHeaders: Story = {
  */
 export const DepthGauge: Story = {
   name: 'Wipeout · Depth gauge (OC-B)',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Archived depth-gauge alternative. It is not part of the forward workspace direction.',
+      },
+    },
+  },
   argTypes: {
     showNames: {
       control: 'boolean',

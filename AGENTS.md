@@ -16,6 +16,8 @@ Do not start an unrelated rewrite.
 4. When a session closes, update the relevant plan and leave `NOW.md` as a short,
    accurate handoff for the next session. It should not be a historical
    log.
+5. Stage changes for review and suggest a short commit message. Do not
+   run writing git operations.
 
 ## Working with phased plans
 

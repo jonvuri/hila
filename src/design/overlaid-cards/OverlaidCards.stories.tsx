@@ -176,7 +176,7 @@ const ALL_THEMES: OverlaidCardsTheme[] = [
   'ultramodern',
 ]
 
-// 'wipeout-gauge' lives in the Design/Workspace story group (full-column
+// 'wipeout-gauge' lives in the archived workspace story group (full-column
 // workspace mockups) rather than here.
 const VARIANT_THEMES: OverlaidCardsTheme[] = [
   'wipeout-notches',
@@ -186,8 +186,16 @@ const VARIANT_THEMES: OverlaidCardsTheme[] = [
 ]
 
 const meta: Meta<StoryArgs> = {
-  title: 'Design/OverlaidCards',
-  parameters: { layout: 'fullscreen' },
+  title: 'Archive/Phase 10/Session 4b/Overlaid Cards',
+  parameters: {
+    layout: 'fullscreen',
+    docs: {
+      description: {
+        component:
+          'Retired Phase 10 exploration. Keep these variants as design history only. None is a production candidate.',
+      },
+    },
+  },
   argTypes: {
     theme: {
       control: 'select',

@@ -39,16 +39,28 @@ when it constrains the active work; `NOW.md` carries the short handoff between s
 **Outcome:** Storybook and the HTML index make the exploration boundary unmistakable, with no loss of
 reference material.
 
-- [ ] Move the session-4b alternative stories under an `Archive/Phase 10/Session 4b` Storybook namespace
+- [x] Move the session-4b alternative stories under an `Archive/Phase 10/Session 4b` Storybook namespace
       (or equivalent archive grouping) and add a short retirement notice to their docs/descriptions.
-- [ ] Archive the original `Design/Workspace` FocusPanel and Depth Gauge stories too. Preserve the Sticky
+- [x] Archive the original `Design/Workspace` FocusPanel and Depth Gauge stories too. Preserve the Sticky
       Headers story as the named source reference, while making clear that its Wipeout styling is not the
       forward base.
-- [ ] Add an archive notice to the HTML comparison/index and linked catalogs. Do not delete or rewrite
+- [x] Add an archive notice to the HTML comparison/index and linked catalogs. Do not delete or rewrite
       the prototype bodies.
-- [ ] Add a new forward `Design/Workspace` story group placeholder for Ghost work; do not duplicate or
+- [x] Add a new forward `Design/Workspace` story group placeholder for Ghost work; do not duplicate or
       rename the underlying experimental renderers solely to make the archive look cleaner.
-- [ ] Verify no live-app imports or defaults changed.
+- [x] Verify no live-app imports or defaults changed.
+
+### Session 4c closeout
+
+- Storybook now groups the Session 4b fan-out under `Archive/Phase 10/Session 4b`. The archived Sticky
+  Headers story identifies the structural source and rejects its Wipeout styling as the forward base.
+- The Session 4 HTML index, three theme catalogs, and Wipeout overlaid-cards deep dive have visible
+  archive notices. Their prototype bodies remain unchanged.
+- `Design/Workspace` contains only the Ghost placeholder for Session 4d. No live-app, renderer, default,
+  or canonical-token file changed.
+- Format, lint, typecheck, focused performance tests, and the Storybook build passed. The full unit suite
+  passed 832 tests. Two unchanged performance tests exceeded their 5-second limits, and each timed-out
+  file passed when run alone.
 
 ## Session 4d — Extract the Ghost workspace skeleton
 
