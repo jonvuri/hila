@@ -206,6 +206,18 @@ bound without generating 22,000 forest rows. Keep a modest integration gather an
 representative query-plan checks. This preserves the guard's intent and removes setup time from the
 result. No test or production source changed during this detour. Session 4h remains next.
 
+### Timeout detour closeout
+
+- The prototype and production scale guards now use synthetic materialized and block segments. The
+  large case represents 10,000,037 materialized rows and a 5,000,000-row block without inserting
+  those rows.
+- Each guard checks the straddling slice plan, its exact 100-row total, and the offset and limit sent
+  to both sources. The existing 730-row integration gathers and representative query-plan guards
+  remain.
+- Format, lint, typecheck, both focused files, and the default-worker full suite passed. The full
+  suite passed all 842 tests in 12.98 seconds.
+- No global timeout or production source changed. Session 4h remains next.
+
 ## Session 4h — Rebuild Wipeout as a Ghost extension
 
 **Outcome:** a complete Wipeout card applies the theme's character to the approved structure.

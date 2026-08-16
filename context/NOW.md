@@ -9,23 +9,21 @@ session: phase-10-session-4h-wipeout-design-card
 
 # Now
 
-Phase 10 Session 4g is closed. `Design/Theme comparison` now renders Ghost and Null
-consecutively through the same `ThemeCard`. Null adds only conventional local role overrides and
-scoped decoration that resolves named Ghost ambiguities.
+Phase 10 Session 4g and its timeout detour are closed. `Design/Theme comparison` now renders Ghost
+and Null consecutively through the same `ThemeCard`. Null adds only conventional local role
+overrides and scoped decoration that resolves named Ghost ambiguities.
 
-Session 4h remains next after a focused timeout detour. The two repeated windowing failures are
-test-method flakiness, not evidence of a production regression. Their 100-row gathers stayed below
-five milliseconds. Large fixture setup took about 4.12 seconds alone and rose to 11.8–16.6 seconds
-under the default 14-worker suite. The full suite passed all 842 tests with two workers. Do not raise
-the global timeout or change production behavior. Refactor the scale guard to assert deterministic
-slice work without its large seeded fixture. The detailed measurements and recommendation are in
-the [session plan](Phase-10-Session-4c-plan.md#session-4h-preflight-timeout-detour).
+The two flaky windowing scale guards now use synthetic segment sizes and recorded slice requests.
+They prove the 100-row bound without generating 22,000-row fixtures. The modest integration gathers
+and representative query-plan guards remain. The default 14-worker suite passed all 842 tests. No
+global timeout or production behavior changed. The measurements and closeout are in the
+[session plan](Phase-10-Session-4c-plan.md#session-4h-preflight-timeout-detour).
 
-## Session 4g verification
+## Session 4g and timeout-detour verification
 
 - Format, lint, typecheck, seven ThemeCard tests, and the Storybook build passed.
-- The full run passed 840 tests. Two unchanged performance tests exceeded their
-  five-second limits. Both files passed when run alone.
+- Both focused windowing files and the default-worker full suite passed. The full suite passed all
+  842 tests.
 - No live-app, production-face, canonical-token, archived Null, or Wipeout file changed.
 
 ## Read for Session 4h

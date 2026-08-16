@@ -36,6 +36,7 @@ import {
   viewBlock,
   viewBlockSliceSql,
   type Block,
+  type Segment,
 } from './window-flatten'
 
 const ROWS_PER_WINDOW = 100
@@ -164,29 +165,63 @@ describe('Phase 9.7 Stage B — count + slice window flattening (production)', (
 
   // -- 4 & 5. Per-window gather cost is bounded, not scale-dependent ------------
 
-  test('per-window gather touches exactly ROWS_PER_WINDOW rows regardless of forest or block size', () => {
-    const measureWindowGather = (forestSize: number, blockSize: number): number => {
-      const wsId = createMatrix(h.db, 'Workspace', [
-        { name: 'label', type: 'TEXT', role: 'label' },
+  test('per-window gather requests exactly ROWS_PER_WINDOW rows at any segment scale', () => {
+    const assertBoundedGather = (materializedSize: number, blockSize: number): void => {
+      const markerKey = new Uint8Array([1])
+      const materializedCalls: { offset: number; limit: number }[] = []
+      const blockCalls: { offset: number; limit: number }[] = []
+      const rows = (limit: number): Record<string, unknown>[] =>
+        Array.from({ length: limit }, () => ({}))
+      const block: Block = {
+        key: markerKey,
+        count: blockSize,
+        slice: (_db, offset, limit) => {
+          blockCalls.push({ offset, limit })
+          return rows(limit)
+        },
+      }
+      const segments: Segment[] = [
+        {
+          kind: 'materialized',
+          virtualStart: 0,
+          virtualSize: materializedSize,
+          rangeStart: null,
+          rangeEnd: markerKey,
+        },
+        {
+          kind: 'block',
+          virtualStart: materializedSize,
+          virtualSize: blockSize,
+          block,
+        },
+      ]
+      const gatherMaterialized = (
+        _db: Database,
+        request: Extract<ReturnType<typeof sliceWindow>[number], { kind: 'materialized' }>,
+      ): Record<string, unknown>[] => {
+        materializedCalls.push({ offset: request.offset, limit: request.limit })
+        return rows(request.limit)
+      }
+
+      const windowIndex = Math.floor(materializedSize / ROWS_PER_WINDOW)
+      const requests = sliceWindow(segments, windowIndex, ROWS_PER_WINDOW)
+
+      expect(requests.map((request) => request.kind)).toEqual(['materialized', 'block'])
+      expect(requests.reduce((sum, request) => sum + request.limit, 0)).toBe(ROWS_PER_WINDOW)
+      expect(gatherWindow(h.rawDb, requests, gatherMaterialized)).toHaveLength(ROWS_PER_WINDOW)
+      expect(materializedCalls).toEqual([
+        {
+          offset: windowIndex * ROWS_PER_WINDOW,
+          limit: materializedSize % ROWS_PER_WINDOW,
+        },
       ])
-      const half = Math.floor(forestSize / 2)
-      appendFlatRows(h.db, wsId, half)
-      const markerRowId = insertDataRow(h.db, wsId, { label: 'Container' })
-      createTreePosition(h.db, wsId, markerRowId)
-      const markerKey = getGlobalKey(h.db, wsId, markerRowId)!
-      appendFlatRows(h.db, wsId, forestSize - half)
-
-      const { block } = makeContainerBlock(h.db, markerKey, blockSize)
-      const segments = computeSegments(h.db, [block], null, null)
-
-      // A window straddling the block start (guaranteed since half >= 100).
-      const straddleWindow = Math.floor(segments[1]!.virtualStart / ROWS_PER_WINDOW)
-      const reqs = sliceWindow(segments, straddleWindow, ROWS_PER_WINDOW)
-      return gatherWindow(h.rawDb, reqs).length
+      expect(blockCalls).toEqual([
+        { offset: 0, limit: ROWS_PER_WINDOW - (materializedSize % ROWS_PER_WINDOW) },
+      ])
     }
 
-    expect(measureWindowGather(2000, 500)).toBe(ROWS_PER_WINDOW)
-    expect(measureWindowGather(20000, 5000)).toBe(ROWS_PER_WINDOW) // 10x forest+block, same cost
+    assertBoundedGather(1_037, 500)
+    assertBoundedGather(10_000_037, 5_000_000)
   })
 
   test('both source kinds ride an ordered walk with no sort step at representative scale', () => {
