@@ -13,6 +13,14 @@ Phase 10 Session 4g is closed. `Design/Theme comparison` now renders Ghost and N
 consecutively through the same `ThemeCard`. Null adds only conventional local role overrides and
 scoped decoration that resolves named Ghost ambiguities.
 
+Session 4h remains next after a focused timeout detour. The two repeated windowing failures are
+test-method flakiness, not evidence of a production regression. Their 100-row gathers stayed below
+five milliseconds. Large fixture setup took about 4.12 seconds alone and rose to 11.8–16.6 seconds
+under the default 14-worker suite. The full suite passed all 842 tests with two workers. Do not raise
+the global timeout or change production behavior. Refactor the scale guard to assert deterministic
+slice work without its large seeded fixture. The detailed measurements and recommendation are in
+the [session plan](Phase-10-Session-4c-plan.md#session-4h-preflight-timeout-detour).
+
 ## Session 4g verification
 
 - Format, lint, typecheck, seven ThemeCard tests, and the Storybook build passed.

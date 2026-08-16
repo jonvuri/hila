@@ -174,6 +174,38 @@ behavior independently of Wipeout chrome.
   when run alone.
 - No live-app, production-face, canonical-token, archived Null, or Wipeout file changed.
 
+### Session 4h preflight timeout detour
+
+The detour reproduced the five-second timeouts in
+`src/perf/windowing-spike.test.ts` and `src/workspace/window-flatten.test.ts`. Measurements used an
+Apple M4 Pro with 14 available processors. Each value below is the duration of the test named
+`per-window gather touches exactly ROWS_PER_WINDOW rows regardless of forest or block size`.
+
+| Load                                       |    Spike test | Production test | Result                                        |
+| ------------------------------------------ | ------------: | --------------: | --------------------------------------------- |
+| File alone, five runs                      |   4.42–4.72 s |     4.42–4.51 s | All passed                                    |
+| Both files together, three runs            |   4.45–4.57 s |     4.44–4.53 s | All passed                                    |
+| Full suite, default 14 workers, three runs | 11.93–16.47 s |   11.81–16.64 s | Both failed each run; 840 of 842 tests passed |
+| Full suite, four workers                   |        6.67 s |          6.68 s | Both failed                                   |
+| Full suite, two workers                    |        4.51 s |          4.70 s | All 842 tests passed                          |
+
+One temporary internal timing sample separated fixture setup from the gather. The 2,000-row case
+spent 323 ms in setup and 0.8 ms in the gather. The 20,000-row case spent 4.12 seconds in setup and
+4.7 ms in the gather. The instrumentation was removed after measurement.
+
+The failures are test-method flakiness, not evidence of a production performance regression. Each
+file owns a separate in-memory database in an isolated Vitest fork. The default run starts these
+duplicate write-heavy fixtures beside other large SQLite suites. Processor contention extends data
+generation beyond the default timeout. The synchronous test body prevents Vitest from reporting the
+timeout until the work returns. The actual bounded gather stays below five milliseconds, and the
+query-plan guards continue to pass.
+
+Do not raise the global timeout or change production behavior. Replace the large seeded scale check
+with deterministic segment and slice-request assertions, or source spies, that prove the 100-row
+bound without generating 22,000 forest rows. Keep a modest integration gather and the existing
+representative query-plan checks. This preserves the guard's intent and removes setup time from the
+result. No test or production source changed during this detour. Session 4h remains next.
+
 ## Session 4h — Rebuild Wipeout as a Ghost extension
 
 **Outcome:** a complete Wipeout card applies the theme's character to the approved structure.
