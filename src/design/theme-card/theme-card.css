@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+
 /* Session 4e variables are local exploration roles. They are not canonical tokens. */
 .tc-card {
   --tc-color-canvas: var(--c-bg);
@@ -65,6 +67,40 @@
   --tc-null-shadow-color: rgb(15 23 42 / 0.16);
 }
 
+[data-theme='dark'] .tc-card[data-theme-card='wipeout'] {
+  --tc-wipeout-canvas: #0a0b0d;
+  --tc-wipeout-surface: #101115;
+  --tc-wipeout-overlay: #17181d;
+  --tc-wipeout-text: #d5d7dd;
+  --tc-wipeout-text-muted: #9a9da8;
+  --tc-wipeout-text-faint: #60636f;
+  --tc-wipeout-line-subtle: #202229;
+  --tc-wipeout-line-strong: #383b45;
+  --tc-wipeout-accent: #8b5cf6;
+  --tc-wipeout-danger: #ef666d;
+  --tc-wipeout-hover: #17181d;
+  --tc-wipeout-selected: #241d38;
+  --tc-wipeout-danger-surface: #281519;
+  --tc-wipeout-segment: rgb(213 215 221 / 0.08);
+}
+
+[data-theme='light'] .tc-card[data-theme-card='wipeout'] {
+  --tc-wipeout-canvas: #f2f2ef;
+  --tc-wipeout-surface: #e9e9e4;
+  --tc-wipeout-overlay: #fbfbf8;
+  --tc-wipeout-text: #17181c;
+  --tc-wipeout-text-muted: #4b4d56;
+  --tc-wipeout-text-faint: #81838c;
+  --tc-wipeout-line-subtle: #d7d7d2;
+  --tc-wipeout-line-strong: #bfc0c5;
+  --tc-wipeout-accent: #6d28d9;
+  --tc-wipeout-danger: #b4232d;
+  --tc-wipeout-hover: #e2e2dd;
+  --tc-wipeout-selected: #e2d8f0;
+  --tc-wipeout-danger-surface: #efdadc;
+  --tc-wipeout-segment: rgb(23 24 28 / 0.09);
+}
+
 /* Map local roles into the shared workspace without changing canonical tokens. */
 .tc-card .ws-workspace {
   --ws-bg: var(--tc-color-canvas);
@@ -115,6 +151,169 @@
 
 .tc-card[data-theme-card='null'] :is(.ws-focus-properties input, .ws-collapse, .ws-drill) {
   border-radius: var(--tc-geometry-control-radius);
+}
+
+/* Wipeout adds bounded instrument decoration to shared markup. */
+.tc-card[data-theme-card='wipeout'] :is(.tc-section-heading h2, .tc-type-display) {
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-section-index {
+  position: relative;
+  padding-left: 10px;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-section-index::before {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  background: currentcolor;
+  content: '';
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-type-stack {
+  position: relative;
+  padding-bottom: 30px;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-type-stack::after {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  width: 7px;
+  height: 4px;
+  background: var(--tc-wipeout-segment);
+  box-shadow:
+    10px 0 var(--tc-wipeout-segment),
+    20px 0 var(--tc-wipeout-segment),
+    30px 0 var(--tc-color-text-faint),
+    40px 0 var(--tc-color-accent);
+  content: '';
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-control-primary, .tc-sticky-header, .ws-workspace-title) {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--tc-geometry-cut-size)) 0,
+    100% var(--tc-geometry-cut-size),
+    100% 100%,
+    0 100%
+  );
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(
+    .tc-row[data-state='selected'],
+    .tc-launcher-result[data-state='selected'],
+    .tc-table-specimen tr[data-state='selected']
+  ) {
+  border-left: 3px solid var(--tc-color-accent);
+}
+
+.tc-card[data-theme-card='wipeout'] [data-state='armed-danger'] .tc-control-state {
+  position: relative;
+  padding-right: 62px;
+}
+
+.tc-card[data-theme-card='wipeout'] [data-state='armed-danger'] .tc-control-state::after {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 6px;
+  height: 4px;
+  background: var(--tc-color-danger);
+  box-shadow:
+    9px 0 var(--tc-color-danger),
+    18px 0 var(--tc-wipeout-segment),
+    27px 0 var(--tc-wipeout-segment),
+    36px 0 var(--tc-wipeout-segment);
+  content: '';
+  transform: translateY(-50%);
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-launcher {
+  position: relative;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-launcher::before,
+.tc-card[data-theme-card='wipeout'] .tc-launcher::after {
+  position: absolute;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  border-color: var(--tc-color-text-faint);
+  pointer-events: none;
+  content: '';
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-launcher::before {
+  top: 4px;
+  right: 4px;
+  border-top: 1px solid;
+  border-right: 1px solid;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-launcher::after {
+  bottom: 4px;
+  left: 4px;
+  border-bottom: 1px solid;
+  border-left: 1px solid;
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-workspace {
+  --ws-line: var(--tc-wipeout-line-subtle);
+  --ws-line-strong: var(--tc-wipeout-line-strong);
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-focus-title {
+  font-family: var(--tc-type-display-family);
+  letter-spacing: 0.035em;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(
+    .ws-workspace-title,
+    .ws-focus-section h3,
+    .ws-section-toggle,
+    .ws-focus-properties span
+  ) {
+  font-family: var(--tc-type-label-family);
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-focus-active .ws-focus-title {
+  position: relative;
+  padding-left: 15px;
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-focus-active .ws-focus-title::before {
+  position: absolute;
+  top: 0.55em;
+  left: 4px;
+  width: 5px;
+  height: 5px;
+  background: var(--tc-color-accent);
+  content: '';
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-column-active {
+  border-right-color: var(--tc-color-text-muted);
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-nav-row-selected {
+  border-left-color: var(--tc-color-accent);
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.ws-sticky-preview-path, .ws-sticky-preview-drill)::before {
+  background: var(--tc-color-text-faint);
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-sticky-preview-drill::before {
+  background: var(--tc-color-accent);
 }
 
 .tc-comparison-page > .tc-card + .tc-card {

@@ -10,6 +10,7 @@ import {
   themeCardStateIds,
   themeCardTreatmentKindIds,
 } from './types'
+import { wipeoutTheme, wipeoutTreatments } from './wipeout'
 
 describe('ThemeCard grammar', () => {
   let dispose: (() => void) | undefined
@@ -153,5 +154,45 @@ describe('ThemeCard grammar', () => {
 
     expect(cards).toHaveLength(2)
     expect(specimenShape(cards[1]!)).toEqual(specimenShape(cards[0]!))
+  })
+
+  test('builds Wipeout as a complete Ghost role override with a bounded quirk budget', () => {
+    expect(Object.keys(wipeoutTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
+    expect(wipeoutTheme.roles?.['geometry-cut-size']).not.toBe(
+      ghostTheme.roles?.['geometry-cut-size'],
+    )
+    expect(wipeoutTreatments.map((treatment) => treatment.kind)).not.toContain('structural')
+    expect(
+      wipeoutTreatments.some((treatment) => treatment.label.includes('quirk budget')),
+    ).toBe(true)
+  })
+
+  test('keeps all comparison specimen structures identical', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    dispose = render(
+      () => (
+        <>
+          <ThemeCard theme={ghostTheme} />
+          <ThemeCard theme={nullTheme} />
+          <ThemeCard theme={wipeoutTheme} />
+        </>
+      ),
+      container,
+    )
+
+    const cards = [...container.querySelectorAll<HTMLElement>('[data-testid="theme-card"]')]
+    const specimenShape = (card: HTMLElement) => ({
+      sections: card.querySelectorAll('[data-theme-card-section]').length,
+      states: card.querySelectorAll('.tc-state-specimen').length,
+      controls: card.querySelectorAll('button, input').length,
+      workspaces: card.querySelectorAll('.tc-workspace-specimen').length,
+      longFormParagraphs: card.querySelectorAll('.tc-long-form p').length,
+      dials: card.querySelectorAll('.tc-dial').length,
+    })
+
+    expect(cards).toHaveLength(3)
+    expect(specimenShape(cards[1]!)).toEqual(specimenShape(cards[0]!))
+    expect(specimenShape(cards[2]!)).toEqual(specimenShape(cards[0]!))
   })
 })

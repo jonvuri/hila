@@ -222,14 +222,34 @@ result. No test or production source changed during this detour. Session 4h rema
 
 **Outcome:** a complete Wipeout card applies the theme's character to the approved structure.
 
-- [ ] Start from Ghost and the same specimens. Consult the archived Wipeout work only for isolated
+- [x] Start from Ghost and the same specimens. Consult the archived Wipeout work only for isolated
       moves worth reusing; do not revive overlaid cards, ancestry tabs, the gauge, or alternate layouts.
-- [ ] Apply the established intent — instrument typography, disciplined accent, hard brightness
+- [x] Apply the established intent — instrument typography, disciplined accent, hard brightness
       steps, chamfers/notches, VFD texture — as orthogonal value/decorative layers with a bounded quirk
       budget.
-- [ ] Demonstrate long-form text pressure, dense rows, table/launcher states, both polarities, and
+- [x] Demonstrate long-form text pressure, dense rows, table/launcher states, both polarities, and
       reduced motion. Typography or ornament may not obscure Ghost's affordances.
-- [ ] Render Ghost, Null, and Wipeout consecutively in the comparison page with synchronized controls.
+- [x] Render Ghost, Null, and Wipeout consecutively in the comparison page with synchronized controls.
+
+### Session 4h closeout
+
+- Wipeout spreads the complete Ghost role set, then overrides only local exploration values. Dark
+  and light values use hard brightness steps, square geometry, violet activity signals, and red risk
+  signals. Canonical tokens remain unchanged.
+- Shared markup adds a bounded decorative layer for one-cut blocks, small ticks and brackets, and
+  unlit VFD segments. It adds no overlaid cards, ancestry tabs, depth gauge, alternate layout,
+  elevation shadow, glow, or ambient motion.
+- Chakra Petch and Share Tech Mono identify structure, labels, and data. Long-form copy keeps the
+  Ghost body face and size. Dense rows, tables, launcher states, workspace affordances, and the
+  reduced-motion final state remain intact.
+- `Design/Theme comparison` renders Ghost, Null, and Wipeout consecutively through the same
+  `ThemeCard`. A focused test confirms that all three cards have the same sections, states,
+  controls, workspace fixtures, long-form content, and dial count.
+- Format, lint, typecheck, nine ThemeCard tests, the Storybook build, and the default-worker full
+  suite passed. The full suite passed all 844 tests in 13.09 seconds. A live visual review was not
+  available because this session had no connected browser; Session 4i retains the explicit visual
+  approval pass.
+- No live-app, production-face, canonical-token, or archived Wipeout file changed.
 
 ## Session 4i — Compare, tune, and approve
 

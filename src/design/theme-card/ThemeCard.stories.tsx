@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { ghostTheme } from './ghost'
 import { nullTheme } from './null'
 import ThemeCard from './ThemeCard'
+import { wipeoutTheme } from './wipeout'
 
 const meta: Meta<typeof ThemeCard> = {
   title: 'Design/Theme comparison',
@@ -23,20 +24,21 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const GhostAndNull: Story = {
-  name: 'Ghost → Null · consecutive comparison',
+export const Comparison: Story = {
+  name: 'Ghost → Null → Wipeout · consecutive comparison',
   args: { theme: ghostTheme },
   render: () => (
     <div class="tc-comparison-page">
       <ThemeCard theme={ghostTheme} />
       <ThemeCard theme={nullTheme} />
+      <ThemeCard theme={wipeoutTheme} />
     </div>
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'Ghost and Null render consecutively with the same component, content, forced states, workspace fixtures, and dial schema. Null changes only local role values and optional decorative primitives.',
+          'Ghost, Null, and Wipeout render consecutively with the same component, content, forced states, workspace fixtures, and dial schema. Themes change only local role values and optional decorative primitives.',
       },
     },
   },
@@ -63,6 +65,19 @@ export const Null: Story = {
       description: {
         story:
           'Null extends Ghost with conventional boundaries, state fills, control surfaces, and elevation. Its ledger links each addition to a Ghost ambiguity.',
+      },
+    },
+  },
+}
+
+export const Wipeout: Story = {
+  name: 'Wipeout · instrument character',
+  args: { theme: wipeoutTheme },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Wipeout extends Ghost with hard brightness steps, instrument type, disciplined accent, one-cut geometry, ticks, and VFD segment texture. Long-form text keeps the shared body face.',
       },
     },
   },
