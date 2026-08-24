@@ -138,8 +138,8 @@ motion, elevation, and decoration values. The semantic declarations then referen
 Components do not select a palette or branch on a visual-theme name.
 
 Storybook exposes separate `polarity` and `visualTheme` toolbar values through one decorator.
-The focused theme preview can keep its local `visualTheme` control. Session 4m will add an
-independent `navigationOutline` control to the forward navigation specimen.
+The focused theme preview can keep its local `visualTheme` control. The forward navigation
+specimen uses the approved Guides treatment and does not expose a single-option outline control.
 
 ### Fidelity inputs
 
@@ -184,12 +184,14 @@ These are defects. They are not part of Ghost, Null, or Wipeout character.
 
 1. Implement both token layers and migrate all current design-system and approved specimen
    consumers in one change. Delete the old token names and the temporary ThemeCard role layer.
-2. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
+2. Rebuild sticky navigation as a bounded, VS Code-inspired widget in Storybook. Disable boundary
+   rubber-band for this view. Use the result to plan production adoption.
+3. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
    navigation-outline configuration.
-3. Remove the executable overlaid-card implementation and its legacy styles after live review.
-4. Migrate the launcher and shared overlays.
-5. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
-6. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
+4. Remove the executable overlaid-card implementation and its legacy styles after live review.
+5. Migrate the launcher and shared overlays.
+6. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
+7. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis.
 
 ## Component inventory

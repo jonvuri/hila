@@ -339,18 +339,21 @@ density (D), and interaction or preference state (S).
 
 ## Post-approval order
 
-The detailed sequence now lives in [Phase 10 · Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md)
-and [Sessions 4n–4o](Phase-10-Sessions-4n-4o-plan.md).
+The detailed sequence now lives in [Phase 10 · Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md),
+the [Session 4n integrated sticky-widget plan](Phase-10-Session-4n-plan.md), and
+[Sessions 4o–4p](Phase-10-Sessions-4o-4p-plan.md).
 
 1. Define the canonical semantic token contract, visual-theme override mechanism, component-variant
    registry, fidelity inputs, and migration map.
 2. Implement tokens and refactor the approved Storybook specimens onto them.
 3. Make sticky-header transitions seamless on the canonical geometry.
 4. Integrate navigation-outline affordances as an independently configurable component variant.
-5. Migrate the live shell and stream as one behavior-preserving slice.
-6. Remove the executable overlaid-card implementation after the live cutover passes review.
-7. Migrate the launcher and shared overlays before retiring top-level tabs.
-8. Migrate faces and browsers incrementally, with composed, substrate, and x-ray as an orthogonal
+5. Rebuild sticky navigation as an integrated, VS Code-inspired Storybook widget. Disable boundary
+   rubber-band for this view and plan production adoption.
+6. Migrate the live shell and stream as one behavior-preserving slice.
+7. Remove the executable overlaid-card implementation after the live cutover passes review.
+8. Migrate the launcher and shared overlays before retiring top-level tabs.
+9. Migrate faces and browsers incrementally, with composed, substrate, and x-ray as an orthogonal
    fidelity axis.
 
 ## Verification per session

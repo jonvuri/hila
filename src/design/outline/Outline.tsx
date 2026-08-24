@@ -4,22 +4,28 @@ import { computeDecorations, flattenTree } from './data'
 import styles from './Outline.module.css'
 import type {
   FlatRow,
+  LegacyOutlineVariant,
   OutlineProps,
   OutlineRowProps,
-  OutlineTheme,
   RowDecoration,
 } from './types'
 
 export type { OutlineProps, OutlineRowProps }
-export type { OutlineNode, OutlineTheme, FlatRow, RowDecoration, VectorSlotData } from './types'
+export type {
+  FlatRow,
+  LegacyOutlineVariant,
+  OutlineNode,
+  RowDecoration,
+  VectorSlotData,
+} from './types'
 export { computeDecorations } from './data'
 
 /**
  * Returns the combined CSS class string for an outline container.
  * Apply this to the element that wraps `OutlineRow` instances so that
- * theme-scoped CSS rules take effect.
+ * legacy-variant CSS rules take effect.
  */
-export const outlineThemeClass = (theme: OutlineTheme): string => {
+export const outlineThemeClass = (theme: LegacyOutlineVariant): string => {
   const map: Record<string, string> = {
     'workflowy-clone': styles.themeWorkflowyClone,
     'workflowy-geometric': styles.themeWorkflowyGeometric,

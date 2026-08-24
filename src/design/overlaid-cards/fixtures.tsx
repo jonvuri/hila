@@ -12,7 +12,7 @@ import { For, type JSX, Show } from 'solid-js'
 
 import './fixtures.css'
 import { Outline } from '../outline/Outline'
-import type { OutlineNode, OutlineTheme } from '../outline/types'
+import type { LegacyOutlineVariant, OutlineNode } from '../outline/types'
 
 import type { OverlaidAncestor } from './types'
 
@@ -470,7 +470,7 @@ export const workspacePanels: WorkspacePanel[] = [
 export const PanelBody = (props: {
   panel: StubPanel
   active: boolean
-  outlineTheme: OutlineTheme
+  outlineTheme: LegacyOutlineVariant
 }): JSX.Element => (
   <div class="pb-body">
     <div classList={{ 'pb-head-active': props.active, 'pb-head-inactive': !props.active }}>

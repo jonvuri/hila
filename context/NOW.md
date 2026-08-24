@@ -2,56 +2,56 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-08-23
+updated: 2026-08-24
 phase: phase-10
-session: phase-10-session-4m-navigation-outlines
+session: phase-10-session-4n-integrated-sticky-widget
 ---
 
 # Now
 
-Phase 10 Session 4l is closed. The forward workspace specimen now uses a pure sticky-layout model
-with stable slot identity, active ancestry, boundary data, and bounded transition progress. Flow
-rows and sticky previews share one row geometry and decoration seam. Header and drill handoffs use
-scroll-linked transforms, and scroll state updates at most once per animation frame.
+Phase 10 Session 4m is complete. Guides is the only forward navigation-outline variant and the
+default. Its dim rails align with parent heading text and end at the bottom edge of the last child
+text. The compact disclosure gutter does not move labels. Expanded controls appear on hover or
+focus. Leaf bullets are optional and off by default. Their gutter stays reserved when they are
+hidden. Sticky headings keep normal depth indentation and use guides without background or border
+chrome.
 
-The new dense Storybook fixture covers title-only, one-level, multi-level, drill-at-top, and
-drill-at-bottom transitions. Pure and component tests cover threshold edges, both directions,
-stable slot elements, row state, collapse, reduced motion, and drill handoffs.
+Decoration calculation and paint remain separate from shared row behavior and accessible
+semantics. The window contract carries stable global identity, pre-window ancestry, post-window
+continuation, and one-row look-ahead. Focused tests prove guide parity across window seams. The old
+`Design/Outline` stories preserve the five original renderers as historical references. The
+rejected forward adapters are removed.
 
-A follow-up corrected leaf-tail boundaries. Only expanded rows with children can advance the
-sticky chain or push an existing header. Leaf siblings now scroll under the current headers until
-the next eligible headers arrive.
-
-The live app, production faces, and executable overlaid-card archive remain unchanged. Their
-migration stays in the later planned slices.
+The live app, production configuration, production faces, and executable overlaid-card archive
+remain unchanged. Their migration stays in the later planned slices.
 
 ## Current verification
 
 - `npm run format` passes.
 - `npm run lint` passes with 14 existing warnings and no errors.
 - `npm run typecheck` passes.
-- All 865 unit tests pass.
+- All 871 unit tests pass. The optional bullet test confirms the same 20-pixel root indent when
+  bullets are visible or hidden.
 - `pnpm build-storybook` passes.
-- `git diff --check` passes.
-- Chrome DevTools one-pixel scans report at most one pixel of slot movement per scroll step in both
-  directions. Incoming previews match their flow rows with zero vertical error.
-- Desktop and narrow inspection passes in all three visual themes and both polarities. Reduced
-  motion uses instant click-to-scroll and no CSS animation.
-- The scroll performance trace reports CLS 0.00, no performance insights, and no long task. The
-  scroll handler performs no layout read. Chrome DevTools reports no console messages or issues.
+- Focused registry, guide, accessibility, and virtual-window tests pass.
+- Chrome DevTools confirms 32-pixel row geometry and no horizontal overflow. Guide x alignment has
+  zero measured error. The terminal guide is within 0.1 pixels of the last child text edge.
+- Pointer disclosure, keyboard focus, sticky scrolling, narrow width, all three visual themes, and
+  both polarities pass.
+- Lighthouse accessibility, best practices, and agentic checks score 100. Chrome DevTools reports
+  no browser issues.
 
-## Read for Session 4m
+## Read for Session 4n
 
-1. The [outline-affordance preflight](Phase-10-Sessions-4j-4m-plan.md#outline-affordances).
-2. The [Session 4m checklist](Phase-10-Sessions-4j-4m-plan.md#session-4m--integrate-configurable-navigation-outlines).
-3. The [navigation outline contract](Design-Faces.md#navigation-outline-variants).
-4. The [browser testing guide](Testing.md#agent-driven-live-browser-testing).
+1. The [integrated sticky-widget session plan](Phase-10-Session-4n-plan.md).
+2. The [Session 4l and 4m outcomes](Phase-10-Sessions-4j-4m-plan.md#session-4l--make-sticky-transitions-seamless).
+3. The [approved navigation outline](Design-Faces.md#navigation-outline).
+4. The [testing guide](Testing.md) before browser work.
 
 ## Next action
 
-Replace the ambiguous outline theme boundary with the navigation-outline variant registry. Then
-separate decoration calculation and paint from navigation-row behavior. Preserve the stable sticky
-geometry and do not migrate production configuration early.
+Start Session 4n Stage 1. Record the current baseline and lock the integrated widget state and
+scroll contracts before renderer changes.
 
 ## Documentation boundary
 

@@ -32,7 +32,7 @@ import { createMemo, createSignal, For, type JSX, onCleanup, onMount, Show } fro
 
 import { OutlineRow, outlineThemeClass } from '../../outline/Outline'
 import { computeDecorations, flattenTree } from '../../outline/data'
-import type { OutlineNode, OutlineTheme } from '../../outline/types'
+import type { LegacyOutlineVariant, OutlineNode } from '../../outline/types'
 import './wipeout.css'
 import './workspace.css'
 
@@ -50,7 +50,7 @@ type StickyNavProps = {
   /** Next panel's title -- fallback text when the drill row is hidden by a
    *  collapsed ancestor (it must stay visible regardless). */
   drillLabel?: string
-  outlineTheme: OutlineTheme
+  outlineTheme: LegacyOutlineVariant
 }
 
 const StickyNav = (props: StickyNavProps): JSX.Element => {

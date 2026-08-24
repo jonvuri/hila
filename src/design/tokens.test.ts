@@ -49,12 +49,12 @@ describe('canonical token contract', () => {
     expect(componentVariantRegistry.navigationOutline.values).not.toContain('ghost')
     expect(componentVariantRegistry.navigationOutline.values).not.toContain('null')
     expect(componentVariantRegistry.navigationOutline.values).not.toContain('wipeout')
-    expect(resolveComponentVariant('navigationOutline', 'vector')).toBe('vector')
+    expect(resolveComponentVariant('navigationOutline', 'guides')).toBe('guides')
   })
 
   test('falls back for missing and unknown component variant values', () => {
-    expect(resolveComponentVariant('navigationOutline', undefined)).toBe('workflowy')
-    expect(resolveComponentVariant('navigationOutline', 'ghost')).toBe('workflowy')
+    expect(resolveComponentVariant('navigationOutline', undefined)).toBe('guides')
+    expect(resolveComponentVariant('navigationOutline', 'ghost')).toBe('guides')
     expect(resolveComponentVariant('tableTreatment', 'unknown')).toBe('thin-line')
   })
 

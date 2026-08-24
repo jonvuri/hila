@@ -8,7 +8,7 @@
 //     each child card overlaying the remainder of its parent
 //
 // Two swappable renderers share this one data contract (mirroring the
-// `OutlineTheme` model -- see types.ts):
+// legacy outline-variant model -- see types.ts):
 //   - `expanded-staircase`  : the live look. One unfocused card + label tab per
 //     ancestor, fanned into a depth staircase of edge lines.
 //   - `collapsed-breadcrumb`: a space-saving concept. Each gap collapses to a

@@ -1,4 +1,5 @@
 import type { OutlineNode } from '../outline/types'
+import type { NavigationOutlineVariant } from '../tokens'
 
 export type WorkspaceAncestrySource = 'provenance' | 'home' | 'membership'
 
@@ -37,6 +38,8 @@ export type WorkspaceProps = {
   ariaLabel?: string
   panels: readonly WorkspacePanel[]
   workspaceTitle: string
+  navigationOutline?: NavigationOutlineVariant
+  showLeafBullets?: boolean
   onAncestrySelect?: (item: WorkspaceAncestryItem) => void
   onDrill?: (panel: WorkspacePanel, rowId: string) => void
 }

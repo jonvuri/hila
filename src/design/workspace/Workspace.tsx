@@ -51,6 +51,8 @@ const Workspace = (props: WorkspaceProps): JSX.Element => (
               drillLabel={props.panels[index() + 1]?.title}
               selectedId={panel.selectedId}
               disabledIds={panel.disabledIds}
+              navigationOutline={props.navigationOutline}
+              showLeafBullets={props.showLeafBullets}
               onDrill={(rowId) => props.onDrill?.(panel, rowId)}
             />
           </article>

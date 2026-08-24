@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { For, type JSX } from 'solid-js'
 
-import type { OutlineTheme } from '../outline/types'
+import type { LegacyOutlineVariant } from '../outline/types'
 
 import OverlaidCards from './OverlaidCards'
 import {
@@ -36,7 +36,7 @@ import { NOTCHES_DEFAULTS, TOPLINES_DEFAULTS } from './variants/shared'
 
 type StoryArgs = {
   theme: OverlaidCardsTheme
-  outlineTheme: OutlineTheme
+  outlineTheme: LegacyOutlineVariant
   // wipeout-notches dials
   edgeMode?: NotchesEdgeMode
   verticalEdges?: NotchesEdgeMode | 'inherit'
@@ -210,7 +210,7 @@ const meta: Meta<StoryArgs> = {
         'vector-field',
         'corner-notches',
         'whitespace-only',
-      ] satisfies OutlineTheme[],
+      ] satisfies LegacyOutlineVariant[],
       description: 'Outline theme rendered inside the panels (dense fixtures).',
     },
   },

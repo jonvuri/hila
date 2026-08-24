@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { render } from 'solid-js/web'
 
+import { navigationOutlineValues } from '../tokens'
+
 import StickyNavigation from './StickyNavigation'
 
 describe('StickyNavigation', () => {
@@ -80,6 +82,13 @@ describe('StickyNavigation', () => {
     expect(
       container.querySelector('[data-row-id="disabled"]')?.getAttribute('aria-disabled'),
     ).toBe('true')
+    expect(
+      container.querySelector<HTMLElement>('[data-row-id="parent"] .ws-row-indent')?.style
+        .width,
+    ).toBe('20px')
+    expect(
+      container.querySelector<HTMLElement>('[data-row-id="child"] .ws-row-indent')?.style.width,
+    ).toBe('36px')
 
     container.querySelector<HTMLButtonElement>('button[aria-label="Collapse Parent"]')!.click()
     expect(container.querySelector('[data-row-id="child"]')).toBeNull()
@@ -114,5 +123,65 @@ describe('StickyNavigation', () => {
     scroll.dispatchEvent(new Event('scroll'))
     frameCallbacks.shift()!(0)
     expect(container.querySelector('[data-sticky-location="top"]')).toBe(drill)
+  })
+
+  test('keeps behavior and accessible semantics in the Guides row', () => {
+    for (const variant of navigationOutlineValues) {
+      dispose?.()
+      container.replaceChildren()
+      dispose = render(
+        () => (
+          <StickyNavigation
+            items={[
+              {
+                id: 'parent',
+                content: 'Parent',
+                children: [{ id: 'child', content: 'Child' }],
+              },
+            ]}
+            selectedId="child"
+            navigationOutline={variant}
+          />
+        ),
+        container,
+      )
+
+      expect(
+        container.querySelector('.ws-navigation')?.getAttribute('data-navigation-outline'),
+      ).toBe(variant)
+      expect(container.querySelector('.ws-navigation')?.getAttribute('data-leaf-bullets')).toBe(
+        'false',
+      )
+      expect(container.querySelectorAll('[role="treeitem"]')).toHaveLength(2)
+      expect(container.querySelectorAll('button[aria-label="Collapse Parent"]')).toHaveLength(1)
+      expect(
+        container.querySelector('[data-row-id="child"]')?.getAttribute('aria-selected'),
+      ).toBe('true')
+      expect(container.querySelector('[data-row-id="child"]')?.getAttribute('aria-level')).toBe(
+        '2',
+      )
+      expect(
+        container
+          .querySelector('[data-row-id="parent"]')
+          ?.classList.contains('ws-nav-row-selection-path'),
+      ).toBe(true)
+      expect(
+        container.querySelector('.ws-row-decoration-slot')?.getAttribute('aria-hidden'),
+      ).toBe('true')
+    }
+  })
+
+  test('shows optional leaf bullets without changing row indentation', () => {
+    dispose = render(
+      () => <StickyNavigation items={[{ id: 'leaf', content: 'Leaf' }]} showLeafBullets />,
+      container,
+    )
+
+    expect(container.querySelector('.ws-navigation')?.getAttribute('data-leaf-bullets')).toBe(
+      'true',
+    )
+    expect(
+      container.querySelector<HTMLElement>('[data-row-id="leaf"] .ws-row-indent')?.style.width,
+    ).toBe('20px')
   })
 })

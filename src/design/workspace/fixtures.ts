@@ -240,4 +240,55 @@ export const stickyThresholdPanels: readonly WorkspacePanel[] = [
   },
 ]
 
+export const navigationOutlinePanels: readonly WorkspacePanel[] = [
+  {
+    id: 'outline-review',
+    kind: 'navigation',
+    title: 'Guides',
+    items: [
+      {
+        id: 'active-branch',
+        content: 'Selected branch',
+        children: [
+          {
+            id: 'deep-branch',
+            content: 'Deep hierarchy',
+            children: [
+              {
+                id: 'deeper-branch',
+                content: 'Editable nested row',
+                children: [
+                  { id: 'selected-leaf', content: 'Selected leaf' },
+                  { id: 'disabled-leaf', content: 'Disabled leaf' },
+                ],
+              },
+              {
+                id: 'long-leaf',
+                content:
+                  'A long navigation label stays truncated while the guide depth increases',
+              },
+            ],
+          },
+          { id: 'active-tail', content: 'Branch tail' },
+        ],
+      },
+      {
+        id: 'collapsed-branch',
+        content: 'Collapsed branch',
+        children: denseLeaves('Hidden child', 4),
+      },
+      {
+        id: 'drill-branch',
+        content: 'Drill target',
+        children: denseLeaves('Drill child', 5),
+      },
+      ...denseLeaves('Boundary context', 24),
+    ],
+    initialCollapsed: new Set(['collapsed-branch']),
+    drillId: 'drill-branch',
+    selectedId: 'selected-leaf',
+    disabledIds: new Set(['disabled-leaf']),
+  },
+]
+
 export { workspaceTitle }

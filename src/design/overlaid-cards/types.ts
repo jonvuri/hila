@@ -10,7 +10,7 @@ import type { JSX } from 'solid-js'
 // ---------------------------------------------------------------------------
 
 /**
- * Swappable renderer over one data contract (mirrors the `OutlineTheme` model).
+ * Swappable renderer over one data contract (mirrors the legacy outline-variant model).
  *   - `expanded-staircase`  : the live look -- one unfocused card + label tab
  *     per ancestor, fanned into a depth staircase of edge lines.
  *   - `collapsed-breadcrumb`: space-saving concept -- each gap collapses to a

@@ -167,51 +167,55 @@ scroll direction.
 
 ## Session 4m — Integrate configurable navigation outlines
 
-**Outcome:** the forward navigation panel can switch outline affordances independently of visual
-theme, and the old plus new candidates are ready for user review.
+**Outcome:** the forward navigation panel uses the approved Guides treatment independently of
+visual theme. The old outline stories preserve the original reference renderers.
 
-- [ ] Replace the ambiguous `OutlineTheme` boundary with a navigation-outline variant registry.
+- [x] Replace the ambiguous `OutlineTheme` boundary with a navigation-outline variant registry.
       Keep visual-theme values out of the registry key.
-- [ ] Split the old renderer into decoration calculation and decoration paint. The shared
+- [x] Add separate decoration calculation and paint adapters beside the old renderer. The shared
       navigation row continues to own all behavior and accessible semantics.
-- [ ] Define the virtual-window input contract. It must provide stable global row identity,
-      ancestry before the window, continuation state after the window, one-row look-ahead, and the
-      bounded 100-row forward context needed by vector field.
-- [ ] Adapt all five existing outline variants to the shared navigation row and canonical tokens.
-      Preserve the old renderer-only stories as reference cases until the adapters pass.
-- [ ] Add **hover guides**, inspired by VS Code. Reveal guide rails on row hover and
+- [x] Define the virtual-window input contract. It must provide stable global row identity,
+      ancestry before the window, continuation state after the window, and one-row look-ahead.
+- [x] Adapt all five existing outline variants to the shared navigation row and canonical tokens
+      for review. Preserve the old renderer-only stories as reference cases.
+- [x] Add **hover guides**, inspired by VS Code. Reveal guide rails on row hover and
       `:focus-within`; keep the selected branch visible.
-- [ ] Add **toggle gutter**, inspired by Notion. Use one stable disclosure column, quiet leaf
+- [x] Add **toggle gutter**, inspired by Notion. Use one stable disclosure column, quiet leaf
       spacing, and no resting guide line.
-- [ ] Add a focused `Design/Navigation outline` story that uses the real forward navigation panel.
-      Provide independent `visualTheme` and `navigationOutline` controls. Do not render a Cartesian
-      comparison grid.
-- [ ] Verify every variant with expanded, collapsed, selected, disabled, editable, drill-path,
-      sticky, long-label, deep-tree, and virtual-window-boundary states.
-- [ ] Review the old and new candidates with the user. Record the approved default and the variants
-      that remain available. Archive rejected candidates without deleting their reference stories.
-- [ ] Keep production configuration and persistence for the later live workspace migration.
+- [x] Add a focused `Design/Navigation outline` story that uses the real forward navigation panel.
+      During review, provide independent `visualTheme` and `navigationOutline` controls. Remove the
+      outline control after one treatment remains. Do not render a Cartesian comparison grid.
+- [x] During review, verify every variant with expanded, collapsed, selected, disabled, editable,
+      drill-path, sticky, long-label, deep-tree, and virtual-window-boundary states.
+- [x] Review the old and new candidates with the user. Guides is the only approved variant and the
+      default. The old `Design/Outline` stories preserve the five original candidates as reference
+      cases. Remove the other forward adapters.
+- [x] Keep production configuration and persistence for the later live workspace migration.
 
 ### Session 4m verification
 
-- [ ] Run focused decoration, registry, accessibility, and virtual-window-boundary tests.
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
-- [ ] Run `pnpm build-storybook`.
-- [ ] Use Chrome DevTools to switch outline and visual theme independently. Check pointer, keyboard,
+- [x] Run focused decoration, registry, accessibility, and virtual-window-boundary tests.
+- [x] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
+- [x] Run `pnpm build-storybook`.
+- [x] Use Chrome DevTools to switch outline and visual theme independently. Check pointer, keyboard,
       sticky transition, narrow width, both polarities, and reduced motion.
 
 ## Follow-on migration order
 
-Sessions 4n–4o are detailed in the
-[live workspace migration and overlaid-card removal plan](Phase-10-Sessions-4n-4o-plan.md).
+The [integrated sticky-widget session](Phase-10-Session-4n-plan.md) is the next visual gate.
+[Sessions 4o–4p](Phase-10-Sessions-4o-4p-plan.md) then cover live workspace migration and
+overlaid-card removal. Session 4n can insert a production sticky session before that sequence.
 
-1. Migrate the live shell and stream as one behavior-preserving slice. Promote the approved sticky
+1. Rebuild sticky navigation as a bounded, VS Code-inspired widget in the focused Storybook
+   workspace. Disable scroll-boundary rubber-band for this view and plan production adoption from
+   the approved result.
+2. Migrate the live shell and stream as one behavior-preserving slice. Promote the approved sticky
    model and navigation-outline configuration without changing navigation behavior.
-2. Remove the executable overlaid-card renderer, variants, styles, stories, and fixture coupling
+3. Remove the executable overlaid-card renderer, variants, styles, stories, and fixture coupling
    after the live cutover passes review.
-3. Migrate the launcher and shared overlays. Land the launcher before top-level tabs are removed.
-4. Capture the retiring Table and Tags views as Storybook references, then remove their tabs.
-5. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
+4. Migrate the launcher and shared overlays. Land the launcher before top-level tabs are removed.
+5. Capture the retiring Table and Tags views as Storybook references, then remove their tabs.
+6. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    orthogonal axis.
 
 ## Starter prompt for Session 4j

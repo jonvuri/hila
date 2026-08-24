@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { For } from 'solid-js'
 
 import { Outline } from './Outline'
-import { OutlineNode, OutlineTheme } from './types'
+import type { LegacyOutlineVariant, OutlineNode } from './types'
 
 const demoItems: OutlineNode[] = [
   {
@@ -85,7 +85,7 @@ const meta: Meta<typeof Outline> = {
         'vector-field',
         'corner-notches',
         'whitespace-only',
-      ] satisfies OutlineTheme[],
+      ] satisfies LegacyOutlineVariant[],
     },
   },
 }
@@ -240,7 +240,7 @@ export const VectorFieldDense: Story = {
   ),
 }
 
-const allThemes: OutlineTheme[] = [
+const allThemes: LegacyOutlineVariant[] = [
   'workflowy-clone',
   'workflowy-geometric',
   'vector-field',

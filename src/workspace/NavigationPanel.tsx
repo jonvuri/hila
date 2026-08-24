@@ -24,7 +24,7 @@ import {
   outlineThemeClass,
   computeDecorations,
 } from '../design/outline/Outline'
-import type { FlatRow, OutlineTheme } from '../design/outline/types'
+import type { FlatRow, LegacyOutlineVariant } from '../design/outline/types'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 import type { OutlineCallbacks } from '../editor/keymap'
 import {
@@ -578,7 +578,7 @@ const OutlineCellStrip = (props: {
 // ---------------------------------------------------------------------------
 
 const NavigationPanel = (props: NavigationPanelProps) => {
-  const [theme] = createSignal<OutlineTheme>('workflowy-clone')
+  const [theme] = createSignal<LegacyOutlineVariant>('workflowy-clone')
 
   // Panel data root: rank key of the subtree this panel renders. Fixed for the
   // component's lifetime -- the root panel has no root (null); embedded panels

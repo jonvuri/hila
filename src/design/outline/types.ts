@@ -1,6 +1,6 @@
 import type { JSX } from 'solid-js'
 
-export type OutlineTheme =
+export type LegacyOutlineVariant =
   | 'workflowy-clone'
   | 'workflowy-geometric'
   | 'vector-field'
@@ -29,7 +29,7 @@ export type RowDecoration = {
 }
 
 export type OutlineRowProps = {
-  theme: OutlineTheme
+  theme: LegacyOutlineVariant
   row: FlatRow
   decoration: RowDecoration
   onToggle?: (id: string) => void
@@ -46,7 +46,7 @@ export type OutlineNode = {
 
 export type OutlineProps = {
   items: OutlineNode[]
-  theme: OutlineTheme
+  theme: LegacyOutlineVariant
   initialCollapsed?: ReadonlySet<string>
   renderContent?: (row: FlatRow) => JSX.Element
 }

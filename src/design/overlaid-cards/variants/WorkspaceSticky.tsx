@@ -14,7 +14,7 @@
 
 import { For, type JSX, Show } from 'solid-js'
 
-import type { OutlineTheme } from '../../outline/types'
+import type { LegacyOutlineVariant } from '../../outline/types'
 import './wipeout.css'
 import './workspace.css'
 import type { WorkspacePanel } from '../fixtures'
@@ -26,7 +26,7 @@ import WorkspaceFocusPanel from './WorkspaceFocusPanel'
 type WorkspaceStickyProps = {
   panels: readonly WorkspacePanel[]
   title: string
-  outlineTheme: OutlineTheme
+  outlineTheme: LegacyOutlineVariant
   displayFont?: WipeoutDisplayFont
 }
 

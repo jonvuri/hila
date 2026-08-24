@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { type JSX } from 'solid-js'
 
 import { Outline } from '../outline/Outline'
-import type { OutlineTheme } from '../outline/types'
+import type { LegacyOutlineVariant } from '../outline/types'
 
 import OverlaidCards from './OverlaidCards'
 import { workspacePanels, workspaceTitle, type WorkspacePanel } from './fixtures'
@@ -22,7 +22,7 @@ import WorkspaceSticky from './variants/WorkspaceSticky'
 // ---------------------------------------------------------------------------
 
 type StoryArgs = {
-  outlineTheme: OutlineTheme
+  outlineTheme: LegacyOutlineVariant
   displayFont: WipeoutDisplayFont
   // FocusPanel story
   active?: boolean
@@ -56,7 +56,7 @@ const meta: Meta<StoryArgs> = {
         'vector-field',
         'corner-notches',
         'whitespace-only',
-      ] satisfies OutlineTheme[],
+      ] satisfies LegacyOutlineVariant[],
       description: 'Outline theme rendered inside the navigation panels.',
     },
     displayFont: {

@@ -115,15 +115,7 @@ export type Density = (typeof densityValues)[number]
 export const renderingFidelityValues = ['composed', 'substrate'] as const
 export type RenderingFidelity = (typeof renderingFidelityValues)[number]
 
-export const navigationOutlineValues = [
-  'workflowy',
-  'geometric',
-  'vector',
-  'notches',
-  'whitespace',
-  'hover-guides',
-  'toggle-gutter',
-] as const
+export const navigationOutlineValues = ['guides'] as const
 export type NavigationOutlineVariant = (typeof navigationOutlineValues)[number]
 
 export const tableTreatmentValues = ['thin-line', 'corner-notch', 'cell-dots'] as const
@@ -148,7 +140,7 @@ export type ComponentVariantRegistry = {
 export const componentVariantRegistry = {
   navigationOutline: {
     values: navigationOutlineValues,
-    defaultValue: 'workflowy',
+    defaultValue: 'guides',
   },
   tableTreatment: {
     values: tableTreatmentValues,

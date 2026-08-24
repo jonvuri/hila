@@ -1,12 +1,14 @@
-# Phase 10 · Sessions 4n–4o — Live workspace migration and overlaid-card removal
+# Phase 10 · Sessions 4o–4p — Live workspace migration and overlaid-card removal
 
-This sequence starts after Sessions 4j–4m close. Session 4n moves the approved workspace structure,
-sticky behavior, outline configuration, and canonical tokens into the live app. Session 4o removes
-the retired overlaid-card implementation after the cutover proves that it has no remaining
-consumer.
+This sequence starts after the integrated sticky-widget treatment is approved and its production
+path is resolved. Session 4o moves the approved workspace structure, sticky behavior, outline
+configuration, and canonical tokens into the live app. Session 4p removes the retired overlaid-card
+implementation after the cutover proves that it has no remaining consumer.
 
-Use [NOW.md](NOW.md) to identify the active session. Execute one session at a time. Session 4n must
-pass its user review and live-app verification before Session 4o deletes any source.
+Use [NOW.md](NOW.md) to identify the active session. Execute one session at a time. Session 4o must
+pass its user review and live-app verification before Session 4p deletes any source. Session 4n can
+insert a production sticky session before this sequence and renumber these sessions if its
+closeout plan requires that order.
 
 ## Fixed decisions
 
@@ -41,10 +43,10 @@ The retired source also has dependencies outside its directory:
   `.card-*`, or OverlaidCards concepts.
 - Two archived Storybook groups execute the old renderer and its variant modules.
 
-Session 4n removes live dependencies. Session 4o removes the executable archive and all remaining
+Session 4o removes live dependencies. Session 4p removes the executable archive and all remaining
 legacy names.
 
-## Session 4n — Migrate the live workspace
+## Session 4o — Migrate the live workspace
 
 **Outcome:** the live app uses the approved workspace shell, sticky navigation, outline variant,
 and canonical theme roles without changing workspace data or gestures.
@@ -106,18 +108,18 @@ and canonical theme roles without changing workspace data or gestures.
 - [ ] Check Ghost, Null, and Wipeout in both polarities. Check keyboard focus and reduced motion.
 - [ ] Record a scroll trace with live virtualized data. Confirm that sticky updates do not cause
       repeated forced layout or long tasks.
-- [ ] Get user approval before starting Session 4o.
+- [ ] Get user approval before starting Session 4p.
 
-### Session 4n closeout gate
+### Session 4o closeout gate
 
 - [ ] No production module imports `src/design/overlaid-cards`.
 - [ ] No production style consumes `--card-*` or `.card-*` layout classes.
 - [ ] The old directory is used only by its archived stories and any fixture dependency that
-      Session 4o will remove.
+      Session 4p will remove.
 - [ ] Update Phase 10 and `NOW.md` with the cutover result, verification, and exact remaining
       dependency list.
 
-## Session 4o — Remove the retired implementation
+## Session 4p — Remove the retired implementation
 
 **Outcome:** no executable overlaid-card implementation, story, style, fixture, token, or import
 remains. Historical design evidence remains readable in documentation, archived HTML, and git
@@ -125,7 +127,7 @@ history.
 
 ### Stage 1 — Prove the deletion boundary
 
-- [ ] Confirm that Session 4n is approved and its closeout gate is complete.
+- [ ] Confirm that Session 4o is approved and its closeout gate is complete.
 - [ ] Search tracked source, Storybook configuration, tests, and build inputs for
       `overlaid-cards`, `OverlaidCards`, `OverlaidAncestor`, `--card-*`, and retired renderer names.
 - [ ] Classify every result as forward dependency, executable archive, stale style/comment, or
@@ -156,7 +158,7 @@ history.
 - [ ] Keep Phase 7 and Phase 10 decision records and archived HTML artifacts. Mark deleted source
       paths as historical text instead of active file links where needed.
 - [ ] Update the inventory and design documents to state that the executable implementation was
-      removed in Session 4o.
+      removed in Session 4p.
 - [ ] Keep the approved workspace stories as the only executable layout reference.
 - [ ] Update `NOW.md` and the Phase 10 checklist with the removal result and next migration session.
 
@@ -174,7 +176,7 @@ history.
 
 ## Follow-on order
 
-After Session 4o closes:
+After Session 4p closes:
 
 1. Migrate the launcher and shared overlays onto canonical tokens.
 2. Land the launcher before top-level tabs are removed.
@@ -182,18 +184,18 @@ After Session 4o closes:
 4. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    orthogonal axis.
 
-## Starter prompt for Session 4n
+## Starter prompt for Session 4o
 
-> Read `context/NOW.md`, the fixed decisions and Session 4n checklist in this plan, the Sessions
+> Read `context/NOW.md`, the fixed decisions and Session 4o checklist in this plan, the Sessions
 > 4j–4m closeout, the approved workspace rules in `Design.md`, and `context/Testing.md`. Execute
-> Session 4n only. Preserve workspace data and gestures while replacing the live OverlaidCards
+> Session 4o only. Preserve workspace data and gestures while replacing the live OverlaidCards
 > renderer with the approved production workspace shell. Do not delete the archived implementation,
 > start launcher or tab work, or commit.
 
-## Starter prompt for Session 4o
+## Starter prompt for Session 4p
 
-> Read `context/NOW.md`, the Session 4n closeout and Session 4o checklist in this plan, Phase 10 §4,
-> and `context/Testing.md`. Execute Session 4o only. Prove that no live dependency remains, move the
+> Read `context/NOW.md`, the Session 4o closeout and Session 4p checklist in this plan, Phase 10 §4,
+> and `context/Testing.md`. Execute Session 4p only. Prove that no live dependency remains, move the
 > surviving fixture data, delete the executable overlaid-card implementation and legacy styles,
 > preserve historical documentation and HTML evidence, run the required verification, and do not
 > commit.

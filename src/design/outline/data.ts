@@ -1,4 +1,10 @@
-import type { FlatRow, OutlineNode, OutlineTheme, RowDecoration, VectorSlotData } from './types'
+import type {
+  FlatRow,
+  LegacyOutlineVariant,
+  OutlineNode,
+  RowDecoration,
+  VectorSlotData,
+} from './types'
 
 export const ANGLE_CEILING_DIST = 100
 
@@ -32,7 +38,7 @@ export const flattenTree = (
  * sufficient forward context (≥ ANGLE_CEILING_DIST rows).
  */
 export const computeDecorations = (
-  theme: OutlineTheme,
+  theme: LegacyOutlineVariant,
   rows: ReadonlyArray<FlatRow>,
 ): RowDecoration[] => {
   const n = rows.length

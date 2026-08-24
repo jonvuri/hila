@@ -17,26 +17,28 @@ x-ray inspection state are also orthogonal. Do not multiply face renderers acros
 product of these axes. Face styles must consume semantic tokens supplied by the active visual theme
 and polarity.
 
-## Navigation outline variants
+## Navigation outline
 
-The old `Design/Outline` stories define five treatments for the same tree. Session 4m will adapt
-their decoration to the forward navigation row. It will also add two new candidates. See the
-[Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#session-4m--integrate-configurable-navigation-outlines).
+Session 4m reviewed seven treatments and approved Guides as the only forward navigation outline.
+The old `Design/Outline` stories preserve the five original renderers as historical references.
+The rejected forward adapters are not part of the registry.
 
-### Variant inventory
+### Approved treatment
 
-| Theme                       | Visual metaphor      | Key elements                                                                                                                                                                                   |
-| --------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A — Workflowy clone**     | Traditional outliner | Filled circle bullets, triangle carets, SVG guide lines connecting parent to children                                                                                                          |
-| **B — Workflowy geometric** | Geometric outliner   | Dash bullets for leaves, plus-sign for collapsed parents, dashed SVG guide lines                                                                                                               |
-| **C — Vector field**        | Directional lines    | Left gutter with angled vector lines pointing from parent to last child; angle determined by row distance (0→0°, 1→35°, 2→50°, 3→58°, 4→63°); own-depth strokes prominent, parent strokes fade |
-| **D — Corner notches**      | Structural brackets  | Top-left L-bracket on every row, bottom-right L-bracket on the visually-last row at each depth level; notch color fades with depth                                                             |
-| **E — Whitespace only**     | Minimalist           | No bullets or lines; hierarchy conveyed by indentation only; faint carets appear on expandable items                                                                                           |
-| **F — Hover guides**        | Context on demand    | Quiet rest state; ancestry rails appear on row hover or keyboard focus; the selected branch remains visible                                                                                    |
-| **G — Toggle gutter**       | Disclosure-led       | One stable disclosure column, quiet leaf spacing, and no resting guide line                                                                                                                    |
+| Variant    | Visual metaphor      | Key elements                                                                                                                     |
+| ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Guides** | Traditional outliner | Dim ancestry rails, optional leaf bullets, compact disclosure controls, and one text axis for each depth in flow and sticky rows |
 
-Themes A–E are reference inputs, not approved shipping names or defaults. Session 4m ends with a
-user review that selects the default and the variants that remain available.
+Each guide aligns with the left edge of its parent heading text. A terminal guide ends at the
+bottom edge of its last child's text. The disclosure control uses the space immediately left of
+the row's text axis and does not change text position. A collapsed parent shows `+`. An expanded
+parent shows a dim `−` only on row hover or keyboard focus.
+
+Leaf bullets are optional and off by default. The row reserves the same bullet gutter when bullets
+are visible or hidden. Toggling bullets must not move text, guides, or disclosure controls.
+
+Sticky headings keep normal depth indentation and guides. They use the canvas background only to
+cover moving flow content. They have no surface, border, selection bar, or hover-fill chrome.
 
 ### Decoration contract
 
@@ -47,7 +49,6 @@ decoration adapter:
 - Expanded and collapsed state.
 - Ancestry before the virtual window.
 - Continuation state and one-row look-ahead after the window.
-- Up to 100 forward rows for the vector-field ceiling.
 
 The decoration adapter returns paint data only. It must not add disclosure, editing, selection,
 disabled, drill, drag, or focus behavior. Decorative marks are hidden from assistive technology.
@@ -58,26 +59,26 @@ The navigation row owns one fixed geometry and exposes decoration slots. A regis
 `navigationOutline` key to calculation and paint adapters. Each adapter consumes canonical semantic
 tokens from the active visual theme and polarity.
 
-The forward Storybook specimen has separate `visualTheme` and `navigationOutline` controls. Do not
-build a Cartesian renderer matrix. Production selection and persistence land with the later live
-workspace migration.
+The forward Storybook specimen has visual-theme and polarity controls. It does not expose a
+single-option outline control. Production adoption lands with the later live workspace migration.
 
 The old renderer currently mixes row behavior with decoration. Do not reuse it as the host row.
 Adapt its calculations and paint, then preserve its standalone stories as references until the
 forward adapters pass.
 
-### Windowing considerations
+### Windowing contract
 
-Guide and corner variants need context outside a rendered window. Vector field can need 100 forward
-rows. The production navigation panel currently computes decorations from its loaded row list. Do
-not treat the last loaded row as the visual end of a branch. The adapter input must carry explicit
-boundary context and support deterministic tests across window seams.
+Guides need explicit context outside a rendered window. Do not treat the last loaded row as the
+visual end of a branch. The adapter input carries ancestry before the window, continuation after
+the window, and one-row look-ahead. Deterministic tests compare full and windowed results.
 
 ### Implementation phases
 
-Session 4m performs one bounded integration pass: establish the registry and host seam; adapt the
-five old variants; add hover guides and toggle gutter; then review the seven candidates. The live
-workspace migration later adds production configuration and persistence.
+Session 4m established the registry and host seam, reviewed seven candidates, and approved Guides.
+Session 4n rebuilds sticky navigation as a bounded widget integrated with its scroll component. It
+uses the VS Code tree architecture as its primary reference and tests scoped suppression of
+scroll-boundary rubber-band behavior. The live workspace migration later adopts the approved
+result without changing navigation behavior.
 
 ## Table face treatments
 
@@ -124,14 +125,7 @@ all three are implemented together. Treatment A establishes the base. Treatment 
 A component-variant registry maps stable configuration keys to local adapters:
 
 ```typescript
-type NavigationOutlineVariant =
-  | 'workflowy'
-  | 'geometric'
-  | 'vector'
-  | 'notches'
-  | 'whitespace'
-  | 'hover-guides'
-  | 'toggle-gutter'
+type NavigationOutlineVariant = 'guides'
 
 type TableTreatmentVariant = 'thin-line' | 'corner-notch' | 'cell-dots'
 
@@ -154,23 +148,22 @@ type ComponentVariantRegistry = {
 
 The registry owns validation and fallback. An explicit valid value wins. A missing or unknown value
 uses that key's `defaultValue`. An unknown persisted value must not enter CSS or select another
-axis. The current `workflowy` behavior is the temporary navigation fallback. Session 4m will set the
-reviewed shipping default.
+axis. `guides` is the reviewed shipping default.
 
 The registry must not contain Ghost, Null, Wipeout, dark, light, composed, substrate, or x-ray
 values. A visual-theme, polarity, or fidelity change must not mutate an explicit component value.
 The rendering host can expose a resolved value with a component-specific data attribute, such as
 `data-navigation-outline`, after TypeScript validates it.
 
-### Face config panel integration
+### Host integration
 
-The navigation panel and outline face can select an outline variant independently. Integration
-requires:
+The navigation panel and outline face use the registered outline treatment independently of visual
+theme and polarity. Integration requires:
 
 1. Add a `navigationOutline` value to the applicable component configuration.
-2. Populate its control with registered variant keys.
-3. Pass the selected key to the decoration adapter.
-4. Keep this value stable when the visual theme or polarity changes.
+2. Resolve the registered value before it reaches CSS.
+3. Pass the resolved key to the decoration adapter.
+4. Do not show a configuration control while the registry has one value.
 
 ### Slot system composition
 
@@ -185,10 +178,13 @@ and matrix browser. The migration order is:
 
 1. Define and implement canonical tokens in Sessions 4j–4k.
 2. Close the sticky and navigation-outline design gates in Sessions 4l–4m.
-3. Migrate the live shell and stream without behavior changes.
-4. Remove the executable overlaid-card implementation after the live cutover passes review.
-5. Migrate the launcher and shared overlays before top-level tabs are removed.
-6. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
+3. Rebuild sticky navigation as an integrated, VS Code-inspired widget and plan production
+   adoption in Session 4n.
+4. Migrate the live shell and stream without behavior changes.
+5. Remove the executable overlaid-card implementation after the live cutover passes review.
+6. Migrate the launcher and shared overlays before top-level tabs are removed.
+7. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
 The detailed order is in the [Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order)
-and the [Sessions 4n–4o plan](Phase-10-Sessions-4n-4o-plan.md).
+and the [Session 4n plan](Phase-10-Session-4n-plan.md). Live migration and removal are in the
+[Sessions 4o–4p plan](Phase-10-Sessions-4o-4p-plan.md).
