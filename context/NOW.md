@@ -2,76 +2,73 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-08-16
+updated: 2026-08-23
 phase: phase-10
-session: phase-10-session-4i-theme-approval
+session: phase-10-sessions-4j-4m-review
 ---
 
 # Now
 
-Phase 10 Session 4h is closed. `Design/Theme comparison` now renders Ghost, Null, and Wipeout
-consecutively through the same `ThemeCard`. Wipeout spreads Ghost's complete local role set, then
-adds hard brightness steps, instrument type, disciplined violet signals, one-cut geometry, ticks,
-brackets, and unlit VFD segments through scoped decoration.
+Phase 10 Session 4i is closed. Ghost, Null, and Wipeout are final and intended to ship as one
+visual-theme family. `Design/Theme previewer` renders one `ThemeCard` with an instant theme control.
+The fixed theme stories retain their approved intent and delta copy.
 
-Long-form copy keeps the Ghost body face and size. The Wipeout layer does not add overlaid cards,
-ancestry tabs, a depth gauge, an alternate layout, elevation shadow, glow, or ambient motion. The
-detailed outcome is in the [session plan](Phase-10-Session-4c-plan.md#session-4h-closeout).
+The next six sessions are planned in
+[Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md) and
+[Sessions 4n–4o](Phase-10-Sessions-4n-4o-plan.md):
 
-## Session 4h verification
+1. Define the canonical token, visual-theme, component-variant, fidelity, and migration contracts.
+2. Implement the canonical tokens and migrate the approved specimens.
+3. Make sticky-header transitions seamless.
+4. Integrate the old and new navigation-outline variants as an independent component setting.
+5. Migrate the approved workspace into the live shell without changing data or gestures.
+6. Remove the executable overlaid-card implementation and its legacy styles after the cutover
+   passes review.
 
-- Format, lint, typecheck, nine ThemeCard tests, and the Storybook build passed.
-- The default-worker full suite passed all 844 tests in 13.09 seconds.
-- A live visual review was unavailable because no browser was connected. Session 4i retains the
-  explicit visual approval pass.
-- No live-app, production-face, canonical-token, or archived Wipeout file changed.
+The live shell migration starts only after the four design sessions close. Full overlaid-card
+removal starts only after the live cutover passes its user review and verification gate.
 
-## Read for Session 4i
+## Planning evidence
 
-1. [Sessions 4c–4i](Phase-10-Session-4c-plan.md): read the fixed decisions, shared boundaries,
-   Session 4i checklist, and verification section.
-2. The shared [ThemeCard](../src/design/theme-card/ThemeCard.tsx), its
-   [input contract](../src/design/theme-card/types.ts), the complete [Ghost
-   input](../src/design/theme-card/ghost.ts), the [Null extension](../src/design/theme-card/null.ts),
-   the [Wipeout extension](../src/design/theme-card/wipeout.ts), and local [exploration
-   styles](../src/design/theme-card/theme-card.css).
-3. The forward [comparison story](../src/design/theme-card/ThemeCard.stories.tsx).
-4. Before the visual review, read [Testing](Testing.md). Read [Design](Design.md) and
-   [Design Faces](Design-Faces.md) only when approved rules are ready to promote.
+- Chrome DevTools measured a 32-pixel sticky-layer height change at each ancestor threshold. The
+  current flow row and sticky copy meet at the seam while a stack row mounts or unmounts.
+- The old outline renderer owns both decoration and interaction. The forward navigation owns a
+  separate interaction contract. Session 4m will keep behavior in the shared navigation row and
+  adapt outline calculation and paint only.
+- Guide, notch, and vector variants need data outside a virtualized visible range. The new contract
+  must supply ancestry, continuation, look-ahead, and up to 100 forward rows.
+- Two new candidates are planned: VS Code-inspired hover guides and a Notion-inspired toggle
+  gutter.
 
-Consult archived Wipeout work only for isolated visual moves. Do not revive its overlaid-card
-structure, ancestry tabs, depth gauge, or alternate layout.
+## Current verification
 
-## Settled direction
+- The Session 4i source set passed format, lint, typecheck, all 845 tests, and the Storybook build.
+  Lint reports 14 existing warnings and no errors.
+- Chrome DevTools confirmed instant Ghost, Null, and Wipeout switching, narrow-width containment,
+  intentional workspace scrolling, and all 13 aligned Wipeout workspace notches.
+- This planning update changes documentation only. Format and `git diff --check` are the required
+  checks before review.
 
-- Ghost owns shared workspace structure, behavior, and minimum affordances.
-- Null and Wipeout extend Ghost through shared semantic inputs and optional decoration.
-- The simple ancestry breadcrumb appears only when the first visible panel is focus.
-- Canonical tokens and shipping-theme choices wait for the Ghost → Null → Wipeout
-  comparison page and explicit approval in Session 4i.
+## Read for Session 4j
 
-## Next session: 4i
+1. The [Sessions 4j–4m fixed decisions and Session 4j checklist](Phase-10-Sessions-4j-4m-plan.md).
+2. The [Sessions 4n–4o dependency boundary](Phase-10-Sessions-4n-4o-plan.md#current-dependency-boundary).
+3. [Phase 10 §4](Phase-10.md#4-cohesive-design-token-and-theming-system).
+4. The [Session 4i semantic token requirements](Phase-10-Session-4c-plan.md#semantic-token-requirements).
+5. The approved [Design](Design.md) and [Design Faces](Design-Faces.md) rules.
 
-Review the single Ghost → Null → Wipeout page at desktop and narrow widths in dark and light
-polarity. Check keyboard focus, reduced motion, contrast, and long-form density. Tune only shared
-dials or named theme deltas. Record explicit approvals, shipping intent, and token requirements.
+## Next action
 
-Do not implement canonical tokens, wire the live app, modify production faces, or clean up archived
-renderers.
-
-## Following sequence
-
-- Plan the small token implementation and behavior-preserving migration sessions after approval.
-
-The detailed outcomes and acceptance criteria remain in
-[the 4c–4i plan](Phase-10-Session-4c-plan.md); do not duplicate them here.
+Review the staged Session 4i closeout and Sessions 4j–4o plans. After approval, execute Session 4j
+only. Do not implement canonical tokens, navigation motion, outline adapters, live migration, or
+retirement deletion in the planning review.
 
 ## Documentation boundary
 
-Until Phase 10 settles, limit cleanup to routing, current-state accuracy, and clear
-historical markers. The broader documentation audit remains deferred until after Phase 10.
+Until Phase 10 settles, limit cleanup to routing, current-state accuracy, and clear historical
+markers. The broader documentation audit remains deferred until after Phase 10.
 
 ## Handoff rule
 
-At the end of each session, check off the detailed session items. Then update this file
-with the completed outcome, verification, next session, and minimum reading set.
+At the end of each session, check off the detailed session items. Then update this file with the
+completed outcome, verification, next session, and minimum reading set.

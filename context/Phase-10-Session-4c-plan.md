@@ -18,7 +18,8 @@ when it constrains the active work; `NOW.md` carries the short handoff between s
   navigation panel has shifted out of the four-column window.
 - Ultramodern, all overlaid-card layouts, and all session-4/4b alternatives remain available only as
   an archive.
-- Canonical tokens and shipping-theme choices wait for one-page comparison and explicit approval.
+- Canonical tokens and shipping-theme choices waited for one-page comparison and explicit approval.
+  Session 4i completed that gate.
 
 ## Shared boundaries
 
@@ -255,25 +256,102 @@ result. No test or production source changed during this detour. Session 4h rema
 
 **Outcome:** one user-reviewed page fixes the visual inputs needed for token design.
 
-- [ ] Review the single scrollable Ghost → Null → Wipeout page at common desktop and narrow widths,
+### Active review directions
+
+- The quieter Ghost resting state, type-led Wipeout framing, and higher Wipeout low-poly quirk
+  budget are approved. They are now the theme defaults instead of provisional controls.
+- Ghost removes nonessential resting borders but keeps hover, focus, selection, risk, and the active
+  column explicit.
+- Wipeout uses type and brightness to group content. Decorative ticks and notches align with their
+  container borders. Each workspace focus and navigation panel has a top-left notch.
+- Editable text has theme-specific hover and focus affordances. Wipeout uses bottom borders for
+  these states.
+- Ghost, Null, and Wipeout are finalized as shipping themes. The approved local inputs do not yet
+  define canonical tokens.
+
+### Current browser verification
+
+- Chrome DevTools checks passed at 1440 × 936 and 390 × 844 in dark and light polarity. The page
+  has no horizontal overflow. Narrow workspaces keep their intentional horizontal scroll.
+- All 13 Wipeout workspace panel notches align with their top-left border: six focus panels and
+  seven navigation panels. Molecule corners, header ticks, launcher corners, and type segments
+  align with their associated container edges.
+- Real pointer and keyboard checks confirm the editable hover and focus treatments. The Ghost
+  light-mode hover border was raised from 2.85:1 to 7.46:1 during this check. Light-mode focus
+  signals range from 5.17:1 to 6.33:1.
+- Lighthouse scores 94 for accessibility in both polarities. The wider specimen still has many
+  faint 10-pixel labels below 4.5:1 contrast. It also has invalid `aria-label` attributes on three
+  repeated decorative specimens and inputs without `id` or `name` attributes. These items predate
+  the approved theme deltas and remain open.
+- Reduced-motion emulation was not available in the active Chrome DevTools tool set. The existing
+  reduced-motion rule remains unchanged.
+
+### Semantic token requirements
+
+These names describe required roles, not the final canonical API. Dependencies are polarity (P),
+density (D), and interaction or preference state (S).
+
+| Base role (Ghost)                   | Null override                                    | Wipeout override                                   | Component consumers                            | Dependency |
+| ----------------------------------- | ------------------------------------------------ | -------------------------------------------------- | ---------------------------------------------- | ---------- |
+| Canvas, surface, overlay            | Familiar tonal steps and elevated shadow surface | Hard custom brightness steps                       | Shell, panels, sticky regions, launcher        | P          |
+| Primary, muted, faint text          | Inherit the neutral ramp                         | Custom hard text ramp                              | Prose, labels, metadata, disabled content      | P          |
+| Accent and danger                   | Familiar blue accent and red danger              | Disciplined violet accent and red danger           | Focus, selection, live paths, validation, risk | P, S       |
+| Body family, size, weight           | Inherit                                          | Inherit                                            | Long-form copy, rows, controls                 | D          |
+| Label, data, display type           | Inherit sans and mono roles                      | Share Tech Mono and Chakra Petch roles             | Headings, labels, data, instrument marks       | D          |
+| Space unit and gaps                 | Inherit                                          | Inherit                                            | Sections, fields, controls, molecules          | D          |
+| Control and row height              | Inherit 32-pixel targets                         | Inherit 32-pixel targets                           | Buttons, inputs, rows, launcher results        | D          |
+| Control radius, surface radius, cut | 6-pixel controls and 10-pixel surfaces           | Square surfaces with one 6-pixel cut               | Controls, cards, overlays, selected blocks     | None       |
+| Subtle and strong lines             | Softer text-mixed boundaries                     | Hard custom line ramp                              | Rows, tables, panels, fields, headers          | P, S       |
+| Motion duration and easing          | 160 ms conventional curve                        | 90 ms linear                                       | Hover, selection, collapse, drill, overlays    | S          |
+| Hover, selected, focus              | Accent-tinted fills and offset focus outline     | Hard fills and bottom-border edit signals          | All interactive and editable elements          | P, S       |
+| Disabled, invalid, armed danger     | Conventional opacity, red border, and fill       | Hard opacity, red border, and fill                 | Controls, rows, fields, destructive actions    | P, S       |
+| Elevation                           | Soft polarity-aware shadow                       | None; use brightness steps                         | Launcher, overlays, sticky regions             | P          |
+| Decorative chrome                   | None                                             | Aligned ticks, notches, chamfers, and VFD segments | Structural containers and instrument labels    | P          |
+
+- [x] Review the single scrollable Ghost → Null → Wipeout page at common desktop and narrow widths,
       in dark and light polarity, with keyboard focus and reduced-motion/contrast checks.
-- [ ] Tune only shared dials or named theme deltas; if a request requires structural divergence,
+- [x] Tune only shared dials or named theme deltas; if a request requires structural divergence,
       resolve the Ghost contract instead of patching one theme.
-- [ ] Record approvals and unresolved items directly in this doc. Decide which themes are intended
+- [x] Record approvals and unresolved items directly in this doc. Decide which themes are intended
       to ship versus remain design-system reference themes.
-- [ ] Produce a semantic token requirements table: base role, Null override, Wipeout override,
+- [x] Produce a semantic token requirements table: base role, Null override, Wipeout override,
       component consumers, and whether the value is polarity-, density-, or state-dependent. Do not
       implement the canonical tokens in this session.
-- [ ] Update `Design.md`/`Design-Faces.md` only with approved rules, then draft the small
-      post-approval token implementation and migration sessions in Phase 10 §4.
+- [x] Update `Design.md`/`Design-Faces.md` only with approved rules. Plan the next token and migration
+      sessions in the next session, as directed at closeout.
 
-## Post-approval order (plan after 4i)
+### Session 4i closeout
 
-1. Define the canonical semantic token contract and Ghost → Null/Wipeout override mechanics.
+- Ghost, Null, and Wipeout are final and intended to ship. Ghost owns the shared structure and
+  minimum affordances. Null and Wipeout remain value and optional-decoration extensions.
+- The consecutive comparison page is retired. `Design/Theme previewer` renders one card with an
+  instant `theme` control. Fixed Ghost, Null, and Wipeout stories retain their approved intent and
+  delta copy.
+- The browser review covered desktop and narrow widths in both polarities, real hover and keyboard
+  focus, chrome alignment, overflow, and contrast. The wider accessibility findings above remain
+  open for the token and migration work.
+- Format, lint, typecheck, all 845 tests, and the Storybook build passed. Lint reports 14 existing
+  warnings and no errors. Chrome confirmed one mounted card, instant Ghost/Null/Wipeout switching,
+  no narrow page overflow, intentional workspace scrolling, and all 13 aligned Wipeout panel
+  notches.
+- Canonical tokens, the live app, production faces, and archived renderers remain unchanged. The
+  next session will plan the token-contract and migration slices.
+
+## Post-approval order
+
+The detailed sequence now lives in [Phase 10 · Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md)
+and [Sessions 4n–4o](Phase-10-Sessions-4n-4o-plan.md).
+
+1. Define the canonical semantic token contract, visual-theme override mechanism, component-variant
+   registry, fidelity inputs, and migration map.
 2. Implement tokens and refactor the approved Storybook specimens onto them.
-3. Migrate the live shell/stream as one behavior-preserving slice.
-4. Migrate launcher and shared overlays before retiring top-level tabs.
-5. Migrate faces/browsers incrementally, with composed/substrate/x-ray as an orthogonal fidelity axis.
+3. Make sticky-header transitions seamless on the canonical geometry.
+4. Integrate navigation-outline affordances as an independently configurable component variant.
+5. Migrate the live shell and stream as one behavior-preserving slice.
+6. Remove the executable overlaid-card implementation after the live cutover passes review.
+7. Migrate the launcher and shared overlays before retiring top-level tabs.
+8. Migrate faces and browsers incrementally, with composed, substrate, and x-ray as an orthogonal
+   fidelity axis.
 
 ## Verification per session
 

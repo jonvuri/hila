@@ -1,62 +1,83 @@
-# Design System — Face Themes
+# Design System — Component Variants
 
-This document plans the integration of outline face themes and table face themes into the design system. These are complex, highly configurable components that build on the elemental primitives and token system established in the initial design system buildout.
+This document plans configurable outline and table treatments. These components build on the
+shared semantic token system. An outline treatment can serve the shell navigation panel and an
+outline face without changing either host's behavior.
 
-## Outline face themes
+## Theme axes
 
-The design exploration (`design-demo.html` section 5) defines five distinct visual treatments for the same tree data structure. All render the same data contract: a flat list of rows with depth, expand/collapse state, and text content.
+Ghost, Null, and Wipeout are the approved global visual themes. They share one structure and
+semantic state contract. The outline and table treatments in this document are component variants
+beneath that global theme layer. They can change local rendering, but not app-level theme identity,
+interaction meaning, or data contracts. An explicit component variant stays unchanged when the
+visual theme changes.
 
-### Theme inventory
+Dark and light polarity is independent of both layers. Composed or substrate fidelity and the
+x-ray inspection state are also orthogonal. Do not multiply face renderers across the Cartesian
+product of these axes. Face styles must consume semantic tokens supplied by the active visual theme
+and polarity.
 
-| Theme | Visual metaphor | Key elements |
-|---|---|---|
-| **A — Workflowy clone** | Traditional outliner | Filled circle bullets, triangle carets, SVG guide lines connecting parent to children |
-| **B — Workflowy geometric** | Geometric outliner | Dash bullets for leaves, plus-sign for collapsed parents, dashed SVG guide lines |
-| **C — Vector field** | Directional lines | Left gutter with angled vector lines pointing from parent to last child; angle determined by row distance (0→0°, 1→35°, 2→50°, 3→58°, 4→63°); own-depth strokes prominent, parent strokes fade |
-| **D — Corner notches** | Structural brackets | Top-left L-bracket on every row, bottom-right L-bracket on the visually-last row at each depth level; notch color fades with depth |
-| **E — Whitespace only** | Minimalist | No bullets or lines; hierarchy conveyed by indentation only; faint carets appear on expandable items |
+## Navigation outline variants
 
-### Data contract
+The old `Design/Outline` stories define five treatments for the same tree. Session 4m will adapt
+their decoration to the forward navigation row. It will also add two new candidates. See the
+[Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#session-4m--integrate-configurable-navigation-outlines).
 
-Each outline row provides:
-- `depth: number` — nesting level (0 = root)
-- `hasChildren: boolean` — whether the row has children
-- `expanded: boolean` — whether children are visible
-- `isVisualLast: boolean` — whether this row is the last visible row at its depth level (needed for themes A, D)
-- `text: string` — row content
+### Variant inventory
 
-The theme renderer receives a flat array of these rows (already flattened from the tree by the outline face logic) and renders them with the appropriate visual treatment.
+| Theme                       | Visual metaphor      | Key elements                                                                                                                                                                                   |
+| --------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A — Workflowy clone**     | Traditional outliner | Filled circle bullets, triangle carets, SVG guide lines connecting parent to children                                                                                                          |
+| **B — Workflowy geometric** | Geometric outliner   | Dash bullets for leaves, plus-sign for collapsed parents, dashed SVG guide lines                                                                                                               |
+| **C — Vector field**        | Directional lines    | Left gutter with angled vector lines pointing from parent to last child; angle determined by row distance (0→0°, 1→35°, 2→50°, 3→58°, 4→63°); own-depth strokes prominent, parent strokes fade |
+| **D — Corner notches**      | Structural brackets  | Top-left L-bracket on every row, bottom-right L-bracket on the visually-last row at each depth level; notch color fades with depth                                                             |
+| **E — Whitespace only**     | Minimalist           | No bullets or lines; hierarchy conveyed by indentation only; faint carets appear on expandable items                                                                                           |
+| **F — Hover guides**        | Context on demand    | Quiet rest state; ancestry rails appear on row hover or keyboard focus; the selected branch remains visible                                                                                    |
+| **G — Toggle gutter**       | Disclosure-led       | One stable disclosure column, quiet leaf spacing, and no resting guide line                                                                                                                    |
 
-### CSS architecture
+Themes A–E are reference inputs, not approved shipping names or defaults. Session 4m ends with a
+user review that selects the default and the variants that remain available.
 
-Each theme should be a separate CSS module:
-- `OutlineThemeA.module.css`, `OutlineThemeB.module.css`, etc.
-- All themes import and use the shared design tokens (`--c-fg`, `--c-border`, `--sp-*`, etc.)
-- The active theme is selected by the face config panel (already has a "Theme" dropdown in the design demo)
+### Decoration contract
 
-A `ThemeRenderer` component maps the theme key to the concrete renderer:
+The host row owns interaction and accessible semantics. It supplies stable row facts to the
+decoration adapter:
 
-```
-OutlineFace → ThemeRenderer(themeKey) → OutlineThemeA | OutlineThemeB | ...
-```
+- Stable global row identity and depth.
+- Expanded and collapsed state.
+- Ancestry before the virtual window.
+- Continuation state and one-row look-ahead after the window.
+- Up to 100 forward rows for the vector-field ceiling.
 
-### SVG rendering considerations
+The decoration adapter returns paint data only. It must not add disclosure, editing, selection,
+disabled, drill, drag, or focus behavior. Decorative marks are hidden from assistive technology.
 
-Themes A, B, and C use inline SVGs for guide lines and vector strokes. These SVGs are positioned absolutely within each row and reference CSS color tokens via `style` attributes (e.g., `stroke: var(--c-border)`). This approach works today in the static demo and should translate directly to SolidJS JSX.
+### Rendering architecture
 
-Theme C (vector field) is the most complex. The vector angle calculation depends on the distance from a parent row to its last visible child. This requires computing the relationship during the flattening step, not in the renderer. The renderer receives pre-computed angle values per gutter slot.
+The navigation row owns one fixed geometry and exposes decoration slots. A registry maps the
+`navigationOutline` key to calculation and paint adapters. Each adapter consumes canonical semantic
+tokens from the active visual theme and polarity.
+
+The forward Storybook specimen has separate `visualTheme` and `navigationOutline` controls. Do not
+build a Cartesian renderer matrix. Production selection and persistence land with the later live
+workspace migration.
+
+The old renderer currently mixes row behavior with decoration. Do not reuse it as the host row.
+Adapt its calculations and paint, then preserve its standalone stories as references until the
+forward adapters pass.
+
+### Windowing considerations
+
+Guide and corner variants need context outside a rendered window. Vector field can need 100 forward
+rows. The production navigation panel currently computes decorations from its loaded row list. Do
+not treat the last loaded row as the visual end of a branch. The adapter input must carry explicit
+boundary context and support deterministic tests across window seams.
 
 ### Implementation phases
 
-**Phase 1: Theme E (whitespace only).** Simplest — no SVGs, no bullets, just indentation and faint carets. Use this to establish the theme renderer pattern and the data contract interface.
-
-**Phase 2: Theme A (Workflowy clone).** Standard outliner with bullets, carets, and guide lines. Introduces SVG gutter rendering.
-
-**Phase 3: Themes B and D.** Geometric variant and corner notches. Both build on patterns from Theme A.
-
-**Phase 4: Theme C (vector field).** Most complex; requires pre-computed angle data. Build last.
-
-Each phase produces its theme component, CSS module, and Storybook stories with static demo data matching the design-demo.html reference.
+Session 4m performs one bounded integration pass: establish the registry and host seam; adapt the
+five old variants; add hover guides and toggle gutter; then review the seven candidates. The live
+workspace migration later adds production configuration and persistence.
 
 ## Table face themes
 
@@ -64,11 +85,11 @@ The design exploration (`design-demo.html` section 6) defines three visual treat
 
 ### Theme inventory
 
-| Theme | Visual metaphor | Key elements |
-|---|---|---|
-| **A — Thin header line** | Clean minimal | Uppercase xs-size headers, bold bottom border on header, light borders on rows |
-| **B — Corner notch container** | Structural | CornerNotchBox wrapper around the table, weighted header text, subtle row borders |
-| **C — Cell dots** | Cell-level decoration | Small dots in the top-left corner of each cell; dot color differentiates header (fg) from body (fg-3/fg-4 alternating) |
+| Theme                          | Visual metaphor       | Key elements                                                                                                           |
+| ------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **A — Thin header line**       | Clean minimal         | Uppercase xs-size headers, bold bottom border on header, light borders on rows                                         |
+| **B — Corner notch container** | Structural            | CornerNotchBox wrapper around the table, weighted header text, subtle row borders                                      |
+| **C — Cell dots**              | Cell-level decoration | Small dots in the top-left corner of each cell; dot color differentiates header (fg) from body (fg-3/fg-4 alternating) |
 
 ### Data contract
 
@@ -91,36 +112,52 @@ All themes share a single CSS module (`Table.module.css`) with a base `.table` c
 
 ## Shared infrastructure
 
-### Theme registry
+### Variant registry
 
-A theme registry maps theme keys to renderer components:
+A component-variant registry maps stable keys to local adapters:
 
 ```typescript
-type OutlineThemeKey = 'workflowy' | 'geometric' | 'vector' | 'notches' | 'whitespace'
+type NavigationOutlineVariant =
+  | 'workflowy'
+  | 'geometric'
+  | 'vector'
+  | 'notches'
+  | 'whitespace'
+  | 'hover-guides'
+  | 'toggle-gutter'
 type TableThemeKey = 'thin-line' | 'corner-notch' | 'cell-dots'
 ```
 
-The face config panel (which already exists in the codebase) will reference these keys. The registry enables lazy loading of theme modules if bundle size becomes a concern.
+Session 4m will settle the final navigation keys after user review. The registry must not contain
+Ghost, Null, or Wipeout keys.
 
 ### Face config panel integration
 
-The existing face config panel (`src/core/FaceConfigPanel.tsx`) already supports theme selection as a concept. The design demo (section 19) shows a "Theme" dropdown in the config panel. Integration requires:
+The navigation panel and outline face can select an outline variant independently. Integration
+requires:
 
-1. Adding a `theme` field to the face config schema.
-2. Populating the dropdown with registered theme keys.
-3. Passing the selected theme key through to the face renderer.
+1. Add a `navigationOutline` value to the applicable component configuration.
+2. Populate its control with registered variant keys.
+3. Pass the selected key to the decoration adapter.
+4. Keep this value stable when the visual theme or polarity changes.
 
 ### Slot system composition
 
-Each theme renders the same data, but the data comes through the slot binding system. The outline face binds a matrix column to its "title" slot; the table face binds multiple columns to its column slots. Theme rendering is purely visual — it doesn't affect slot bindings.
+Each component variant renders the same bound data. The outline face binds a matrix column to its
+title slot. The table face binds multiple columns to column slots. Variant rendering is visual and
+does not affect slot bindings.
 
 ## Migration plan
 
-The existing `src/global.css` contains ~500 lines of face-specific styles (outline, note list, note face, matrix browser, etc.) using hardcoded colors. Migration strategy:
+The existing `src/global.css` contains face-specific styles for the outline, note list, note face,
+and matrix browser. The migration order is:
 
-1. **Build new face components** using design tokens and CSS Modules. These initially live alongside the old code.
-2. **Switch one face at a time.** Replace the old class-based styles with the new component. The face renderer in `FaceRenderer.tsx` already dispatches by face type, so switching is localized.
-3. **Remove old global styles** for each face after the new component is live and tested.
-4. **App shell migration last.** The sidebar, view switcher, and layout shell styles in `global.css` are the final migration target. These touch layout concerns that are orthogonal to face theming.
+1. Define and implement canonical tokens in Sessions 4j–4k.
+2. Close the sticky and navigation-outline design gates in Sessions 4l–4m.
+3. Migrate the live shell and stream without behavior changes.
+4. Remove the executable overlaid-card implementation after the live cutover passes review.
+5. Migrate the launcher and shared overlays before top-level tabs are removed.
+6. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
-Expected effort per face: 2-3 sessions for the outline face (given 5 themes), 1-2 sessions for the table face, 1 session for the note face (it's mostly prose with wikilinks).
+The detailed order is in the [Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order)
+and the [Sessions 4n–4o plan](Phase-10-Sessions-4n-4o-plan.md).

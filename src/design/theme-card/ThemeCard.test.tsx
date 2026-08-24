@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
+import { afterEach, describe, expect, test } from 'vitest'
 
 import { ghostTheme, ghostTreatments } from './ghost'
 import { nullTheme, nullTreatments } from './null'
 import ThemeCard from './ThemeCard'
+import ThemePreview from './ThemePreview'
 import {
   themeCardSectionIds,
   themeCardSemanticRoleIds,
@@ -163,7 +165,9 @@ describe('ThemeCard grammar', () => {
     )
     expect(wipeoutTreatments.map((treatment) => treatment.kind)).not.toContain('structural')
     expect(
-      wipeoutTreatments.some((treatment) => treatment.label.includes('quirk budget')),
+      wipeoutTreatments.some((treatment) =>
+        treatment.label.includes('aligned low-poly chrome'),
+      ),
     ).toBe(true)
   })
 
@@ -194,5 +198,20 @@ describe('ThemeCard grammar', () => {
     expect(cards).toHaveLength(3)
     expect(specimenShape(cards[1]!)).toEqual(specimenShape(cards[0]!))
     expect(specimenShape(cards[2]!)).toEqual(specimenShape(cards[0]!))
+  })
+
+  test('previews one approved theme at a time', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const [theme, setTheme] = createSignal<'ghost' | 'null' | 'wipeout'>('ghost')
+    dispose = render(() => <ThemePreview theme={theme()} />, container)
+
+    expect(container.querySelectorAll('[data-testid="theme-card"]')).toHaveLength(1)
+    expect(container.querySelector('[data-theme-card="ghost"]')).not.toBeNull()
+
+    setTheme('wipeout')
+
+    expect(container.querySelectorAll('[data-testid="theme-card"]')).toHaveLength(1)
+    expect(container.querySelector('[data-theme-card="wipeout"]')).not.toBeNull()
   })
 })

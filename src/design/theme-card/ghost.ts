@@ -140,7 +140,7 @@ export const ghostTreatments = [
   {
     section: 'dials-notes',
     kind: 'optional-decoration',
-    label: 'Ghost has no open decoration dial',
+    label: 'Resting borders recede without hiding state or behavior',
   },
 ] as const satisfies readonly ThemeCardTreatment[]
 
@@ -165,6 +165,10 @@ export const ghostTheme: ThemeCardThemeInput = {
     {
       label: 'Polarity',
       text: 'Local roles follow the Storybook light and dark foundations. Danger changes by polarity.',
+    },
+    {
+      label: 'Approved resting state',
+      text: 'Nonessential borders recede. Hover, focus, selection, risk, and the active column remain explicit.',
     },
   ],
 }

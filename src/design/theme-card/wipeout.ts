@@ -80,7 +80,7 @@ export const wipeoutTreatments = [
   {
     section: 'dials-notes',
     kind: 'optional-decoration',
-    label: 'The quirk budget is fixed: one cut, one tick language, and one segment texture',
+    label: 'Type-led framing uses aligned low-poly chrome instead of complete resting borders',
   },
 ] as const satisfies readonly ThemeCardTreatment[]
 
@@ -109,6 +109,10 @@ export const wipeoutTheme: ThemeCardThemeInput = {
     {
       label: 'Motion and depth',
       text: 'Transitions are short and linear. Reduced motion shows the final state. No elevation shadow or glow is used.',
+    },
+    {
+      label: 'Approved frame and quirk budget',
+      text: 'Type and brightness define groups. Aligned ticks, notches, and chamfers suggest or reinforce container borders.',
     },
   ],
 }

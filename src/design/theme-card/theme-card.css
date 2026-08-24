@@ -153,6 +153,11 @@
   border-radius: var(--tc-geometry-control-radius);
 }
 
+.tc-card[data-theme-card='null']
+  :is(.tc-field input, .tc-launcher input, .ws-focus-properties input):hover {
+  border-color: var(--tc-color-text-muted);
+}
+
 /* Wipeout adds bounded instrument decoration to shared markup. */
 .tc-card[data-theme-card='wipeout'] :is(.tc-section-heading h2, .tc-type-display) {
   letter-spacing: 0.055em;
@@ -181,8 +186,8 @@
 
 .tc-card[data-theme-card='wipeout'] .tc-type-stack::after {
   position: absolute;
-  bottom: 14px;
-  left: 16px;
+  bottom: 0;
+  left: 0;
   width: 7px;
   height: 4px;
   background: var(--tc-wipeout-segment);
@@ -251,15 +256,15 @@
 }
 
 .tc-card[data-theme-card='wipeout'] .tc-launcher::before {
-  top: 4px;
-  right: 4px;
+  top: 0;
+  right: 0;
   border-top: 1px solid;
   border-right: 1px solid;
 }
 
 .tc-card[data-theme-card='wipeout'] .tc-launcher::after {
-  bottom: 4px;
-  left: 4px;
+  bottom: 0;
+  left: 0;
   border-bottom: 1px solid;
   border-left: 1px solid;
 }
@@ -316,8 +321,170 @@
   background: var(--tc-color-accent);
 }
 
-.tc-comparison-page > .tc-card + .tc-card {
-  border-top: 8px solid var(--tc-color-text);
+/* Session 4i approved these local theme inputs. They are not canonical tokens. */
+.tc-card[data-theme-card='ghost']
+  :is(
+    .tc-control:not(.tc-control-primary),
+    .tc-icon-control,
+    .tc-field input,
+    .tc-chip,
+    .tc-filter-token,
+    .tc-molecule,
+    .tc-launcher
+  ) {
+  border-color: transparent;
+}
+
+.tc-card[data-theme-card='ghost'] [data-state='invalid'] .tc-control-state {
+  border-color: var(--tc-state-invalid);
+}
+
+.tc-card[data-theme-card='ghost'] [data-state='armed-danger'] .tc-control-state {
+  border-color: var(--tc-color-danger);
+}
+
+.tc-card[data-theme-card='ghost'] .ws-column:not(.ws-column-active) {
+  border-right-color: transparent;
+}
+
+.tc-card[data-theme-card='ghost'] .ws-column:first-child:not(.ws-column-active) {
+  border-left-color: transparent;
+}
+
+.tc-card[data-theme-card='ghost']
+  :is(.ws-focus, .ws-focus-section, .ws-breadcrumb, .ws-focus-properties input, .ws-drill) {
+  border-color: transparent;
+}
+
+.tc-card[data-theme-card='ghost']
+  :is(.tc-field input, .tc-launcher input, .ws-focus-properties input):hover {
+  border-color: var(--tc-color-text-muted);
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(
+    .tc-swatch,
+    .tc-type-stack,
+    .tc-foundation-grid > div,
+    .tc-state-specimen,
+    .tc-molecule,
+    .tc-focus-specimen header,
+    .tc-table-specimen th,
+    .tc-table-specimen td,
+    .tc-launcher,
+    .tc-launcher footer,
+    .tc-sticky-header,
+    .tc-row,
+    .tc-launcher-result
+  ) {
+  border-color: transparent;
+}
+
+.tc-card[data-theme-card='wipeout'] .ws-workspace {
+  --ws-line: transparent;
+  --ws-line-strong: transparent;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-molecule > h3, .tc-table-specimen th, .ws-workspace-title, .ws-focus-section h3) {
+  color: var(--tc-color-text-muted);
+  font-weight: 600;
+  letter-spacing: 0.11em;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-molecule {
+  position: relative;
+}
+
+.tc-card[data-theme-card='wipeout'] .tc-molecule::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 9px;
+  height: 9px;
+  border-top: 1px solid var(--tc-color-text-faint);
+  border-right: 1px solid var(--tc-color-text-faint);
+  content: '';
+  pointer-events: none;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(
+    .tc-chip,
+    .tc-filter-token,
+    .tc-row[data-state='selected'],
+    .tc-launcher-result[data-state='selected']
+  ) {
+  clip-path: polygon(
+    4px 0,
+    100% 0,
+    100% calc(100% - 4px),
+    calc(100% - 4px) 100%,
+    0 100%,
+    0 4px
+  );
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-sticky-header, .ws-workspace-title, .ws-sticky-preview) {
+  position: relative;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-sticky-header, .ws-workspace-title, .ws-sticky-preview)::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  border-top: 1px solid var(--tc-color-text-faint);
+  content: '';
+  pointer-events: none;
+}
+
+.tc-card[data-theme-card='wipeout'] :is(.ws-focus, .ws-navigation) {
+  position: relative;
+}
+
+.tc-card[data-theme-card='wipeout'] :is(.ws-focus, .ws-navigation)::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-top: 1px solid var(--tc-color-text-faint);
+  border-left: 1px solid var(--tc-color-text-faint);
+  content: '';
+  pointer-events: none;
+}
+
+.tc-card[data-theme-card='wipeout']
+  .ws-focus
+  :is(.ws-focus-title, .ws-focus-content [contenteditable]):hover {
+  border-bottom-color: var(--tc-color-text-muted);
+}
+
+.tc-card[data-theme-card='wipeout']
+  .ws-focus
+  :is(.ws-focus-title, .ws-focus-content [contenteditable]):focus {
+  border-bottom-color: var(--tc-color-accent);
+  outline: 0;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-field input, .tc-launcher input, .ws-focus-properties input) {
+  border-color: transparent;
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-field input, .tc-launcher input, .ws-focus-properties input):hover {
+  border-bottom-color: var(--tc-color-text-muted);
+}
+
+.tc-card[data-theme-card='wipeout']
+  :is(.tc-field input, .tc-launcher input, .ws-focus-properties input):focus {
+  border-bottom-color: var(--tc-color-accent);
+  outline: 0;
 }
 
 .tc-section {

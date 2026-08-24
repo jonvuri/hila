@@ -2,19 +2,26 @@ import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 
 import { ghostTheme } from './ghost'
 import { nullTheme } from './null'
-import ThemeCard from './ThemeCard'
+import ThemePreview, { themePreviewIds } from './ThemePreview'
 import { wipeoutTheme } from './wipeout'
 
-const meta: Meta<typeof ThemeCard> = {
-  title: 'Design/Theme comparison',
-  component: ThemeCard,
+const meta: Meta<typeof ThemePreview> = {
+  title: 'Design/Theme previewer',
+  component: ThemePreview,
+  args: { theme: 'ghost' },
+  argTypes: {
+    theme: {
+      control: 'inline-radio',
+      options: themePreviewIds,
+      description: 'Select the approved theme rendered by the shared preview.',
+    },
+  },
   parameters: {
     layout: 'fullscreen',
-    controls: { disable: true },
     docs: {
       description: {
         component:
-          'ThemeCard is the fixed comparison grammar for Ghost, Null, and Wipeout. Ghost supplies the shared structure and minimum affordances. Its semantic roles are local exploration inputs. Later cards must preserve its markup, content, and forced states.',
+          'ThemePreview renders one approved theme through the fixed ThemeCard grammar. Ghost supplies the shared structure and minimum affordances. Null and Wipeout preserve its markup, content, and forced states.',
       },
     },
   },
@@ -24,21 +31,13 @@ export default meta
 
 type Story = StoryObj<typeof meta>
 
-export const Comparison: Story = {
-  name: 'Ghost → Null → Wipeout · consecutive comparison',
-  args: { theme: ghostTheme },
-  render: () => (
-    <div class="tc-comparison-page">
-      <ThemeCard theme={ghostTheme} />
-      <ThemeCard theme={nullTheme} />
-      <ThemeCard theme={wipeoutTheme} />
-    </div>
-  ),
+export const Preview: Story = {
+  name: 'Theme preview',
   parameters: {
     docs: {
       description: {
         story:
-          'Ghost, Null, and Wipeout render consecutively with the same component, content, forced states, workspace fixtures, and dial schema. Themes change only local role values and optional decorative primitives.',
+          'Use the theme control to switch instantly between the finalized Ghost, Null, and Wipeout treatments. The content, states, and workspace fixtures stay fixed.',
       },
     },
   },
@@ -46,12 +45,12 @@ export const Comparison: Story = {
 
 export const Ghost: Story = {
   name: 'Ghost · minimum affordances',
-  args: { theme: ghostTheme },
+  args: { theme: 'ghost' },
   parameters: {
+    controls: { disable: true },
     docs: {
       description: {
-        story:
-          'Ghost is the full baseline card. Each section identifies structural marks, semantic state signals, and the deliberate absence of optional decoration.',
+        story: `${ghostTheme.intent} ${ghostTheme.delta} Each section identifies structural marks, semantic state signals, and the deliberate absence of optional decoration.`,
       },
     },
   },
@@ -59,12 +58,12 @@ export const Ghost: Story = {
 
 export const Null: Story = {
   name: 'Null · conventional affordances',
-  args: { theme: nullTheme },
+  args: { theme: 'null' },
   parameters: {
+    controls: { disable: true },
     docs: {
       description: {
-        story:
-          'Null extends Ghost with conventional boundaries, state fills, control surfaces, and elevation. Its ledger links each addition to a Ghost ambiguity.',
+        story: `${nullTheme.intent} ${nullTheme.delta} Its ledger links each conventional addition to a Ghost ambiguity.`,
       },
     },
   },
@@ -72,12 +71,12 @@ export const Null: Story = {
 
 export const Wipeout: Story = {
   name: 'Wipeout · instrument character',
-  args: { theme: wipeoutTheme },
+  args: { theme: 'wipeout' },
   parameters: {
+    controls: { disable: true },
     docs: {
       description: {
-        story:
-          'Wipeout extends Ghost with hard brightness steps, instrument type, disciplined accent, one-cut geometry, ticks, and VFD segment texture. Long-form text keeps the shared body face.',
+        story: `${wipeoutTheme.intent} ${wipeoutTheme.delta} Long-form text keeps the shared body face.`,
       },
     },
   },

@@ -147,6 +147,7 @@ const Dial = (props: { dial: ThemeCardDial }): JSX.Element => (
 
 const ThemeCard = (props: ThemeCardProps): JSX.Element => (
   <article
+    id={`theme-card-${props.theme.id}`}
     class="tc-card"
     data-theme-card={props.theme.id}
     data-testid="theme-card"
