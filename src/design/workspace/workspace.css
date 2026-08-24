@@ -217,6 +217,11 @@
 }
 
 .ws-navigation {
+  --ws-navigation-row-height: 32px;
+  --ws-navigation-row-inset: 8px;
+  --ws-navigation-decoration-width: 2px;
+  --ws-navigation-decoration-gap: 8px;
+
   position: relative;
   flex: 1;
   min-height: 0;
@@ -237,18 +242,18 @@
 }
 
 .ws-nav-tree {
-  padding: 0 8px;
+  padding: 0;
 }
 
 .ws-nav-row {
   position: relative;
   display: flex;
   align-items: center;
-  height: 32px;
+  height: var(--ws-navigation-row-height);
   min-width: 0;
-  padding-right: 4px;
+  padding: 0 var(--ws-navigation-row-inset);
   color: var(--color-text-muted);
-  border-left: 2px solid transparent;
+  line-height: 1.3;
 }
 
 .ws-nav-row:hover {
@@ -261,12 +266,22 @@
   background: var(--color-state-selected);
 }
 
-.ws-nav-row-path {
-  border-left-color: var(--color-line-strong);
+.ws-row-decoration-slot {
+  flex: none;
+  width: var(--ws-navigation-decoration-width);
+  height: 18px;
+  margin-right: var(--ws-navigation-decoration-gap);
+  background: transparent;
 }
 
-.ws-nav-row-drill {
-  border-left-color: var(--color-text);
+.ws-nav-row-path > .ws-row-decoration-slot,
+.ws-sticky-preview-path > .ws-row-decoration-slot {
+  background: var(--color-line-strong);
+}
+
+.ws-nav-row-drill > .ws-row-decoration-slot,
+.ws-sticky-preview-drill > .ws-row-decoration-slot {
+  background: var(--color-text);
 }
 
 .ws-nav-row-disabled {
@@ -330,26 +345,19 @@
   border-color: var(--color-line-strong);
 }
 
-.ws-sticky-stack,
-.ws-sticky-dock {
+.ws-sticky-layer {
   position: absolute;
-  right: 0;
-  left: 0;
-}
-
-.ws-sticky-stack {
-  top: 0;
-}
-
-.ws-sticky-dock {
-  bottom: 0;
+  z-index: 2;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 .ws-workspace-title,
 .ws-sticky-preview {
   display: flex;
   width: 100%;
-  height: 32px;
+  height: var(--ws-navigation-row-height);
   min-width: 0;
   align-items: center;
   overflow: hidden;
@@ -363,7 +371,10 @@
 }
 
 .ws-workspace-title {
-  padding: 0 12px;
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  padding: 0 var(--ws-navigation-row-inset);
   font-family: var(--type-label-family);
   font-size: var(--type-label-size);
   font-weight: var(--type-label-weight);
@@ -372,38 +383,37 @@
 }
 
 .ws-sticky-preview {
-  position: relative;
-  padding: 0 12px 0 18px;
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  padding: 0 var(--ws-navigation-row-inset);
   font: inherit;
   font-size: var(--type-body-size);
+  line-height: 1.3;
   cursor: pointer;
+  pointer-events: auto;
+  will-change: transform;
 }
 
 .ws-sticky-preview:hover {
   background: var(--color-state-hover);
 }
 
-.ws-sticky-preview span {
+.ws-sticky-preview > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ws-sticky-preview-path::before,
-.ws-sticky-preview-drill::before {
-  content: '';
-  position: absolute;
-  top: 7px;
-  bottom: 7px;
-  left: 8px;
-  width: 2px;
-  background: var(--color-line-strong);
+.ws-sticky-preview-candidate {
+  pointer-events: none;
 }
 
-.ws-sticky-preview-drill::before {
-  background: var(--color-text);
+.ws-sticky-preview-inactive {
+  visibility: hidden;
+  pointer-events: none;
 }
 
-.ws-sticky-dock .ws-sticky-preview {
+.ws-sticky-preview-bottom {
   border-top: var(--width-line) solid var(--color-line-strong);
   border-bottom: 0;
 }

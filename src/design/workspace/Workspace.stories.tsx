@@ -9,6 +9,7 @@ import {
   longWorkspaceTitle,
   rootShiftedPanels,
   rootVisiblePanels,
+  stickyThresholdPanels,
   workspaceTitle,
 } from './fixtures'
 import type { WorkspacePanel } from './types'
@@ -105,6 +106,19 @@ export const CrossMatrixAncestry: Story = {
       description: {
         story:
           'A provenance-resolved breadcrumb crosses from the workspace matrix into the task matrix without changing the panel structure.',
+      },
+    },
+  },
+}
+
+export const StickyThresholds: Story = {
+  name: 'Sticky transition thresholds',
+  args: { panels: stickyThresholdPanels },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Dense columns cover title-only, one-level, multiple-level, drill-at-top, and drill-at-bottom transitions.',
       },
     },
   },

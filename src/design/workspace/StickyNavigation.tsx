@@ -3,8 +3,7 @@ import { createMemo, createSignal, For, type JSX, onCleanup, onMount, Show } fro
 import { flattenTree } from '../outline/data'
 import type { FlatRow, OutlineNode } from '../outline/types'
 
-const ROW_HEIGHT = 32
-const FLOW_GAP = 4
+import { calculateStickyLayout, STICKY_ROW_HEIGHT, type StickySlotState } from './sticky-layout'
 
 type StickyNavigationProps = {
   ariaLabel?: string
@@ -43,6 +42,7 @@ const NavigationRow = (props: NavigationRowProps): JSX.Element => (
     aria-disabled={props.disabled}
     data-row-id={props.row.id}
   >
+    <span class="ws-row-decoration-slot" aria-hidden="true" />
     <span class="ws-row-indent" style={{ width: `${props.row.depth * 16}px` }} />
     <Show
       when={props.row.hasChildren}
@@ -85,15 +85,30 @@ const StickyPreview = (props: {
   label: string
   path: boolean
   drill: boolean
+  state?: StickySlotState
+  location?: 'top' | 'bottom'
+  style?: JSX.CSSProperties
   onClick: () => void
 }): JSX.Element => (
   <button
     type="button"
     class="ws-sticky-preview"
-    classList={{ 'ws-sticky-preview-path': props.path, 'ws-sticky-preview-drill': props.drill }}
+    classList={{
+      'ws-sticky-preview-path': props.path,
+      'ws-sticky-preview-drill': props.drill,
+      'ws-sticky-preview-candidate': props.state === 'candidate',
+      'ws-sticky-preview-inactive': props.state === 'inactive',
+      'ws-sticky-preview-bottom': props.location === 'bottom',
+    }}
     data-sticky="true"
+    data-sticky-location={props.location}
+    data-sticky-state={props.state}
+    aria-hidden={props.state === 'candidate' || props.state === 'inactive' ? 'true' : undefined}
+    tabIndex={props.state === 'candidate' || props.state === 'inactive' ? -1 : 0}
+    style={props.style}
     onClick={() => props.onClick()}
   >
+    <span class="ws-row-decoration-slot" aria-hidden="true" />
     <span>{props.label}</span>
   </button>
 )
@@ -105,6 +120,8 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
   const [scrollTop, setScrollTop] = createSignal(0)
   const [viewHeight, setViewHeight] = createSignal(Number.POSITIVE_INFINITY)
   let scrollElement: HTMLDivElement | undefined
+  let scrollFrame: number | undefined
+  let pendingScrollTop = 0
 
   const toggle = (id: string) => {
     setCollapsed((previous) => {
@@ -116,17 +133,7 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
   }
 
   const rows = createMemo(() => flattenTree(props.items, collapsed()))
-
-  const parents = createMemo((): number[] => {
-    const output: number[] = []
-    const byDepth: number[] = []
-    for (let index = 0; index < rows().length; index++) {
-      const depth = rows()[index]!.depth
-      output.push(depth > 0 ? (byDepth[depth - 1] ?? -1) : -1)
-      byDepth[depth] = index
-    }
-    return output
-  })
+  const stickyRows = createMemo(() => rows().filter((row) => row.hasChildren && row.expanded))
 
   const drillAncestors = createMemo((): ReadonlySet<string> => {
     const output = new Set<string>()
@@ -156,62 +163,38 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
     onCleanup(() => observer.disconnect())
   })
 
-  const layout = createMemo(() => {
-    const flatRows = rows()
-    const pinnedCount = props.title == null ? 0 : 1
-    const padding = pinnedCount * ROW_HEIGHT + FLOW_GAP
-    const permanentCount = pinnedCount + (props.drillId == null ? 0 : 1)
-    const chain: number[] = []
-
-    if (flatRows.length > 0 && scrollTop() > 0) {
-      const anchor = scrollTop() + permanentCount * ROW_HEIGHT
-      const rowIndex = Math.min(
-        flatRows.length - 1,
-        Math.max(0, Math.floor((anchor - padding) / ROW_HEIGHT)),
-      )
-      let parentIndex = parents()[rowIndex] ?? -1
-      while (parentIndex >= 0) {
-        chain.unshift(parentIndex)
-        parentIndex = parents()[parentIndex] ?? -1
-      }
-    }
-
-    const drillIndex =
-      props.drillId == null ? -1 : flatRows.findIndex((row) => row.id === props.drillId)
-    const drillIsInChain = drillIndex >= 0 && chain.includes(drillIndex)
-    const drillY = padding + drillIndex * ROW_HEIGHT
-    const stackLength = pinnedCount + chain.length
-    const drillAtTop =
-      props.drillId != null &&
-      !drillIsInChain &&
-      (drillIndex < 0 || drillY < scrollTop() + stackLength * ROW_HEIGHT)
-    const drillAtBottom =
-      !drillAtTop &&
-      !drillIsInChain &&
-      drillIndex >= 0 &&
-      drillY + ROW_HEIGHT > scrollTop() + viewHeight()
-
-    return { chain, drillAtBottom, drillAtTop, drillIndex, padding, pinnedCount }
+  onCleanup(() => {
+    if (scrollFrame != null) cancelAnimationFrame(scrollFrame)
   })
 
-  const scrollToRow = (index: number, slot: number) => {
-    scrollElement?.scrollTo({
-      top: Math.max(0, layout().padding + index * ROW_HEIGHT - slot * ROW_HEIGHT),
-      behavior: 'smooth',
+  const layout = createMemo(() =>
+    calculateStickyLayout({
+      rows: rows(),
+      scrollTop: scrollTop(),
+      viewHeight: viewHeight(),
+      hasTitle: props.title != null,
+      drillId: props.drillId,
+    }),
+  )
+
+  const updateScroll = (nextScrollTop: number) => {
+    pendingScrollTop = nextScrollTop
+    if (scrollFrame != null) return
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = undefined
+      setScrollTop(pendingScrollTop)
     })
   }
 
-  const previewRow = (index: number, slot: number): JSX.Element => {
-    const row = rows()[index]!
-    const drill = row.id === props.drillId
-    return (
-      <StickyPreview
-        label={row.content}
-        path={drillAncestors().has(row.id)}
-        drill={drill}
-        onClick={() => scrollToRow(index, slot)}
-      />
-    )
+  const prefersReducedMotion = (): boolean =>
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  const scrollToRow = (index: number, slot: number) => {
+    scrollElement?.scrollTo({
+      top: Math.max(0, layout().padding + index * STICKY_ROW_HEIGHT - slot * STICKY_ROW_HEIGHT),
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+    })
   }
 
   return (
@@ -219,7 +202,7 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
       <div
         class="ws-navigation-scroll"
         ref={scrollElement}
-        onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+        onScroll={(event) => updateScroll(event.currentTarget.scrollTop)}
       >
         <div class="ws-navigation-flow" style={{ 'padding-top': `${layout().padding}px` }}>
           <div class="ws-nav-tree" role="tree">
@@ -240,48 +223,60 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
         </div>
       </div>
 
-      <div class="ws-sticky-stack">
+      <div class="ws-sticky-layer">
         <Show when={props.title != null}>
           <div class="ws-workspace-title" data-sticky="true" title={props.title}>
             {props.title}
           </div>
         </Show>
-        <For each={layout().chain}>
-          {(rowIndex, slot) => {
-            const row = () => rows()[rowIndex]!
+        <For each={stickyRows()}>
+          {(row) => {
+            const slot = () => layout().slots.find((candidate) => candidate.id === row.id)!
             return (
               <StickyPreview
-                label={row().content}
-                path={drillAncestors().has(row().id)}
-                drill={row().id === props.drillId}
-                onClick={() => scrollToRow(rowIndex, layout().pinnedCount + slot())}
+                label={row.content}
+                path={drillAncestors().has(row.id)}
+                drill={row.id === props.drillId}
+                state={slot().state}
+                style={{ transform: `translate3d(0, ${slot().y}px, 0)` }}
+                onClick={() => scrollToRow(slot().rowIndex, row.depth + 1)}
               />
             )
           }}
         </For>
-        <Show when={layout().drillAtTop}>
+        <Show when={layout().drill != null}>
           <StickyPreview
             label={
-              layout().drillIndex >= 0 ?
-                rows()[layout().drillIndex]!.content
+              layout().drill!.rowIndex >= 0 ?
+                rows()[layout().drill!.rowIndex]!.content
               : (props.drillLabel ?? 'Untitled')
             }
             path={false}
             drill
+            state={
+              layout().drill!.location === 'flow' ? 'candidate'
+              : layout().drill!.location === 'chain' ?
+                'inactive'
+              : undefined
+            }
+            location={
+              layout().drill!.location === 'bottom' ? 'bottom'
+              : layout().drill!.location === 'top' ?
+                'top'
+              : undefined
+            }
+            style={{ transform: `translate3d(0, ${layout().drill!.y}px, 0)` }}
             onClick={() => {
-              if (layout().drillIndex >= 0) {
-                scrollToRow(layout().drillIndex, layout().pinnedCount + layout().chain.length)
+              if (layout().drill!.rowIndex >= 0) {
+                scrollToRow(
+                  layout().drill!.rowIndex,
+                  layout().activeAncestorChain.length + (props.title == null ? 0 : 1),
+                )
               }
             }}
           />
         </Show>
       </div>
-
-      <Show when={layout().drillAtBottom}>
-        <div class="ws-sticky-dock">
-          {previewRow(layout().drillIndex, layout().pinnedCount + layout().chain.length)}
-        </div>
-      </Show>
     </section>
   )
 }

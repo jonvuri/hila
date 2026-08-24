@@ -5,6 +5,12 @@ import {
 
 import type { WorkspaceAncestry, WorkspaceAncestryItem, WorkspacePanel } from './types'
 
+const denseLeaves = (prefix: string, count: number) =>
+  Array.from({ length: count }, (_, index) => ({
+    id: `${prefix}-${index + 1}`,
+    content: `${prefix} row ${index + 1}`,
+  }))
+
 const ancestryItem = (id: string, label: string, matrixId = 1): WorkspaceAncestryItem => ({
   id,
   label,
@@ -179,6 +185,58 @@ export const crossMatrixPanels: readonly WorkspacePanel[] = [
       ],
       backlinks: ['Ch. 3 — Storage and Retrieval'],
     },
+  },
+]
+
+export const stickyThresholdPanels: readonly WorkspacePanel[] = [
+  {
+    id: 'threshold-title',
+    kind: 'navigation',
+    title: 'Title only',
+    items: denseLeaves('Title only', 36),
+  },
+  {
+    id: 'threshold-one-level',
+    kind: 'navigation',
+    title: 'One level',
+    items: Array.from({ length: 9 }, (_, index) => ({
+      id: `one-level-${index + 1}`,
+      content: `Section ${index + 1}`,
+      children: denseLeaves(`Section ${index + 1}`, 3),
+    })),
+  },
+  {
+    id: 'threshold-multi-level',
+    kind: 'navigation',
+    title: 'Multiple levels',
+    items: Array.from({ length: 6 }, (_, index) => ({
+      id: `multi-${index + 1}`,
+      content: `Area ${index + 1}`,
+      children: [
+        {
+          id: `multi-${index + 1}-group`,
+          content: `Group ${index + 1}`,
+          children: denseLeaves(`Nested ${index + 1}`, 4),
+        },
+        { id: `multi-${index + 1}-tail`, content: `Area ${index + 1} tail` },
+      ],
+    })),
+  },
+  {
+    id: 'threshold-drill-top',
+    kind: 'navigation',
+    title: 'Drill at top',
+    items: denseLeaves('Top drill', 36),
+    drillId: 'Top drill-3',
+    selectedId: 'Top drill-3',
+  },
+  {
+    id: 'threshold-drill-bottom',
+    kind: 'navigation',
+    title: 'Drill at bottom',
+    items: denseLeaves('Bottom drill', 36),
+    drillId: 'Bottom drill-34',
+    selectedId: 'Bottom drill-34',
   },
 ]
 

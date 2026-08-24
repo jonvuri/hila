@@ -137,32 +137,32 @@ temporary theme-card role layer.
 **Outcome:** headers enter, stack, push, and leave without a visible row-height jump in either
 scroll direction.
 
-- [ ] Add a dense threshold fixture that covers title-only, one-level, multi-level, drill-at-top,
+- [x] Add a dense threshold fixture that covers title-only, one-level, multi-level, drill-at-top,
       and drill-at-bottom transitions.
-- [ ] Extract the sticky layout calculation into a pure, tested model. Return stable slot identity,
+- [x] Extract the sticky layout calculation into a pure, tested model. Return stable slot identity,
       the active ancestor chain, the next boundary, and bounded transition progress.
-- [ ] Give flow rows and sticky previews one row-height, inset, baseline, and decoration-slot
+- [x] Give flow rows and sticky previews one row-height, inset, baseline, and decoration-slot
       contract. Keep their interaction semantics distinct where necessary.
-- [ ] Keep sticky slots mounted across a threshold. Use scroll-linked transforms for the handoff and
+- [x] Keep sticky slots mounted across a threshold. Use scroll-linked transforms for the handoff and
       push-off. Do not animate layout properties or add ambient motion.
-- [ ] Coalesce scroll updates to at most one reactive write per animation frame. Avoid layout reads
+- [x] Coalesce scroll updates to at most one reactive write per animation frame. Avoid layout reads
       in the scroll handler.
-- [ ] Preserve click-to-scroll, collapse, drill path, selection, disabled state, keyboard focus,
+- [x] Preserve click-to-scroll, collapse, drill path, selection, disabled state, keyboard focus,
       bottom dock, and long-label truncation.
-- [ ] Under reduced motion, keep position continuity but remove nonessential easing or fades.
-- [ ] Use Chrome DevTools to inspect one-pixel steps around every threshold in both directions.
+- [x] Under reduced motion, keep position continuity but remove nonessential easing or fades.
+- [x] Use Chrome DevTools to inspect one-pixel steps around every threshold in both directions.
       The visible stack coverage must not change by 32 pixels in one step, and no duplicate row may
       flash at the seam.
-- [ ] Record a scroll performance trace. Confirm that the scroll handler does not cause repeated
+- [x] Record a scroll performance trace. Confirm that the scroll handler does not cause repeated
       forced layout or long tasks.
 
 ### Session 4l verification
 
-- [ ] Run focused pure-layout and component tests, including threshold minus one, threshold, and
+- [x] Run focused pure-layout and component tests, including threshold minus one, threshold, and
       threshold plus one for both scroll directions.
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
-- [ ] Run `pnpm build-storybook`.
-- [ ] Inspect desktop and narrow widths, all three visual themes, both polarities, and reduced
+- [x] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
+- [x] Run `pnpm build-storybook`.
+- [x] Inspect desktop and narrow widths, all three visual themes, both polarities, and reduced
       motion in Chrome DevTools.
 
 ## Session 4m — Integrate configurable navigation outlines
