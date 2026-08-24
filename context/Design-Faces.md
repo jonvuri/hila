@@ -79,13 +79,14 @@ Session 4m performs one bounded integration pass: establish the registry and hos
 five old variants; add hover guides and toggle gutter; then review the seven candidates. The live
 workspace migration later adds production configuration and persistence.
 
-## Table face themes
+## Table face treatments
 
-The design exploration (`design-demo.html` section 6) defines three visual treatments for tabular data.
+The design exploration (`design-demo.html` section 6) defines three visual treatments for tabular
+data.
 
-### Theme inventory
+### Variant inventory
 
-| Theme                          | Visual metaphor       | Key elements                                                                                                           |
+| Variant                        | Visual metaphor       | Key elements                                                                                                           |
 | ------------------------------ | --------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **A — Thin header line**       | Clean minimal         | Uppercase xs-size headers, bold bottom border on header, light borders on rows                                         |
 | **B — Corner notch container** | Structural            | CornerNotchBox wrapper around the table, weighted header text, subtle row borders                                      |
@@ -97,24 +98,30 @@ Each table row is independently renderable given its props, enabling windowed re
 
 - `columns: Column[]` where `Column = { key: string; label: string }` — column definitions, stable across windows
 - `rows: FlatTableRow[]` where `FlatTableRow = { id: string; cells: Record<string, string> }` — row data keyed by column key, with `id` for stable keying across virtualizer window boundaries
-- `computeTableDecorations(theme, columns, rows, startIndex?)` returns a `RowDecoration[]` with per-cell decoration data. The `startIndex` parameter supports windowed rendering — row index parity (for cell-dot color alternation) must reflect the row's global position, not its position within the window.
-- `TableRowProps` bundles everything needed to render a single row in isolation: `theme`, `columns`, `row`, `decoration`, and an optional `renderCell` callback.
+- `computeTableDecorations(variant, columns, rows, startIndex?)` returns a `RowDecoration[]` with per-cell decoration data. The `startIndex` parameter supports windowed rendering — row index parity (for cell-dot color alternation) must reflect the row's global position, not its position within the window.
+- `TableRowProps` bundles everything needed to render a single row in isolation: `variant`, `columns`, `row`, `decoration`, and an optional `renderCell` callback.
 
-The theme renderer receives a flat array of these rows and renders them with the appropriate visual treatment. The header row (`TableHeaderRow`) is separate and always visible (not virtualized).
+The variant renderer receives a flat array of these rows and renders them with the selected visual
+treatment. The header row (`TableHeaderRow`) is separate and always visible. It is not virtualized.
 
 ### CSS architecture
 
-All themes share a single CSS module (`Table.module.css`) with a base `.table` class and theme-scoped descendant rules (`.themeThinLine`, `.themeCornerNotch`, `.themeCellDots`). The active theme class is applied via `tableThemeClass(theme)`, which returns the combined class string for the `<table>` element. Theme B reuses the `CornerNotchBox` primitive from the design system as a wrapper component.
+All variants share one CSS module (`Table.module.css`) with a base `.table` class and
+variant-scoped descendant rules. The current class names are `.themeThinLine`,
+`.themeCornerNotch`, and `.themeCellDots`. Session 4k does not rename this component-local API.
+Treatment B reuses the `CornerNotchBox` primitive as a wrapper.
 
 ### Implementation phases
 
-**Phase 1: All three themes.** The table themes are structurally simple (no SVGs, no cross-row dependencies), so all three are implemented together. Theme A establishes the base, Theme B composes with `CornerNotchBox`, Theme C adds per-cell dot decorations.
+**Phase 1: All three variants.** The table treatments have no SVG or cross-row dependencies, so
+all three are implemented together. Treatment A establishes the base. Treatment B composes with
+`CornerNotchBox`. Treatment C adds per-cell dot decorations.
 
 ## Shared infrastructure
 
 ### Variant registry
 
-A component-variant registry maps stable keys to local adapters:
+A component-variant registry maps stable configuration keys to local adapters:
 
 ```typescript
 type NavigationOutlineVariant =
@@ -125,11 +132,35 @@ type NavigationOutlineVariant =
   | 'whitespace'
   | 'hover-guides'
   | 'toggle-gutter'
-type TableThemeKey = 'thin-line' | 'corner-notch' | 'cell-dots'
+
+type TableTreatmentVariant = 'thin-line' | 'corner-notch' | 'cell-dots'
+
+type ComponentVariantValues = {
+  navigationOutline: NavigationOutlineVariant
+  tableTreatment: TableTreatmentVariant
+}
+
+type ComponentVariantConfig = Partial<ComponentVariantValues>
+
+type ComponentVariantDefinition<Value extends string> = {
+  values: readonly Value[]
+  defaultValue: Value
+}
+
+type ComponentVariantRegistry = {
+  [Key in keyof ComponentVariantValues]: ComponentVariantDefinition<ComponentVariantValues[Key]>
+}
 ```
 
-Session 4m will settle the final navigation keys after user review. The registry must not contain
-Ghost, Null, or Wipeout keys.
+The registry owns validation and fallback. An explicit valid value wins. A missing or unknown value
+uses that key's `defaultValue`. An unknown persisted value must not enter CSS or select another
+axis. The current `workflowy` behavior is the temporary navigation fallback. Session 4m will set the
+reviewed shipping default.
+
+The registry must not contain Ghost, Null, Wipeout, dark, light, composed, substrate, or x-ray
+values. A visual-theme, polarity, or fidelity change must not mutate an explicit component value.
+The rendering host can expose a resolved value with a component-specific data attribute, such as
+`data-navigation-outline`, after TypeScript validates it.
 
 ### Face config panel integration
 

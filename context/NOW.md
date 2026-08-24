@@ -4,25 +4,28 @@ kind: status
 state: active
 updated: 2026-08-23
 phase: phase-10
-session: phase-10-sessions-4j-4m-review
+session: phase-10-session-4j-contract-review
 ---
 
 # Now
 
-Phase 10 Session 4i is closed. Ghost, Null, and Wipeout are final and intended to ship as one
-visual-theme family. `Design/Theme previewer` renders one `ThemeCard` with an instant theme control.
-The fixed theme stories retain their approved intent and delta copy.
+Phase 10 Session 4j has a complete contract draft and is at its review gate. The contract defines
+fundamental tokens as simple values and semantic tokens as stable component-facing roles. Session
+4k will replace the old token API and migrate all current design-system consumers in one change. It
+will not keep compatibility aliases.
 
-The next six sessions are planned in
-[Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md) and
+The contract also defines `data-visual-theme`, an independent `data-theme` polarity, the typed
+component-variant registry, composed and substrate fidelity, x-ray resolution, accessibility
+ownership, and the ordered migration slices.
+
+The next five sessions are planned in [Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md) and
 [Sessions 4n–4o](Phase-10-Sessions-4n-4o-plan.md):
 
-1. Define the canonical token, visual-theme, component-variant, fidelity, and migration contracts.
-2. Implement the canonical tokens and migrate the approved specimens.
-3. Make sticky-header transitions seamless.
-4. Integrate the old and new navigation-outline variants as an independent component setting.
-5. Migrate the approved workspace into the live shell without changing data or gestures.
-6. Remove the executable overlaid-card implementation and its legacy styles after the cutover
+1. Implement the canonical tokens and migrate the approved specimens.
+2. Make sticky-header transitions seamless.
+3. Integrate the old and new navigation-outline variants as an independent component setting.
+4. Migrate the approved workspace into the live shell without changing data or gestures.
+5. Remove the executable overlaid-card implementation and its legacy styles after the cutover
    passes review.
 
 The live shell migration starts only after the four design sessions close. Full overlaid-card
@@ -42,26 +45,20 @@ removal starts only after the live cutover passes its user review and verificati
 
 ## Current verification
 
-- The Session 4i source set passed format, lint, typecheck, all 845 tests, and the Storybook build.
-  Lint reports 14 existing warnings and no errors.
-- Chrome DevTools confirmed instant Ghost, Null, and Wipeout switching, narrow-width containment,
-  intentional workspace scrolling, and all 13 aligned Wipeout workspace notches.
-- This planning update changes documentation only. Format and `git diff --check` are the required
-  checks before review.
+- The Session 4j draft changes documentation only. The touched documents are formatted, and
+  `git diff --check` passes.
+- The changed-file list contains no runtime or canonical token source.
 
-## Read for Session 4j
+## Read for Session 4j review
 
-1. The [Sessions 4j–4m fixed decisions and Session 4j checklist](Phase-10-Sessions-4j-4m-plan.md).
-2. The [Sessions 4n–4o dependency boundary](Phase-10-Sessions-4n-4o-plan.md#current-dependency-boundary).
-3. [Phase 10 §4](Phase-10.md#4-cohesive-design-token-and-theming-system).
-4. The [Session 4i semantic token requirements](Phase-10-Session-4c-plan.md#semantic-token-requirements).
-5. The approved [Design](Design.md) and [Design Faces](Design-Faces.md) rules.
+1. The [canonical token and theme contract](Design.md#token-system).
+2. The [component-variant registry](Design-Faces.md#variant-registry).
+3. The [Session 4j checklist](Phase-10-Sessions-4j-4m-plan.md#session-4j--define-the-canonical-token-and-configuration-contract).
 
 ## Next action
 
-Review the staged Session 4i closeout and Sessions 4j–4o plans. After approval, execute Session 4j
-only. Do not implement canonical tokens, navigation motion, outline adapters, live migration, or
-retirement deletion in the planning review.
+Review the Session 4j contract. Confirm or revise it before any canonical token source changes.
+After approval, close Session 4j and prepare Session 4k. Do not implement tokens before that review.
 
 ## Documentation boundary
 

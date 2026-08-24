@@ -82,26 +82,26 @@ Use these as pattern references, not as targets to copy:
 **Outcome:** one reviewed contract names the canonical roles, their dependencies, the visual-theme
 override mechanism, the independent component-variant mechanism, and the migration slices.
 
-- [ ] Convert the Session 4i requirements table into canonical atom groups for color, type, space,
+- [x] Convert the Session 4i requirements table into canonical atom groups for color, type, space,
       geometry, lines, motion, elevation, semantic states, and optional decoration.
-- [ ] Define which values depend on polarity, density, interaction state, or reduced-motion
+- [x] Define which values depend on polarity, density, interaction state, or reduced-motion
       preference. Do not encode component names in general-purpose atom names.
-- [ ] Select the visual-theme attribute and inheritance mechanism. Keep polarity independent of
+- [x] Select the visual-theme attribute and inheritance mechanism. Keep polarity independent of
       Ghost, Null, and Wipeout.
-- [ ] Define a typed component-variant registry. Include `navigationOutline` as an independent key.
+- [x] Define a typed component-variant registry. Include `navigationOutline` as an independent key.
       Its explicit component value must not change when the visual theme changes.
-- [ ] Define composed, substrate, and x-ray fidelity inputs against the surface and elevation roles.
-- [ ] Map the open ThemeCard accessibility findings to token or component work. Do not treat
+- [x] Define composed, substrate, and x-ray fidelity inputs against the surface and elevation roles.
+- [x] Map the open ThemeCard accessibility findings to token or component work. Do not treat
       low-contrast labels or invalid accessible names as theme character.
-- [ ] Write the ordered migration checklist: approved specimens; live shell and stream;
+- [x] Write the ordered migration checklist: approved specimens; live shell and stream;
       overlaid-card removal; launcher and overlays; tab retirement; faces and browsers.
 - [ ] Review the contract before any canonical token source changes.
 
 ### Session 4j verification
 
-- [ ] Format the touched documents.
-- [ ] Run `git diff --check`.
-- [ ] Confirm that no runtime or canonical token source changed.
+- [x] Format the touched documents.
+- [x] Run `git diff --check`.
+- [x] Confirm that no runtime or canonical token source changed.
 
 ## Session 4k — Implement tokens and migrate the approved specimens
 
@@ -110,8 +110,9 @@ temporary theme-card role layer.
 
 - [ ] Add the reviewed token groups to `tokens.css` and `tokens.ts`. Implement the visual-theme
       override mechanism for Ghost, Null, and Wipeout.
-- [ ] Move the approved `ThemeCard` and forward workspace specimens onto canonical roles. Remove
-      temporary aliases only after all specimen consumers migrate.
+- [ ] Replace the old token names and temporary ThemeCard roles while moving all current
+      design-system and approved specimen consumers onto canonical roles. Do not add compatibility
+      aliases.
 - [ ] Add the visual-theme control through the shared Storybook decorator. Keep the focused
       preview control if it remains useful for instant local comparison.
 - [ ] Add contract tests for theme inheritance, polarity independence, required roles, and unknown
