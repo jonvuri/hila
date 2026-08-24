@@ -33,6 +33,8 @@ export type WorkspacePanel = {
 }
 
 export type WorkspaceProps = {
+  as?: 'main' | 'section'
+  ariaLabel?: string
   panels: readonly WorkspacePanel[]
   workspaceTitle: string
   onAncestrySelect?: (item: WorkspaceAncestryItem) => void

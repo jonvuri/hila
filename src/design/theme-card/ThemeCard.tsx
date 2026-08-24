@@ -2,13 +2,12 @@ import { For, type JSX, Show } from 'solid-js'
 
 import Workspace from '../workspace/Workspace'
 import { rootShiftedPanels, rootVisiblePanels, workspaceTitle } from '../workspace/fixtures'
+import { type Polarity, resolvePolarity } from '../tokens'
 
 import './theme-card.css'
 import {
-  themeCardSemanticRoleIds,
   themeCardStateIds,
   type ThemeCardDial,
-  type ThemeCardSemanticRoleId,
   type ThemeCardSectionId,
   type ThemeCardStateId,
   type ThemeCardThemeInput,
@@ -18,10 +17,11 @@ import {
 
 type ThemeCardProps = {
   theme: ThemeCardThemeInput
+  polarity?: Polarity
 }
 
 type RoleSpecimen = {
-  id: ThemeCardSemanticRoleId
+  id: string
   label: string
 }
 
@@ -50,17 +50,6 @@ const treatmentKindLabels: Record<ThemeCardTreatmentKind, string> = {
   structural: 'Structural',
   'semantic-state': 'Semantic state',
   'optional-decoration': 'Optional decoration',
-}
-
-const toRoleStyle = (theme: ThemeCardThemeInput): JSX.CSSProperties => {
-  const style: Record<string, string> = {}
-
-  for (const role of themeCardSemanticRoleIds) {
-    const value = theme.roles?.[role]
-    if (value) style[`--tc-${role}`] = value
-  }
-
-  return style as JSX.CSSProperties
 }
 
 const Section = (props: {
@@ -149,9 +138,15 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
   <article
     id={`theme-card-${props.theme.id}`}
     class="tc-card"
+    data-theme={
+      props.polarity ??
+      resolvePolarity(
+        typeof document === 'undefined' ? undefined : document.documentElement.dataset.theme,
+      )
+    }
+    data-visual-theme={props.theme.id}
     data-theme-card={props.theme.id}
     data-testid="theme-card"
-    style={toRoleStyle(props.theme)}
   >
     <Section
       id="intent"
@@ -176,7 +171,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       id="palette-type"
       index="02"
       title="Palette and type"
-      summary="Semantic color and type roles. The role names are temporary exploration inputs."
+      summary="Canonical semantic color and type roles."
       treatments={treatmentsFor(props.theme, 'palette-type')}
     >
       <div class="tc-split-grid">
@@ -217,7 +212,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
       <div class="tc-foundation-grid">
         <div>
           <h3>Spacing</h3>
-          <div class="tc-space-stack" aria-label="Spacing scale">
+          <div class="tc-space-stack" aria-hidden="true">
             <i />
             <i />
             <i />
@@ -226,7 +221,7 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
         </div>
         <div>
           <h3>Geometry</h3>
-          <div class="tc-geometry" aria-label="Control, surface, and cut geometry">
+          <div class="tc-geometry" aria-hidden="true">
             <i />
             <i />
             <i />
@@ -237,14 +232,14 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
           <div class="tc-lines">
             <i />
             <i />
-            <svg viewBox="0 0 24 24" role="img" aria-label="Drill icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m9 5 7 7-7 7" />
             </svg>
           </div>
         </div>
         <div>
           <h3>Motion</h3>
-          <div class="tc-motion-track" aria-label="Motion duration and easing specimen">
+          <div class="tc-motion-track" aria-hidden="true">
             <i />
           </div>
         </div>
@@ -281,12 +276,21 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
           −
         </button>
         <span class="tc-chip">scope: subtree</span>
-        <label class="tc-field">
+        <label class="tc-field" for={`theme-card-filter-${props.theme.id}`}>
           <span>Filter</span>
-          <input value="storage engines" aria-label="Filter reading queue" />
+          <input
+            id={`theme-card-filter-${props.theme.id}`}
+            name={`reading-queue-filter-${props.theme.id}`}
+            value="storage engines"
+          />
         </label>
-        <label class="tc-check">
-          <input type="checkbox" checked />
+        <label class="tc-check" for={`theme-card-backlinks-${props.theme.id}`}>
+          <input
+            id={`theme-card-backlinks-${props.theme.id}`}
+            name={`show-backlinks-${props.theme.id}`}
+            type="checkbox"
+            checked
+          />
           <span>Show backlinks</span>
         </label>
       </div>
@@ -388,9 +392,14 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
         <div class="tc-molecule tc-launcher-specimen">
           <h3>Launcher</h3>
           <div class="tc-launcher" role="dialog" aria-label="Launcher specimen">
-            <label>
+            <label for={`theme-card-launcher-search-${props.theme.id}`}>
               <span aria-hidden="true">⌕</span>
-              <input value="storage engines" aria-label="Search all places" />
+              <span class="tc-visually-hidden">Search all places</span>
+              <input
+                id={`theme-card-launcher-search-${props.theme.id}`}
+                name={`launcher-search-${props.theme.id}`}
+                value="storage engines"
+              />
             </label>
             <div class="tc-launcher-chips">
               <span class="tc-chip">kind: text</span>
@@ -427,7 +436,12 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
             <small>No ancestry breadcrumb</small>
           </figcaption>
           <div class="tc-workspace-frame">
-            <Workspace panels={rootVisiblePanels} workspaceTitle={workspaceTitle} />
+            <Workspace
+              as="section"
+              ariaLabel="Root-visible workspace"
+              panels={rootVisiblePanels}
+              workspaceTitle={workspaceTitle}
+            />
           </div>
         </figure>
         <figure class="tc-workspace-specimen">
@@ -436,7 +450,12 @@ const ThemeCard = (props: ThemeCardProps): JSX.Element => (
             <small>Breadcrumb on first visible focus panel</small>
           </figcaption>
           <div class="tc-workspace-frame">
-            <Workspace panels={rootShiftedPanels} workspaceTitle={workspaceTitle} />
+            <Workspace
+              as="section"
+              ariaLabel="Root-shifted workspace"
+              panels={rootShiftedPanels}
+              workspaceTitle={workspaceTitle}
+            />
           </div>
         </figure>
       </div>

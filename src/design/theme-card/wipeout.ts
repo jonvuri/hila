@@ -1,35 +1,4 @@
-import { ghostRoles } from './ghost'
-import type { ThemeCardSemanticRoleId, ThemeCardThemeInput, ThemeCardTreatment } from './types'
-
-export const wipeoutRoles = {
-  ...ghostRoles,
-  'color-canvas': 'var(--tc-wipeout-canvas)',
-  'color-surface': 'var(--tc-wipeout-surface)',
-  'color-overlay': 'var(--tc-wipeout-overlay)',
-  'color-text': 'var(--tc-wipeout-text)',
-  'color-text-muted': 'var(--tc-wipeout-text-muted)',
-  'color-text-faint': 'var(--tc-wipeout-text-faint)',
-  'color-accent': 'var(--tc-wipeout-accent)',
-  'color-danger': 'var(--tc-wipeout-danger)',
-  'type-label-family': "'Share Tech Mono', var(--font-mono)",
-  'type-data-family': "'Share Tech Mono', var(--font-mono)",
-  'type-display-family':
-    "'Chakra Petch', 'Bahnschrift', 'Avenir Next Condensed', 'Arial Narrow', var(--font-sans)",
-  'type-label-size': '10px',
-  'type-label-weight': '500',
-  'geometry-control-radius': '0',
-  'geometry-surface-radius': '0',
-  'geometry-cut-size': '6px',
-  'line-subtle': '1px solid var(--tc-wipeout-line-subtle)',
-  'line-strong': '1px solid var(--tc-wipeout-line-strong)',
-  'motion-duration': '90ms',
-  'motion-easing': 'linear',
-  'state-hover': 'var(--tc-wipeout-hover)',
-  'state-selected': 'var(--tc-wipeout-selected)',
-  'state-focus': 'var(--tc-wipeout-accent)',
-  'state-invalid': 'var(--tc-wipeout-danger)',
-  'state-danger-surface': 'var(--tc-wipeout-danger-surface)',
-} satisfies Record<ThemeCardSemanticRoleId, string>
+import type { ThemeCardThemeInput, ThemeCardTreatment } from './types'
 
 export const wipeoutTreatments = [
   {
@@ -91,7 +60,6 @@ export const wipeoutTheme: ThemeCardThemeInput = {
     'Give the Ghost structure a precise instrument character while keeping dense reading clear.',
   delta:
     'Add hard brightness steps, strict display and data voices, disciplined violet signals, one-cut geometry, ticks, and unlit VFD segments.',
-  roles: wipeoutRoles,
   treatments: wipeoutTreatments,
   notes: [
     {

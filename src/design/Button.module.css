@@ -1,10 +1,11 @@
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-4);
-  padding: var(--sp-8) var(--sp-16);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
+  min-height: var(--size-control);
+  gap: var(--space-compact-inset);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  font-size: var(--type-body-small-size);
+  font-family: var(--type-body-family);
   cursor: pointer;
   border: none;
   background: none;
@@ -12,13 +13,13 @@
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-state-disabled);
   cursor: not-allowed;
 }
 
 .primary {
-  background: var(--c-invert-bg);
-  color: var(--c-invert-fg);
+  color: var(--color-inverse-text);
+  background: var(--color-inverse-surface);
   font-weight: 500;
 }
 
@@ -28,42 +29,47 @@
 
 .secondary {
   background: none;
-  color: var(--c-fg);
-  border: 1px solid var(--c-border);
+  color: var(--color-text);
+  border: var(--width-line) solid var(--color-line-strong);
 }
 
 .secondary:hover:not(:disabled) {
-  background: var(--c-hover);
+  background: var(--color-state-hover);
 }
 
 .ghost {
-  color: var(--c-fg-3);
+  color: var(--color-text-faint);
 }
 
 .ghost:hover:not(:disabled) {
-  color: var(--c-fg);
+  color: var(--color-text);
 }
 
 .destructive {
-  color: var(--c-fg-3);
+  color: var(--color-danger);
 }
 
 .destructive:hover:not(:disabled) {
-  color: var(--c-fg);
+  color: var(--color-danger);
   font-weight: 600;
 }
 
 .icon {
-  padding: var(--sp-4);
-  color: var(--c-fg-3);
-  width: 28px;
-  height: 28px;
+  width: var(--size-control);
+  height: var(--size-control);
+  padding: var(--space-compact-inset);
+  color: var(--color-text-faint);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .icon:hover:not(:disabled) {
-  color: var(--c-fg);
-  background: var(--c-hover);
+  color: var(--color-text);
+  background: var(--color-state-hover);
+}
+
+.btn:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
 }

@@ -1,3 +1,4 @@
+import type { VisualTheme } from '../tokens'
 export const themeCardSectionIds = [
   'intent',
   'palette-type',
@@ -22,48 +23,6 @@ export const themeCardStateIds = [
 ] as const
 
 export type ThemeCardStateId = (typeof themeCardStateIds)[number]
-
-export const themeCardSemanticRoleIds = [
-  'color-canvas',
-  'color-surface',
-  'color-overlay',
-  'color-text',
-  'color-text-muted',
-  'color-text-faint',
-  'color-accent',
-  'color-danger',
-  'type-body-family',
-  'type-label-family',
-  'type-data-family',
-  'type-display-family',
-  'type-body-size',
-  'type-label-size',
-  'type-body-weight',
-  'type-label-weight',
-  'space-unit',
-  'space-control-gap',
-  'space-section-gap',
-  'space-row-height',
-  'geometry-control-radius',
-  'geometry-surface-radius',
-  'geometry-cut-size',
-  'line-subtle',
-  'line-strong',
-  'icon-size',
-  'icon-stroke',
-  'motion-duration',
-  'motion-easing',
-  'state-hover',
-  'state-selected',
-  'state-focus',
-  'state-disabled-opacity',
-  'state-invalid',
-  'state-danger-surface',
-] as const
-
-export type ThemeCardSemanticRoleId = (typeof themeCardSemanticRoleIds)[number]
-
-export type ThemeCardSemanticRoles = Partial<Record<ThemeCardSemanticRoleId, string>>
 
 export type ThemeCardDialOption = {
   id: string
@@ -99,11 +58,10 @@ export type ThemeCardTreatment = {
 }
 
 export type ThemeCardThemeInput = {
-  id: string
+  id: VisualTheme
   name: string
   intent: string
   delta: string
-  roles?: ThemeCardSemanticRoles
   dials?: readonly ThemeCardDial[]
   notes?: readonly ThemeCardNote[]
   treatments?: readonly ThemeCardTreatment[]

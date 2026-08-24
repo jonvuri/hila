@@ -1,13 +1,13 @@
 .container {
   max-width: 1024px;
   margin: 0 auto;
-  padding: 0 var(--sp-16);
+  padding: 0 var(--space-content-inset);
 }
 
 .row {
   display: grid;
   grid-template-columns: repeat(16, 1fr);
-  gap: var(--sp-16);
+  gap: var(--space-panel-gap);
 }
 
 /* Generate .col-1 through .col-16 */

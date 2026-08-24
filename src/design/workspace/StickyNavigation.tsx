@@ -7,6 +7,7 @@ const ROW_HEIGHT = 32
 const FLOW_GAP = 4
 
 type StickyNavigationProps = {
+  ariaLabel?: string
   title?: string
   items: OutlineNode[]
   initialCollapsed?: ReadonlySet<string>
@@ -214,7 +215,7 @@ const StickyNavigation = (props: StickyNavigationProps): JSX.Element => {
   }
 
   return (
-    <section class="ws-navigation" aria-label={props.title ?? 'Children'}>
+    <section class="ws-navigation" aria-label={props.ariaLabel ?? props.title ?? 'Children'}>
       <div
         class="ws-navigation-scroll"
         ref={scrollElement}

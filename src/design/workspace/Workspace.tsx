@@ -1,4 +1,5 @@
 import { For, type JSX, Show } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 
 import FocusPanel from './FocusPanel'
 import StickyNavigation from './StickyNavigation'
@@ -9,7 +10,13 @@ export const shouldShowWorkspaceBreadcrumb = (panels: readonly WorkspacePanel[])
   panels[0]?.kind === 'focus'
 
 const Workspace = (props: WorkspaceProps): JSX.Element => (
-  <main class="ws-workspace" data-theme-base="ghost" data-testid="workspace-skeleton">
+  <Dynamic
+    component={props.as ?? 'main'}
+    aria-label={props.ariaLabel}
+    class="ws-workspace"
+    data-theme-base="ghost"
+    data-testid="workspace-skeleton"
+  >
     <For each={props.panels}>
       {(panel, index) => {
         const active = () => index() === props.panels.length - 1
@@ -30,11 +37,13 @@ const Workspace = (props: WorkspaceProps): JSX.Element => (
                   content={focus()}
                   active={active()}
                   ancestry={showBreadcrumb() ? panel.ancestry : undefined}
+                  landmarkLabelPrefix={props.ariaLabel}
                   onAncestrySelect={props.onAncestrySelect}
                 />
               )}
             </Show>
             <StickyNavigation
+              ariaLabel={[props.ariaLabel, panel.title, 'children'].filter(Boolean).join(': ')}
               title={panel.kind === 'navigation' ? props.workspaceTitle : undefined}
               items={panel.items}
               initialCollapsed={panel.initialCollapsed}
@@ -48,7 +57,7 @@ const Workspace = (props: WorkspaceProps): JSX.Element => (
         )
       }}
     </For>
-  </main>
+  </Dynamic>
 )
 
 export default Workspace

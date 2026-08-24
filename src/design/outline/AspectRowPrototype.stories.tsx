@@ -151,7 +151,7 @@ const TypeBadge = (props: { typeName: string }) => {
 
 const FIELD_LABEL_STYLE = {
   'font-size': '9px',
-  color: 'var(--c-fg-3)',
+  color: 'var(--color-text-faint)',
   'font-weight': '600',
   'letter-spacing': '0.4px',
   'text-transform': 'uppercase' as const,
@@ -159,7 +159,7 @@ const FIELD_LABEL_STYLE = {
 }
 const FIELD_VALUE_STYLE = {
   'font-size': '12px',
-  color: 'var(--c-fg-2)',
+  color: 'var(--color-text-muted)',
   'line-height': '1.4',
 }
 
@@ -282,11 +282,11 @@ const BlockHeader = (props: { fieldNames: string[]; labelLayout: 'stacked' | 'in
       'flex-direction': 'row',
       gap: '16px',
       padding: '2px 0 4px',
-      'border-bottom': '1px solid var(--c-border)',
+      'border-bottom': '1px solid var(--color-line-strong)',
       'margin-bottom': '2px',
       position: 'sticky',
       top: '0',
-      background: 'var(--c-bg)',
+      background: 'var(--color-canvas)',
       'z-index': '2',
     }}
   >
@@ -294,7 +294,7 @@ const BlockHeader = (props: { fieldNames: string[]; labelLayout: 'stacked' | 'in
       <span
         style={{
           'font-size': '9px',
-          color: 'var(--c-fg-3)',
+          color: 'var(--color-text-faint)',
           'font-weight': '600',
           'letter-spacing': '0.4px',
           'text-transform': 'uppercase',
@@ -310,7 +310,7 @@ const BlockHeader = (props: { fieldNames: string[]; labelLayout: 'stacked' | 'in
         <span
           style={{
             'font-size': '9px',
-            color: 'var(--c-fg-3)',
+            color: 'var(--color-text-faint)',
             'font-weight': '600',
             'letter-spacing': '0.4px',
             'text-transform': 'uppercase',
@@ -363,7 +363,7 @@ const AspectRow = (props: {
         <div
           style={{
             'font-size': '10px',
-            color: 'var(--c-fg-3)',
+            color: 'var(--color-text-faint)',
             'font-style': 'italic',
             'padding-bottom': '2px',
           }}
@@ -386,8 +386,8 @@ const AspectRow = (props: {
           style={{
             flex: isInline() ? '0 0 55%' : undefined,
             'min-width': '0',
-            'font-size': 'var(--text-base)',
-            color: 'var(--c-fg)',
+            'font-size': 'var(--type-body-size)',
+            color: 'var(--color-text)',
             'line-height': '1.6',
             overflow: isInline() ? 'hidden' : undefined,
             'text-overflow': isInline() ? 'ellipsis' : undefined,
@@ -469,7 +469,7 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
     <div
       style={{
         margin: '2px 0',
-        border: '1px solid var(--c-border-2)',
+        border: '1px solid var(--color-line-subtle)',
         'border-radius': '4px',
         overflow: 'hidden',
       }}
@@ -479,11 +479,11 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
           padding: '3px 8px',
           'font-size': '10px',
           'font-weight': '600',
-          color: 'var(--c-fg-3)',
+          color: 'var(--color-text-faint)',
           'letter-spacing': '0.3px',
           'text-transform': 'uppercase',
-          background: 'var(--c-surface)',
-          'border-bottom': '1px solid var(--c-border-2)',
+          background: 'var(--color-surface)',
+          'border-bottom': '1px solid var(--color-line-subtle)',
         }}
       >
         {props.data.title}
@@ -492,8 +492,8 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
       <div
         style={{
           display: 'flex',
-          background: 'var(--c-surface)',
-          'border-bottom': '1px solid var(--c-border)',
+          background: 'var(--color-surface)',
+          'border-bottom': '1px solid var(--color-line-strong)',
         }}
       >
         <For each={props.data.columns}>
@@ -506,7 +506,7 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
                 'font-size': '10px',
                 'letter-spacing': '0.3px',
                 'text-transform': 'uppercase',
-                color: 'var(--c-fg-3)',
+                color: 'var(--color-text-faint)',
               }}
             >
               {col}
@@ -520,7 +520,7 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
           <div
             style={{
               display: 'flex',
-              background: i() % 2 === 0 ? 'var(--c-bg)' : 'var(--c-surface)',
+              background: i() % 2 === 0 ? 'var(--color-canvas)' : 'var(--color-surface)',
             }}
           >
             <For each={row}>
@@ -529,7 +529,7 @@ const SubTableEmbed = (props: { data: SubTableData }) => {
                   style={{
                     ...baseCellStyle,
                     flex: j() === 0 ? '2' : '1',
-                    color: j() === 0 ? 'var(--c-fg)' : 'var(--c-fg-2)',
+                    color: j() === 0 ? 'var(--color-text)' : 'var(--color-text-muted)',
                   }}
                 >
                   {cell}
@@ -560,11 +560,11 @@ const renderContent = (row: FlatRow) => {
   return (
     <span
       style={{
-        'font-size': 'var(--text-base)',
+        'font-size': 'var(--type-body-size)',
         'line-height': '1.6',
         padding: '4px 0',
         display: 'block',
-        color: 'var(--c-fg)',
+        color: 'var(--color-text)',
       }}
     >
       {row.content}
@@ -589,9 +589,9 @@ const PrototypeScene = (props: PrototypeSceneProps) => {
       style={{
         width: isNarrow() ? '280px' : '680px',
         'max-width': '100%',
-        'font-family': 'var(--font-sans)',
-        background: 'var(--c-bg)',
-        border: '1px solid var(--c-border)',
+        'font-family': 'var(--type-body-family)',
+        background: 'var(--color-canvas)',
+        border: '1px solid var(--color-line-strong)',
         'border-radius': '6px',
         overflow: 'hidden',
         display: 'flex',
@@ -603,15 +603,15 @@ const PrototypeScene = (props: PrototypeSceneProps) => {
       <div
         style={{
           padding: '14px 16px 12px',
-          'border-bottom': '1px solid var(--c-border-2)',
+          'border-bottom': '1px solid var(--color-line-subtle)',
           'flex-shrink': '0',
         }}
       >
         <div
           style={{
-            'font-size': 'var(--text-lg)',
+            'font-size': 'var(--type-display-small-size)',
             'font-weight': '600',
-            color: 'var(--c-fg-max)',
+            color: 'var(--color-text-strong)',
             'line-height': '1.4',
           }}
         >
@@ -619,8 +619,8 @@ const PrototypeScene = (props: PrototypeSceneProps) => {
         </div>
         <div
           style={{
-            'font-size': 'var(--text-sm)',
-            color: 'var(--c-fg-3)',
+            'font-size': 'var(--type-body-small-size)',
+            color: 'var(--color-text-faint)',
             'margin-top': '6px',
             'line-height': '1.5',
           }}
@@ -660,7 +660,7 @@ const PrototypeScene = (props: PrototypeSceneProps) => {
       <div
         style={{
           padding: '8px 16px',
-          'border-bottom': '1px solid var(--c-border-2)',
+          'border-bottom': '1px solid var(--color-line-subtle)',
           'flex-shrink': '0',
           'overflow-y': 'auto',
         }}

@@ -1,19 +1,19 @@
 .heading {
   display: inline-block;
-  background: var(--c-invert-bg);
-  color: var(--c-invert-fg);
-  padding: var(--sp-4) var(--sp-8);
+  padding: var(--space-compact-inset) var(--space-control-gap);
+  color: var(--color-inverse-text);
+  background: var(--color-inverse-surface);
   font-weight: 600;
 }
 
 .sm {
-  font-size: var(--text-sm);
+  font-size: var(--type-body-small-size);
 }
 
 .md {
-  font-size: var(--text-md);
+  font-size: var(--type-body-large-size);
 }
 
 .lg {
-  font-size: var(--text-lg);
+  font-size: var(--type-display-small-size);
 }

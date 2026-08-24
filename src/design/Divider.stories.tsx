@@ -25,16 +25,22 @@ export const Full: Story = {
 
 export const BetweenContent: Story = {
   render: () => (
-    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-16)' }}>
-      <p style={{ 'font-size': 'var(--text-sm)', color: 'var(--c-fg-2)' }}>
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-16)' }}>
+      <p
+        style={{ 'font-size': 'var(--type-body-small-size)', color: 'var(--color-text-muted)' }}
+      >
         Content above the short divider.
       </p>
       <Divider />
-      <p style={{ 'font-size': 'var(--text-sm)', color: 'var(--c-fg-2)' }}>
+      <p
+        style={{ 'font-size': 'var(--type-body-small-size)', color: 'var(--color-text-muted)' }}
+      >
         Content below the short divider.
       </p>
       <Divider full />
-      <p style={{ 'font-size': 'var(--text-sm)', color: 'var(--c-fg-2)' }}>
+      <p
+        style={{ 'font-size': 'var(--type-body-small-size)', color: 'var(--color-text-muted)' }}
+      >
         Content below the full divider.
       </p>
     </div>

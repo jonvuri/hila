@@ -10,8 +10,8 @@
   left: 0;
   width: 6px;
   height: 6px;
-  border-top: 1px solid var(--c-border);
-  border-left: 1px solid var(--c-border);
+  border-top: var(--width-line) solid var(--color-line-strong);
+  border-left: var(--width-line) solid var(--color-line-strong);
 }
 
 .wrapper::after {
@@ -21,26 +21,29 @@
   right: 0;
   width: 6px;
   height: 6px;
-  border-top: 1px solid var(--c-border);
-  border-right: 1px solid var(--c-border);
+  border-top: var(--width-line) solid var(--color-line-strong);
+  border-right: var(--width-line) solid var(--color-line-strong);
 }
 
 .input {
   background: none;
   border: none;
-  border-bottom: 1px solid var(--c-border);
-  color: var(--c-fg);
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
-  padding: var(--sp-8) var(--sp-16);
+  min-height: var(--size-control);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  color: var(--color-text);
+  border-bottom: var(--width-line) solid var(--color-line-strong);
+  font-size: var(--type-body-small-size);
+  font-family: var(--type-body-family);
   outline: none;
   width: 200px;
 }
 
 .input:focus {
-  border-bottom-color: var(--c-fg-2);
+  border-bottom-color: var(--color-state-focus);
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
 }
 
 .input::placeholder {
-  color: var(--c-fg-4);
+  color: var(--color-text-faint);
 }

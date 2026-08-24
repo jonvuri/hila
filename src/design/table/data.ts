@@ -24,11 +24,12 @@ export const computeTableDecorations = (
 
   return rows.map((_, i) => {
     const globalIndex = startIndex + i
-    const dotColor = globalIndex % 2 === 0 ? 'var(--c-fg-3)' : 'var(--c-fg-4)'
+    const dotColor =
+      globalIndex % 2 === 0 ? 'var(--color-text-faint)' : 'var(--color-line-strong)'
     return {
       cellDecorations: Array.from({ length: colCount }, () => ({ dotColor })),
     }
   })
 }
 
-export const headerDotColor = 'var(--c-fg)'
+export const headerDotColor = 'var(--color-text)'

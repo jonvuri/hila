@@ -18,12 +18,12 @@ export const Default: Story = {
 
 export const WithContext: Story = {
   render: () => (
-    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-8)' }}>
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-8)' }}>
       <SectionHeading>Matrix registry</SectionHeading>
       <p
         style={{
-          'font-size': 'var(--text-sm)',
-          color: 'var(--c-fg-3)',
+          'font-size': 'var(--type-body-small-size)',
+          color: 'var(--color-text-faint)',
           'max-width': '640px',
           'line-height': '1.5',
         }}

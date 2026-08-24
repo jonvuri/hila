@@ -102,7 +102,7 @@ and remove the executable overlaid-card implementation.
 
 ### Planned pre-migration sessions
 
-- [ ] **Session 4j:** define the canonical token, visual-theme, component-variant, fidelity, and
+- [x] **Session 4j:** define the canonical token, visual-theme, component-variant, fidelity, and
       migration contracts.
 - [ ] **Session 4k:** implement the tokens and migrate the approved theme specimens.
 - [ ] **Session 4l:** make sticky-header transitions continuous in both scroll directions.

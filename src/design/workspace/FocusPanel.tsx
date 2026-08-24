@@ -1,4 +1,4 @@
-import { createSignal, For, type JSX, Show } from 'solid-js'
+import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js'
 
 import type { WorkspaceAncestry, WorkspaceAncestryItem, WorkspaceFocusContent } from './types'
 
@@ -7,16 +7,18 @@ type FocusPanelProps = {
   content: WorkspaceFocusContent
   active: boolean
   ancestry?: WorkspaceAncestry
+  landmarkLabelPrefix?: string
   onAncestrySelect?: (item: WorkspaceAncestryItem) => void
 }
 
 const AncestryBreadcrumb = (props: {
   ancestry: WorkspaceAncestry
+  label: string
   onSelect?: (item: WorkspaceAncestryItem) => void
 }): JSX.Element => (
   <nav
     class="ws-breadcrumb"
-    aria-label="Ancestry"
+    aria-label={props.label}
     data-source={props.ancestry.source}
     data-testid="workspace-ancestry-breadcrumb"
   >
@@ -36,6 +38,9 @@ const AncestryBreadcrumb = (props: {
 
 const FocusPanel = (props: FocusPanelProps): JSX.Element => {
   const [backlinksOpen, setBacklinksOpen] = createSignal(false)
+  const propertyIdPrefix = createUniqueId()
+  const landmarkLabel = (label: string) =>
+    [props.landmarkLabelPrefix, props.title, label].filter(Boolean).join(': ')
 
   return (
     <section
@@ -46,7 +51,11 @@ const FocusPanel = (props: FocusPanelProps): JSX.Element => {
     >
       <Show when={props.ancestry}>
         {(ancestry) => (
-          <AncestryBreadcrumb ancestry={ancestry()} onSelect={props.onAncestrySelect} />
+          <AncestryBreadcrumb
+            ancestry={ancestry()}
+            label={landmarkLabel('ancestry')}
+            onSelect={props.onAncestrySelect}
+          />
         )}
       </Show>
 
@@ -61,16 +70,20 @@ const FocusPanel = (props: FocusPanelProps): JSX.Element => {
       </div>
 
       <Show when={props.content.properties.length > 0}>
-        <section class="ws-focus-section" aria-label="Properties">
+        <section class="ws-focus-section" aria-label={landmarkLabel('properties')}>
           <h3>Properties</h3>
           <div class="ws-focus-properties">
             <For each={props.content.properties}>
-              {([key, value]) => (
-                <label>
-                  <span>{key}</span>
-                  <input type="text" value={value} aria-label={key} />
-                </label>
-              )}
+              {([key, value]) => {
+                const inputId = `${propertyIdPrefix}-${key.toLowerCase().replaceAll(' ', '-')}`
+
+                return (
+                  <label for={inputId}>
+                    <span>{key}</span>
+                    <input id={inputId} name={inputId} type="text" value={value} />
+                  </label>
+                )
+              }}
             </For>
           </div>
         </section>

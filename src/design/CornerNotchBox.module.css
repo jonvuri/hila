@@ -1,6 +1,6 @@
 .box {
   position: relative;
-  padding: var(--sp-16);
+  padding: var(--space-content-inset);
 }
 
 .box::before,
@@ -14,13 +14,13 @@
 .box::before {
   top: 0;
   left: 0;
-  border-top: 1px solid var(--c-border);
-  border-left: 1px solid var(--c-border);
+  border-top: var(--width-line) solid var(--color-line-strong);
+  border-left: var(--width-line) solid var(--color-line-strong);
 }
 
 .box::after {
   bottom: 0;
   right: 0;
-  border-bottom: 1px solid var(--c-border);
-  border-right: 1px solid var(--c-border);
+  border-right: var(--width-line) solid var(--color-line-strong);
+  border-bottom: var(--width-line) solid var(--color-line-strong);
 }

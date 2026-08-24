@@ -18,7 +18,7 @@ export const Default: Story = {
 
 export const AllTypes: Story = {
   render: () => (
-    <div style={{ display: 'flex', gap: 'var(--sp-8)', 'align-items': 'center' }}>
+    <div style={{ display: 'flex', gap: 'var(--space-8)', 'align-items': 'center' }}>
       <Badge>text</Badge>
       <Badge>richtext</Badge>
       <Badge>number</Badge>

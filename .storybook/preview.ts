@@ -2,12 +2,14 @@ import type { Preview } from 'storybook-solidjs-vite'
 import '../src/design/tokens.css'
 import '../src/design/reset.css'
 
+import { resolvePolarity, resolveVisualTheme } from '../src/design/tokens'
+
 const preview: Preview = {
   globalTypes: {
-    theme: {
-      description: 'Color theme',
+    polarity: {
+      description: 'Light or dark polarity',
       toolbar: {
-        title: 'Theme',
+        title: 'Polarity',
         icon: 'circlehollow',
         items: [
           { value: 'dark', icon: 'moon', title: 'Dark' },
@@ -16,13 +18,30 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    visualTheme: {
+      description: 'Global visual theme',
+      toolbar: {
+        title: 'Visual theme',
+        icon: 'paintbrush',
+        items: [
+          { value: 'ghost', title: 'Ghost' },
+          { value: 'null', title: 'Null' },
+          { value: 'wipeout', title: 'Wipeout' },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
   initialGlobals: {
-    theme: 'dark',
+    polarity: 'dark',
+    visualTheme: 'ghost',
   },
   decorators: [
     (Story, context) => {
-      document.documentElement.setAttribute('data-theme', context.globals.theme ?? 'dark')
+      const polarity = resolvePolarity(context.globals.polarity)
+      const visualTheme = resolveVisualTheme(context.globals.visualTheme)
+      document.documentElement.setAttribute('data-theme', polarity)
+      document.documentElement.setAttribute('data-visual-theme', visualTheme)
       return Story()
     },
   ],

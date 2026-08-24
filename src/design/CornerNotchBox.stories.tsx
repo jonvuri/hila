@@ -18,8 +18,8 @@ export const Default: Story = {
     children: (
       <div
         style={{
-          'font-size': 'var(--text-sm)',
-          color: 'var(--c-fg-2)',
+          'font-size': 'var(--type-body-small-size)',
+          color: 'var(--color-text-muted)',
           'line-height': '1.6',
         }}
       >
@@ -35,7 +35,9 @@ export const NarrowContent: Story = {
   args: {
     maxWidth: '280px',
     children: (
-      <div style={{ 'font-size': 'var(--text-sm)', color: 'var(--c-fg-2)' }}>
+      <div
+        style={{ 'font-size': 'var(--type-body-small-size)', color: 'var(--color-text-muted)' }}
+      >
         A compact container with corner notch decoration.
       </div>
     ),

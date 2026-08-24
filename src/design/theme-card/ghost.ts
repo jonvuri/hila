@@ -1,43 +1,4 @@
-import type { ThemeCardSemanticRoleId, ThemeCardThemeInput, ThemeCardTreatment } from './types'
-
-export const ghostRoles = {
-  'color-canvas': 'var(--c-bg)',
-  'color-surface': 'var(--c-surface)',
-  'color-overlay': 'var(--c-elevated)',
-  'color-text': 'var(--c-fg)',
-  'color-text-muted': 'var(--c-fg-2)',
-  'color-text-faint': 'var(--c-fg-3)',
-  'color-accent': 'var(--c-accent)',
-  'color-danger': 'var(--tc-ghost-danger)',
-  'type-body-family': 'var(--font-sans)',
-  'type-label-family': 'var(--font-mono)',
-  'type-data-family': 'var(--font-mono)',
-  'type-display-family': 'var(--font-sans)',
-  'type-body-size': 'var(--text-base)',
-  'type-label-size': 'var(--text-xs)',
-  'type-body-weight': '400',
-  'type-label-weight': '500',
-  'space-unit': '4px',
-  'space-control-gap': '8px',
-  'space-section-gap': '32px',
-  'space-row-height': '32px',
-  'geometry-control-radius': '0',
-  'geometry-surface-radius': '0',
-  'geometry-cut-size': '0',
-  'line-subtle': '1px solid var(--c-border-2)',
-  'line-strong': '1px solid var(--c-border)',
-  'icon-size': '16px',
-  'icon-stroke': '1.5',
-  'motion-duration': '120ms',
-  'motion-easing': 'ease-out',
-  'state-hover': 'var(--c-hover)',
-  'state-selected': 'var(--c-active)',
-  'state-focus': 'var(--c-accent)',
-  'state-disabled-opacity': '0.45',
-  'state-invalid': 'var(--tc-ghost-danger)',
-  'state-danger-surface':
-    'color-mix(in srgb, var(--tc-ghost-danger) 14%, var(--tc-color-canvas))',
-} satisfies Record<ThemeCardSemanticRoleId, string>
+import type { ThemeCardThemeInput, ThemeCardTreatment } from './types'
 
 export const ghostTreatments = [
   {
@@ -151,7 +112,6 @@ export const ghostTheme: ThemeCardThemeInput = {
     'Expose the shared workspace structure, behavior, and minimum affordances without theme character.',
   delta:
     'Assign the least visual treatment that keeps hierarchy, interaction targets, and semantic states clear.',
-  roles: ghostRoles,
   treatments: ghostTreatments,
   notes: [
     {
@@ -164,7 +124,7 @@ export const ghostTheme: ThemeCardThemeInput = {
     },
     {
       label: 'Polarity',
-      text: 'Local roles follow the Storybook light and dark foundations. Danger changes by polarity.',
+      text: 'Canonical roles follow the Storybook light and dark polarity. Danger changes by polarity.',
     },
     {
       label: 'Approved resting state',

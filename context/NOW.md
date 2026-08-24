@@ -4,61 +4,47 @@ kind: status
 state: active
 updated: 2026-08-23
 phase: phase-10
-session: phase-10-session-4j-contract-review
+session: phase-10-session-4l-sticky-transitions
 ---
 
 # Now
 
-Phase 10 Session 4j has a complete contract draft and is at its review gate. The contract defines
-fundamental tokens as simple values and semantic tokens as stable component-facing roles. Session
-4k will replace the old token API and migrate all current design-system consumers in one change. It
-will not keep compatibility aliases.
+Phase 10 Session 4k is closed. The canonical tokens now render the approved Ghost, Null, and
+Wipeout previews without the temporary ThemeCard role layer. The user approved the canonical
+contracts in `Design.md` and `Design-Faces.md` without revisions.
 
-The contract also defines `data-visual-theme`, an independent `data-theme` polarity, the typed
-component-variant registry, composed and substrate fidelity, x-ray resolution, accessibility
-ownership, and the ordered migration slices.
+Browser inspection covered all three themes in both polarities at desktop and narrow widths. It
+also covered instant theme and polarity changes, required-label and control contrast, keyboard
+focus, intentional workspace scrolling, accessibility landmarks, and the browser console. The
+inspection corrected the Wipeout light faint-neutral value, the Null state-fill cascade, reactive
+preview polarity, and duplicate workspace landmark names.
 
-The next five sessions are planned in [Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md) and
-[Sessions 4n–4o](Phase-10-Sessions-4n-4o-plan.md):
-
-1. Implement the canonical tokens and migrate the approved specimens.
-2. Make sticky-header transitions seamless.
-3. Integrate the old and new navigation-outline variants as an independent component setting.
-4. Migrate the approved workspace into the live shell without changing data or gestures.
-5. Remove the executable overlaid-card implementation and its legacy styles after the cutover
-   passes review.
-
-The live shell migration starts only after the four design sessions close. Full overlaid-card
-removal starts only after the live cutover passes its user review and verification gate.
-
-## Planning evidence
-
-- Chrome DevTools measured a 32-pixel sticky-layer height change at each ancestor threshold. The
-  current flow row and sticky copy meet at the seam while a stack row mounts or unmounts.
-- The old outline renderer owns both decoration and interaction. The forward navigation owns a
-  separate interaction contract. Session 4m will keep behavior in the shared navigation row and
-  adapt outline calculation and paint only.
-- Guide, notch, and vector variants need data outside a virtualized visible range. The new contract
-  must supply ancestry, continuation, look-ahead, and up to 100 forward rows.
-- Two new candidates are planned: VS Code-inspired hover guides and a Notion-inspired toggle
-  gutter.
+The live app, production faces, and executable overlaid-card archive remain unchanged. Their
+migration stays in the later planned slices.
 
 ## Current verification
 
-- The Session 4j draft changes documentation only. The touched documents are formatted, and
-  `git diff --check` passes.
-- The changed-file list contains no runtime or canonical token source.
+- `npm run format` passes.
+- `npm run lint` passes with 14 existing warnings and no errors.
+- `npm run typecheck` passes.
+- All 855 unit tests pass.
+- `pnpm build-storybook` passes.
+- `git diff --check` passes.
+- The Storybook accessibility scan reports zero violations for the inspected Wipeout light case.
+  A Lighthouse snapshot of Null light reports an accessibility score of 100.
+- Chrome DevTools reports no console errors, warnings, or issues.
 
-## Read for Session 4j review
+## Read for Session 4l
 
-1. The [canonical token and theme contract](Design.md#token-system).
-2. The [component-variant registry](Design-Faces.md#variant-registry).
-3. The [Session 4j checklist](Phase-10-Sessions-4j-4m-plan.md#session-4j--define-the-canonical-token-and-configuration-contract).
+1. The [sticky-transition preflight](Phase-10-Sessions-4j-4m-plan.md#sticky-transition).
+2. The [Session 4l checklist](Phase-10-Sessions-4j-4m-plan.md#session-4l--make-sticky-transitions-seamless).
+3. The [browser testing guide](Testing.md#agent-driven-live-browser-testing).
 
 ## Next action
 
-Review the Session 4j contract. Confirm or revise it before any canonical token source changes.
-After approval, close Session 4j and prepare Session 4k. Do not implement tokens before that review.
+Add the dense sticky-threshold fixture for title-only, one-level, multi-level, drill-at-top, and
+drill-at-bottom transitions. Then extract the current sticky layout calculation into a pure,
+tested model. Do not build Session 4m outline variants early.
 
 ## Documentation boundary
 

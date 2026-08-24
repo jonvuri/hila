@@ -266,7 +266,7 @@ const VectorFieldRowInner = (props: InternalRowProps) => {
                   y2="7"
                   transform={slot.short ? undefined : `rotate(${slot.angle}, 7, 7)`}
                   style={{
-                    stroke: 'var(--c-fg-2)',
+                    stroke: 'var(--color-text-muted)',
                     'stroke-width': `${slot.strokeWidth}`,
                     'stroke-linecap': 'round',
                     opacity: `${slot.opacity}`,
@@ -284,7 +284,11 @@ const VectorFieldRowInner = (props: InternalRowProps) => {
 
 /* ---- Corner Notches ---- */
 
-const NOTCH_COLORS = ['var(--c-fg-2)', 'var(--c-fg-3)', 'var(--c-fg-4)'] as const
+const NOTCH_COLORS = [
+  'var(--color-text-muted)',
+  'var(--color-text-faint)',
+  'var(--color-line-strong)',
+] as const
 const notchColor = (depth: number): string => NOTCH_COLORS[Math.min(depth, 2)]!
 
 const CornerNotchesRowInner = (props: InternalRowProps) => {

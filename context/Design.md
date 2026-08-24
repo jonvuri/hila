@@ -25,9 +25,9 @@ The hila design system provides a set of design tokens, structural primitives, a
 | `src/design/tokens.ts`  | Typed token names, axis values, and registry helpers for TypeScript consumers.                                       |
 | `src/design/reset.css`  | Minimal global reset that uses token variables.                                                                      |
 
-Session 4k will replace the current token names with this contract. It will update all current
-design-system consumers in the same change. It will not add compatibility aliases. Live styles
-that do not yet consume canonical tokens stay unchanged until their planned migration slice.
+Session 4k replaces the old token names with this contract. It updates all current design-system
+consumers in the same change and adds no compatibility aliases. Live styles that do not yet consume
+canonical tokens stay unchanged until their planned migration slice.
 
 ### Two token layers
 
@@ -137,7 +137,7 @@ Each resolved polarity and visual-theme pair assigns the fundamental palette, ty
 motion, elevation, and decoration values. The semantic declarations then reference those values.
 Components do not select a palette or branch on a visual-theme name.
 
-Storybook will expose separate `polarity` and `visualTheme` toolbar values through one decorator.
+Storybook exposes separate `polarity` and `visualTheme` toolbar values through one decorator.
 The focused theme preview can keep its local `visualTheme` control. Session 4m will add an
 independent `navigationOutline` control to the forward navigation specimen.
 

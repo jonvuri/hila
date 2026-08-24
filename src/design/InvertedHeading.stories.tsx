@@ -32,7 +32,7 @@ export const Small: Story = {
 
 export const AllSizes: Story = {
   render: () => (
-    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-16)' }}>
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-16)' }}>
       <InvertedHeading size="lg">Large — Project roadmap</InvertedHeading>
       <InvertedHeading size="md">Medium — Outline</InvertedHeading>
       <InvertedHeading size="sm">Small — Architecture notes</InvertedHeading>

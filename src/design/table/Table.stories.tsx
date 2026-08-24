@@ -74,18 +74,18 @@ const allThemes: TableTheme[] = ['thin-line', 'corner-notch', 'cell-dots']
 
 export const AllThemes: Story = {
   render: () => (
-    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-32)' }}>
+    <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-32)' }}>
       <For each={allThemes}>
         {(theme) => (
           <div>
             <div
               style={{
-                'font-size': 'var(--text-xs)',
+                'font-size': 'var(--type-label-size)',
                 'font-weight': '600',
                 'letter-spacing': '1.5px',
                 'text-transform': 'uppercase',
-                color: 'var(--c-fg-3)',
-                'margin-bottom': 'var(--sp-8)',
+                color: 'var(--color-text-faint)',
+                'margin-bottom': 'var(--space-8)',
               }}
             >
               {theme}

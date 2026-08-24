@@ -2,33 +2,33 @@
 
 .table {
   width: 100%;
-  font-size: var(--text-base);
+  font-size: var(--type-body-size);
   border-collapse: collapse;
-  color: var(--c-fg);
+  color: var(--color-text);
 }
 
 .table th,
 .table td {
   text-align: left;
-  padding: var(--sp-8) var(--sp-16);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
 }
 
 .table th {
-  color: var(--c-fg-max);
+  color: var(--color-text-strong);
 }
 
 /* ── Theme A — Thin header line ── */
 
 .themeThinLine th {
-  font-size: var(--text-xs);
+  font-size: var(--type-label-size);
   text-transform: uppercase;
   letter-spacing: 1px;
   font-weight: 500;
-  border-bottom: 1px solid var(--c-fg);
+  border-bottom: var(--width-line) solid var(--color-text);
 }
 
 .themeThinLine td {
-  border-bottom: 1px solid var(--c-border-2);
+  border-bottom: var(--width-line) solid var(--color-line-subtle);
 }
 
 /* ── Theme B — Corner notch container ── */
@@ -38,7 +38,7 @@
 }
 
 .themeCornerNotch td {
-  border-bottom: 1px solid var(--c-border-2);
+  border-bottom: var(--width-line) solid var(--color-line-subtle);
 }
 
 /* ── Theme C — Cell dots ── */

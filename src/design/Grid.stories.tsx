@@ -5,12 +5,12 @@ import { GridContainer, GridRow, GridCol } from './Grid'
 const Placeholder = (props: { label: string }) => (
   <div
     style={{
-      background: 'var(--c-surface)',
-      border: '1px solid var(--c-border-2)',
-      padding: 'var(--sp-8) var(--sp-16)',
-      'font-size': 'var(--text-xs)',
-      'font-family': 'var(--font-mono)',
-      color: 'var(--c-fg-3)',
+      background: 'var(--color-surface)',
+      border: '1px solid var(--color-line-subtle)',
+      padding: 'var(--space-8) var(--space-16)',
+      'font-size': 'var(--type-label-size)',
+      'font-family': 'var(--type-data-family)',
+      color: 'var(--color-text-faint)',
       'text-align': 'center',
     }}
   >

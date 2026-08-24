@@ -1,56 +1,76 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 import { For } from 'solid-js'
 
-import { spacing, fontSize, fontFamily } from './tokens'
+import { fontSizeValues, semanticVar, spacingValues, type SemanticTokenName } from './tokens'
 
-const colorGroups = [
+const colorGroups: readonly { label: string; tokens: readonly SemanticTokenName[] }[] = [
   {
-    label: 'Surface & text',
-    tokens: ['bg', 'surface', 'elevated', 'hover', 'active', 'fg', 'fg-2', 'fg-3', 'fg-4'],
+    label: 'Surfaces and text',
+    tokens: [
+      'color-canvas',
+      'color-surface',
+      'color-overlay',
+      'color-text-strong',
+      'color-text',
+      'color-text-muted',
+      'color-text-faint',
+    ],
   },
-  { label: 'Borders', tokens: ['border', 'border-2'] },
-  { label: 'Inverted', tokens: ['invert-bg', 'invert-fg'] },
-  { label: 'Accent', tokens: ['accent', 'accent-2', 'accent-border', 'accent-3'] },
-] as const
+  { label: 'Lines', tokens: ['color-line-strong', 'color-line-subtle'] },
+  { label: 'Inverse', tokens: ['color-inverse-surface', 'color-inverse-text'] },
+  {
+    label: 'State',
+    tokens: [
+      'color-accent',
+      'color-danger',
+      'color-state-hover',
+      'color-state-selected',
+      'color-state-focus',
+      'color-state-invalid',
+    ],
+  },
+]
 
-const Swatch = (props: { name: string }) => (
+const Swatch = (props: { name: SemanticTokenName }) => (
   <div
     style={{
-      background: `var(--c-${props.name})`,
-      height: '48px',
       display: 'flex',
+      height: '64px',
+      'min-width': '120px',
       'align-items': 'flex-end',
-      padding: 'var(--sp-4)',
-      border: '1px solid var(--c-border-2)',
-      'min-width': '100px',
+      padding: 'var(--space-4)',
+      background: semanticVar(props.name),
+      border: 'var(--border-subtle)',
     }}
   >
     <span
       style={{
-        'font-size': 'var(--text-xs)',
-        'font-family': 'var(--font-mono)',
-        opacity: '0.8',
-        color: props.name.startsWith('fg') ? 'var(--c-bg)' : 'var(--c-fg-2)',
+        padding: 'var(--space-2) var(--space-4)',
+        color: 'var(--color-text)',
+        background: 'var(--color-canvas)',
+        'font-family': 'var(--type-data-family)',
+        'font-size': 'var(--type-label-size)',
       }}
     >
-      {props.name}
+      --{props.name}
     </span>
   </div>
 )
 
 const ColorPaletteRender = () => (
-  <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-32)' }}>
+  <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-section-gap)' }}>
     <For each={colorGroups}>
       {(group) => (
         <div>
           <div
             style={{
-              'font-size': 'var(--text-xs)',
-              'font-weight': '500',
-              'letter-spacing': '1px',
+              'margin-bottom': 'var(--space-control-gap)',
+              color: 'var(--color-text-faint)',
+              'font-family': 'var(--type-label-family)',
+              'font-size': 'var(--type-label-size)',
+              'font-weight': 'var(--type-label-weight)',
+              'letter-spacing': 'var(--type-label-letter-spacing)',
               'text-transform': 'uppercase',
-              color: 'var(--c-fg-3)',
-              'margin-bottom': 'var(--sp-8)',
             }}
           >
             {group.label}
@@ -58,13 +78,11 @@ const ColorPaletteRender = () => (
           <div
             style={{
               display: 'grid',
-              'grid-template-columns': 'repeat(auto-fill, minmax(100px, 1fr))',
-              gap: 'var(--sp-8)',
+              'grid-template-columns': 'repeat(auto-fill, minmax(120px, 1fr))',
+              gap: 'var(--space-control-gap)',
             }}
           >
-            <For each={group.tokens as unknown as string[]}>
-              {(token) => <Swatch name={token} />}
-            </For>
+            <For each={group.tokens}>{(token) => <Swatch name={token} />}</For>
           </div>
         </div>
       )}
@@ -73,26 +91,28 @@ const ColorPaletteRender = () => (
 )
 
 const SpacingScaleRender = () => (
-  <div style={{ display: 'flex', 'align-items': 'flex-end', gap: 'var(--sp-16)' }}>
-    <For each={Object.entries(spacing)}>
+  <div
+    style={{ display: 'flex', 'align-items': 'flex-end', gap: 'var(--space-content-inset)' }}
+  >
+    <For each={Object.entries(spacingValues)}>
       {([key, value]) => (
         <div style={{ 'text-align': 'center' }}>
           <div
             style={{
               width: value,
               height: value,
-              background: 'var(--c-accent)',
-              margin: '0 auto var(--sp-4)',
+              margin: '0 auto var(--space-4)',
+              background: 'var(--color-accent)',
             }}
           />
           <span
             style={{
-              'font-size': 'var(--text-xs)',
-              color: 'var(--c-fg-3)',
-              'font-family': 'var(--font-mono)',
+              color: 'var(--color-text-faint)',
+              'font-family': 'var(--type-data-family)',
+              'font-size': 'var(--type-label-size)',
             }}
           >
-            {key}
+            --space-{key}
           </span>
         </div>
       )}
@@ -100,67 +120,31 @@ const SpacingScaleRender = () => (
   </div>
 )
 
-const typeSpecimens = Object.entries(fontSize).map(([key, value]) => ({
-  key,
-  value,
-  weight:
-    key === '3xl' ? '300'
-    : key === 'lg' ? '500'
-    : '400',
-  color:
-    key === 'sm' ? 'var(--c-fg-2)'
-    : key === 'xs' ? 'var(--c-fg-3)'
-    : 'var(--c-fg)',
-}))
+const typeSpecimens = Object.entries(fontSizeValues).map(([key, value]) => ({ key, value }))
 
 const TypographyScaleRender = () => (
-  <div style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--sp-16)' }}>
+  <div
+    style={{ display: 'flex', 'flex-direction': 'column', gap: 'var(--space-content-inset)' }}
+  >
     <For each={typeSpecimens}>
-      {(spec) => (
-        <div style={{ 'line-height': '1.3' }}>
-          <div
-            style={{
-              'font-size': spec.value,
-              'font-weight': spec.weight,
-              color: spec.color,
-            }}
-          >
-            Design language — {spec.value}
+      {(specimen) => (
+        <div>
+          <div style={{ color: 'var(--color-text)', 'font-size': specimen.value }}>
+            Design language — {specimen.value}
           </div>
           <div
             style={{
-              'font-size': 'var(--text-xs)',
-              'font-family': 'var(--font-mono)',
-              color: 'var(--c-fg-3)',
-              'margin-top': 'var(--sp-4)',
+              'margin-top': 'var(--space-4)',
+              color: 'var(--color-text-faint)',
+              'font-family': 'var(--type-data-family)',
+              'font-size': 'var(--type-label-size)',
             }}
           >
-            --text-{spec.key} · {spec.weight}
+            --font-size-{specimen.key}
           </div>
         </div>
       )}
     </For>
-    <div style={{ 'line-height': '1.3' }}>
-      <div
-        style={{
-          'font-size': fontSize.base,
-          'font-family': fontFamily.mono,
-          color: 'var(--c-fg-2)',
-        }}
-      >
-        const matrix = createMatrix('outline')
-      </div>
-      <div
-        style={{
-          'font-size': 'var(--text-xs)',
-          'font-family': 'var(--font-mono)',
-          color: 'var(--c-fg-3)',
-          'margin-top': 'var(--sp-4)',
-        }}
-      >
-        --font-mono · --text-base
-      </div>
-    </div>
   </div>
 )
 
@@ -173,14 +157,6 @@ export default meta
 
 type Story = StoryObj
 
-export const ColorPalette: Story = {
-  render: () => <ColorPaletteRender />,
-}
-
-export const SpacingScale: Story = {
-  render: () => <SpacingScaleRender />,
-}
-
-export const TypographyScale: Story = {
-  render: () => <TypographyScaleRender />,
-}
+export const ColorPalette: Story = { render: () => <ColorPaletteRender /> }
+export const SpacingScale: Story = { render: () => <SpacingScaleRender /> }
+export const TypographyScale: Story = { render: () => <TypographyScaleRender /> }

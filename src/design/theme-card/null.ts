@@ -1,23 +1,4 @@
-import { ghostRoles } from './ghost'
-import type { ThemeCardSemanticRoleId, ThemeCardThemeInput, ThemeCardTreatment } from './types'
-
-export const nullRoles = {
-  ...ghostRoles,
-  'color-accent': 'var(--tc-null-accent)',
-  'color-danger': 'var(--tc-null-danger)',
-  'geometry-control-radius': '6px',
-  'geometry-surface-radius': '10px',
-  'line-subtle': '1px solid color-mix(in srgb, var(--tc-color-text) 12%, transparent)',
-  'line-strong': '1px solid color-mix(in srgb, var(--tc-color-text) 22%, transparent)',
-  'motion-duration': '160ms',
-  'motion-easing': 'cubic-bezier(0.2, 0, 0, 1)',
-  'state-hover': 'color-mix(in srgb, var(--tc-color-accent) 8%, var(--tc-color-surface))',
-  'state-selected': 'color-mix(in srgb, var(--tc-color-accent) 14%, var(--tc-color-surface))',
-  'state-focus': 'var(--tc-color-accent)',
-  'state-invalid': 'var(--tc-null-danger)',
-  'state-danger-surface':
-    'color-mix(in srgb, var(--tc-null-danger) 12%, var(--tc-color-surface))',
-} satisfies Record<ThemeCardSemanticRoleId, string>
+import type { ThemeCardThemeInput, ThemeCardTreatment } from './types'
 
 export const nullTreatments = [
   {
@@ -75,7 +56,6 @@ export const nullTheme: ThemeCardThemeInput = {
     'Make the Ghost structure immediately familiar through restrained, conventional interface signals.',
   delta:
     'Add moderate radius, accent state fills, filled controls, and soft elevation only where Ghost can be ambiguous.',
-  roles: nullRoles,
   treatments: nullTreatments,
   notes: [
     {

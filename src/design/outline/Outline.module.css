@@ -3,11 +3,11 @@
    ============================================================ */
 
 .outline {
-  font-size: var(--text-base);
-  color: var(--c-fg);
-  background: var(--c-bg);
-  padding: var(--sp-16);
-  border: 1px solid var(--c-border-2);
+  padding: var(--space-content-inset);
+  color: var(--color-text);
+  background: var(--color-canvas);
+  border: var(--width-line) solid var(--color-line-subtle);
+  font-size: var(--type-body-size);
 }
 
 .row {
@@ -74,7 +74,7 @@
 .themeWorkflowyClone .guideConnector::before,
 .themeWorkflowyClone .guideConnectorLast::before {
   left: 16px;
-  border-left: 1px solid var(--c-border);
+  border-left: var(--width-line) solid var(--color-line-strong);
 }
 
 .themeWorkflowyClone .guideConnector::after,
@@ -93,8 +93,8 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--c-fg-4);
-  font-size: calc(var(--text-base) * 1.5);
+  color: var(--color-text-faint);
+  font-size: calc(var(--type-body-size) * 1.5);
   padding: 0;
   user-select: none;
   line-height: 1;
@@ -102,7 +102,7 @@
 }
 
 .caret:hover {
-  color: var(--c-fg-2);
+  color: var(--color-text-muted);
 }
 
 .caretSpacer {
@@ -114,11 +114,11 @@
 .bulletDot {
   width: 5px;
   height: 5px;
-  background: var(--c-fg-2);
+  background: var(--color-text-muted);
   flex-shrink: 0;
   align-self: flex-start;
   margin-top: 12px;
-  margin-right: var(--sp-8);
+  margin-right: var(--space-control-gap);
 }
 
 /* ============================================================
@@ -130,7 +130,7 @@
 .themeWorkflowyGeometric .guideConnector::before,
 .themeWorkflowyGeometric .guideConnectorLast::before {
   left: 5px;
-  border-left: 1px solid var(--c-fg-4);
+  border-left: var(--width-line) solid var(--color-text-faint);
 }
 
 .themeWorkflowyGeometric .guideConnector::after,
@@ -146,7 +146,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: var(--sp-8);
+  margin-right: var(--space-control-gap);
   background: none;
   border: none;
   padding: 0;
@@ -158,7 +158,7 @@
   display: block;
   width: 10px;
   height: 1px;
-  background: var(--c-fg-2);
+  background: var(--color-text-muted);
 }
 
 .bulletDashParent {
@@ -167,7 +167,7 @@
 
 .bulletDashParent:hover::before {
   height: 2px;
-  background: var(--c-fg);
+  background: var(--color-text);
 }
 
 .plusMark {
@@ -178,7 +178,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: var(--sp-8);
+  margin-right: var(--space-control-gap);
   background: none;
   border: none;
   padding: 0;
@@ -190,7 +190,7 @@
 .plusMark::after {
   content: '';
   position: absolute;
-  background: var(--c-fg-2);
+  background: var(--color-text-muted);
 }
 
 .plusMark::before {
@@ -211,7 +211,7 @@
 
 .plusMark:hover::before,
 .plusMark:hover::after {
-  background: var(--c-fg);
+  background: var(--color-text);
 }
 
 /* ============================================================
@@ -280,7 +280,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--c-fg-4);
+  color: var(--color-text-faint);
   font-size: 14px;
   padding: 0;
   user-select: none;
@@ -289,7 +289,7 @@
 }
 
 .caretFaint:hover {
-  color: var(--c-fg-2);
+  color: var(--color-text-muted);
 }
 
 .caretFaintSpacer {

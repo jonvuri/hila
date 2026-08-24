@@ -1,45 +1,52 @@
 .menu {
   display: inline-block;
-  background: var(--c-elevated);
-  border: 1px solid var(--c-border);
+  background: var(--color-overlay);
+  border: var(--width-line) solid var(--color-line-strong);
+  box-shadow: var(--elevation-overlay);
   min-width: 180px;
-  padding: var(--sp-4) 0;
-  font-size: var(--text-sm);
+  padding: var(--space-compact-inset) 0;
+  font-size: var(--type-body-small-size);
 }
 
 .item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--sp-4) var(--sp-16);
-  color: var(--c-fg);
+  min-height: var(--size-control);
+  padding: var(--space-compact-inset) var(--space-control-inset-inline);
+  color: var(--color-text);
   cursor: pointer;
   border: none;
   background: none;
   width: 100%;
-  font-size: var(--text-sm);
-  font-family: var(--font-sans);
+  font-size: var(--type-body-small-size);
+  font-family: var(--type-body-family);
   text-align: left;
   line-height: 1.4;
 }
 
 .item:hover {
-  background: var(--c-hover);
+  background: var(--color-state-hover);
 }
 
 .muted {
-  color: var(--c-fg-3);
+  color: var(--color-text-faint);
 }
 
 .shortcut {
-  color: var(--c-fg-3);
-  font-size: var(--text-xs);
-  margin-left: var(--sp-16);
+  margin-left: var(--space-control-inset-inline);
+  color: var(--color-text-faint);
+  font-size: var(--type-label-size);
   flex-shrink: 0;
 }
 
 .separator {
   height: 1px;
-  background: var(--c-border-2);
-  margin: var(--sp-4) 0;
+  margin: var(--space-compact-inset) 0;
+  background: var(--color-line-subtle);
+}
+
+.item:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: calc(-1 * var(--width-focus-ring));
 }

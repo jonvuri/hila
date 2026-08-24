@@ -6,12 +6,7 @@ import { ghostTheme, ghostTreatments } from './ghost'
 import { nullTheme, nullTreatments } from './null'
 import ThemeCard from './ThemeCard'
 import ThemePreview from './ThemePreview'
-import {
-  themeCardSectionIds,
-  themeCardSemanticRoleIds,
-  themeCardStateIds,
-  themeCardTreatmentKindIds,
-} from './types'
+import { themeCardSectionIds, themeCardStateIds, themeCardTreatmentKindIds } from './types'
 import { wipeoutTheme, wipeoutTreatments } from './wipeout'
 
 describe('ThemeCard grammar', () => {
@@ -26,19 +21,7 @@ describe('ThemeCard grammar', () => {
   const mount = () => {
     container = document.createElement('div')
     document.body.appendChild(container)
-    dispose = render(
-      () => (
-        <ThemeCard
-          theme={{
-            id: 'test',
-            name: 'Test grammar',
-            intent: 'Keep the comparison fixed.',
-            delta: 'No theme delta.',
-          }}
-        />
-      ),
-      container,
-    )
+    dispose = render(() => <ThemeCard theme={ghostTheme} />, container)
   }
 
   test('keeps the fixed section order', () => {
@@ -59,40 +42,11 @@ describe('ThemeCard grammar', () => {
     expect(states).toEqual(themeCardStateIds)
   })
 
-  test('accepts each temporary semantic role', () => {
-    const roles = Object.fromEntries(
-      themeCardSemanticRoleIds.map((role, index) => [role, `${index + 1}px`]),
-    )
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    dispose = render(
-      () => (
-        <ThemeCard
-          theme={{
-            id: 'roles',
-            name: 'Role contract',
-            intent: 'Test the local role input.',
-            delta: 'No theme delta.',
-            roles,
-          }}
-        />
-      ),
-      container,
-    )
-
-    const card = container.querySelector<HTMLElement>('[data-testid="theme-card"]')
-    expect(card).not.toBeNull()
-    for (const [role, value] of Object.entries(roles)) {
-      expect(card?.style.getPropertyValue(`--tc-${role}`)).toBe(value)
-    }
-  })
-
-  test('fills the Ghost card with every local role and treatment category', () => {
+  test('renders the Ghost card with every treatment category', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     dispose = render(() => <ThemeCard theme={ghostTheme} />, container)
 
-    expect(Object.keys(ghostTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
     expect(
       new Set(
         [...container.querySelectorAll('[data-treatment-kind]')].map((treatment) =>
@@ -121,11 +75,8 @@ describe('ThemeCard grammar', () => {
     expect(container.querySelectorAll('.tc-long-form p')).toHaveLength(3)
   })
 
-  test('builds Null as a complete Ghost role override with an ambiguity ledger', () => {
-    expect(Object.keys(nullTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
-    expect(nullTheme.roles?.['geometry-control-radius']).not.toBe(
-      ghostTheme.roles?.['geometry-control-radius'],
-    )
+  test('builds Null as a canonical theme with an ambiguity ledger', () => {
+    expect(nullTheme.id).toBe('null')
     expect(nullTreatments.map((treatment) => treatment.kind)).not.toContain('structural')
     expect(
       nullTreatments.every((treatment) => treatment.label.startsWith('Ghost ambiguity:')),
@@ -158,11 +109,8 @@ describe('ThemeCard grammar', () => {
     expect(specimenShape(cards[1]!)).toEqual(specimenShape(cards[0]!))
   })
 
-  test('builds Wipeout as a complete Ghost role override with a bounded quirk budget', () => {
-    expect(Object.keys(wipeoutTheme.roles ?? {})).toEqual(themeCardSemanticRoleIds)
-    expect(wipeoutTheme.roles?.['geometry-cut-size']).not.toBe(
-      ghostTheme.roles?.['geometry-cut-size'],
-    )
+  test('builds Wipeout as a canonical theme with a bounded quirk budget', () => {
+    expect(wipeoutTheme.id).toBe('wipeout')
     expect(wipeoutTreatments.map((treatment) => treatment.kind)).not.toContain('structural')
     expect(
       wipeoutTreatments.some((treatment) =>
@@ -204,7 +152,7 @@ describe('ThemeCard grammar', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     const [theme, setTheme] = createSignal<'ghost' | 'null' | 'wipeout'>('ghost')
-    dispose = render(() => <ThemePreview theme={theme()} />, container)
+    dispose = render(() => <ThemePreview visualTheme={theme()} />, container)
 
     expect(container.querySelectorAll('[data-testid="theme-card"]')).toHaveLength(1)
     expect(container.querySelector('[data-theme-card="ghost"]')).not.toBeNull()
@@ -213,5 +161,60 @@ describe('ThemeCard grammar', () => {
 
     expect(container.querySelectorAll('[data-testid="theme-card"]')).toHaveLength(1)
     expect(container.querySelector('[data-theme-card="wipeout"]')).not.toBeNull()
+  })
+
+  test('exposes both resolved theme axes on the isolated preview scope', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const [polarity, setPolarity] = createSignal<'dark' | 'light'>('dark')
+    dispose = render(() => <ThemeCard polarity={polarity()} theme={wipeoutTheme} />, container)
+
+    const card = container.querySelector<HTMLElement>('[data-testid="theme-card"]')
+    expect(card?.dataset.theme).toBe('dark')
+    expect(card?.dataset.visualTheme).toBe('wipeout')
+
+    setPolarity('light')
+
+    expect(card?.dataset.theme).toBe('light')
+    expect(card?.dataset.visualTheme).toBe('wipeout')
+  })
+
+  test('gives form controls stable identifiers and associated labels', () => {
+    mount()
+
+    for (const input of container.querySelectorAll<HTMLInputElement>('input')) {
+      expect(input.id).not.toBe('')
+      expect(input.name).not.toBe('')
+      expect(container.querySelector(`label[for="${input.id}"]`)).not.toBeNull()
+    }
+  })
+
+  test('hides decorative foundation specimens from assistive technology', () => {
+    mount()
+
+    expect(container.querySelectorAll('.tc-foundation-grid [aria-label]')).toHaveLength(0)
+    expect(container.querySelectorAll('.tc-foundation-grid [aria-hidden="true"]')).toHaveLength(
+      4,
+    )
+  })
+
+  test('gives embedded workspace landmarks unique names', () => {
+    mount()
+
+    const workspaces = [
+      ...container.querySelectorAll<HTMLElement>('[data-testid="workspace-skeleton"]'),
+    ]
+    expect(workspaces.map((workspace) => workspace.tagName)).toEqual(['SECTION', 'SECTION'])
+    expect(workspaces.map((workspace) => workspace.getAttribute('aria-label'))).toEqual([
+      'Root-visible workspace',
+      'Root-shifted workspace',
+    ])
+
+    const landmarkNames = [
+      ...container.querySelectorAll<HTMLElement>(
+        '.ws-focus-section[aria-label], .ws-navigation[aria-label], .ws-breadcrumb[aria-label]',
+      ),
+    ].map((landmark) => landmark.getAttribute('aria-label'))
+    expect(new Set(landmarkNames).size).toBe(landmarkNames.length)
   })
 })

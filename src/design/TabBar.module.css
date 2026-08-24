@@ -1,27 +1,33 @@
 .bar {
   display: flex;
-  gap: var(--sp-16);
-  border-bottom: 1px solid var(--c-border-2);
+  gap: var(--space-panel-gap);
+  border-bottom: var(--width-line) solid var(--color-line-subtle);
 }
 
 .tab {
-  font-size: var(--text-sm);
-  color: var(--c-fg-3);
-  padding: var(--sp-8) 0;
+  min-height: var(--size-control);
+  padding: var(--space-control-inset-block) 0;
+  color: var(--color-text-faint);
+  font-size: var(--type-body-small-size);
   cursor: pointer;
   border: none;
   background: none;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  font-family: var(--font-sans);
+  font-family: var(--type-body-family);
   line-height: 1;
 }
 
 .tab:hover {
-  color: var(--c-fg-2);
+  color: var(--color-text-muted);
 }
 
 .active {
-  color: var(--c-fg);
-  border-bottom-color: var(--c-fg);
+  color: var(--color-text);
+  border-bottom-color: var(--color-text);
+}
+
+.tab:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
 }

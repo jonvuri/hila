@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from 'storybook-solidjs-vite'
 
+import { resolvePolarity } from '../tokens'
+
 import { ghostTheme } from './ghost'
 import { nullTheme } from './null'
 import ThemePreview, { themePreviewIds } from './ThemePreview'
@@ -8,9 +10,15 @@ import { wipeoutTheme } from './wipeout'
 const meta: Meta<typeof ThemePreview> = {
   title: 'Design/Theme previewer',
   component: ThemePreview,
-  args: { theme: 'ghost' },
+  args: { visualTheme: 'ghost' },
+  render: (args, context) => (
+    <ThemePreview
+      polarity={resolvePolarity(context.globals.polarity)}
+      visualTheme={args.visualTheme}
+    />
+  ),
   argTypes: {
-    theme: {
+    visualTheme: {
       control: 'inline-radio',
       options: themePreviewIds,
       description: 'Select the approved theme rendered by the shared preview.',
@@ -45,7 +53,7 @@ export const Preview: Story = {
 
 export const Ghost: Story = {
   name: 'Ghost · minimum affordances',
-  args: { theme: 'ghost' },
+  args: { visualTheme: 'ghost' },
   parameters: {
     controls: { disable: true },
     docs: {
@@ -58,7 +66,7 @@ export const Ghost: Story = {
 
 export const Null: Story = {
   name: 'Null · conventional affordances',
-  args: { theme: 'null' },
+  args: { visualTheme: 'null' },
   parameters: {
     controls: { disable: true },
     docs: {
@@ -71,7 +79,7 @@ export const Null: Story = {
 
 export const Wipeout: Story = {
   name: 'Wipeout · instrument character',
-  args: { theme: 'wipeout' },
+  args: { visualTheme: 'wipeout' },
   parameters: {
     controls: { disable: true },
     docs: {

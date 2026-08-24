@@ -7,9 +7,9 @@
 }
 
 html {
-  font-size: var(--text-base);
-  color: var(--c-fg);
-  font-family: var(--font-sans);
-  background: var(--c-bg);
+  font-size: var(--type-body-size);
+  color: var(--color-text);
+  font-family: var(--type-body-family);
+  background: var(--color-canvas);
   -webkit-font-smoothing: antialiased;
 }

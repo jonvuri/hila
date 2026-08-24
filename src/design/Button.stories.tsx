@@ -68,7 +68,7 @@ export const AllVariants: Story = {
     <div
       style={{
         display: 'flex',
-        gap: 'var(--sp-8)',
+        gap: 'var(--space-8)',
         'flex-wrap': 'wrap',
         'align-items': 'center',
       }}

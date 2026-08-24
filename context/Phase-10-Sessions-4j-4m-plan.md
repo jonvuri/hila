@@ -95,7 +95,7 @@ override mechanism, the independent component-variant mechanism, and the migrati
       low-contrast labels or invalid accessible names as theme character.
 - [x] Write the ordered migration checklist: approved specimens; live shell and stream;
       overlaid-card removal; launcher and overlays; tab retirement; faces and browsers.
-- [ ] Review the contract before any canonical token source changes.
+- [x] Review the contract before any canonical token source changes.
 
 ### Session 4j verification
 
@@ -108,28 +108,29 @@ override mechanism, the independent component-variant mechanism, and the migrati
 **Outcome:** canonical tokens render the approved Ghost, Null, and Wipeout previews without the
 temporary theme-card role layer.
 
-- [ ] Add the reviewed token groups to `tokens.css` and `tokens.ts`. Implement the visual-theme
+- [x] Add the reviewed token groups to `tokens.css` and `tokens.ts`. Implement the visual-theme
       override mechanism for Ghost, Null, and Wipeout.
-- [ ] Replace the old token names and temporary ThemeCard roles while moving all current
+- [x] Replace the old token names and temporary ThemeCard roles while moving all current
       design-system and approved specimen consumers onto canonical roles. Do not add compatibility
       aliases.
-- [ ] Add the visual-theme control through the shared Storybook decorator. Keep the focused
+- [x] Add the visual-theme control through the shared Storybook decorator. Keep the focused
       preview control if it remains useful for instant local comparison.
-- [ ] Add contract tests for theme inheritance, polarity independence, required roles, and unknown
+- [x] Add contract tests for theme inheritance, polarity independence, required roles, and unknown
       component-variant fallbacks.
-- [ ] Resolve the ThemeCard label contrast, repeated accessible-name, and input-identifier findings
+- [x] Resolve the ThemeCard label contrast, repeated accessible-name, and input-identifier findings
       recorded in Session 4i.
-- [ ] Compare the canonical result with the approved preview in all three themes and both
+- [x] Compare the canonical result with the approved preview in all three themes and both
       polarities. Fix token mapping errors only; do not reopen the approved design direction.
-- [ ] Confirm that no live-app or production-face style changed.
+- [x] Confirm that no live-app or production-face style changed.
 
 ### Session 4k verification
 
-- [ ] Run `npm run format`.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run typecheck`.
-- [ ] Run `npm run test:run`.
-- [ ] Run `pnpm build-storybook` and inspect the theme preview at desktop and narrow widths.
+- [x] Run `npm run format`.
+- [x] Run `npm run lint`.
+- [x] Run `npm run typecheck`.
+- [x] Run `npm run test:run`.
+- [x] Run `pnpm build-storybook`.
+- [x] Inspect the theme preview at desktop and narrow widths.
 
 ## Session 4l — Make sticky transitions seamless
 
