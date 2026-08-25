@@ -4,54 +4,73 @@ kind: status
 state: active
 updated: 2026-08-24
 phase: phase-10
-session: phase-10-session-4n-integrated-sticky-widget
+session: phase-10-session-4o-production-sticky-adoption
 ---
 
 # Now
 
-Phase 10 Session 4m is complete. Guides is the only forward navigation-outline variant and the
-default. Its dim rails align with parent heading text and end at the bottom edge of the last child
-text. The compact disclosure gutter does not move labels. Expanded controls appear on hover or
-focus. Leaf bullets are optional and off by default. Their gutter stays reserved when they are
-hidden. Sticky headings keep normal depth indentation and use guides without background or border
-chrome.
+Phase 10 Session 4n is complete. The user approved the integrated sticky-navigation widget in the
+forward Storybook workspace. The push-off behavior, alignment, and visual treatment pass review.
+Manual top and bottom macOS trackpad gestures confirm that the navigation view does not
+rubber-band.
 
-Decoration calculation and paint remain separate from shared row behavior and accessible
-semantics. The window contract carries stable global identity, pre-window ancestry, post-window
-continuation, and one-row look-ahead. Focused tests prove guide parity across window seams. The old
-`Design/Outline` stories preserve the five original renderers as historical references. The
-rejected forward adapters are removed.
+Each navigation scroller now contains one bounded widget. Its primary stack is the active expanded
+ancestry of the first visible nested row. One secondary drill dock represents the focused target
+when flow or the primary stack does not. The dock takes the same canonical slot on the first push
+pixel, so it does not disappear and jump back.
 
-The live app, production configuration, production faces, and executable overlaid-card archive
-remain unchanged. Their migration stays in the later planned slices.
+The source outline remains the only tree. Sticky copies use the shared 32-pixel row, Guides
+decoration, control gutter, selection, disabled, and theme paths. They provide named disclosure,
+scroll, drill, and focus-handoff actions without duplicate tree-item or editor semantics. The
+workspace title masks outgoing rows. The widget stops at the content viewport and does not cover
+the native scrollbar.
 
-## Current verification
+Normal scroll frames reuse sticky DOM. Subtree push-off writes only the final row transform. The
+navigation scrollport uses scoped `overscroll-behavior: none`.
+
+## Verification
 
 - `npm run format` passes.
 - `npm run lint` passes with 14 existing warnings and no errors.
 - `npm run typecheck` passes.
-- All 871 unit tests pass. The optional bullet test confirms the same 20-pixel root indent when
-  bullets are visible or hidden.
+- All 877 unit tests pass. The sticky widget has 18 focused state and component tests.
 - `pnpm build-storybook` passes.
-- Focused registry, guide, accessibility, and virtual-window tests pass.
-- Chrome DevTools confirms 32-pixel row geometry and no horizontal overflow. Guide x alignment has
-  zero measured error. The terminal guide is within 0.1 pixels of the last child text edge.
-- Pointer disclosure, keyboard focus, sticky scrolling, narrow width, all three visual themes, and
-  both polarities pass.
+- Chrome DevTools confirms stable thresholds in both directions, continuous top-level
+  replacement, continuous drill handoff, final-row-only position writes, no duplicate tree items,
+  and no console issues.
+- Classic and overlay scrollbar geometry, narrow labels, keyboard scrolling and editing,
+  disclosure, focus handoff, click-to-scroll, drill docking, all themes, and both polarities pass.
+- A 180-frame scroll trace has zero layout shift and no reported long-task insight.
 - Lighthouse accessibility, best practices, and agentic checks score 100. Chrome DevTools reports
   no browser issues.
+- Manual macOS trackpad review confirms no boundary rubber-band. Existing browser checks confirm
+  expected keyboard, wheel, nested-control, and outer-workspace scrolling.
 
-## Read for Session 4n
+## Production boundary
 
-1. The [integrated sticky-widget session plan](Phase-10-Session-4n-plan.md).
-2. The [Session 4l and 4m outcomes](Phase-10-Sessions-4j-4m-plan.md#session-4l--make-sticky-transitions-seamless).
-3. The [approved navigation outline](Design-Faces.md#navigation-outline).
-4. The [testing guide](Testing.md) before browser work.
+The production navigation uses paged 100-row windows and absolute translated virtual blocks.
+Loaded rows provide ordered appearance identity, logical data identity, and renderer identity, but
+the current public contracts do not provide active ancestry, visible-subtree boundaries, or source
+coordinates when ancestors are unmounted.
+
+Session 4o will add a bounded sticky metadata plane, an explicit virtual scroll and geometry
+contract, and one shared production row-header renderer. It will not widen the rendered range or
+move editor ownership into sticky copies. The live shell and executable overlaid-card renderer stay
+unchanged until Sessions 4p–4q.
+
+## Read for Session 4o
+
+1. The [production sticky adoption plan](Phase-10-Session-4o-plan.md).
+2. The Session 4n [review evidence](Phase-10-Session-4n-plan.md#review-evidence) and
+   [production findings](Phase-10-Session-4n-plan.md#production-adoption-findings).
+3. [Virtualization.md](Virtualization.md).
+4. The [approved navigation outline](Design-Faces.md#navigation-outline).
+5. [Testing.md](Testing.md) before E2E or browser work.
 
 ## Next action
 
-Start Session 4n Stage 1. Record the current baseline and lock the integrated widget state and
-scroll contracts before renderer changes.
+Execute Session 4o. Adapt the approved widget to the production paged navigation and virtualizer.
+Do not start the live workspace cutover.
 
 ## Documentation boundary
 

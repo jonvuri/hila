@@ -341,7 +341,8 @@ density (D), and interaction or preference state (S).
 
 The detailed sequence now lives in [Phase 10 · Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md),
 the [Session 4n integrated sticky-widget plan](Phase-10-Session-4n-plan.md), and
-[Sessions 4o–4p](Phase-10-Sessions-4o-4p-plan.md).
+[Session 4o production sticky plan](Phase-10-Session-4o-plan.md), followed by
+[Sessions 4p–4q](Phase-10-Sessions-4p-4q-plan.md).
 
 1. Define the canonical semantic token contract, visual-theme override mechanism, component-variant
    registry, fidelity inputs, and migration map.

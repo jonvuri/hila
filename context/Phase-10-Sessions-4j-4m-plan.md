@@ -202,20 +202,22 @@ visual theme. The old outline stories preserve the original reference renderers.
 
 ## Follow-on migration order
 
-The [integrated sticky-widget session](Phase-10-Session-4n-plan.md) is the next visual gate.
-[Sessions 4o–4p](Phase-10-Sessions-4o-4p-plan.md) then cover live workspace migration and
-overlaid-card removal. Session 4n can insert a production sticky session before that sequence.
+The [integrated sticky-widget session](Phase-10-Session-4n-plan.md) closed the next visual gate.
+[Session 4o](Phase-10-Session-4o-plan.md) covers production sticky adoption. [Sessions
+4p–4q](Phase-10-Sessions-4p-4q-plan.md) then cover live workspace migration and overlaid-card
+removal.
 
 1. Rebuild sticky navigation as a bounded, VS Code-inspired widget in the focused Storybook
    workspace. Disable scroll-boundary rubber-band for this view and plan production adoption from
    the approved result.
-2. Migrate the live shell and stream as one behavior-preserving slice. Promote the approved sticky
-   model and navigation-outline configuration without changing navigation behavior.
-3. Remove the executable overlaid-card renderer, variants, styles, stories, and fixture coupling
+2. Adapt the approved widget to paged production data and the production virtualizer.
+3. Migrate the live shell and stream as one behavior-preserving slice. Preserve the approved sticky
+   model and promote the navigation-outline configuration without changing navigation behavior.
+4. Remove the executable overlaid-card renderer, variants, styles, stories, and fixture coupling
    after the live cutover passes review.
-4. Migrate the launcher and shared overlays. Land the launcher before top-level tabs are removed.
-5. Capture the retiring Table and Tags views as Storybook references, then remove their tabs.
-6. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
+5. Migrate the launcher and shared overlays. Land the launcher before top-level tabs are removed.
+6. Capture the retiring Table and Tags views as Storybook references, then remove their tabs.
+7. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    orthogonal axis.
 
 ## Starter prompt for Session 4j

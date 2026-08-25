@@ -85,12 +85,11 @@ Unify the visual language across every surface into one token + theming system. 
 
 **Next sequence:** [Sessions 4j–4m](Phase-10-Sessions-4j-4m-plan.md) defined and implemented the
 canonical token contract, then closed the sticky-motion and outline-treatment gates.
-[Session 4n](Phase-10-Session-4n-plan.md) now rebuilds sticky navigation as a bounded widget that
-uses the VS Code tree architecture as its primary reference. It also validates scoped suppression
-of scroll-boundary rubber-band behavior and plans production adoption.
-[Sessions 4o–4p](Phase-10-Sessions-4o-4p-plan.md) then migrate the live workspace and remove the
-executable overlaid-card implementation. Session 4n can insert a production sticky session before
-live migration if its findings require one.
+[Session 4n](Phase-10-Session-4n-plan.md) rebuilt sticky navigation as a bounded widget, disabled
+boundary rubber-band in the navigation view, and passed user review.
+[Session 4o](Phase-10-Session-4o-plan.md) now adapts the widget to paged production data and the
+virtualizer. [Sessions 4p–4q](Phase-10-Sessions-4p-4q-plan.md) then migrate the live workspace and
+remove the executable overlaid-card implementation.
 
 - [x] **Reconcile the visual language:** Ghost owns structure and minimum semantic affordances. Null
       and Wipeout own only value overrides and optional decoration. The overlaid-card depth language
@@ -111,15 +110,17 @@ live migration if its findings require one.
 - [x] **Session 4l:** make sticky-header transitions continuous in both scroll directions.
 - [x] **Session 4m:** integrate the old and new navigation-outline variants through a separate
       configuration axis.
-- [ ] **Session 4n:** rebuild sticky navigation as an integrated, VS Code-inspired widget in
-      Storybook. Disable boundary rubber-band for this view. If the treatment succeeds, plan and
-      route its production adoption before live migration.
+- [x] **Session 4n:** rebuild sticky navigation as an integrated, VS Code-inspired widget in
+      Storybook. Disable boundary rubber-band for this view. Plan and route its production
+      adoption before live migration.
 
 ### Planned workspace migration and retirement sessions
 
-- [ ] **Session 4o:** migrate the approved workspace into the live shell without changing workspace
+- [ ] **Session 4o:** adapt integrated sticky navigation to paged production data and the
+      production virtualizer without widening the rendered range.
+- [ ] **Session 4p:** migrate the approved workspace into the live shell without changing workspace
       data or gestures.
-- [ ] **Session 4p:** remove the executable overlaid-card renderer, variants, styles, stories, and
+- [ ] **Session 4q:** remove the executable overlaid-card renderer, variants, styles, stories, and
       fixture coupling after the cutover passes review.
 
 **Incoming deferral — substrate / x-ray fidelity (from [Phase 9.2](Phase-9.2.md#composed-vs-substrate-fidelity-and-x-ray), re-confirmed by [§9.5](Phase-9.md)).** The **composed vs. substrate** fidelity axis (and its global **x-ray** toggle) is a rendering-convention that spans _every_ surface at every granularity — the same scope this token/theming pass unifies. It was deliberately deferred from 9.2/9.5 (which only lean on substrate as a _concept_: §9.5's boundary-hop far side reuses the role-adaptive `FocusPanel`, not a built substrate face). **Point of no return:** the elevation/surface/fade token model decided here is what a substrate face would render against; building substrate before this pass would mint tokens this phase then has to reconcile. So settle the fidelity axis as part of the token model (how composed vs. substrate read; whether x-ray is a theme or an orthogonal overlay) and add it to the migration checklist. The **identity face** ([Architecture.md](Architecture.md#identity-face)) is its conformance test — "does every surface x-ray cleanly?"

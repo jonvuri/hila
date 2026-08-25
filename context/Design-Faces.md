@@ -75,10 +75,9 @@ the window, and one-row look-ahead. Deterministic tests compare full and windowe
 ### Implementation phases
 
 Session 4m established the registry and host seam, reviewed seven candidates, and approved Guides.
-Session 4n rebuilds sticky navigation as a bounded widget integrated with its scroll component. It
-uses the VS Code tree architecture as its primary reference and tests scoped suppression of
-scroll-boundary rubber-band behavior. The live workspace migration later adopts the approved
-result without changing navigation behavior.
+Session 4n rebuilt sticky navigation as a bounded widget integrated with its scroll component. It
+also approved scoped suppression of scroll-boundary rubber-band behavior. Session 4o adapts the
+same widget and Guides renderer to paged production data before the live shell migration.
 
 ## Table face treatments
 
@@ -178,13 +177,14 @@ and matrix browser. The migration order is:
 
 1. Define and implement canonical tokens in Sessions 4j–4k.
 2. Close the sticky and navigation-outline design gates in Sessions 4l–4m.
-3. Rebuild sticky navigation as an integrated, VS Code-inspired widget and plan production
-   adoption in Session 4n.
-4. Migrate the live shell and stream without behavior changes.
-5. Remove the executable overlaid-card implementation after the live cutover passes review.
-6. Migrate the launcher and shared overlays before top-level tabs are removed.
-7. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
+3. Rebuild sticky navigation as an integrated, VS Code-inspired widget in Session 4n.
+4. Adapt the widget to paged production data and the production virtualizer in Session 4o.
+5. Migrate the live shell and stream without behavior changes.
+6. Remove the executable overlaid-card implementation after the live cutover passes review.
+7. Migrate the launcher and shared overlays before top-level tabs are removed.
+8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
-The detailed order is in the [Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order)
-and the [Session 4n plan](Phase-10-Session-4n-plan.md). Live migration and removal are in the
-[Sessions 4o–4p plan](Phase-10-Sessions-4o-4p-plan.md).
+The detailed order is in the [Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
+the [Session 4n plan](Phase-10-Session-4n-plan.md), and the
+[Session 4o plan](Phase-10-Session-4o-plan.md). Live migration and removal are in the
+[Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).

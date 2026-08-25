@@ -64,7 +64,8 @@
 .ws-focus button:focus-visible,
 .ws-nav-row button:focus-visible,
 .ws-row-label:focus-visible,
-.ws-sticky-preview:focus-visible {
+.ws-sticky-row button:focus-visible,
+.ws-sticky-dock:focus-visible {
   outline: var(--width-focus-ring) solid var(--color-state-focus);
   outline-offset: var(--offset-focus-ring);
 }
@@ -233,6 +234,7 @@
   inset: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: none;
   scrollbar-color: var(--color-line-strong) transparent;
   scrollbar-width: thin;
 }
@@ -261,7 +263,8 @@
   background: var(--color-state-hover);
 }
 
-.ws-nav-row-selected {
+.ws-nav-row-selected,
+.ws-sticky-row-selected {
   color: var(--color-text);
   background: var(--color-state-selected);
 }
@@ -349,7 +352,9 @@
 }
 
 .ws-nav-row:hover .ws-collapse[aria-expanded='true'],
-.ws-nav-row:focus-within .ws-collapse[aria-expanded='true'] {
+.ws-nav-row:focus-within .ws-collapse[aria-expanded='true'],
+.ws-sticky-row:hover .ws-collapse[aria-expanded='true'],
+.ws-sticky-row:focus-within .ws-collapse[aria-expanded='true'] {
   opacity: 0.42;
 }
 
@@ -401,16 +406,26 @@
   border-color: var(--color-line-strong);
 }
 
-.ws-sticky-layer {
-  position: absolute;
+.ws-sticky-widget {
+  position: sticky;
   z-index: 2;
-  inset: 0;
-  overflow: hidden;
+  top: 0;
+  width: 100%;
+  height: 0;
+  overflow: visible;
   pointer-events: none;
 }
 
+.ws-sticky-rows {
+  display: contents;
+}
+
 .ws-workspace-title,
-.ws-sticky-preview {
+.ws-sticky-row,
+.ws-sticky-dock {
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   width: 100%;
   height: var(--ws-navigation-row-height);
@@ -426,9 +441,7 @@
 }
 
 .ws-workspace-title {
-  position: absolute;
-  z-index: 2;
-  top: 0;
+  z-index: 9;
   padding: 0 var(--ws-navigation-row-inset);
   font-family: var(--type-label-family);
   font-size: var(--type-label-size);
@@ -437,10 +450,9 @@
   letter-spacing: 0.08em;
 }
 
-.ws-sticky-preview {
-  position: absolute;
+.ws-sticky-row,
+.ws-sticky-dock {
   z-index: 1;
-  top: 0;
   padding: 0 var(--ws-navigation-row-inset);
   font: inherit;
   font-size: var(--type-body-size);
@@ -450,7 +462,13 @@
   will-change: transform;
 }
 
-.ws-sticky-preview:hover {
+.ws-sticky-row {
+  z-index: calc(8 - var(--ws-sticky-stack-index));
+}
+
+.ws-sticky-row:hover,
+.ws-sticky-row:focus-within,
+.ws-sticky-dock:hover {
   color: var(--color-text-strong);
   background: var(--color-canvas);
 }
@@ -458,22 +476,43 @@
 .ws-sticky-label {
   flex: 1;
   min-width: 0;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ws-sticky-label:disabled,
+.ws-sticky-row-disabled {
+  color: var(--color-text-faint);
+  cursor: not-allowed;
+  opacity: var(--opacity-state-disabled);
+}
+
+.ws-sticky-label-text {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ws-sticky-preview-candidate {
-  pointer-events: none;
+.ws-sticky-dock {
+  z-index: 8;
+  border: 0;
 }
 
-.ws-sticky-preview-inactive {
+.ws-sticky-dock[data-sticky-location='flow'],
+.ws-sticky-dock[data-sticky-location='chain'] {
   visibility: hidden;
   pointer-events: none;
-}
-
-.ws-sticky-preview-bottom {
-  border: 0;
 }
 
 @media (max-width: 720px) {

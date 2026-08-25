@@ -185,14 +185,37 @@ These are defects. They are not part of Ghost, Null, or Wipeout character.
 1. Implement both token layers and migrate all current design-system and approved specimen
    consumers in one change. Delete the old token names and the temporary ThemeCard role layer.
 2. Rebuild sticky navigation as a bounded, VS Code-inspired widget in Storybook. Disable boundary
-   rubber-band for this view. Use the result to plan production adoption.
-3. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
+   rubber-band for this view.
+3. Adapt the approved widget to paged production data and the production virtualizer.
+4. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
    navigation-outline configuration.
-4. Remove the executable overlaid-card implementation and its legacy styles after live review.
-5. Migrate the launcher and shared overlays.
-6. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
-7. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
+5. Remove the executable overlaid-card implementation and its legacy styles after live review.
+6. Migrate the launcher and shared overlays.
+7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
+8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis.
+
+### Sticky navigation
+
+The approved navigation uses one bounded sticky widget inside its native vertical scrollport. The
+source outline remains the only tree. Sticky copies expose named actions, but they do not own tree
+items, editors, drag behavior, or selection state.
+
+The primary sticky stack is the expanded ancestry of the first visible nested position. Each row
+uses a canonical 32-pixel slot and its visible-subtree end for push-off. One secondary drill dock
+represents the focused target when normal flow or the primary stack does not represent it. The
+dock yields to the same tree appearance in the primary stack and takes its canonical slot on the
+first push pixel.
+
+Production paging uses `global_lexkey` as the ordered appearance identity and `(matrix_id,
+row_id)` as logical row identity. A bounded metadata plane supplies ancestry, subtree ends,
+post-window continuation, and drill resolution when source rows are not mounted. It does not widen
+the rendered range. The virtualizer supplies scroll and retained geometry values. Scroll handlers
+must not read row layout.
+
+The widget stops at the content viewport and cannot cover the native scrollbar. The workspace
+title masks outgoing rows. `overscroll-behavior: none` belongs only to the navigation scrollport.
+Normal push-off reuses the sticky DOM and writes only the final row transform.
 
 ## Component inventory
 

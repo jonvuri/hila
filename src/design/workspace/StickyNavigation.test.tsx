@@ -56,21 +56,32 @@ describe('StickyNavigation', () => {
     )
   }
 
-  test('coalesces scroll writes and keeps one sticky slot element', () => {
+  test('coalesces scroll writes and moves only the final sticky row', () => {
     mount()
     const scroll = container.querySelector<HTMLElement>('.ws-navigation-scroll')!
-    const slot = container.querySelector<HTMLElement>('[data-sticky-state="candidate"]')!
 
-    scroll.scrollTop = 3
-    scroll.dispatchEvent(new Event('scroll'))
     scroll.scrollTop = 4
+    scroll.dispatchEvent(new Event('scroll'))
+    expect(frameCallbacks).toHaveLength(1)
+    frameCallbacks.shift()!(0)
+    const slot = container.querySelector<HTMLElement>('[data-sticky-state="active"]')!
+    expect(slot.style.transform).toBe('translate3d(0, 32px, 0)')
+    expect(slot.classList.contains('ws-sticky-row-selection-path')).toBe(true)
+
+    scroll.scrollTop = 68
+    scroll.dispatchEvent(new Event('scroll'))
+    scroll.scrollTop = 69
     scroll.dispatchEvent(new Event('scroll'))
 
     expect(frameCallbacks).toHaveLength(1)
-    expect(slot.style.transform).toBe('translate3d(0, 36px, 0)')
     frameCallbacks.shift()!(0)
     expect(container.querySelector('[data-sticky-state="active"]')).toBe(slot)
-    expect(slot.style.transform).toBe('translate3d(0, 32px, 0)')
+    expect(slot.style.transform).toBe('translate3d(0, 31px, 0)')
+    expect(
+      container
+        .querySelector('[data-sticky-widget]')
+        ?.getAttribute('data-widget-position-updates'),
+    ).toBe('1')
   })
 
   test('preserves row state and collapse behavior', () => {
@@ -95,6 +106,24 @@ describe('StickyNavigation', () => {
     expect(container.querySelector('button[aria-label="Expand Parent"]')).not.toBeNull()
   })
 
+  test('collapses from a sticky copy and returns focus to the source tree', async () => {
+    mount()
+    const scroll = container.querySelector<HTMLElement>('.ws-navigation-scroll')!
+    scroll.scrollTop = 4
+    scroll.dispatchEvent(new Event('scroll'))
+    frameCallbacks.shift()!(0)
+
+    container
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Collapse Parent from pinned navigation"]',
+      )!
+      .click()
+    await Promise.resolve()
+
+    expect(container.querySelectorAll('.ws-sticky-row')).toHaveLength(0)
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Expand Parent')
+  })
+
   test('uses instant click-to-scroll under reduced motion', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: true }))
     mount()
@@ -105,24 +134,64 @@ describe('StickyNavigation', () => {
     scroll.dispatchEvent(new Event('scroll'))
     frameCallbacks.shift()!(0)
 
-    container.querySelector<HTMLButtonElement>('[data-sticky-state="active"]')!.click()
+    container
+      .querySelector<HTMLButtonElement>('[data-sticky-state="active"] .ws-sticky-label')!
+      .click()
     expect(scrollTo).toHaveBeenCalledWith({ behavior: 'auto', top: 4 })
   })
 
-  test('keeps the drill preview mounted through both edge handoffs', () => {
+  test('keeps the drill preview mounted through both edge handoffs', async () => {
     mount()
+    await Promise.resolve()
     const scroll = container.querySelector<HTMLElement>('.ws-navigation-scroll')!
     const drill = container.querySelector<HTMLElement>('[data-sticky-location="bottom"]')!
 
-    scroll.scrollTop = 68
+    scroll.scrollTop = 100
     scroll.dispatchEvent(new Event('scroll'))
     frameCallbacks.shift()!(0)
-    expect(container.querySelector('[data-sticky-state="candidate"]')).toBe(drill)
+    expect(container.querySelector('[data-sticky-location="flow"]')).toBe(drill)
 
-    scroll.scrollTop = 69
+    scroll.scrollTop = 101
     scroll.dispatchEvent(new Event('scroll'))
     frameCallbacks.shift()!(0)
     expect(container.querySelector('[data-sticky-location="top"]')).toBe(drill)
+  })
+
+  test('hands a pushed drill heading to the top dock without a gap', async () => {
+    dispose = render(
+      () => (
+        <StickyNavigation
+          title="Workspace"
+          items={[
+            {
+              id: 'drill',
+              content: 'Drill row',
+              children: [{ id: 'child', content: 'Child' }],
+            },
+            { id: 'tail', content: 'Tail' },
+          ]}
+          drillId="drill"
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const scroll = container.querySelector<HTMLElement>('.ws-navigation-scroll')!
+
+    scroll.scrollTop = 36
+    scroll.dispatchEvent(new Event('scroll'))
+    frameCallbacks.shift()!(0)
+    const drill = container.querySelector<HTMLElement>('[data-sticky-location="chain"]')!
+
+    scroll.scrollTop = 37
+    scroll.dispatchEvent(new Event('scroll'))
+    frameCallbacks.shift()!(0)
+
+    expect(container.querySelector('[data-sticky-location="top"]')).toBe(drill)
+    expect(drill.style.transform).toBe('translate3d(0, 32px, 0)')
+    expect(
+      container.querySelector<HTMLElement>('[data-sticky-row-id="drill"]')?.style.transform,
+    ).toBe('translate3d(0, 31px, 0)')
   })
 
   test('keeps behavior and accessible semantics in the Guides row', () => {
@@ -153,6 +222,9 @@ describe('StickyNavigation', () => {
         'false',
       )
       expect(container.querySelectorAll('[role="treeitem"]')).toHaveLength(2)
+      expect(container.querySelector('[data-sticky-widget]')?.getAttribute('role')).toBe(
+        'group',
+      )
       expect(container.querySelectorAll('button[aria-label="Collapse Parent"]')).toHaveLength(1)
       expect(
         container.querySelector('[data-row-id="child"]')?.getAttribute('aria-selected'),
