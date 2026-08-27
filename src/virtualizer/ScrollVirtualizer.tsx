@@ -1,6 +1,19 @@
 import { createSignal, createMemo, createEffect, onMount, onCleanup, For } from 'solid-js'
 import { JSX } from 'solid-js/jsx-runtime'
 
+import {
+  buildWindowGeometry,
+  findVisibleWindowRange,
+  getRenderedWindowRange,
+  getResizeScrollCompensation,
+  RetainedRowGeometryIndex,
+} from './geometry'
+import type {
+  RetainedRowGeometry,
+  VirtualRowGeometryInput,
+  VirtualWindowGeometry,
+  VisibleWindowRange,
+} from './geometry'
 import styles from './ScrollVirtualizer.module.css'
 
 // Hard invariant: THRESHOLD_DISTANCE >= 2.
@@ -13,23 +26,26 @@ const BLOCK_SIZE = 4 + THRESHOLD_DISTANCE * 2 // Size of window blocks for repos
 
 type WindowState = 'GHOST' | 'VISIBLE'
 
-// The virtualizer's own scroll container (`.scrollContainer`) only actually
-// scrolls when an ancestor chain gives it a bounded height (a `flex` column
-// with `min-height: 0` all the way up). Callers that embed the virtualizer
-// inside their own scrolling wrapper (e.g. OverlaidCards' `.card-inner`) leave
-// `.scrollContainer` sized to its content instead, so it never clips — using it
-// as the IntersectionObserver root would then report every window as
-// permanently visible. Walk up to the nearest ancestor that actually
-// establishes a scrollbox (`overflow-y: auto|scroll`); fall back to the
-// virtualizer's own container for genuinely standalone (self-scrolling) usage.
-const findScrollRoot = (el: HTMLElement): HTMLElement => {
-  let cur = el.parentElement
-  while (cur && cur !== document.body) {
-    const overflowY = getComputedStyle(cur).overflowY
-    if (overflowY === 'auto' || overflowY === 'scroll') return cur
-    cur = cur.parentElement
-  }
-  return el
+export type VirtualizerGeometryState = {
+  /** The element that owns scroll input. */
+  scrollport: HTMLElement
+  /** The viewport start in virtual content coordinates. */
+  scrollTop: number
+  viewportHeight: number
+  windows: readonly VirtualWindowGeometry[]
+  visibleRange: VisibleWindowRange | undefined
+  renderedRange: ReadonlySet<number>
+  rows: readonly RetainedRowGeometry[]
+  firstVisibleRow: RetainedRowGeometry | undefined
+}
+
+export type ScrollVirtualizerHandle = {
+  getScrollport: () => HTMLElement | undefined
+  getGeometry: () => VirtualizerGeometryState | undefined
+  getRowCoordinates: (
+    position: VirtualRowGeometryInput['position'],
+  ) => (RetainedRowGeometry & { viewportStart: number }) | undefined
+  updateRowGeometry: (windowIndex: number, rows: readonly VirtualRowGeometryInput[]) => void
 }
 
 type WindowRendererProps = {
@@ -42,8 +58,8 @@ type WindowComponentProps = {
   windowIndex: number
   onIntersection: (windowIndex: number, isIntersecting: boolean) => void
   onResize: (windowIndex: number, height: number) => void
-  /** The actual scrolling ancestor (see `findScrollRoot`) — the IntersectionObserver root. */
-  scrollRootRef: HTMLElement | undefined
+  /** The element that owns scrolling and is the IntersectionObserver root. */
+  scrollport: HTMLElement | undefined
   getPosition: (windowIndex: number) => number
   renderWindow: WindowRendererFunction
 }
@@ -63,7 +79,7 @@ const WindowComponent = (props: WindowComponentProps) => {
         })
       },
       {
-        root: props.scrollRootRef,
+        root: props.scrollport,
       },
     )
 
@@ -103,10 +119,16 @@ const WindowComponent = (props: WindowComponentProps) => {
   )
 }
 
-type ScrollVirtualizerProps = {
+export type ScrollVirtualizerProps = {
   renderWindow: WindowRendererFunction
   minWindowHeight: number
   totalWindows?: number
+  /** Return an external scrollport. The internal scrollport is the safe default. */
+  scrollport?: () => HTMLElement | undefined
+  /** Return numeric row geometry for a retained window. Offsets are window-relative. */
+  getRowGeometry?: (windowIndex: number) => readonly VirtualRowGeometryInput[]
+  virtualizerRef?: (handle: ScrollVirtualizerHandle | undefined) => void
+  onGeometryChange?: (state: VirtualizerGeometryState) => void
   onVisibleRangeChange?: (range: Set<number>) => void
 } & JSX.HTMLAttributes<HTMLDivElement>
 
@@ -124,6 +146,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
 
   // Track current content height for each window
   const [windowHeights, setWindowHeights] = createSignal<number[]>([])
+  const [measuredWindows, setMeasuredWindows] = createSignal<Set<number>>(new Set())
+
+  const [physicalScrollTop, setPhysicalScrollTop] = createSignal(0)
+  const [viewportHeight, setViewportHeight] = createSignal(0)
 
   // Track which windows are actually visible in viewport, based on intersection observers
   const [actuallyVisible, setActuallyVisible] = createSignal<Set<number>>(new Set())
@@ -136,38 +162,28 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   const [containerVirtualOffset, setContainerVirtualOffset] = createSignal(0)
 
   let containerRef: HTMLDivElement | undefined
+  let latestGeometry: VirtualizerGeometryState | undefined
+  const rowGeometry = new RetainedRowGeometryIndex()
+  const rowGeometryInputs = new Map<number, readonly VirtualRowGeometryInput[]>()
+  const [rowGeometryRevision, setRowGeometryRevision] = createSignal(0)
+  const [retainedRows, setRetainedRows] = createSignal<readonly RetainedRowGeometry[]>([])
 
-  // The actual scrolling element (may be `containerRef` itself, or an
-  // embedding ancestor — see `findScrollRoot`). Resolved lazily since
-  // `containerRef` is only set once the element is created.
-  const getScrollRoot = (): HTMLElement | undefined =>
-    containerRef ? findScrollRoot(containerRef) : undefined
-
-  // Return the measured height for a window, or minWindowHeight as the
-  // estimate for windows that haven't been rendered/measured yet.
-  const getTotalHeight = (windowIndex: number): number => {
-    const height = windowHeights()[windowIndex]
-    return height != null && height > 0 ? height : props.minWindowHeight
-  }
+  // Use one explicit owner for scroll input and geometry. Standalone callers
+  // use the internal scrollport without parent-style discovery.
+  const getScrollport = (): HTMLElement | undefined => props.scrollport?.() ?? containerRef
 
   // Calculate virtual positions of all windows (cumulative from virtual origin 0).
   // Iterates up to totalWindows so unmeasured windows contribute their estimated
   // height to the scroll area, preventing an undersized scroll region.
-  const virtualPositions = createMemo(() => {
+  const windowGeometry = createMemo(() => {
     const heights = windowHeights()
     const total = props.totalWindows ?? heights.length
     const count = Math.max(heights.length, total)
-    const positions: number[] = []
+    return buildWindowGeometry(heights, count, props.minWindowHeight, measuredWindows())
+  })
 
-    if (count === 0) return positions
-
-    let cumulativePosition = 0
-    for (let i = 0; i < count; i++) {
-      positions[i] = cumulativePosition
-      cumulativePosition += getTotalHeight(i)
-    }
-
-    return positions
+  const virtualPositions = createMemo(() => {
+    return windowGeometry().map((window) => window.start)
   })
 
   // Convert virtual position to physical position within container
@@ -181,21 +197,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
 
   // Pure function to compute full visible range from latch pair
   const computeVisibleRange = (pair: [number, number]): Set<number> => {
-    const [min, max] = pair
-
-    const rangeStart = Math.max(0, min - THRESHOLD_DISTANCE)
-    let rangeEnd = max + THRESHOLD_DISTANCE
-
-    if (props.totalWindows !== undefined) {
-      rangeEnd = Math.min(rangeEnd, props.totalWindows - 1)
-    }
-
-    const visibleRange = new Set<number>()
-    for (let i = rangeStart; i <= rangeEnd; i++) {
-      visibleRange.add(i)
-    }
-
-    return visibleRange
+    return getRenderedWindowRange(pair, props.totalWindows, THRESHOLD_DISTANCE)
   }
 
   // Find the appropriate container offset based on window states
@@ -227,10 +229,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   createEffect(() => {
     const newOffset = computeContainerOffset()
     const currentOffset = containerVirtualOffset()
-    const scrollRoot = getScrollRoot()
+    const scrollport = getScrollport()
 
-    if (newOffset !== currentOffset && scrollRoot) {
-      const currentScrollTop = scrollRoot.scrollTop
+    if (newOffset !== currentOffset && scrollport) {
+      const currentScrollTop = scrollport.scrollTop
       const offsetDelta = newOffset - currentOffset
 
       // Apply changes in same animation frame
@@ -239,13 +241,23 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
         setContainerVirtualOffset(newOffset)
 
         // Compensate scroll position
-        scrollRoot.scrollTop = currentScrollTop - offsetDelta
+        scrollport.scrollTop = currentScrollTop - offsetDelta
+        setPhysicalScrollTop(scrollport.scrollTop)
       })
     }
   })
 
   const handleWindowResize = (windowIndex: number, newHeight: number) => {
     if (newHeight === 0) return
+
+    const scrollport = getScrollport()
+    const contentScrollTop =
+      (scrollport?.scrollTop ?? physicalScrollTop()) + containerVirtualOffset()
+    const compensation = getResizeScrollCompensation(
+      windowGeometry()[windowIndex],
+      newHeight,
+      contentScrollTop,
+    )
 
     setWindowHeights((prev) => {
       const current = prev[windowIndex]
@@ -256,6 +268,17 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
       }
       return prev
     })
+    setMeasuredWindows((prev) => {
+      if (prev.has(windowIndex)) return prev
+      const next = new Set(prev)
+      next.add(windowIndex)
+      return next
+    })
+
+    if (compensation !== 0 && scrollport) {
+      scrollport.scrollTop += compensation
+      setPhysicalScrollTop(scrollport.scrollTop)
+    }
   }
 
   // Handle window intersection changes - update the actually visible set and latch pair
@@ -390,6 +413,16 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     return computeVisibleRange(latchPair())
   })
 
+  const reconcileVisibleRangeFromScroll = (scrollTop: number, height: number) => {
+    const visible = findVisibleWindowRange(windowGeometry(), scrollTop, height)
+    if (!visible) return
+    const currentPair = latchPair()
+    const nextPair = clampPair([visible.start, visible.end])
+    if (nextPair[0] === currentPair[0] && nextPair[1] === currentPair[1]) return
+    setLatchPair(nextPair)
+    updateWindowStates(computeVisibleRange(nextPair))
+  }
+
   // Computed windows for rendering
   const visibleWindows = createMemo(() => {
     const range = currentVisibleRange()
@@ -398,17 +431,25 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     return Array.from(range).filter((windowIndex) => states[windowIndex] === 'VISIBLE')
   })
 
-  // Calculate total physical content height based on visible windows
+  // Calculate the physical content height from the virtual window geometry.
   const totalContentHeight = createMemo(() => {
     const positions = virtualPositions()
     const offset = containerVirtualOffset()
+
+    // Bounded outlines have complete estimated geometry. Do not add an empty
+    // safety tail after their final window.
+    if (props.totalWindows !== undefined) {
+      const lastWindow = windowGeometry().at(-1)
+      const totalVirtual = lastWindow ? lastWindow.start + lastWindow.height : 0
+      return Math.max(totalVirtual - offset, 0)
+    }
 
     if (positions.length === 0) return CONTAINER_HEIGHT * 2
 
     // Find max virtual position and add height of that window
     const maxIndex = positions.length - 1
-    const maxVirtualPos = positions[maxIndex] ?? 0
-    const totalVirtual = maxVirtualPos + getTotalHeight(maxIndex)
+    const lastWindow = windowGeometry()[maxIndex]
+    const totalVirtual = lastWindow ? lastWindow.start + lastWindow.height : 0
 
     // Physical height is virtual range that's visible in container
     const physicalHeight = totalVirtual - offset
@@ -420,7 +461,82 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     props.onVisibleRangeChange?.(currentVisibleRange())
   })
 
+  createEffect(() => {
+    rowGeometryRevision()
+    const retainedRange = currentVisibleRange()
+    const windows = windowGeometry()
+    for (const windowIndex of rowGeometryInputs.keys()) {
+      if (!retainedRange.has(windowIndex)) rowGeometryInputs.delete(windowIndex)
+    }
+    rowGeometry.retainWindows(retainedRange)
+    for (const windowIndex of retainedRange) {
+      const window = windows[windowIndex]
+      if (window) {
+        rowGeometry.updateWindow(
+          window,
+          rowGeometryInputs.get(windowIndex) ?? props.getRowGeometry?.(windowIndex) ?? [],
+        )
+      }
+    }
+    setRetainedRows(rowGeometry.rows())
+  })
+
+  createEffect(() => {
+    const windows = windowGeometry()
+    const scrollport = getScrollport()
+    if (!scrollport) return
+    const scrollTop = physicalScrollTop() + containerVirtualOffset()
+    const height = viewportHeight()
+    const rows = retainedRows()
+    latestGeometry = {
+      scrollport,
+      scrollTop,
+      viewportHeight: height,
+      windows,
+      visibleRange: findVisibleWindowRange(windows, scrollTop, height),
+      renderedRange: new Set(currentVisibleRange()),
+      rows,
+      firstVisibleRow: rows.find((row) => row.end > scrollTop),
+    }
+    props.onGeometryChange?.(latestGeometry)
+  })
+
   onMount(() => {
+    const handle: ScrollVirtualizerHandle = {
+      getScrollport,
+      getGeometry: () => latestGeometry,
+      getRowCoordinates: (position) =>
+        rowGeometry.sourceCoordinates(position, latestGeometry?.scrollTop ?? 0),
+      updateRowGeometry: (windowIndex, rows) => {
+        rowGeometryInputs.set(windowIndex, rows)
+        setRowGeometryRevision((revision) => revision + 1)
+      },
+    }
+    props.virtualizerRef?.(handle)
+    onCleanup(() => props.virtualizerRef?.(undefined))
+
+    const scrollport = getScrollport()
+    if (scrollport) {
+      const updateScrollTop = () => {
+        setPhysicalScrollTop(scrollport.scrollTop)
+        reconcileVisibleRangeFromScroll(
+          scrollport.scrollTop + containerVirtualOffset(),
+          viewportHeight(),
+        )
+      }
+      const updateViewportHeight = () => setViewportHeight(scrollport.clientHeight)
+      const resizeObserver = new ResizeObserver(updateViewportHeight)
+
+      updateViewportHeight()
+      updateScrollTop()
+      scrollport.addEventListener('scroll', updateScrollTop, { passive: true })
+      resizeObserver.observe(scrollport)
+      onCleanup(() => {
+        scrollport.removeEventListener('scroll', updateScrollTop)
+        resizeObserver.disconnect()
+      })
+    }
+
     const initialRange = computeVisibleRange(latchPair())
     updateWindowStates(initialRange)
   })
@@ -432,6 +548,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
 
     setWindowStates((prev) => (prev.length > total ? prev.slice(0, total) : prev))
     setWindowHeights((prev) => (prev.length > total ? prev.slice(0, total) : prev))
+    setMeasuredWindows((prev) => {
+      const next = new Set([...prev].filter((windowIndex) => windowIndex < total))
+      return next.size === prev.size ? prev : next
+    })
     setLatchPair((prev) => {
       const clamped = clampPair(prev)
       return clamped[0] !== prev[0] || clamped[1] !== prev[1] ? clamped : prev
@@ -442,8 +562,15 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   })
 
   return (
-    <div class={styles.container}>
-      <div ref={containerRef} class={styles.scrollContainer}>
+    <div
+      class={styles.container}
+      classList={{ [styles.externalContainer!]: props.scrollport != null }}
+    >
+      <div
+        ref={containerRef}
+        class={styles.scrollContainer}
+        classList={{ [styles.externalScrollContent!]: props.scrollport != null }}
+      >
         <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>
           <For each={visibleWindows()}>
             {(windowIndex) => (
@@ -451,7 +578,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
                 windowIndex={windowIndex}
                 onIntersection={handleWindowIntersection}
                 onResize={handleWindowResize}
-                scrollRootRef={getScrollRoot()}
+                scrollport={getScrollport()}
                 getPosition={getPhysicalPosition}
                 renderWindow={props.renderWindow}
               />

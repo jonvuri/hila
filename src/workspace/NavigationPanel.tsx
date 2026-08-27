@@ -20,12 +20,14 @@ import {
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import {
-  OutlineRow as DesignOutlineRow,
-  outlineThemeClass,
-  computeDecorations,
-} from '../design/outline/Outline'
-import type { FlatRow, LegacyOutlineVariant } from '../design/outline/types'
+  calculateNavigationOutlineDecorations,
+  createNavigationOutlineWindow,
+} from '../design/workspace/navigation-outline'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
+import type {
+  ScrollVirtualizerHandle,
+  VirtualizerGeometryState,
+} from '../virtualizer/ScrollVirtualizer'
 import type { OutlineCallbacks } from '../editor/keymap'
 import {
   createLabelEditorState,
@@ -50,6 +52,16 @@ import type { AspectPreview } from '../shared/property-surface'
 import { FieldEditor } from '../shared/FieldEditor'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
+import {
+  createProductionNavigationHeaderViewModel,
+  ProductionNavigationRowHeader,
+} from './NavigationRowHeader'
+import ProductionStickyNavigation from './ProductionStickyNavigation'
+import {
+  PRODUCTION_STICKY_FLOW_GAP,
+  PRODUCTION_STICKY_ROW_HEIGHT,
+  type ProductionStickyRow,
+} from './production-sticky'
 import { buildMatrixTitleQuery } from './workspace-plugin'
 import { RowGestureMenu, CoalescedHeader, type GestureRef } from './row-gestures'
 import {
@@ -125,6 +137,9 @@ const keyToHex = (key: Uint8Array): string =>
   Array.from(key)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
+
+const hexToKey = (hex: string): Uint8Array =>
+  new Uint8Array(hex.match(/.{2}/g)?.map((byte) => Number.parseInt(byte, 16)) ?? [])
 
 const copyKey = (key: Uint8Array | undefined): Uint8Array | undefined =>
   key ? new Uint8Array(key) : undefined
@@ -578,8 +593,6 @@ const OutlineCellStrip = (props: {
 // ---------------------------------------------------------------------------
 
 const NavigationPanel = (props: NavigationPanelProps) => {
-  const [theme] = createSignal<LegacyOutlineVariant>('workflowy-clone')
-
   // Panel data root: rank key of the subtree this panel renders. Fixed for the
   // component's lifetime -- the root panel has no root (null); embedded panels
   // are locked to their focus panel's row. Intra-panel zoom was removed; all
@@ -588,6 +601,10 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   const focusRootHex = focusRoot ? keyToHex(focusRoot) : null
 
   const [collapsedKeys, setCollapsedKeys] = createSignal<Set<string>>(new Set())
+  const [stickyAnchorPk, setStickyAnchorPk] = createSignal<string | null>(null)
+  const [virtualizerGeometry, setVirtualizerGeometry] = createSignal<VirtualizerGeometryState>()
+  let navigationScrollport: HTMLDivElement | undefined
+  let virtualizerHandle: ScrollVirtualizerHandle | undefined
 
   // Expanded content editors (composite keys whose content preview is expanded)
   const [expandedContentRows, setExpandedContentRows] = createSignal<Set<string>>(new Set())
@@ -597,6 +614,9 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     matrixId,
     focusRootHex: () => focusRootHex,
     collapsedKeyHexes: () => Array.from(collapsedKeys()),
+    stickyAnchorPk,
+    drillTarget: () =>
+      props.focusedRowId == null ? null : { matrixId, rowId: props.focusedRowId },
   })
 
   const error = pageData.error
@@ -686,20 +706,30 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const visibleRows = createMemo((): WorkspaceRowData[] => [...rows])
 
-  const flatRows = createMemo((): FlatRow[] => {
-    const vRows = visibleRows()
-    const offset = focusDepthOffset()
-    const collapsed = collapsedKeys()
-    return vRows.map((row) => ({
-      id: keyToHex(row.key),
-      content: row.label ?? '',
-      depth: row.depth - offset,
-      hasChildren: row.has_children === 1,
-      expanded: row.has_children === 1 && !collapsed.has(keyToHex(row.key)),
-    }))
+  const decorationByPk = createMemo(() => {
+    const context = pageData.stickyContext()
+    const rowsByPk = new Map<string, ProductionStickyRow>()
+    for (const row of [...context.ancestry, ...context.retained]) {
+      rowsByPk.set(row.identity.pk, row)
+    }
+    if (context.postWindow) rowsByPk.set(context.postWindow.identity.pk, context.postWindow)
+    const metadataRows = [...rowsByPk.values()].sort(
+      (left, right) => left.visibleIndex - right.visibleIndex,
+    )
+    const outlineWindow = createNavigationOutlineWindow(
+      metadataRows.map((row) => ({
+        id: row.identity.pk,
+        content: extractTextFromPmDoc(row.label),
+        depth: Math.max(0, row.depth - focusDepthOffset()),
+        hasChildren: row.hasChildren,
+        expanded: row.expanded,
+      })),
+    )
+    const decorations = calculateNavigationOutlineDecorations('guides', outlineWindow)
+    return new Map(
+      metadataRows.map((row, index) => [row.identity.pk, decorations[index]!] as const),
+    )
   })
-
-  const decorations = createMemo(() => computeDecorations(theme(), flatRows()))
 
   const totalWindows = () => pageData.totalWindows()
 
@@ -1126,6 +1156,129 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const depthOffset = focusDepthOffset
 
+  type RowMeasurement = { slotHeight?: number; rowHeight?: number }
+  const rowMeasurements = new Map<string, RowMeasurement>()
+  const [rowMeasurementRevision, setRowMeasurementRevision] = createSignal(0)
+  const sourceDisclosureByPk = new Map<string, HTMLButtonElement>()
+  const [sourceControlRevision, setSourceControlRevision] = createSignal(0)
+  const [pendingStickyFocus, setPendingStickyFocus] = createSignal<{
+    pk: string
+    control: 'disclosure' | 'label'
+    stackIndex?: number
+  } | null>(null)
+
+  const titleHeight = (): number => (isRootPanel ? PRODUCTION_STICKY_ROW_HEIGHT : 0)
+  const sourceTopInset = (): number => titleHeight() + PRODUCTION_STICKY_FLOW_GAP
+
+  const updateRowMeasurement = (pk: string, field: keyof RowMeasurement, height: number) => {
+    if (!(height > 0)) return
+    const previous = rowMeasurements.get(pk) ?? {}
+    if (previous[field] === height) return
+    rowMeasurements.set(pk, { ...previous, [field]: height })
+    setRowMeasurementRevision((revision) => revision + 1)
+  }
+
+  const getRowGeometry = (windowIndex: number) => {
+    rowMeasurementRevision()
+    const windowRows = pageData.getWindowRows(windowIndex)
+    let offset = windowIndex === 0 ? sourceTopInset() : 0
+    return windowRows.map((row) => {
+      const measurement = rowMeasurements.get(row.pk)
+      const slotHeight = measurement?.slotHeight ?? ESTIMATED_ROW_HEIGHT_PX
+      const rowHeight = measurement?.rowHeight ?? slotHeight
+      const rowOffset = offset + Math.max(0, slotHeight - rowHeight)
+      offset += slotHeight
+      return { position: row.pk, offset: rowOffset, height: rowHeight }
+    })
+  }
+
+  const updateStickyGeometry = (geometry: VirtualizerGeometryState) => {
+    setVirtualizerGeometry(geometry)
+    const context = pageData.stickyContext()
+    const geometryByPk = new Map(geometry.rows.map((row) => [`${row.position}`, row] as const))
+    let activeHeading: ProductionStickyRow | undefined
+    for (const row of context.retained) {
+      if (!row.expanded || !row.hasChildren) continue
+      const source = geometryByPk.get(row.identity.pk)
+      if (!source) continue
+      const stackDepth = Math.max(0, row.depth - focusDepthOffset())
+      const threshold = source.start - titleHeight() - stackDepth * PRODUCTION_STICKY_ROW_HEIGHT
+      if (threshold <= geometry.scrollTop) activeHeading = row
+    }
+    const firstVisible = geometry.rows.find(
+      (row) => row.end > geometry.scrollTop + titleHeight(),
+    )
+    const anchorPk = activeHeading?.identity.pk ?? `${firstVisible?.position ?? ''}`
+    setStickyAnchorPk(anchorPk || null)
+  }
+
+  const sourceScrollTop = (pk: string, stackIndex: number): number | undefined => {
+    const geometry = virtualizerHandle?.getGeometry()
+    const coordinates = virtualizerHandle?.getRowCoordinates(pk)
+    if (coordinates) {
+      return Math.max(
+        0,
+        coordinates.start - titleHeight() - stackIndex * PRODUCTION_STICKY_ROW_HEIGHT,
+      )
+    }
+    const metadata = [
+      ...pageData.stickyContext().ancestry,
+      ...pageData.stickyContext().retained,
+      ...(pageData.stickyContext().postWindow ? [pageData.stickyContext().postWindow!] : []),
+    ].find((row) => row.identity.pk === pk)
+    if (!geometry || !metadata) return undefined
+    const windowIndex = Math.floor(metadata.visibleIndex / ROWS_PER_WINDOW)
+    const window = geometry.windows[windowIndex]
+    if (!window) return undefined
+    const localIndex = metadata.visibleIndex % ROWS_PER_WINDOW
+    const estimatedStart =
+      window.start +
+      localIndex * ESTIMATED_ROW_HEIGHT_PX +
+      (windowIndex === 0 ? sourceTopInset() : 0)
+    return Math.max(
+      0,
+      estimatedStart - titleHeight() - stackIndex * PRODUCTION_STICKY_ROW_HEIGHT,
+    )
+  }
+
+  const scrollToStickySource = (pk: string, stackIndex: number) => {
+    setPendingStickyFocus({ pk, control: 'label', stackIndex })
+    const scrollTop = sourceScrollTop(pk, stackIndex)
+    if (scrollTop != null && navigationScrollport) navigationScrollport.scrollTop = scrollTop
+  }
+
+  const toggleFromSticky = (row: ProductionStickyRow) => {
+    setPendingStickyFocus({ pk: row.identity.pk, control: 'disclosure' })
+    toggleCollapseByHex(row.identity.pk)
+  }
+
+  const drillFromSticky = (row: ProductionStickyRow) => {
+    props.onOpenFocus(row.matrixId, row.rowId, hexToKey(row.identity.pk))
+  }
+
+  createEffect(() => {
+    sourceControlRevision()
+    visibleRows()
+    virtualizerGeometry()
+    const pending = pendingStickyFocus()
+    if (!pending) return
+    if (pending.control === 'disclosure') {
+      const disclosure = sourceDisclosureByPk.get(pending.pk)
+      if (!disclosure) return
+      disclosure.focus()
+      setPendingStickyFocus(null)
+      return
+    }
+    const coordinates = virtualizerHandle?.getRowCoordinates(pending.pk)
+    if (!coordinates) return
+    const scrollTop = sourceScrollTop(pending.pk, pending.stackIndex ?? 0)
+    if (scrollTop != null && navigationScrollport) navigationScrollport.scrollTop = scrollTop
+    const row = visibleRows().find((candidate) => candidate.pk === pending.pk)
+    if (!row) return
+    requestFocus(row.rk, 'start')
+    setPendingStickyFocus(null)
+  })
+
   const renderWindow = (windowProps: { windowIndex: number }) => {
     // eslint-disable-next-line solid/reactivity -- windowIndex is a static number from WindowComponent, not a reactive prop
     const wIdx = windowProps.windowIndex
@@ -1142,12 +1295,16 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
     return (
       <>
+        <Show when={wIdx === 0}>
+          <div aria-hidden="true" style={{ height: `${sourceTopInset()}px`, flex: 'none' }} />
+        </Show>
         <Show when={debugFlags.pageBoundary()}>
           <PageBoundaryOverlay pageIndex={wIdx} rows={windowRows()} />
         </Show>
         <For each={windowRows()}>
           {(row, localI) => {
-            const globalIdx = () => startIdx() + localI()
+            const globalIdx = () => wIdx * ROWS_PER_WINDOW + localI()
+            const loadedIndex = () => startIdx() + localI()
             const rowId = row.row_id
             const rowMatrixId = row.matrix_id
             const rowCk = row.rk
@@ -1187,6 +1344,17 @@ const NavigationPanel = (props: NavigationPanelProps) => {
             // (the firewall), so the ownership gestures (portal / move-owner /
             // detach) are suppressed.
             const isBlockRow = row.is_block_row === 1
+            const headerModel = createMemo(() =>
+              createProductionNavigationHeaderViewModel(row, {
+                globalIndex: globalIdx(),
+                depthOffset: depthOffset(),
+                collapsedAppearanceIds: collapsedKeys(),
+                selected: isFocusTarget(),
+                disabled: isGhost(),
+                drill: isFocusTarget(),
+                drillActionLabel: isBlockRow ? 'Open real position' : 'Open focus panel',
+              }),
+            )
 
             // C2 substrate merge: a meshed cross-matrix loose row (its own home
             // is a host in this matrix — the Phase 9.5 boundary) renders its own
@@ -1200,7 +1368,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
             const isRunStart = createMemo(() => {
               if (!isCrossMatrix) return false
               const vRows = visibleRows()
-              const idx = globalIdx()
+              const idx = loadedIndex()
               const prev = vRows[idx - 1]
               return !prev || prev.matrix_id !== rowMatrixId
             })
@@ -1217,17 +1385,39 @@ const NavigationPanel = (props: NavigationPanelProps) => {
               return fr ? { matrixId: fr.matrix_id, rowId: fr.row_id } : undefined
             })
 
+            let slotObserver: ResizeObserver | undefined
+            let rowObserver: ResizeObserver | undefined
+            const observeGeometry = (element: HTMLElement, field: keyof RowMeasurement) => {
+              if (typeof ResizeObserver === 'undefined') return
+              const observer = new ResizeObserver((entries) => {
+                const height = entries[0]?.contentRect.height
+                if (height != null) updateRowMeasurement(row.pk, field, height)
+              })
+              observer.observe(element)
+              if (field === 'slotHeight') slotObserver = observer
+              else rowObserver = observer
+            }
+
             onCleanup(() => {
               unregisterHandle(rowCk)
               unregisterContentHandle(rowCk)
+              sourceDisclosureByPk.delete(row.pk)
+              rowMeasurements.delete(row.pk)
+              slotObserver?.disconnect()
+              rowObserver?.disconnect()
+              setRowMeasurementRevision((revision) => revision + 1)
             })
 
             return (
-              <>
+              <div
+                data-navigation-row-slot={row.pk}
+                ref={(element) => observeGeometry(element, 'slotHeight')}
+              >
                 <Show when={isRunStart()}>
                   <CoalescedHeader columns={rowColumns()} />
                 </Show>
                 <div
+                  ref={(element) => observeGeometry(element, 'rowHeight')}
                   class="outline-row"
                   data-row-id={rowId}
                   data-row-ck={rowCk}
@@ -1239,7 +1429,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     opacity:
                       dragState()?.subtreeCks.has(rowCk) && dragState()?.activated ? 0.25 : 1,
                     transition: 'opacity 0.15s',
-                    background: isFocusTarget() ? 'hsla(225, 60%, 50%, 0.08)' : undefined,
                   }}
                 >
                   {/* Drag handle */}
@@ -1252,9 +1441,9 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                       display: 'flex',
                       'align-items': 'center',
                       'justify-content': 'center',
+                      height: `${ESTIMATED_ROW_HEIGHT_PX}px`,
                       'user-select': 'none',
                       opacity: 0.4,
-                      'padding-top': '2px',
                     }}
                     onPointerDown={(e: PointerEvent) => {
                       e.preventDefault()
@@ -1266,109 +1455,127 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
                   {/* Row content: bullet + label + content preview */}
                   <div style={{ flex: 1, 'min-width': 0 }}>
-                    <DesignOutlineRow
-                      theme={theme()}
-                      row={flatRows()[globalIdx()]!}
-                      decoration={decorations()[globalIdx()]!}
+                    <ProductionNavigationRowHeader
+                      model={headerModel()}
+                      decoration={decorationByPk().get(row.pk) ?? { continues: [] }}
+                      representation="source"
                       onToggle={toggleCollapseByHex}
-                      renderContent={() => (
-                        <div
-                          style={{
-                            display: 'flex',
-                            'align-items': 'baseline',
-                            gap: '6px',
-                            flex: 1,
-                            'min-width': 0,
-                          }}
-                        >
-                          <Show when={chip}>
-                            {(c) => (
-                              <span
-                                class="nav-row-type-chip"
-                                data-testid="row-type-chip"
-                                style={{
-                                  'flex-shrink': 0,
-                                  'font-size': '11px',
-                                  'font-weight': '600',
-                                  'line-height': '1.4',
-                                  padding: '0 6px',
-                                  'border-radius': '4px',
-                                  color: c().color,
-                                  background: tagBadgeBackground(c().color),
-                                }}
-                              >
-                                {c().text}
-                              </span>
-                            )}
-                          </Show>
-                          <Show
-                            when={!isGhost()}
-                            fallback={
-                              <span
-                                class="nav-row-ghost"
-                                data-testid="outline-row-ghost"
-                                title="The original of this mirror was deleted"
-                                style={{
-                                  flex: 1,
-                                  'min-width': 0,
-                                  'font-size': '13px',
-                                  'font-style': 'italic',
-                                  color: 'var(--text-muted)',
-                                  'user-select': 'none',
-                                }}
-                              >
-                                🗑 (deleted)
-                              </span>
+                      onDisclosureRef={(element) => {
+                        sourceDisclosureByPk.set(row.pk, element)
+                        setSourceControlRevision((revision) => revision + 1)
+                      }}
+                      onDrill={
+                        isGhost() ? undefined : (
+                          () => {
+                            if (isBlockRow) {
+                              props.onOpenFoldedFocus(row.matrix_id, row.row_id)
+                            } else {
+                              props.onOpenFocus(
+                                row.matrix_id,
+                                row.row_id,
+                                new Uint8Array(row.key),
+                              )
                             }
-                          >
-                            <LabelEditor
-                              rowId={rowId}
-                              label={row.label ?? ''}
-                              matrixId={rowMatrixId}
-                              pageIndex={wIdx}
-                              callbacks={callbacks}
-                              onHandle={(handle) => registerHandle(rowCk, handle)}
-                              onEditorFocus={() => setFocusedCk(rowCk)}
-                            />
-                          </Show>
-                          {/* Compact aspect preview chips (host workspace rows only) */}
-                          <For each={previews()}>
-                            {(preview) => (
-                              <For each={preview.fields}>
-                                {(f) => (
-                                  <span
-                                    class="nav-row-property-chip"
-                                    data-testid="nav-row-property-chip"
-                                    title={`#${preview.tagName} · ${f.name}`}
-                                    style={{
-                                      'flex-shrink': 0,
-                                      'font-size': '11px',
-                                      'font-weight': '500',
-                                      'line-height': '1.4',
-                                      padding: '0 5px',
-                                      'border-radius': '3px',
-                                      color: preview.color,
-                                      background: tagBadgeBackground(preview.color),
-                                      cursor: 'pointer',
-                                    }}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      props.onOpenFocus(
-                                        row.matrix_id,
-                                        row.row_id,
-                                        new Uint8Array(row.key),
-                                      )
-                                    }}
-                                  >
-                                    {f.value}
-                                  </span>
-                                )}
-                              </For>
-                            )}
-                          </For>
-                        </div>
-                      )}
-                    />
+                          }
+                        )
+                      }
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          'align-items': 'baseline',
+                          gap: '6px',
+                          flex: 1,
+                          'min-width': 0,
+                        }}
+                      >
+                        <Show when={chip}>
+                          {(c) => (
+                            <span
+                              class="nav-row-type-chip"
+                              data-testid="row-type-chip"
+                              style={{
+                                'flex-shrink': 0,
+                                'font-size': '11px',
+                                'font-weight': '600',
+                                'line-height': '1.4',
+                                padding: '0 6px',
+                                'border-radius': '4px',
+                                color: c().color,
+                                background: tagBadgeBackground(c().color),
+                              }}
+                            >
+                              {c().text}
+                            </span>
+                          )}
+                        </Show>
+                        <Show
+                          when={!isGhost()}
+                          fallback={
+                            <span
+                              class="nav-row-ghost"
+                              data-testid="outline-row-ghost"
+                              title="The original of this mirror was deleted"
+                              style={{
+                                flex: 1,
+                                'min-width': 0,
+                                'font-size': '13px',
+                                'font-style': 'italic',
+                                color: 'var(--text-muted)',
+                                'user-select': 'none',
+                              }}
+                            >
+                              🗑 (deleted)
+                            </span>
+                          }
+                        >
+                          <LabelEditor
+                            rowId={rowId}
+                            label={row.label ?? ''}
+                            matrixId={rowMatrixId}
+                            pageIndex={wIdx}
+                            callbacks={callbacks}
+                            onHandle={(handle) => registerHandle(rowCk, handle)}
+                            onEditorFocus={() => setFocusedCk(rowCk)}
+                          />
+                        </Show>
+                        {/* Compact aspect preview chips (host workspace rows only) */}
+                        <For each={previews()}>
+                          {(preview) => (
+                            <For each={preview.fields}>
+                              {(f) => (
+                                <span
+                                  class="nav-row-property-chip"
+                                  data-testid="nav-row-property-chip"
+                                  title={`#${preview.tagName} · ${f.name}`}
+                                  style={{
+                                    'flex-shrink': 0,
+                                    'font-size': '11px',
+                                    'font-weight': '500',
+                                    'line-height': '1.4',
+                                    padding: '0 5px',
+                                    'border-radius': '3px',
+                                    color: preview.color,
+                                    background: tagBadgeBackground(preview.color),
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    props.onOpenFocus(
+                                      row.matrix_id,
+                                      row.row_id,
+                                      new Uint8Array(row.key),
+                                    )
+                                  }}
+                                >
+                                  {f.value}
+                                </span>
+                              )}
+                            </For>
+                          )}
+                        </For>
+                      </div>
+                    </ProductionNavigationRowHeader>
 
                     {/* Content area: preview or expanded editor */}
                     <Show when={!isGhost() && (row.content || isExpanded())}>
@@ -1448,47 +1655,8 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                       />
                     </span>
                   </Show>
-
-                  {/* Right-arrow button: open focus panel. Every rendered row gets it,
-                    including meshed cross-matrix aspect rows — drilling into one whose
-                    own-parent is a host in this matrix is the Phase 9.5 boundary hop.
-                    Ghost tombstones have no target to open. A folded block row (Stage
-                    C3) drills in via identity resolution, not its synthetic key — the
-                    label/tooltip flags this as a jump to the row's real position
-                    (its real position may be structurally unrelated to where it's
-                    folded in here), rather than an in-place boundary hop. */}
-                  <Show when={!isGhost()}>
-                    <button
-                      class="nav-row-open-focus"
-                      data-testid="open-focus-btn"
-                      aria-label={isBlockRow ? 'Open real position' : 'Open focus panel'}
-                      title={isBlockRow ? 'Open real position' : undefined}
-                      style={{
-                        position: 'absolute',
-                        right: '4px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        'font-size': '14px',
-                        color: 'var(--text-muted)',
-                        padding: '2px 4px',
-                        'border-radius': '3px',
-                        opacity: 0,
-                        transition: 'opacity 0.15s, color 0.15s',
-                      }}
-                      onClick={() =>
-                        isBlockRow ?
-                          props.onOpenFoldedFocus(row.matrix_id, row.row_id)
-                        : props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
-                      }
-                    >
-                      →
-                    </button>
-                  </Show>
                 </div>
-              </>
+              </div>
             )
           }}
         </For>
@@ -1497,92 +1665,124 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   }
 
   return (
-    <div class="navigation-panel" data-testid="navigation-panel">
+    <div
+      class="navigation-panel"
+      data-testid="navigation-panel"
+      style={{ display: 'flex', 'flex-direction': 'column', height: '100%', 'min-height': 0 }}
+    >
       <Show when={error()}>
         <div style={{ color: '#f87171', padding: '8px', 'margin-bottom': '8px' }}>
           Query error: {error()?.message}
         </div>
       </Show>
-      {/* Only the root panel carries a header (the editable workspace title).
-          Embedded panels are locked to their focus panel's children and rely on
-          the FocusPanel header + ancestry tabs for their title/context. */}
-      <Show when={isRootPanel}>
-        <div
-          class="workspace-title-header"
-          style={{ padding: '8px 12px 4px' }}
-          data-testid="workspace-title"
-        >
-          <span
-            class="label-heading workspace-title-editor"
-            contentEditable={true}
-            data-testid="workspace-title-editor"
-            onBlur={(e) => {
-              const newTitle = (e.currentTarget as HTMLSpanElement).textContent?.trim() ?? ''
-              if (newTitle && newTitle !== matrixTitle()) {
-                void renameMatrix(props.matrixId, newTitle)
-              } else if (!newTitle) {
-                ;(e.currentTarget as HTMLSpanElement).textContent = matrixTitle() || 'Workspace'
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                ;(e.currentTarget as HTMLSpanElement).blur()
-              } else if (e.key === 'Escape') {
-                ;(e.currentTarget as HTMLSpanElement).textContent = matrixTitle() || 'Workspace'
-                ;(e.currentTarget as HTMLSpanElement).blur()
-              }
-            }}
-          >
-            {matrixTitle() || 'Workspace'}
-          </span>
-        </div>
-      </Show>
-      <Show
-        when={visibleRows().length > 0}
-        fallback={
-          <div
-            class="navigation-panel-empty"
-            data-testid="navigation-panel-empty"
-            tabindex="0"
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'center',
-              'min-height': '200px',
-              color: 'var(--text-muted)',
-              'font-size': '15px',
-              'font-style': 'italic',
-              outline: 'none',
-              cursor: 'text',
-            }}
-            onKeyDown={(e: KeyboardEvent) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                void insertRow(props.matrixId, {
-                  values: { label: EMPTY_LABEL_JSON, content: null },
-                }).then(({ rowId: newRowId }) => {
-                  requestFocus(compositeKey(props.matrixId, newRowId), 'start')
-                })
-              }
-            }}
-            ref={(el) => queueMicrotask(() => el.focus())}
-          >
-            Press Enter to create your first row.
-          </div>
-        }
+      <div
+        class="production-navigation-scrollport"
+        ref={navigationScrollport}
+        style={{
+          position: 'relative',
+          flex: 1,
+          'min-height': 0,
+          overflow: 'auto',
+          'overscroll-behavior': 'none',
+        }}
       >
-        <div class={outlineThemeClass(theme())} style={{ padding: 0, border: 'none' }}>
-          <ScrollVirtualizer
-            renderWindow={renderWindow}
-            totalWindows={totalWindows()}
-            minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
-            onVisibleRangeChange={(range) => {
-              if (range.size > 0) pageData.setNeededWindows(range)
-            }}
-          />
-        </div>
-      </Show>
+        <ProductionStickyNavigation
+          context={pageData.stickyContext()}
+          geometry={virtualizerGeometry()}
+          depthOffset={focusDepthOffset()}
+          title={
+            isRootPanel ?
+              <div class="workspace-title-header" data-testid="workspace-title">
+                <span
+                  class="label-heading workspace-title-editor"
+                  contentEditable={true}
+                  data-testid="workspace-title-editor"
+                  onBlur={(e) => {
+                    const newTitle =
+                      (e.currentTarget as HTMLSpanElement).textContent?.trim() ?? ''
+                    if (newTitle && newTitle !== matrixTitle()) {
+                      void renameMatrix(props.matrixId, newTitle)
+                    } else if (!newTitle) {
+                      ;(e.currentTarget as HTMLSpanElement).textContent =
+                        matrixTitle() || 'Workspace'
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      ;(e.currentTarget as HTMLSpanElement).blur()
+                    } else if (e.key === 'Escape') {
+                      ;(e.currentTarget as HTMLSpanElement).textContent =
+                        matrixTitle() || 'Workspace'
+                      ;(e.currentTarget as HTMLSpanElement).blur()
+                    }
+                  }}
+                >
+                  {matrixTitle() || 'Workspace'}
+                </span>
+              </div>
+            : undefined
+          }
+          decorationFor={(row) => decorationByPk().get(row.identity.pk) ?? { continues: [] }}
+          onToggle={toggleFromSticky}
+          onScrollToSource={scrollToStickySource}
+          onDrill={drillFromSticky}
+        />
+        <Show
+          when={visibleRows().length > 0}
+          fallback={
+            <div
+              class="navigation-panel-empty"
+              data-testid="navigation-panel-empty"
+              tabindex="0"
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                'justify-content': 'center',
+                'min-height': '200px',
+                'padding-top': `${sourceTopInset()}px`,
+                color: 'var(--text-muted)',
+                'font-size': '15px',
+                'font-style': 'italic',
+                outline: 'none',
+                cursor: 'text',
+              }}
+              onKeyDown={(e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void insertRow(props.matrixId, {
+                    values: { label: EMPTY_LABEL_JSON, content: null },
+                  }).then(({ rowId: newRowId }) => {
+                    requestFocus(compositeKey(props.matrixId, newRowId), 'start')
+                  })
+                }
+              }}
+              ref={(el) => queueMicrotask(() => el.focus())}
+            >
+              Press Enter to create your first row.
+            </div>
+          }
+        >
+          <div
+            role="tree"
+            aria-label="Navigation outline"
+            style={{ padding: 0, border: 'none' }}
+          >
+            <ScrollVirtualizer
+              renderWindow={renderWindow}
+              totalWindows={totalWindows()}
+              minWindowHeight={ROWS_PER_WINDOW * ESTIMATED_ROW_HEIGHT_PX}
+              scrollport={() => navigationScrollport}
+              getRowGeometry={getRowGeometry}
+              virtualizerRef={(handle) => (virtualizerHandle = handle)}
+              onGeometryChange={updateStickyGeometry}
+              onVisibleRangeChange={(range) => {
+                if (range.size > 0) pageData.setNeededWindows(range)
+              }}
+            />
+          </div>
+        </Show>
+      </div>
       <Show when={dropTarget()}>
         {(target) => (
           <div

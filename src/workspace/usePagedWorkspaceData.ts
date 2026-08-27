@@ -7,6 +7,7 @@ import {
   addGatherObserver,
   removeGatherObserver,
 } from '../core/client/sql-client'
+import { resolveDrillInPosition } from '../core/client/matrix-client'
 import type {
   GatherBlockSpec,
   GatherObserver,
@@ -23,7 +24,17 @@ import {
   buildOutlineCountQuery,
   buildHydrationQuery,
   buildInRangeBlockMarkersQuery,
+  buildProductionStickyAncestryQuery,
+  buildProductionStickyContinuationQuery,
 } from './workspace-plugin'
+import {
+  assignProductionRenderKeys,
+  createProductionStickyContext,
+  createProductionStickyDrill,
+  productionStickyRowFromQuery,
+  type ProductionStickyQueryRow,
+  type ProductionStickyRow,
+} from './production-sticky'
 
 export const ROWS_PER_WINDOW = 100
 
@@ -77,12 +88,6 @@ type WindowRow = {
  * across reparents); one that occurs more than once (home + portals) gets
  * `rk = ck:pk` for every occurrence, so each appearance is a distinct DOM row.
  */
-const assignRenderKeys = (rows: WindowRow[]): void => {
-  const counts = new Map<string, number>()
-  for (const r of rows) counts.set(r.ck, (counts.get(r.ck) ?? 0) + 1)
-  for (const r of rows) r.rk = counts.get(r.ck)! > 1 ? `${r.ck}:${r.pk}` : r.ck
-}
-
 // A fully-hydrated outline row: window metadata merged with the row's data.
 export type WorkspaceRowData = WindowRow & {
   label: string | null
@@ -94,6 +99,8 @@ export type UsePagedWorkspaceDataOpts = {
   matrixId: number
   focusRootHex: Accessor<string | null>
   collapsedKeyHexes: Accessor<string[]>
+  stickyAnchorPk?: Accessor<string | null>
+  drillTarget?: Accessor<{ matrixId: number; rowId: number } | null>
 }
 
 const INITIAL_NEEDED_WINDOWS = new Set([0, 1, 2, 3])
@@ -239,9 +246,61 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
 
   const applyWindowResult = (raw: Record<string, unknown>[]) => {
     const mapped = raw.map(toWindowRow)
-    assignRenderKeys(mapped)
+    assignProductionRenderKeys(mapped)
     setWindowRows(reconcile(mapped, { key: 'rk' }))
   }
+
+  // -----------------------------------------------------------------------
+  // Sticky metadata plane. It is separate from row hydration and does not
+  // change the loaded window range.
+  // -----------------------------------------------------------------------
+  const [stickyAncestryRows, setStickyAncestryRows] = createSignal<ProductionStickyQueryRow[]>(
+    [],
+  )
+  const [stickyPostWindowRow, setStickyPostWindowRow] =
+    createSignal<ProductionStickyQueryRow | null>(null)
+
+  createEffect(() => {
+    const anchorKeyHex = opts.stickyAnchorPk?.()
+    if (!anchorKeyHex) {
+      setStickyAncestryRows([])
+      return
+    }
+    const sql = buildProductionStickyAncestryQuery({
+      anchorKeyHex,
+      labelMatrixId: opts.matrixId,
+      focusRootHex: opts.focusRootHex(),
+      collapsedKeyHexes: opts.collapsedKeyHexes(),
+    })
+    // Keep the previous bounded chain until the replacement subscription
+    // resolves. Clearing here flashes an empty widget and rebuilds the same
+    // chain when a row boundary changes the anchor.
+    const observer: SqlObserver = (result) => {
+      setStickyAncestryRows((result ?? []) as ProductionStickyQueryRow[])
+    }
+    addObserver(sql, observer)
+    onCleanup(() => removeObserver(sql, observer))
+  })
+
+  createEffect(() => {
+    const finalPk = windowRows[windowRows.length - 1]?.pk
+    if (!finalPk) {
+      setStickyPostWindowRow(null)
+      return
+    }
+    const sql = buildProductionStickyContinuationQuery({
+      afterKeyHex: finalPk,
+      labelMatrixId: opts.matrixId,
+      focusRootHex: opts.focusRootHex(),
+      collapsedKeyHexes: opts.collapsedKeyHexes(),
+    })
+    setStickyPostWindowRow(null)
+    const observer: SqlObserver = (result) => {
+      setStickyPostWindowRow((result?.[0] as ProductionStickyQueryRow | undefined) ?? null)
+    }
+    addObserver(sql, observer)
+    onCleanup(() => removeObserver(sql, observer))
+  })
 
   createEffect(() => {
     const range = loadedRange()
@@ -358,8 +417,98 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     }
   })
 
+  const stickyGatherObservers = new Map<string, SqlObserver>()
+  const [stickyHydrated, setStickyHydrated] = createStore<
+    Record<string, Record<string, unknown>>
+  >({})
+
+  const removeStickyGather = (sql: string) => {
+    const observer = stickyGatherObservers.get(sql)
+    if (!observer) return
+    removeObserver(sql, observer)
+    stickyGatherObservers.delete(sql)
+  }
+
+  createEffect(() => {
+    const byMatrix = new Map<number, Set<number>>()
+    const addRow = (matrixId: number, rowId: number) => {
+      let rowIds = byMatrix.get(matrixId)
+      if (!rowIds) {
+        rowIds = new Set<number>()
+        byMatrix.set(matrixId, rowIds)
+      }
+      rowIds.add(rowId)
+    }
+
+    for (const row of stickyAncestryRows()) addRow(row.matrix_id, row.row_id)
+    const postWindow = stickyPostWindowRow()
+    if (postWindow) addRow(postWindow.matrix_id, postWindow.row_id)
+    const drillTarget = opts.drillTarget?.()
+    if (drillTarget) addRow(drillTarget.matrixId, drillTarget.rowId)
+
+    const desired = new Map<string, number>()
+    for (const [matrixId, rowIds] of byMatrix) {
+      desired.set(
+        buildHydrationQuery(
+          matrixId,
+          [...rowIds].sort((a, b) => a - b),
+        ),
+        matrixId,
+      )
+    }
+
+    const retainedData: Record<string, Record<string, unknown>> = {}
+    for (const [matrixId, rowIds] of byMatrix) {
+      for (const rowId of rowIds) {
+        const ck = compositeKey(matrixId, rowId)
+        if (stickyHydrated[ck]) retainedData[ck] = stickyHydrated[ck]
+      }
+    }
+    setStickyHydrated(reconcile(retainedData))
+
+    for (const sql of [...stickyGatherObservers.keys()]) {
+      if (!desired.has(sql)) removeStickyGather(sql)
+    }
+    for (const [sql, matrixId] of desired) {
+      if (stickyGatherObservers.has(sql)) continue
+      const observer: SqlObserver = (result) => {
+        if (!result) return
+        const updates: Record<string, Record<string, unknown>> = {}
+        for (const dataRow of result as Record<string, unknown>[]) {
+          updates[compositeKey(matrixId, dataRow.id as number)] = dataRow
+        }
+        setStickyHydrated(updates)
+      }
+      stickyGatherObservers.set(sql, observer)
+      addObserver(sql, observer)
+    }
+  })
+
+  const [resolvedDrill, setResolvedDrill] = createSignal<{
+    key: Uint8Array
+    isHome: boolean
+  } | null>(null)
+
+  createEffect(() => {
+    const target = opts.drillTarget?.()
+    setResolvedDrill(null)
+    if (!target) return
+    let current = true
+    void resolveDrillInPosition(target.matrixId, target.rowId)
+      .then((resolved) => {
+        if (current) setResolvedDrill(resolved)
+      })
+      .catch(() => {
+        if (current) setResolvedDrill(null)
+      })
+    onCleanup(() => {
+      current = false
+    })
+  })
+
   onCleanup(() => {
     for (const sql of Array.from(gatherObservers.keys())) removeGather(sql)
+    for (const sql of Array.from(stickyGatherObservers.keys())) removeStickyGather(sql)
     removeAspectGather()
   })
 
@@ -443,6 +592,61 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     setRows(reconcile(merged, { key: 'rk' }))
   })
 
+  const stickyRowFromQuery = (raw: ProductionStickyQueryRow): ProductionStickyRow => {
+    const ck = compositeKey(raw.matrix_id, raw.row_id)
+    const data = stickyHydrated[ck] ?? hydrated[ck]
+    return productionStickyRowFromQuery({
+      ...raw,
+      label: (data?.label as string | null | undefined) ?? raw.label,
+    })
+  }
+
+  const stickyRetainedRows = createMemo((): ProductionStickyRow[] => {
+    const range = loadedRange()
+    const firstVisibleIndex = (range?.[0] ?? 0) * ROWS_PER_WINDOW
+    const collapsed = new Set(opts.collapsedKeyHexes().map((pk) => pk.toLowerCase()))
+    return rows.map((row, index) =>
+      productionStickyRowFromQuery(
+        {
+          pk: row.pk,
+          matrix_id: row.matrix_id,
+          row_id: row.row_id,
+          depth: row.depth,
+          visible_index: firstVisibleIndex + index,
+          label: row.label,
+          has_children: row.has_children,
+          expanded: row.has_children === 1 && !collapsed.has(row.pk) ? 1 : 0,
+          subtree_end_pk: null,
+        },
+        row.rk,
+      ),
+    )
+  })
+
+  const stickyContext = createMemo(() => {
+    const target = opts.drillTarget?.()
+    const drill =
+      target ?
+        createProductionStickyDrill(
+          target.matrixId,
+          target.rowId,
+          ((
+            stickyHydrated[compositeKey(target.matrixId, target.rowId)] ??
+            hydrated[compositeKey(target.matrixId, target.rowId)]
+          )?.label as string | null | undefined) ?? null,
+          resolvedDrill(),
+        )
+      : null
+    const postWindowRaw = stickyPostWindowRow()
+    return createProductionStickyContext({
+      firstVisiblePk: opts.stickyAnchorPk?.() ?? null,
+      ancestry: stickyAncestryRows().map(stickyRowFromQuery),
+      retained: stickyRetainedRows(),
+      postWindow: postWindowRaw ? stickyRowFromQuery(postWindowRaw) : null,
+      drill,
+    })
+  })
+
   const getWindowRows = (windowIndex: number): WorkspaceRowData[] => {
     const range = loadedRange()
     if (!range) return []
@@ -467,5 +671,6 @@ export const usePagedWorkspaceData = (opts: UsePagedWorkspaceDataOpts) => {
     error: countError,
     aspectsByHostCk,
     getHydratedData,
+    stickyContext,
   }
 }

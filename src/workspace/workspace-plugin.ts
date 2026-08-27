@@ -62,8 +62,12 @@ export {
   buildOutlineCountQuery,
   buildHydrationQuery,
   buildInRangeBlockMarkersQuery,
+  buildProductionStickyAncestryQuery,
+  buildProductionStickyContinuationQuery,
   type PaginatedOutlineQueryOpts,
   type OutlineCountQueryOpts,
+  type ProductionStickyQueryOpts,
+  type ProductionStickyContinuationQueryOpts,
 } from './outline-queries'
 
 // Ancestor chains for a set of descendant `(matrix_id, row_id)` pairs, returned in

@@ -2,75 +2,78 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-08-24
+updated: 2026-08-25
 phase: phase-10
-session: phase-10-session-4o-production-sticky-adoption
+session: phase-10-session-4p-live-workspace-migration
 ---
 
 # Now
 
-Phase 10 Session 4n is complete. The user approved the integrated sticky-navigation widget in the
-forward Storybook workspace. The push-off behavior, alignment, and visual treatment pass review.
-Manual top and bottom macOS trackpad gestures confirm that the navigation view does not
-rubber-band.
+Phase 10 Session 4o is complete and approved. Production trackpad scrolling and sticky-header
+behavior match the approved Storybook treatment. Session 4p can now migrate the live workspace
+shell while it preserves the production sticky contracts.
 
-Each navigation scroller now contains one bounded widget. Its primary stack is the active expanded
-ancestry of the first visible nested row. One secondary drill dock represents the focused target
-when flow or the primary stack does not. The dock takes the same canonical slot on the first push
-pixel, so it does not disappear and jump back.
+The production navigation panel now owns one explicit scrollport and one bounded sticky widget.
+`usePagedWorkspaceData` subscribes to expanded ancestry, subtree boundaries, one post-window row,
+and a resolved or unresolved drill target. A separate bounded gather hydrates cross-matrix labels.
+The metadata plane does not change the rendered range, the 100-row page size, or editor hydration.
 
-The source outline remains the only tree. Sticky copies use the shared 32-pixel row, Guides
-decoration, control gutter, selection, disabled, and theme paths. They provide named disclosure,
-scroll, drill, and focus-handoff actions without duplicate tree-item or editor semantics. The
-workspace title masks outgoing rows. The widget stops at the content viewport and does not cover
-the native scrollbar.
+Production rows publish numeric source geometry from model estimates and resize observation. The
+controller selects an active heading from content coordinates. It keeps equal sticky DOM and
+changes only the final row transform during push-off. Sticky disclosure, scroll-to-source, drill,
+and source-focus restoration use the production controller. The secondary dock covers flow, top,
+bottom, primary, pushed-primary, and unresolved states.
 
-Normal scroll frames reuse sticky DOM. Subtree push-off writes only the final row transform. The
-navigation scrollport uses scoped `overscroll-behavior: none`.
+Session 4o-c found four integration defects. Ancestry replacements no longer flash an empty chain.
+Numeric source jumps now reconcile retained virtual windows. Focused navigation now owns a bounded
+scrollport. Bounded virtualizers now end at their measured or estimated final window instead of a
+synthetic safety tail. The new production E2E proof covers 465 rows, five pages, root and focused
+navigation, unmounted ancestry, push-off in both directions, source reveal, and drill.
 
 ## Verification
 
 - `npm run format` passes.
 - `npm run lint` passes with 14 existing warnings and no errors.
 - `npm run typecheck` passes.
-- All 877 unit tests pass. The sticky widget has 18 focused state and component tests.
-- `pnpm build-storybook` passes.
-- Chrome DevTools confirms stable thresholds in both directions, continuous top-level
-  replacement, continuous drill handoff, final-row-only position writes, no duplicate tree items,
-  and no console issues.
-- Classic and overlay scrollbar geometry, narrow labels, keyboard scrolling and editing,
-  disclosure, focus handoff, click-to-scroll, drill docking, all themes, and both polarities pass.
-- A 180-frame scroll trace has zero layout shift and no reported long-task insight.
-- Lighthouse accessibility, best practices, and agentic checks score 100. Chrome DevTools reports
-  no browser issues.
-- Manual macOS trackpad review confirms no boundary rubber-band. Existing browser checks confirm
-  expected keyboard, wheel, nested-control, and outer-workspace scrolling.
+- The focused integration suite passes.
+- The full suite has 906 passing tests.
+- The Storybook build passes.
+- The focused production E2E proof passes in system Chromium.
+- The six reset-based paging, editing, keyboard, collapse, and drag E2E scenarios pass.
+- Focused E2E proves that non-navigation content still scrolls and that navigation boundary input
+  does not move the outer scroller.
+- A 180-frame production trace has zero rebuilds for an unchanged chain, 180 final-row position
+  writes, CLS 0.00, and no reported performance insight or long-task finding.
+- Live inspection confirms all active thresholds in both directions, 265 retained metadata rows,
+  265 mounted source rows, two bounded ancestors, correct title masking, and correct classic and
+  hidden scrollbar widths. At a 390-pixel viewport, the widget fits the 369-pixel content width
+  and the long label keeps one line with ellipsis.
+- Final user review confirms that macOS trackpad scrolling and sticky-header behavior match the
+  approved Storybook treatment.
 
 ## Production boundary
 
-The production navigation uses paged 100-row windows and absolute translated virtual blocks.
-Loaded rows provide ordered appearance identity, logical data identity, and renderer identity, but
-the current public contracts do not provide active ancestry, visible-subtree boundaries, or source
-coordinates when ancestors are unmounted.
+The widget is mounted in root and focused production navigation. `StreamView`, the workspace shell,
+and the executable overlaid-card renderer remain unchanged. Session 4p owns the live shell cutover.
+Session 4q remains blocked until the cutover passes review.
 
-Session 4o will add a bounded sticky metadata plane, an explicit virtual scroll and geometry
-contract, and one shared production row-header renderer. It will not widen the rendered range or
-move editor ownership into sticky copies. The live shell and executable overlaid-card renderer stay
-unchanged until Sessions 4p–4q.
+The Session 4o change set is staged and reviewed. The current visual and content mismatch between
+source rows and sticky rows is not a blocker while row design remains unsettled. The future
+continuity requirement is recorded in the [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).
 
-## Read for Session 4o
+## Read for Session 4p
 
-1. The [production sticky adoption plan](Phase-10-Session-4o-plan.md).
-2. The Session 4n [review evidence](Phase-10-Session-4n-plan.md#review-evidence) and
-   [production findings](Phase-10-Session-4n-plan.md#production-adoption-findings).
-3. [Virtualization.md](Virtualization.md).
-4. The [approved navigation outline](Design-Faces.md#navigation-outline).
-5. [Testing.md](Testing.md) before E2E or browser work.
+1. The [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md), especially the fixed decisions and
+   Session 4p Stage 1.
+2. The Session 4o [closeout](Phase-10-Session-4o-plan.md#closeout-gate).
+3. The approved workspace rules in [Design.md](Design.md).
+4. The browser and E2E [testing guide](Testing.md).
+5. `src/workspace/StreamView.tsx` and the current overlaid-card renderer boundary.
 
 ## Next action
 
-Execute Session 4o. Adapt the approved widget to the production paged navigation and virtualizer.
-Do not start the live workspace cutover.
+Execute Session 4p Stage 1 in order. Lock the stream-controller behavior before changing the live
+renderer. Do not start Session 4q early.
 
 ## Documentation boundary
 

@@ -8,12 +8,16 @@
 
 const container: string;
 const scrollContainer: string;
+const externalContainer: string;
+const externalScrollContent: string;
 const content: string;
 const window: string;
 
 export {
 	container,
 	scrollContainer,
+	externalContainer,
+	externalScrollContent,
 	content,
 	window
 };
@@ -21,6 +25,8 @@ export {
 export default {
 	container,
 	scrollContainer,
+	externalContainer,
+	externalScrollContent,
 	content,
 	window
 };

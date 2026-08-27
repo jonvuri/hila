@@ -13,6 +13,17 @@
   position: relative;
 }
 
+.externalContainer {
+  display: block;
+  flex: none;
+  min-height: 0;
+}
+
+.externalScrollContent {
+  height: auto;
+  overflow: visible;
+}
+
 .content {
   position: relative;
   width: 100%;

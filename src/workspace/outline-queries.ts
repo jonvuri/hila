@@ -135,6 +135,160 @@ export type OutlineCountQueryOpts = {
   beforeKeyHex?: string | null
 }
 
+export type ProductionStickyQueryOpts = {
+  /** The first visible materialized appearance. Folded synthetic keys return no ancestry. */
+  anchorKeyHex: string
+  /** The matrix that owns the production navigation label column. */
+  labelMatrixId: number
+  focusRootHex?: string | null
+  collapsedKeyHexes?: string[]
+  maxAncestors?: number
+}
+
+/**
+ * Read the bounded, expanded appearance ancestry for one visible position.
+ *
+ * Ancestry uses key prefixes, not `closure`. This keeps a home appearance and
+ * each portal appearance on their separate display paths. `subtree_end_pk` is
+ * the first visible row after the ancestor subtree. It is null only when the
+ * visible subtree continues to the end of the current focus scope.
+ */
+export const buildProductionStickyAncestryQuery = (opts: ProductionStickyQueryOpts): string => {
+  const visibleFilters = buildFilterClauses({
+    focusRootHex: opts.focusRootHex ?? null,
+    collapsedKeyHexes: opts.collapsedKeyHexes,
+    afterKeyHex: opts.focusRootHex ?? null,
+  })
+  const collapsedAncestors = (opts.collapsedKeyHexes ?? [])
+    .map((hex) => `AND a.global_lexkey != X'${hex}'`)
+    .join('\n')
+  const focusAncestors =
+    opts.focusRootHex ? `AND a.global_lexkey > X'${opts.focusRootHex}'` : ''
+  const maxAncestors = Math.max(1, Math.min(7, opts.maxAncestors ?? 7))
+  const segments: string[] = []
+  let segment = ''
+  for (let index = 0; index < opts.anchorKeyHex.length; index += 2) {
+    const byte = opts.anchorKeyHex.slice(index, index + 2).toLowerCase()
+    if (byte === '00') {
+      if (segment) segments.push(segment)
+      segment = ''
+    } else {
+      segment += byte
+    }
+  }
+  const prefixes = segments
+    .slice(0, -1)
+    .map((_, index) => `${segments.slice(0, index + 1).join('00')}00`)
+  const requestedPrefixes =
+    prefixes.length > 0 ?
+      `VALUES ${prefixes.map((hex) => `(X'${hex}')`).join(', ')}`
+    : 'SELECT NULL WHERE 0'
+
+  return `
+WITH visible AS (
+  SELECT r.global_lexkey AS key
+  FROM scroll_index r
+  WHERE 1 = 1
+  ${visibleFilters}
+), requested_prefixes(key) AS (
+  ${requestedPrefixes}
+), bounded_ancestors AS (
+  SELECT a.global_lexkey AS key, a.matrix_id, a.row_id, a.depth
+  FROM requested_prefixes p
+  JOIN scroll_index a ON a.global_lexkey = p.key
+  WHERE EXISTS (
+      SELECT 1 FROM scroll_index anchor
+      WHERE anchor.global_lexkey = X'${opts.anchorKeyHex}'
+    )
+    ${focusAncestors}
+    ${collapsedAncestors}
+    ${EXCLUDE_BLOCK_MARKERS.replaceAll('r.', 'a.')}
+  ORDER BY a.depth DESC
+  LIMIT ${maxAncestors}
+)
+SELECT lower(hex(a.key)) AS pk, a.matrix_id, a.row_id, a.depth,
+       d.label,
+       (
+         SELECT COUNT(*)
+         FROM visible before_row
+         WHERE before_row.key < a.key
+       ) AS visible_index,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM joins ch
+         WHERE ch.kind = 'own' AND ch.source_matrix_id = a.matrix_id
+           AND ch.source_row_id = a.row_id
+           AND NOT EXISTS (
+             SELECT 1 FROM block_sources bs
+             WHERE bs.marker_matrix_id = ch.target_matrix_id
+               AND bs.marker_row_id = ch.target_row_id
+           )
+       ) THEN 1 ELSE 0 END AS has_children,
+       1 AS expanded,
+       (
+         SELECT NULLIF(lower(hex(MIN(v.key))), '')
+         FROM visible v
+         WHERE v.key > a.key
+           AND substr(v.key, 1, length(a.key)) != a.key
+       ) AS subtree_end_pk
+FROM bounded_ancestors a
+LEFT JOIN "mx_${opts.labelMatrixId}_data" d
+  ON a.matrix_id = ${opts.labelMatrixId} AND a.row_id = d.id
+ORDER BY a.depth
+`
+}
+
+export type ProductionStickyContinuationQueryOpts = {
+  afterKeyHex: string
+  labelMatrixId: number
+  focusRootHex?: string | null
+  collapsedKeyHexes?: string[]
+}
+
+/** Read exactly one visible metadata row after the retained window. */
+export const buildProductionStickyContinuationQuery = (
+  opts: ProductionStickyContinuationQueryOpts,
+): string => {
+  const visibleFilters = buildFilterClauses({
+    focusRootHex: opts.focusRootHex ?? null,
+    collapsedKeyHexes: opts.collapsedKeyHexes,
+    afterKeyHex: opts.focusRootHex ?? null,
+  })
+  return `
+WITH visible AS (
+  SELECT r.*
+  FROM scroll_index r
+  WHERE 1 = 1
+  ${visibleFilters}
+)
+SELECT lower(hex(r.global_lexkey)) AS pk, r.matrix_id, r.row_id, r.depth,
+       d.label,
+       (
+         SELECT COUNT(*)
+         FROM visible before_row
+         WHERE before_row.global_lexkey < r.global_lexkey
+       ) AS visible_index,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM joins ch
+         WHERE ch.kind = 'own' AND ch.source_matrix_id = r.matrix_id
+           AND ch.source_row_id = r.row_id
+       ) THEN 1 ELSE 0 END AS has_children,
+       CASE WHEN ${
+         (opts.collapsedKeyHexes ?? []).length === 0 ?
+           '1'
+         : `lower(hex(r.global_lexkey)) NOT IN (${(opts.collapsedKeyHexes ?? [])
+             .map((hex) => `'${hex.toLowerCase()}'`)
+             .join(', ')})`
+       } THEN 1 ELSE 0 END AS expanded,
+       NULL AS subtree_end_pk
+FROM visible r
+LEFT JOIN "mx_${opts.labelMatrixId}_data" d
+  ON r.matrix_id = ${opts.labelMatrixId} AND r.row_id = d.id
+WHERE r.global_lexkey > X'${opts.afterKeyHex}'
+ORDER BY r.global_lexkey
+LIMIT 1
+`
+}
+
 export const buildOutlineCountQuery = (opts: OutlineCountQueryOpts = {}): string => {
   const filterClauses = buildFilterClauses({
     focusRootHex: opts.focusRootHex ?? null,

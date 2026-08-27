@@ -184,7 +184,9 @@ test.describe('Multi-window virtualizer', () => {
     // Collapse every expanded parent to hide all children.
     // After each click the DOM updates, so we re-query for the next button.
     while (true) {
-      const btn = page.locator('[data-testid="outline-bullet"][aria-label="Collapse"]').first()
+      const btn = page
+        .locator('.production-navigation-row-header-source [aria-label^="Collapse "]')
+        .first()
       if (!(await btn.isVisible().catch(() => false))) break
       await btn.click()
       await page.waitForTimeout(50)
@@ -203,7 +205,9 @@ test.describe('Multi-window virtualizer', () => {
 
     // Expand all collapsed parents
     while (true) {
-      const btn = page.locator('[data-testid="outline-bullet"][aria-label="Expand"]').first()
+      const btn = page
+        .locator('.production-navigation-row-header-source [aria-label^="Expand "]')
+        .first()
       if (!(await btn.isVisible().catch(() => false))) break
       await btn.click()
       await page.waitForTimeout(50)

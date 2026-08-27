@@ -17,6 +17,9 @@ user review and live-app verification before Session 4q deletes any source.
 - Keep the live app on one shared structure for Ghost, Null, and Wipeout.
 - Navigation outline remains an independent component setting. It does not change with visual
   theme or polarity.
+- The Session 4o sticky mechanics are approved. The current visual and content mismatch between
+  source rows and sticky rows is not a final design decision. Preserve the deferred continuity
+  requirement below.
 - The retired overlaid-card implementation has no compatibility promise after the live cutover.
 - Preserve historical rationale in Phase 7, Phase 10, and the archived HTML artifacts. Git history
   preserves the deleted executable prototypes.
@@ -117,6 +120,25 @@ and canonical theme roles without changing workspace data or gestures.
       Session 4q will remove.
 - [ ] Update Phase 10 and `NOW.md` with the cutover result, verification, and exact remaining
       dependency list.
+
+### Deferred navigation-row and sticky continuity
+
+Do not block the Session 4p shell cutover on this visual refinement. Navigation-row content and
+styling remain in the prototype phase. Address this requirement with the next deliberate
+navigation-row surface pass:
+
+- Treat the sticky header as the compact state of the same source-row seam, not as a separate
+  composition that only shares data.
+- Consider putting the guide, disclosure, and title in one fixed top line. Keep previews,
+  properties, gestures, menus, and expanded content below that line when they do not belong in a
+  sticky header.
+- Make source-to-sticky and sticky-to-source transitions preserve text, guide alignment, type,
+  color, spacing, and interaction identity. The row should appear to collapse to one line and
+  expand from it without a jarring replacement.
+- Keep one tree item and one editor owner. Reuse the shared row model and renderer seam instead of
+  duplicating source-only controls in the sticky representation.
+- Add Storybook and live checks for visual correspondence at entry, push-off, reverse scroll, and
+  source reveal after the row surface stabilizes.
 
 ## Session 4q — Remove the retired implementation
 

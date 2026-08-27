@@ -87,9 +87,10 @@ Unify the visual language across every surface into one token + theming system. 
 canonical token contract, then closed the sticky-motion and outline-treatment gates.
 [Session 4n](Phase-10-Session-4n-plan.md) rebuilt sticky navigation as a bounded widget, disabled
 boundary rubber-band in the navigation view, and passed user review.
-[Session 4o](Phase-10-Session-4o-plan.md) now adapts the widget to paged production data and the
-virtualizer. [Sessions 4p–4q](Phase-10-Sessions-4p-4q-plan.md) then migrate the live workspace and
-remove the executable overlaid-card implementation.
+[Session 4o](Phase-10-Session-4o-plan.md) adapted the widget to paged production data and the
+virtualizer, passed live and trackpad review, and received user approval.
+[Sessions 4p–4q](Phase-10-Sessions-4p-4q-plan.md) now migrate the live workspace and remove the
+executable overlaid-card implementation.
 
 - [x] **Reconcile the visual language:** Ghost owns structure and minimum semantic affordances. Null
       and Wipeout own only value overrides and optional decoration. The overlaid-card depth language
@@ -116,7 +117,7 @@ remove the executable overlaid-card implementation.
 
 ### Planned workspace migration and retirement sessions
 
-- [ ] **Session 4o:** adapt integrated sticky navigation to paged production data and the
+- [x] **Session 4o:** adapt integrated sticky navigation to paged production data and the
       production virtualizer without widening the rendered range.
 - [ ] **Session 4p:** migrate the approved workspace into the live shell without changing workspace
       data or gestures.

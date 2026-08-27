@@ -543,12 +543,21 @@ const FocusPanel = (props: FocusPanelProps) => {
         display: 'flex',
         'flex-direction': 'column',
         height: '100%',
-        overflow: 'auto',
+        overflow: 'hidden',
         'min-width': '360px',
         'background-color': 'var(--card-focused-bg)',
       }}
     >
-      <div style={{ padding: '16px 24px', flex: 1, overflow: 'auto' }}>
+      <div
+        style={{
+          display: 'flex',
+          'flex-direction': 'column',
+          flex: 1,
+          'min-height': 0,
+          padding: '16px 24px',
+          overflow: 'auto',
+        }}
+      >
         <Show
           when={rowData()}
           fallback={
@@ -785,6 +794,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                   'padding-top': '12px',
                   flex: 1,
                   'min-height': '120px',
+                  overflow: 'hidden',
                 }}
               >
                 <Show
