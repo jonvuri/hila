@@ -4,6 +4,11 @@ import { render } from 'solid-js/web'
 import './design/tokens.css'
 import './global.css'
 import App from './App'
+import { resolveVisualTheme } from './design/tokens'
+
+document.documentElement.dataset.visualTheme = resolveVisualTheme(
+  document.documentElement.dataset.visualTheme,
+)
 
 const root = document.getElementById('root')
 

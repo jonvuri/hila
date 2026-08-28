@@ -9,11 +9,16 @@ session: phase-10-session-4p-live-workspace-migration
 
 # Now
 
-Phase 10 Session 4p Stage 1 is complete. The focused `StreamView` contract now locks initial root,
-panel transitions, four-column eviction, back navigation, external and inline navigation, folded
-positions, unresolved positions, and cross-matrix hops. The approved workspace test locks the
-first-visible-focus breadcrumb predicate. Stage 2 can now separate the controller from the live
-presentation without changing this behavior.
+Phase 10 Session 4p Stage 2 is complete. A typed stream controller now owns bounded panel state,
+queries, ancestry resolution, keyboard and inline-reference listeners, and navigation handlers.
+Its public boundary has no retired ancestor type. Stable panel identities preserve mounted panel
+instances through append and replace operations.
+
+The production workspace shell now accepts panel kind, stable identity, active state, title,
+ancestry, and a content slot. It uses the approved bounded column geometry and canonical surface,
+line, type, spacing, elevation, and state roles. The live root resolves visual theme separately
+from polarity. Ghost, Null, and Wipeout use one shell structure. `StreamView` still adapts the new
+controller to the old renderer until the Stage 4 cutover.
 
 The production navigation panel now owns one explicit scrollport and one bounded sticky widget.
 `usePagedWorkspaceData` subscribes to expanded ancestry, subtree boundaries, one post-window row,
@@ -38,7 +43,9 @@ navigation, unmounted ancestry, push-off in both directions, source reveal, and 
 - `npm run lint` passes with 14 existing warnings and no errors.
 - `npm run typecheck` passes.
 - The focused `StreamView` controller contract has seven passing tests.
-- The full suite has 913 passing tests.
+- The production workspace-shell contract has two passing tests.
+- The full suite has 915 passing tests.
+- The production build passes with its existing chunk-size warnings.
 - The Storybook build passes.
 - The focused production E2E proof passes in system Chromium.
 - The six reset-based paging, editing, keyboard, collapse, and drag E2E scenarios pass.
@@ -55,27 +62,30 @@ navigation, unmounted ancestry, push-off in both directions, source reveal, and 
 
 ## Production boundary
 
-The widget is mounted in root and focused production navigation. `StreamView`, the workspace shell,
-and the executable overlaid-card renderer remain unchanged. Session 4p Stage 2 owns the controller
-and shell-contract separation. Session 4q remains blocked until the cutover passes review.
+The widget is mounted in root and focused production navigation. `StreamView` still renders the
+executable overlaid-card presentation through the new controller. The production workspace shell
+is defined but is not mounted. Session 4p Stage 3 owns navigation configuration and canonical live
+roles. Session 4q remains blocked until the cutover passes review.
 
 The Session 4o change set is staged and reviewed. The current visual and content mismatch between
 source rows and sticky rows is not a blocker while row design remains unsettled. The future
 continuity requirement is recorded in the [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).
 
-## Read for Session 4p
+## Read for Session 4p Stage 3
 
 1. The [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md), especially the fixed decisions and
-   Session 4p Stage 1.
+   Session 4p Stage 3.
 2. The Session 4o [closeout](Phase-10-Session-4o-plan.md#closeout-gate).
 3. The approved workspace rules in [Design.md](Design.md).
 4. The browser and E2E [testing guide](Testing.md).
-5. `src/workspace/StreamView.tsx` and the current overlaid-card renderer boundary.
+5. `src/workspace/stream-controller.ts`, `WorkspaceShell.tsx`, `NavigationPanel.tsx`, and
+   `ProductionStickyNavigation.tsx`.
 
 ## Next action
 
-Execute Session 4p Stage 2 in order. Keep the Stage 1 behavior contract green while separating the
-controller from presentation. Do not start Session 4q early.
+Execute Session 4p Stage 3 in order. Preserve the production sticky, paging, geometry, and
+transition contracts while promoting the independent navigation-outline configuration and
+canonical live roles. Do not start Stage 4 or Session 4q early.
 
 ## Documentation boundary
 

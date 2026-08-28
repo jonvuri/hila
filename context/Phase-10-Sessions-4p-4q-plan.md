@@ -88,16 +88,28 @@ Stage 1 evidence:
 
 ### Stage 2 — Separate controller from presentation
 
-- [ ] Move panel state, queries, ancestry resolution, and navigation handlers behind a typed stream
+- [x] Move panel state, queries, ancestry resolution, and navigation handlers behind a typed stream
       controller or equivalent local model. Remove `OverlaidAncestor` from this boundary.
-- [ ] Define a production workspace-shell contract that accepts panel kind, stable identity,
+- [x] Define a production workspace-shell contract that accepts panel kind, stable identity,
       active state, title, ancestry, and a panel-content slot. Do not make production data conform
       to Storybook fixture types.
-- [ ] Promote the approved four-column geometry and active-column treatment into the production
+- [x] Promote the approved four-column geometry and active-column treatment into the production
       shell through canonical tokens.
-- [ ] Apply the Session 4j visual-theme mechanism at the live root. Keep its value independent of
+- [x] Apply the Session 4j visual-theme mechanism at the live root. Keep its value independent of
       the existing polarity attribute.
-- [ ] Keep one DOM order and interaction structure across Ghost, Null, and Wipeout.
+- [x] Keep one DOM order and interaction structure across Ghost, Null, and Wipeout.
+
+Stage 2 evidence:
+
+- `src/workspace/stream-controller.ts` owns the bounded panel state, queries, ancestry, keyboard
+  and inline-reference listeners, and navigation handlers. Its public types do not depend on the
+  retired renderer.
+- `src/workspace/WorkspaceShell.tsx` defines the production-only shell contract. Its focused test
+  locks stable panel identity, active state, first-focus ancestry, content slots, and one structure
+  across all visual themes.
+- The live root resolves `data-visual-theme` separately from the existing `data-theme` polarity.
+- `StreamView` still adapts the controller to `OverlaidCards` during this stage. Stage 4 owns the
+  renderer cutover.
 
 ### Stage 3 — Promote navigation behavior and configuration
 

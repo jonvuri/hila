@@ -23,8 +23,9 @@ vi.mock('../sql/useQuery', () => ({
 }))
 
 type MockPanel =
-  | { type: 'navigation' }
+  | { id: string; type: 'navigation' }
   | {
+      id: string
       type: 'focus'
       matrixId: number
       rowId: number
@@ -44,6 +45,7 @@ vi.mock('../design/overlaid-cards/OverlaidCards', () => ({
         {(panel, index) => (
           <section
             data-matrix-id={panel.type === 'focus' ? panel.matrixId : undefined}
+            data-panel-id={panel.id}
             data-panel-kind={panel.type}
             data-row-id={panel.type === 'focus' ? panel.rowId : undefined}
             data-testid="mock-stream-panel"
@@ -125,6 +127,9 @@ const panelIdentity = (container: HTMLElement) =>
     : `${panel.dataset.matrixId}:${panel.dataset.rowId}`,
   )
 
+const stablePanelIds = (container: HTMLElement) =>
+  panelElements(container).map((panel) => panel.dataset.panelId)
+
 const click = (container: HTMLElement, label: string, index = 0) => {
   const buttons = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
     (button) => button.textContent?.trim() === label,
@@ -173,9 +178,11 @@ describe('StreamView controller contract', () => {
 
     click(container, 'Append focus')
     expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
+    const firstIds = stablePanelIds(container)
 
     click(container, 'Append child')
     expect(panelIdentity(container)).toEqual(['navigation', '10:101', '10:102'])
+    expect(stablePanelIds(container).slice(0, 2)).toEqual(firstIds)
 
     click(container, 'Replace focus', 1)
     expect(panelIdentity(container)).toEqual(['navigation', '10:101', '10:202'])
