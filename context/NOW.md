@@ -2,16 +2,18 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-08-25
+updated: 2026-08-27
 phase: phase-10
 session: phase-10-session-4p-live-workspace-migration
 ---
 
 # Now
 
-Phase 10 Session 4o is complete and approved. Production trackpad scrolling and sticky-header
-behavior match the approved Storybook treatment. Session 4p can now migrate the live workspace
-shell while it preserves the production sticky contracts.
+Phase 10 Session 4p Stage 1 is complete. The focused `StreamView` contract now locks initial root,
+panel transitions, four-column eviction, back navigation, external and inline navigation, folded
+positions, unresolved positions, and cross-matrix hops. The approved workspace test locks the
+first-visible-focus breadcrumb predicate. Stage 2 can now separate the controller from the live
+presentation without changing this behavior.
 
 The production navigation panel now owns one explicit scrollport and one bounded sticky widget.
 `usePagedWorkspaceData` subscribes to expanded ancestry, subtree boundaries, one post-window row,
@@ -35,8 +37,8 @@ navigation, unmounted ancestry, push-off in both directions, source reveal, and 
 - `npm run format` passes.
 - `npm run lint` passes with 14 existing warnings and no errors.
 - `npm run typecheck` passes.
-- The focused integration suite passes.
-- The full suite has 906 passing tests.
+- The focused `StreamView` controller contract has seven passing tests.
+- The full suite has 913 passing tests.
 - The Storybook build passes.
 - The focused production E2E proof passes in system Chromium.
 - The six reset-based paging, editing, keyboard, collapse, and drag E2E scenarios pass.
@@ -54,8 +56,8 @@ navigation, unmounted ancestry, push-off in both directions, source reveal, and 
 ## Production boundary
 
 The widget is mounted in root and focused production navigation. `StreamView`, the workspace shell,
-and the executable overlaid-card renderer remain unchanged. Session 4p owns the live shell cutover.
-Session 4q remains blocked until the cutover passes review.
+and the executable overlaid-card renderer remain unchanged. Session 4p Stage 2 owns the controller
+and shell-contract separation. Session 4q remains blocked until the cutover passes review.
 
 The Session 4o change set is staged and reviewed. The current visual and content mismatch between
 source rows and sticky rows is not a blocker while row design remains unsettled. The future
@@ -72,8 +74,8 @@ continuity requirement is recorded in the [Sessions 4p–4q plan](Phase-10-Sessi
 
 ## Next action
 
-Execute Session 4p Stage 1 in order. Lock the stream-controller behavior before changing the live
-renderer. Do not start Session 4q early.
+Execute Session 4p Stage 2 in order. Keep the Stage 1 behavior contract green while separating the
+controller from presentation. Do not start Session 4q early.
 
 ## Documentation boundary
 

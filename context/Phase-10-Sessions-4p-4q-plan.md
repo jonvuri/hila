@@ -55,14 +55,36 @@ and canonical theme roles without changing workspace data or gestures.
 
 ### Stage 1 — Lock the behavior contract
 
-- [ ] Add focused tests for the stream controller before changing its renderer. Cover initial root,
+- [x] Add focused tests for the stream controller before changing its renderer. Cover initial root,
       append, replace, close, four-column eviction, and `Meta+ArrowLeft`.
-- [ ] Cover external row navigation, inline-reference navigation, folded-row focus, unresolved
+- [x] Cover external row navigation, inline-reference navigation, folded-row focus, unresolved
       positions, and cross-matrix boundary hops.
-- [ ] Cover the breadcrumb predicate: show simple ancestry only when the first visible panel is
+- [x] Cover the breadcrumb predicate: show simple ancestry only when the first visible panel is
       focus. The title and sticky stack remain the ancestry signal while root navigation is visible.
-- [ ] Record the current live fixture and database setup needed for deterministic component and E2E
+- [x] Record the current live fixture and database setup needed for deterministic component and E2E
       tests.
+
+#### Stage 1 test setup
+
+The focused component contract runs in Vitest with jsdom. It mocks the SQL position resolver, the
+folded-position resolver, reactive query results, and the three presentation components. It keeps
+the real `StreamView` signals, handlers, effects, and document listeners. Fixed matrix IDs, row
+IDs, and byte keys make each panel transition deterministic without a database.
+
+Live E2E tests start from the two-step **Reset DB** action. Reset rebuilds the schema. The app then
+registers its plugins again and creates the `Workspace` matrix with one `Welcome to Hila` row.
+Tests must wait for the row and each reactive result. Tests can use client data APIs through
+`page.evaluate` to seed exact cross-matrix, folded, and ownership states. They must use retrying
+assertions instead of fixed delays. E2E runs use the system browser outside the sandbox.
+
+Stage 1 evidence:
+
+- `src/workspace/StreamView.test.tsx` covers the controller contract through the current component
+  boundary.
+- `src/design/workspace/Workspace.test.tsx` covers the approved first-visible-focus breadcrumb
+  predicate.
+- Existing live proofs remain in `e2e/stream-view.spec.ts`, `e2e/focus-panel.spec.ts`,
+  `e2e/folded-row-drill-in.spec.ts`, and `e2e/tags.spec.ts`.
 
 ### Stage 2 — Separate controller from presentation
 
