@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { createSignal, For, type JSX } from 'solid-js'
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 
 import type { ComponentVariantConfig, VisualTheme } from '../design/tokens'
 
 const mocks = vi.hoisted(() => ({
   execQuery: vi.fn(),
+  nextFocusInstance: 0,
   resolveDrillInPosition: vi.fn(),
 }))
 
@@ -22,42 +23,6 @@ vi.mock('../sql/useQuery', () => ({
     result: () => null,
     error: () => null,
   }),
-}))
-
-type MockPanel =
-  | { id: string; type: 'navigation' }
-  | {
-      id: string
-      type: 'focus'
-      matrixId: number
-      rowId: number
-      foldedOrigin?: boolean
-      unresolvedPosition?: boolean
-    }
-
-type MockOverlaidCardsProps = {
-  panels: MockPanel[]
-  renderPanel: (panel: MockPanel, index: number) => JSX.Element
-}
-
-vi.mock('../design/overlaid-cards/OverlaidCards', () => ({
-  default: (props: MockOverlaidCardsProps) => (
-    <div data-testid="mock-stream">
-      <For each={props.panels}>
-        {(panel, index) => (
-          <section
-            data-matrix-id={panel.type === 'focus' ? panel.matrixId : undefined}
-            data-panel-id={panel.id}
-            data-panel-kind={panel.type}
-            data-row-id={panel.type === 'focus' ? panel.rowId : undefined}
-            data-testid="mock-stream-panel"
-          >
-            {props.renderPanel(panel, index())}
-          </section>
-        )}
-      </For>
-    </div>
-  ),
 }))
 
 type MockNavigationPanelProps = {
@@ -88,47 +53,53 @@ type MockFocusPanelProps = {
 }
 
 vi.mock('./FocusPanel', () => ({
-  default: (props: MockFocusPanelProps) => (
-    <div
-      data-folded-origin={props.foldedOrigin ? 'true' : undefined}
-      data-testid="mock-focus-panel"
-      data-unresolved-position={props.unresolvedPosition ? 'true' : undefined}
-    >
-      <button
-        onClick={() =>
-          props.onAppendFocus(props.matrixId, props.rowId + 1, Uint8Array.of(props.rowId + 1))
-        }
+  default: (props: MockFocusPanelProps) => {
+    const instanceId = `focus-instance-${mocks.nextFocusInstance++}`
+    return (
+      <div
+        data-folded-origin={props.foldedOrigin ? 'true' : undefined}
+        data-instance-id={instanceId}
+        data-matrix-id={props.matrixId}
+        data-row-id={props.rowId}
+        data-testid="mock-focus-panel"
+        data-unresolved-position={props.unresolvedPosition ? 'true' : undefined}
       >
-        Append child
-      </button>
-      <button
-        onClick={() =>
-          props.onReplaceFocus(props.matrixId, props.rowId + 100, Uint8Array.of(props.rowId))
-        }
-      >
-        Replace focus
-      </button>
-      <button onClick={() => props.onOpenRowRef(20, props.rowId + 200)}>
-        Open boundary row
-      </button>
-      <button onClick={() => props.onCollapse()}>Collapse here</button>
-      <button onClick={() => props.onClose()}>Close focus</button>
-    </div>
-  ),
+        <button
+          onClick={() =>
+            props.onAppendFocus(props.matrixId, props.rowId + 1, Uint8Array.of(props.rowId + 1))
+          }
+        >
+          Append child
+        </button>
+        <button
+          onClick={() =>
+            props.onReplaceFocus(props.matrixId, props.rowId + 100, Uint8Array.of(props.rowId))
+          }
+        >
+          Replace focus
+        </button>
+        <button onClick={() => props.onOpenRowRef(20, props.rowId + 200)}>
+          Open boundary row
+        </button>
+        <button onClick={() => props.onCollapse()}>Collapse here</button>
+        <button onClick={() => props.onClose()}>Close focus</button>
+      </div>
+    )
+  },
 }))
 
 const { default: StreamView } = await import('./StreamView')
 
 const panelElements = (container: HTMLElement) => [
-  ...container.querySelectorAll<HTMLElement>('[data-testid="mock-stream-panel"]'),
+  ...container.querySelectorAll<HTMLElement>('[data-testid="workspace-shell-column"]'),
 ]
 
 const panelIdentity = (container: HTMLElement) =>
-  panelElements(container).map((panel) =>
-    panel.dataset.panelKind === 'navigation' ?
-      'navigation'
-    : `${panel.dataset.matrixId}:${panel.dataset.rowId}`,
-  )
+  panelElements(container).map((panel) => {
+    if (panel.dataset.panelKind === 'navigation') return 'navigation'
+    const focus = panel.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')
+    return `${focus?.dataset.matrixId}:${focus?.dataset.rowId}`
+  })
 
 const stablePanelIds = (container: HTMLElement) =>
   panelElements(container).map((panel) => panel.dataset.panelId)
@@ -153,6 +124,7 @@ describe('StreamView controller contract', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.nextFocusInstance = 0
     container = document.createElement('div')
     document.body.appendChild(container)
   })
@@ -182,10 +154,22 @@ describe('StreamView controller contract', () => {
     click(container, 'Append focus')
     expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
     const firstIds = stablePanelIds(container)
+    const firstFocusInstance = container.querySelector<HTMLElement>(
+      '[data-testid="mock-focus-panel"]',
+    )?.dataset.instanceId
 
     click(container, 'Append child')
     expect(panelIdentity(container)).toEqual(['navigation', '10:101', '10:102'])
     expect(stablePanelIds(container).slice(0, 2)).toEqual(firstIds)
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')?.dataset
+        .instanceId,
+    ).toBe(firstFocusInstance)
+    expect(panelElements(container).map((panel) => panel.dataset.active)).toEqual([
+      'false',
+      'false',
+      'true',
+    ])
 
     click(container, 'Replace focus', 1)
     expect(panelIdentity(container)).toEqual(['navigation', '10:101', '10:202'])
@@ -235,6 +219,25 @@ describe('StreamView controller contract', () => {
     click(container, 'Append child', 2)
 
     expect(panelIdentity(container)).toEqual(['10:101', '10:102', '10:103', '10:104'])
+  })
+
+  test('shows the simple breadcrumb only after root leaves the visible columns', () => {
+    mount()
+    click(container, 'Append focus')
+    click(container, 'Append child')
+    click(container, 'Append child', 1)
+
+    expect(container.querySelector('[data-testid="workspace-shell-breadcrumb"]')).toBeNull()
+
+    click(container, 'Append child', 2)
+
+    const breadcrumb = container.querySelector<HTMLElement>(
+      '[data-testid="workspace-shell-breadcrumb"]',
+    )
+    expect(breadcrumb?.textContent).toContain('Workspace')
+
+    click(container, 'Workspace')
+    expect(panelIdentity(container)).toEqual(['navigation'])
   })
 
   test('Meta+ArrowLeft closes only the rightmost focus panel', () => {

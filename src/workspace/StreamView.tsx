@@ -1,14 +1,25 @@
 import { createMemo, Suspense } from 'solid-js'
 
-import OverlaidCards from '../design/overlaid-cards/OverlaidCards'
 import { resolveComponentVariant, type ComponentVariantConfig } from '../design/tokens'
 
 import FocusPanel from './FocusPanel'
 import NavigationPanel from './NavigationPanel'
-import { createStreamController, type StreamControllerInput } from './stream-controller'
+import {
+  createStreamController,
+  type StreamControllerInput,
+  type StreamPanel,
+} from './stream-controller'
+import WorkspaceShell, {
+  type WorkspaceShellAncestor,
+  type WorkspaceShellPanel,
+} from './WorkspaceShell'
 
 type StreamViewProps = StreamControllerInput & {
   componentConfig?: ComponentVariantConfig
+}
+
+type StreamShellPanel = WorkspaceShellPanel & {
+  source: StreamPanel
 }
 
 const StreamView = (props: StreamViewProps) => {
@@ -16,18 +27,43 @@ const StreamView = (props: StreamViewProps) => {
   const navigationOutline = createMemo(() =>
     resolveComponentVariant('navigationOutline', props.componentConfig?.navigationOutline),
   )
-  const overlaidGaps = createMemo(() =>
-    controller.ancestry().map((chain) =>
-      chain.map((ancestor) => ({
-        key: ancestor.id,
-        label: ancestor.label,
-        rowId: ancestor.rowId ?? null,
-        matrixId: ancestor.matrixId,
-      })),
-    ),
+  const shellPanelBySource = new WeakMap<StreamPanel, StreamShellPanel>()
+  const shellPanels = createMemo(() =>
+    controller.panels().map((source): StreamShellPanel => {
+      const existing = shellPanelBySource.get(source)
+      if (existing) return existing
+
+      const shellPanel: StreamShellPanel = {
+        source,
+        id: source.id,
+        get kind() {
+          return source.type
+        },
+        get active() {
+          return controller.panels().at(-1)?.id === source.id
+        },
+        get title() {
+          return source.type === 'navigation' ?
+              controller.title()
+            : `Focused row ${source.rowId}`
+        },
+        get ancestry() {
+          const panelIndex = controller.panels().findIndex((panel) => panel.id === source.id)
+          const chain = panelIndex < 0 ? [] : (controller.ancestry()[panelIndex] ?? [])
+          if (panelIndex !== 0 || source.type !== 'focus') return chain
+          return [
+            { id: 'workspace-root', label: controller.title() },
+            ...chain,
+          ] satisfies readonly WorkspaceShellAncestor[]
+        },
+      }
+      shellPanelBySource.set(source, shellPanel)
+      return shellPanel
+    }),
   )
 
-  const renderPanel = (panel: ReturnType<typeof controller.panels>[number], index: number) => {
+  const renderPanel = (shellPanel: StreamShellPanel, index: number) => {
+    const panel = shellPanel.source
     if (panel.type === 'navigation') {
       return (
         <NavigationPanel
@@ -73,26 +109,12 @@ const StreamView = (props: StreamViewProps) => {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div class="card-viewport" style={{ padding: '16px', color: 'var(--text-muted)' }}>
-          Loading…
-        </div>
-      }
-    >
-      <OverlaidCards
-        panels={controller.panels()}
-        panelKind={(panel) => (panel.type === 'navigation' ? 'navigation' : 'focus')}
-        gaps={overlaidGaps()}
-        title={controller.title()}
+    <Suspense fallback={<div class="workspace-shell-loading">Loading…</div>}>
+      <WorkspaceShell
+        panels={shellPanels()}
         renderPanel={renderPanel}
-        onAncestorClick={(panelIndex, ancestor) =>
-          controller.selectAncestor(panelIndex, {
-            id: ancestor.key,
-            label: ancestor.label,
-            rowId: ancestor.rowId ?? undefined,
-            matrixId: ancestor.matrixId,
-          })
+        onAncestorSelect={(panelIndex, ancestor) =>
+          controller.selectAncestor(panelIndex, ancestor)
         }
       />
     </Suspense>

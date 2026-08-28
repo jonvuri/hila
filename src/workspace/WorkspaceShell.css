@@ -10,6 +10,13 @@
   font-family: var(--type-body-family);
 }
 
+.workspace-shell-loading {
+  flex: 1;
+  padding: var(--space-content-inset);
+  color: var(--color-text-muted);
+  background: var(--color-canvas);
+}
+
 .workspace-shell-column {
   display: flex;
   flex: 1 0 min(280px, 80vw);

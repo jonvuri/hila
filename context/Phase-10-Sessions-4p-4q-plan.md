@@ -143,12 +143,25 @@ Stage 3 evidence:
 
 ### Stage 4 — Cut over `StreamView`
 
-- [ ] Render the production workspace shell directly from the stream controller. Remove the live
+- [x] Render the production workspace shell directly from the stream controller. Remove the live
       `OverlaidCards` and `OverlaidAncestor` imports.
-- [ ] Replace ancestor-gap tabs with the approved simple breadcrumb rule. Preserve click navigation
+- [x] Replace ancestor-gap tabs with the approved simple breadcrumb rule. Preserve click navigation
       through the existing ancestry data.
-- [ ] Preserve loading, empty, error, active-panel, narrow-width, and long-label states.
-- [ ] Confirm that `StreamView` has no layout-theme switch or retired ancestor-card concept.
+- [x] Preserve loading, empty, error, active-panel, narrow-width, and long-label states.
+- [x] Confirm that `StreamView` has no layout-theme switch or retired ancestor-card concept.
+
+Stage 4 evidence:
+
+- `StreamView` renders `WorkspaceShell` with stable panel wrappers keyed by controller panel
+  identity. Ancestry updates do not remount existing panel content.
+- The breadcrumb appears only when a focus panel is the first visible column. It starts with the
+  workspace title. The title returns to root, and each retained ancestry item uses the existing
+  controller navigation path.
+- Loading uses a canonical workspace-shell state. Navigation and focus panels still own their
+  loading, empty, error, unresolved-position, narrow-width, and long-label behavior.
+- The focused controller and shell tests have 11 passing tests. Static types pass.
+- Outside the archived implementation, the only remaining `overlaid-cards` source dependency is
+  the known forward Storybook fixture import. Session 4q owns that fixture move.
 
 ### Stage 5 — Live review and verification
 
