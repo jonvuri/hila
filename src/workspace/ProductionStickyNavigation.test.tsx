@@ -81,6 +81,7 @@ describe('production sticky navigation', () => {
           context={context}
           geometry={geometry}
           depthOffset={0}
+          navigationOutline="guides"
           title={<span>Workspace</span>}
           decorationFor={() => ({ continues: [] })}
           onToggle={toggle}
@@ -131,6 +132,7 @@ describe('production sticky navigation', () => {
           context={context}
           geometry={undefined}
           depthOffset={0}
+          navigationOutline="guides"
           decorationFor={() => ({ continues: [] })}
           onToggle={() => {}}
           onScrollToSource={() => {}}

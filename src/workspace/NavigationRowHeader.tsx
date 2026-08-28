@@ -8,6 +8,7 @@ import {
   type NavigationOutlineDecoration,
   type NavigationOutlineRow,
 } from '../design/workspace/navigation-outline'
+import type { NavigationOutlineVariant } from '../design/tokens'
 
 import type { WorkspaceRowData } from './usePagedWorkspaceData'
 import type { ProductionStickyRow } from './production-sticky'
@@ -100,6 +101,7 @@ export const createProductionStickyNavigationHeaderViewModel = (
 type ProductionNavigationRowHeaderProps = {
   model: ProductionNavigationHeaderViewModel
   decoration: NavigationOutlineDecoration
+  navigationOutline: NavigationOutlineVariant
   representation: 'source' | 'sticky'
   children?: JSX.Element
   onToggle?: (appearanceId: string) => void
@@ -120,10 +122,11 @@ const outlineRow = (model: ProductionNavigationHeaderViewModel): NavigationOutli
 const Decoration = (props: {
   model: ProductionNavigationHeaderViewModel
   decoration: NavigationOutlineDecoration
+  navigationOutline: NavigationOutlineVariant
 }): JSX.Element => (
   <span class="production-navigation-row-decoration" aria-hidden="true">
     <NavigationOutlinePaint
-      variant="guides"
+      variant={props.navigationOutline}
       row={outlineRow(props.model)}
       decoration={props.decoration}
     />
@@ -182,6 +185,7 @@ export const ProductionNavigationRowHeader = (
       aria-selected={sticky() ? undefined : props.model.selected}
       aria-disabled={sticky() ? undefined : props.model.disabled}
       data-navigation-row-representation={props.representation}
+      data-navigation-outline={props.navigationOutline}
       data-row-pk={props.model.appearanceId}
       data-row-ck={props.model.logicalId}
       data-row-rk={props.model.rendererId}
@@ -190,7 +194,11 @@ export const ProductionNavigationRowHeader = (
         height: `${PRODUCTION_NAVIGATION_ROW_HEIGHT}px`,
       }}
     >
-      <Decoration model={props.model} decoration={props.decoration} />
+      <Decoration
+        model={props.model}
+        decoration={props.decoration}
+        navigationOutline={props.navigationOutline}
+      />
       <Indent depth={props.model.depth} />
       <Disclosure
         model={props.model}

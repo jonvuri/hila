@@ -87,6 +87,7 @@ describe('production navigation row header', () => {
           <ProductionNavigationRowHeader
             model={model}
             decoration={{ continues: [true] }}
+            navigationOutline="guides"
             representation="source"
             onToggle={toggle}
             onDrill={drill}
@@ -96,6 +97,7 @@ describe('production navigation row header', () => {
           <ProductionNavigationRowHeader
             model={model}
             decoration={{ continues: [true] }}
+            navigationOutline="guides"
             representation="sticky"
             onToggle={toggle}
             onScrollToSource={scroll}
@@ -119,6 +121,8 @@ describe('production navigation row header', () => {
     expect(source.getAttribute('aria-selected')).toBe('true')
     expect(source.getAttribute('aria-level')).toBe('2')
     expect(sticky.getAttribute('role')).toBe('presentation')
+    expect(source.dataset.navigationOutline).toBe('guides')
+    expect(sticky.dataset.navigationOutline).toBe('guides')
     expect(sticky.hasAttribute('aria-selected')).toBe(false)
     expect(sticky.querySelector('[data-testid="source-editor"]')).toBeNull()
     expect(container.querySelectorAll('.ws-outline-guide')).toHaveLength(2)
@@ -152,6 +156,7 @@ describe('production navigation row header', () => {
           <ProductionNavigationRowHeader
             model={model}
             decoration={{ continues: [] }}
+            navigationOutline="guides"
             representation="source"
             onToggle={() => {}}
             onDrill={() => {}}
@@ -159,6 +164,7 @@ describe('production navigation row header', () => {
           <ProductionNavigationRowHeader
             model={model}
             decoration={{ continues: [] }}
+            navigationOutline="guides"
             representation="sticky"
             onToggle={() => {}}
             onScrollToSource={() => {}}

@@ -107,15 +107,15 @@ export const RowGestureMenu: Component<{ host?: GestureRef; target: GestureRef }
             right: '0',
             top: '18px',
             'z-index': 20,
-            background: 'var(--card-focused-bg, #1b1e27)',
-            border: '1px solid hsl(230, 15%, 22%)',
-            'border-radius': '4px',
+            background: 'var(--color-overlay)',
+            border: 'var(--border-strong)',
+            'border-radius': 'var(--radius-control)',
             padding: '4px',
             display: 'flex',
             'flex-direction': 'column',
             gap: '2px',
             'min-width': '160px',
-            'box-shadow': '0 4px 12px rgba(0,0,0,0.3)',
+            'box-shadow': 'var(--elevation-overlay)',
           }}
         >
           {/* Position-anchored gestures need a destination host. A root-level

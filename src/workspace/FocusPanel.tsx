@@ -40,6 +40,7 @@ import {
 } from '../editor/inlineref-sync'
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
+import type { NavigationOutlineVariant } from '../design/tokens'
 
 import SubstrateRegion from './SubstrateRegion'
 import {
@@ -69,6 +70,7 @@ type FocusPanelProps = {
   matrixId: number
   rowId: number
   rowKey: Uint8Array
+  navigationOutline?: NavigationOutlineVariant
   // Phase 9.7 Stage C3: this panel was opened by drilling into a folded block
   // row's real position, not a plain boundary hop — shows a small notice so
   // the jump to a (possibly structurally unrelated) real position is legible.
@@ -545,7 +547,7 @@ const FocusPanel = (props: FocusPanelProps) => {
         height: '100%',
         overflow: 'hidden',
         'min-width': '360px',
-        'background-color': 'var(--card-focused-bg)',
+        'background-color': 'var(--color-surface)',
       }}
     >
       <div
@@ -839,6 +841,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                     >
                       <NavigationPanel
                         matrixId={props.matrixId}
+                        navigationOutline={props.navigationOutline}
                         rootKey={props.rowKey}
                         onOpenFocus={props.onAppendFocus}
                         onOpenFoldedFocus={props.onOpenFoldedFocus}

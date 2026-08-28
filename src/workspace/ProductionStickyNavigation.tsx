@@ -3,6 +3,7 @@ import { render } from 'solid-js/web'
 
 import { extractTextFromPmDoc } from '../core/pm-text'
 import type { NavigationOutlineDecoration } from '../design/workspace/navigation-outline'
+import type { NavigationOutlineVariant } from '../design/tokens'
 import type { VirtualizerGeometryState } from '../virtualizer/ScrollVirtualizer'
 
 import {
@@ -26,6 +27,7 @@ type ProductionStickyNavigationProps = {
   context: ProductionStickyContext
   geometry: VirtualizerGeometryState | undefined
   depthOffset: number
+  navigationOutline: NavigationOutlineVariant
   title?: JSX.Element
   decorationFor: (row: ProductionStickyRow) => NavigationOutlineDecoration
   onToggle: (row: ProductionStickyRow) => void
@@ -98,6 +100,7 @@ const ProductionStickyNavigation = (props: ProductionStickyNavigationProps): JSX
                 <ProductionNavigationRowHeader
                   model={model}
                   decoration={props.decorationFor(node.row)}
+                  navigationOutline={props.navigationOutline}
                   representation="sticky"
                   onToggle={() => props.onToggle(node.row)}
                   onScrollToSource={() =>

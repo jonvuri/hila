@@ -23,6 +23,7 @@ import {
   calculateNavigationOutlineDecorations,
   createNavigationOutlineWindow,
 } from '../design/workspace/navigation-outline'
+import { resolveComponentVariant, type NavigationOutlineVariant } from '../design/tokens'
 import ScrollVirtualizer from '../virtualizer/ScrollVirtualizer'
 import type {
   ScrollVirtualizerHandle,
@@ -96,6 +97,7 @@ const EMPTY_CONTENT_JSON = JSON.stringify({
 type NavigationPanelProps = {
   matrixId: number
   rootKey?: Uint8Array
+  navigationOutline?: NavigationOutlineVariant
   // Boundary-hop aware (Phase 9.5): carries the row's matrix so a meshed cross-matrix
   // aspect row can drill into a focus panel keyed by `(matrix_id, row_id)`.
   onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
@@ -593,6 +595,9 @@ const OutlineCellStrip = (props: {
 // ---------------------------------------------------------------------------
 
 const NavigationPanel = (props: NavigationPanelProps) => {
+  const navigationOutline = createMemo(() =>
+    resolveComponentVariant('navigationOutline', props.navigationOutline),
+  )
   // Panel data root: rank key of the subtree this panel renders. Fixed for the
   // component's lifetime -- the root panel has no root (null); embedded panels
   // are locked to their focus panel's row. Intra-panel zoom was removed; all
@@ -725,7 +730,10 @@ const NavigationPanel = (props: NavigationPanelProps) => {
         expanded: row.expanded,
       })),
     )
-    const decorations = calculateNavigationOutlineDecorations('guides', outlineWindow)
+    const decorations = calculateNavigationOutlineDecorations(
+      navigationOutline(),
+      outlineWindow,
+    )
     return new Map(
       metadataRows.map((row, index) => [row.identity.pk, decorations[index]!] as const),
     )
@@ -1458,6 +1466,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     <ProductionNavigationRowHeader
                       model={headerModel()}
                       decoration={decorationByPk().get(row.pk) ?? { continues: [] }}
+                      navigationOutline={navigationOutline()}
                       representation="source"
                       onToggle={toggleCollapseByHex}
                       onDisclosureRef={(element) => {
@@ -1667,6 +1676,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   return (
     <div
       class="navigation-panel"
+      data-navigation-outline={navigationOutline()}
       data-testid="navigation-panel"
       style={{ display: 'flex', 'flex-direction': 'column', height: '100%', 'min-height': 0 }}
     >
@@ -1690,6 +1700,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           context={pageData.stickyContext()}
           geometry={virtualizerGeometry()}
           depthOffset={focusDepthOffset()}
+          navigationOutline={navigationOutline()}
           title={
             isRootPanel ?
               <div class="workspace-title-header" data-testid="workspace-title">

@@ -3,19 +3,13 @@
 }
 
 /* ====================================================================
-   App-wide tokens
+   App-wide legacy roles
 
-   The overlaid-cards design system (its --card-* tokens and .card* classes)
-   lives in src/design/overlaid-cards/OverlaidCards.css, imported by the
-   OverlaidCards component so it is available both in the app and Storybook.
+   Migrate these roles to the canonical design tokens with each planned
+   production surface pass.
    ==================================================================== */
 
 :root {
-  /* -- Void: the app's base background. Also defined (with the rest of the
-     --card-* system) in OverlaidCards.css; kept here too so the body/#root
-     background resolves before the lazy-loaded stream view chunk arrives. -- */
-  --card-void: hsl(230, 20%, 7%);
-
   /* -- Text palette (dark mode) -- */
   --text-primary: #d8d8e4;
   --text-dim: #8888a0;
@@ -34,8 +28,8 @@ body,
   overflow: hidden;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-  background: var(--card-void);
-  color: var(--text-primary);
+  background: var(--color-canvas);
+  color: var(--color-text);
 }
 
 /* ---- App shell ---- */
@@ -1798,7 +1792,7 @@ body,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  width: var(--card-focus-col-width);
+  width: 320px;
   margin: -16px 0 0 -24px;
   padding: 16px 10px 10px 24px;
   border: none;
@@ -1810,7 +1804,7 @@ body,
 }
 
 .focus-panel-label-collapse:hover {
-  background: hsl(230, 18%, 17%);
+  background: var(--color-state-hover);
 }
 
 .focus-panel-collapse-chevron {

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { createSignal, For, type JSX } from 'solid-js'
 import { render } from 'solid-js/web'
 
+import type { ComponentVariantConfig, VisualTheme } from '../design/tokens'
+
 const mocks = vi.hoisted(() => ({
   execQuery: vi.fn(),
   resolveDrillInPosition: vi.fn(),
@@ -59,13 +61,14 @@ vi.mock('../design/overlaid-cards/OverlaidCards', () => ({
 }))
 
 type MockNavigationPanelProps = {
+  navigationOutline?: string
   onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
   onOpenFoldedFocus: (matrixId: number, rowId: number) => void
 }
 
 vi.mock('./NavigationPanel', () => ({
   default: (props: MockNavigationPanelProps) => (
-    <div>
+    <div data-navigation-outline={props.navigationOutline}>
       <button onClick={() => props.onOpenFocus(10, 101, Uint8Array.of(1))}>Append focus</button>
       <button onClick={() => props.onOpenFoldedFocus(10, 102)}>Open folded focus</button>
     </div>
@@ -192,6 +195,36 @@ describe('StreamView controller contract', () => {
 
     click(container, 'Close focus')
     expect(panelIdentity(container)).toEqual(['navigation'])
+  })
+
+  test('resolves navigation outline configuration independently of theme and polarity', () => {
+    let setComponentConfig!: (config: ComponentVariantConfig) => void
+    let setTheme!: (theme: VisualTheme) => void
+    let setPolarity!: (polarity: 'dark' | 'light') => void
+
+    dispose = render(() => {
+      const [componentConfig, updateComponentConfig] = createSignal<ComponentVariantConfig>({})
+      const [theme, updateTheme] = createSignal<VisualTheme>('ghost')
+      const [polarity, updatePolarity] = createSignal<'dark' | 'light'>('dark')
+      setComponentConfig = updateComponentConfig
+      setTheme = updateTheme
+      setPolarity = updatePolarity
+      return (
+        <div data-theme={polarity()} data-visual-theme={theme()}>
+          <StreamView matrixId={10} componentConfig={componentConfig()} />
+        </div>
+      )
+    }, container)
+
+    const outline = () =>
+      container.querySelector<HTMLElement>('[data-navigation-outline]')?.dataset
+        .navigationOutline
+
+    expect(outline()).toBe('guides')
+    setComponentConfig({ navigationOutline: 'guides' })
+    setTheme('wipeout')
+    setPolarity('light')
+    expect(outline()).toBe('guides')
   })
 
   test('evicts the oldest panel when append exceeds four visible columns', () => {

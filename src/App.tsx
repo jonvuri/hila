@@ -13,6 +13,7 @@ import type { FaceConfig } from './core/face-types'
 import { registerFaceComponent } from './core/FaceRenderer'
 import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
+import { resolveComponentVariant, type ComponentVariantConfig } from './design/tokens'
 import { useQuery } from './sql/useQuery'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
@@ -35,6 +36,7 @@ const App: Component = () => {
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
   const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
+  const [workspaceFaceConfig, setWorkspaceFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
   const [workspaceNavigateToRowId, setWorkspaceNavigateToRowId] = createSignal<number | null>(
     null,
@@ -60,12 +62,19 @@ const App: Component = () => {
   const workspaceTabLabel = createMemo(
     () => (wsTitleResult()?.[0] as { title: string } | undefined)?.title || 'Workspace',
   )
+  const workspaceComponentConfig = createMemo<ComponentVariantConfig>(() => ({
+    navigationOutline: resolveComponentVariant(
+      'navigationOutline',
+      workspaceFaceConfig()?.settings.navigationOutline,
+    ),
+  }))
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
   const initPlugins = async () => {
     setWorkspaceMatrixId(null)
     setTableFaceConfig(null)
+    setWorkspaceFaceConfig(null)
 
     await registerTableFaceType()
     const TableFaceComponent = (await import('./table/TableFace')).default
@@ -79,7 +88,9 @@ const App: Component = () => {
     setWorkspaceMatrixId(wsId)
 
     const configs = await getFaceConfigs(wsId)
+    const workspaceConfig = configs.find((c) => c.faceTypeId === 'hila.workspace')
     const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
+    if (workspaceConfig) setWorkspaceFaceConfig(workspaceConfig)
     if (tableConfig) setTableFaceConfig(tableConfig)
   }
 
@@ -186,6 +197,9 @@ const App: Component = () => {
                     if (config.faceTypeId === 'hila.table') {
                       setTableFaceConfig(config)
                       setActiveView('table')
+                    } else if (config.faceTypeId === 'hila.workspace') {
+                      setWorkspaceFaceConfig(config)
+                      setActiveView('workspace')
                     }
                   }}
                   onCancel={() => setFaceConfigTarget(null)}
@@ -203,6 +217,7 @@ const App: Component = () => {
                     fallback={
                       <StreamView
                         matrixId={wsId()}
+                        componentConfig={workspaceComponentConfig()}
                         navigateToRowId={workspaceNavigateToRowId()}
                         onNavigated={() => setWorkspaceNavigateToRowId(null)}
                       />

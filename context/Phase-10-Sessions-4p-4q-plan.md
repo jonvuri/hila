@@ -113,17 +113,33 @@ Stage 2 evidence:
 
 ### Stage 3 — Promote navigation behavior and configuration
 
-- [ ] Preserve the approved production sticky widget from Session 4o while the surrounding shell
+- [x] Preserve the approved production sticky widget from Session 4o while the surrounding shell
       changes. Keep its scrollport, paging, geometry, row-rendering, and performance contracts.
-- [ ] Apply the approved navigation-outline adapter through the independent
+- [x] Apply the approved navigation-outline adapter through the independent
       `navigationOutline` configuration key.
-- [ ] Read the outline value through the Session 4j component-configuration contract. Use the
+- [x] Read the outline value through the Session 4j component-configuration contract. Use the
       approved default when no explicit value exists, and keep an explicit value stable across
       visual-theme and polarity changes.
-- [ ] Preserve the boundary context supplied by Session 4o. Do not expand the rendered virtual
+- [x] Preserve the boundary context supplied by Session 4o. Do not expand the rendered virtual
       window.
-- [ ] Preserve the Session 4n transition invariants at real virtual-window and ancestry boundaries.
-- [ ] Replace live `--card-*` consumers with canonical surface, width, and state roles.
+- [x] Preserve the Session 4n transition invariants at real virtual-window and ancestry boundaries.
+- [x] Replace live `--card-*` consumers with canonical surface, width, and state roles.
+
+Stage 3 evidence:
+
+- The app reads `navigationOutline` from the persisted workspace face settings. `StreamView`
+  resolves it through the component-variant registry and supplies one value to root and nested
+  navigation.
+- Source and sticky rows calculate and paint through the same resolved adapter. The navigation
+  host exposes `data-navigation-outline` for live inspection. Visual-theme and polarity changes do
+  not modify the component value.
+- No paging, metadata, virtualizer, scrollport, geometry, or transition calculation changed. The
+  focused outline, virtual-window, sticky, virtualizer, and controller suites have 41 passing
+  tests.
+- Production modules outside the retired renderer no longer consume `--card-*`. The app canvas,
+  focus surface, hover state, and gesture overlay use canonical roles.
+- Formatting, lint with 14 existing warnings, static types, all 916 tests, and the production build
+  pass. The build keeps its existing chunk-size warnings.
 
 ### Stage 4 — Cut over `StreamView`
 

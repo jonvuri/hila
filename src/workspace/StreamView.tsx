@@ -1,15 +1,21 @@
 import { createMemo, Suspense } from 'solid-js'
 
 import OverlaidCards from '../design/overlaid-cards/OverlaidCards'
+import { resolveComponentVariant, type ComponentVariantConfig } from '../design/tokens'
 
 import FocusPanel from './FocusPanel'
 import NavigationPanel from './NavigationPanel'
 import { createStreamController, type StreamControllerInput } from './stream-controller'
 
-type StreamViewProps = StreamControllerInput
+type StreamViewProps = StreamControllerInput & {
+  componentConfig?: ComponentVariantConfig
+}
 
 const StreamView = (props: StreamViewProps) => {
   const controller = createStreamController(props)
+  const navigationOutline = createMemo(() =>
+    resolveComponentVariant('navigationOutline', props.componentConfig?.navigationOutline),
+  )
   const overlaidGaps = createMemo(() =>
     controller.ancestry().map((chain) =>
       chain.map((ancestor) => ({
@@ -26,6 +32,7 @@ const StreamView = (props: StreamViewProps) => {
       return (
         <NavigationPanel
           matrixId={props.matrixId}
+          navigationOutline={navigationOutline()}
           rootKey={panel.rootKey}
           onOpenFocus={(matrixId, rowId, key) =>
             controller.appendFocus(index, matrixId, rowId, new Uint8Array(key))
@@ -41,6 +48,7 @@ const StreamView = (props: StreamViewProps) => {
     return (
       <FocusPanel
         matrixId={panel.matrixId}
+        navigationOutline={navigationOutline()}
         rowId={panel.rowId}
         rowKey={panel.rowKey}
         foldedOrigin={panel.foldedOrigin}
