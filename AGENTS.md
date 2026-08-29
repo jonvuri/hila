@@ -1,9 +1,8 @@
 # Repository instructions
 
-Use ASD-STE100 Simplified Technical English for prose in documentation and code
-comments. Keep sentences concise, direct, and easy to read. When you already
-change a document or comment, correct unclear prose in the part that you touch.
-Do not start an unrelated rewrite.
+Keep sentences concise, direct, and easy to read. When you already
+change a document or comment, correct unclear or overly verbose prose
+in the part that you touch. Do not start an unrelated rewrite.
 
 ## Context and planning
 
