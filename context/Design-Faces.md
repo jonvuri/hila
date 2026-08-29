@@ -180,7 +180,8 @@ and matrix browser. The migration order is:
 3. Rebuild sticky navigation as an integrated, VS Code-inspired widget in Session 4n.
 4. Adapt the widget to paged production data and the production virtualizer in Session 4o.
 5. Migrate the live shell and stream without behavior changes.
-6. Remove the executable overlaid-card implementation after the live cutover passes review.
+6. Session 4q removed the executable overlaid-card implementation after the live cutover passed
+   review.
 7. Migrate the launcher and shared overlays before top-level tabs are removed.
 8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 

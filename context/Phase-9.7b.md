@@ -93,7 +93,7 @@ While setting up a live scroll test for §4, a 762-row outline showed **all 8 wi
 simultaneously, immediately on load, at every scroll position** — the `GHOST`/`VISIBLE` unmount
 logic never engaged. Root cause: [`ScrollVirtualizer`](../src/virtualizer/ScrollVirtualizer.tsx)
 used its own `.scrollContainer` div (`containerRef`) as the `IntersectionObserver` root. But
-every panel is wrapped by [`OverlaidCards`](../src/design/overlaid-cards/OverlaidCards.tsx) in a
+every panel was wrapped by the historical `OverlaidCards` renderer in a
 `.card-inner` div (`overflow-y: auto`) — the _actual_ scrolling element sits two DOM levels
 above `containerRef`. `.scrollContainer` itself never establishes real overflow (it just grows
 to fit its content under a broken flex-height chain), so as an `IntersectionObserver` root it

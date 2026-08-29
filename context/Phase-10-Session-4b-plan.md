@@ -24,13 +24,13 @@ with **theming-direction decisions** that unblock the rest of [Phase 10 §4](Pha
 The HTML prototypes remain useful visual evidence, but all are **retired and archived**. They are not
 sources of current layout truth and must not be incrementally promoted into production code.
 
-| Artifact | Archived value |
-|---|---|
-| [Phase-10-Session-4-themes.html](Phase-10-Session-4-themes.html) | Retired comparison index for the original three-way fan-out |
-| [Phase-10-Session-4-theme-wipeout.html](Phase-10-Session-4-theme-wipeout.html) | Retired Wipeout catalog; may supply isolated chrome references only |
-| [Phase-10-Session-4-theme-null.html](Phase-10-Session-4-theme-null.html) | Retired Null catalog; intent survives, implementation does not |
-| [Phase-10-Session-4-theme-ultramodern.html](Phase-10-Session-4-theme-ultramodern.html) | Retired Ultramodern direction |
-| [Phase-10-Session-4-wipeout-overlaid-cards.html](Phase-10-Session-4-wipeout-overlaid-cards.html) | Retired deep dive into six overlaid-card concepts |
+| Artifact                                                                                         | Archived value                                                      |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| [Phase-10-Session-4-themes.html](Phase-10-Session-4-themes.html)                                 | Retired comparison index for the original three-way fan-out         |
+| [Phase-10-Session-4-theme-wipeout.html](Phase-10-Session-4-theme-wipeout.html)                   | Retired Wipeout catalog; may supply isolated chrome references only |
+| [Phase-10-Session-4-theme-null.html](Phase-10-Session-4-theme-null.html)                         | Retired Null catalog; intent survives, implementation does not      |
+| [Phase-10-Session-4-theme-ultramodern.html](Phase-10-Session-4-theme-ultramodern.html)           | Retired Ultramodern direction                                       |
+| [Phase-10-Session-4-wipeout-overlaid-cards.html](Phase-10-Session-4-wipeout-overlaid-cards.html) | Retired deep dive into six overlaid-card concepts                   |
 
 The deep dive's concepts: **OC-A1** (column-locked tab strip, full card edges), **OC-A2** (top-lines
 only), **OC-A3** (disconnected notches), **OC-B** (depth gauge rail), OC-C (edge-on sheets), OC-D
@@ -44,8 +44,8 @@ A2, and B** for Wipeout, plus one variant each for Null and Ultramodern.
 2. **Create `OverlaidCards` variants per theme**, based on the HTML prototypes:
    - **Null** (per §N5b)
    - **Ultramodern** (per §U5b)
-   - **Wipeout · Notches** = OC-A1 + OC-A3 combined — *parameterize every change made during
-     prototyping so this variant is very flexible to configure* (highest-priority variant)
+   - **Wipeout · Notches** = OC-A1 + OC-A3 combined — _parameterize every change made during
+     prototyping so this variant is very flexible to configure_ (highest-priority variant)
    - **Wipeout · Top lines** = OC-A2
    - **Wipeout · Depth gauge** = OC-B
    - All rendered with the **same dense + nested stub data**.
@@ -59,7 +59,7 @@ A2, and B** for Wipeout, plus one variant each for Null and Ultramodern.
   `expanded-staircase` theme (same policy as Phase 7b stage 5).
 - **Do not touch `src/design/tokens.css` yet.** Variants keep their values in variant-local custom
   properties (the existing `--card-*` pattern in `OverlaidCards.css`); token reconciliation is the
-  §4 pass *after* the direction decisions.
+  §4 pass _after_ the direction decisions.
 - Don't commit unless the user asks. Run the standard checks (below) after each meaningful step.
 
 ---
@@ -96,13 +96,13 @@ A2, and B** for Wipeout, plus one variant each for Null and Ultramodern.
 - [x] Stages 2a–2e — five theme/card variants and common comparison stories.
 - [x] Stage 2f — workspace-scale FocusPanel, Sticky Headers, and Depth Gauge stories.
 - [x] Stages 3–4 — direction review closed by the decisions above; focused follow-on sessions
-  planned.
+      planned.
 
 ---
 
 ## Stage 1 — Dense-outline gestalt story — complete
 
-- Replace/augment `StubPanelBody` in [OverlaidCards.stories.tsx](../src/design/overlaid-cards/OverlaidCards.stories.tsx)
+- Replace/augment `StubPanelBody` in historical `OverlaidCards.stories.tsx`
   with the real presentational `Outline` ([src/design/outline/Outline.tsx](../src/design/outline/Outline.tsx))
   fed via `renderPanel` — the contracts already compose: `OverlaidCardsProps.renderPanel(panel, i)`
   can return `<Outline items={...} theme={...} />`.
@@ -122,7 +122,7 @@ A2, and B** for Wipeout, plus one variant each for Null and Ultramodern.
 
 Extend the existing **swappable-renderer pattern**: `OverlaidCards` is already a thin `<Switch>` over
 renderers sharing layout helpers (`positionTabs`, `PanelColumns`, extent/color helpers — see
-[OverlaidCards.tsx](../src/design/overlaid-cards/OverlaidCards.tsx)). Add the new renderers alongside
+historical `OverlaidCards.tsx`). Add the new renderers alongside
 `ExpandedStaircase` / `CollapsedBreadcrumb`.
 
 **Type shape (suggestion, adjust in-session):** extend `OverlaidCardsTheme` with
@@ -142,9 +142,9 @@ The instrument-strip layout with card chrome dialable from full edges down to ba
 rules from the prototypes (see §W5b + deep-dive OC-A1/OC-A3 for rendered reference):
 
 - **Tab layer, column-locked**: per-column tab groups flush with their column's left edge; within a
-  group, tab baselines staircase down toward focus. Tab species: *title* (inverted fill, one chamfered
-  corner), *ancestor* (1px outline, mono uppercase, clickable), *panel* (outline, carries the
-  non-active panel's title — 7b Resolution B), *marker* (small solid accent block, no text = the
+  group, tab baselines staircase down toward focus. Tab species: _title_ (inverted fill, one chamfered
+  corner), _ancestor_ (1px outline, mono uppercase, clickable), _panel_ (outline, carries the
+  non-active panel's title — 7b Resolution B), _marker_ (small solid accent block, no text = the
   active panel; non-interactive).
 - **Card chrome** (the A1↔A3 dial): vertical ancestor edges + panel edge/top-rule (A1 full lines) ⇄
   disconnected ticks (A3). A3 semantic rules, locked during prototyping:
@@ -209,7 +209,7 @@ rules from the prototypes (see §W5b + deep-dive OC-A1/OC-A3 for rendered refere
 
 - Cards = **glass panes at altitudes**: `backdrop-filter` blur + translucent fill + edge highlight;
   ancestors peek from behind as slivers (10px steps), dimmer/lower by depth; panes overlap ~10px and
-  the overlap shows *through* the glass; active pane = brighter edge + accent glow.
+  the overlap shows _through_ the glass; active pane = brighter edge + accent glow.
 - Tab layer = **column-locked pill groups** (glass pills; panel pill = raised glass; active = gradient
   pill). Needs an ambient wash background in the story frame or the glass reads as nothing — give the
   story a wash-decorated container.
@@ -232,29 +232,29 @@ full-screen, whole-workspace mockups (Wipeout only), distinct from the OverlaidC
 re-skins. Composed from two child components over a workspace-shaped fixture
 (`workspacePanels` in `fixtures.tsx` — extended trees + per-panel focus meta + drill-row ids):
 
-- **`WorkspaceFocusPanel`** ([variants/WorkspaceFocusPanel.tsx](../src/design/overlaid-cards/variants/WorkspaceFocusPanel.tsx)) —
+- **`WorkspaceFocusPanel`** (historical `variants/WorkspaceFocusPanel.tsx`) —
   Wipeout mockup of the wired `FocusPanel`: title header (accent flag when active), content
   prose, Properties strip, Backlinks toggle. Sits above the children navigation panel in every
   drill-down column, mirroring the live app's column composition. Has its own story.
-- **`StickyNav`** ([variants/StickyNav.tsx](../src/design/overlaid-cards/variants/StickyNav.tsx)) —
+- **`StickyNav`** (historical `variants/StickyNav.tsx`) —
   the **sticky-headers-as-breadcrumbs** concept (new, not an OverlaidCards re-skin): no tab
   layer; the sticky header stacks ARE the breadcrumb. **Every sticky header is unique in the
   whole view** (within nav panels; focus-panel titles don't count): drill columns render no
   gap-ancestor rows — those rows are already visible in a column to the left — and the
   continuous ancestry reads through accents instead.
-  - *Pinned title row* — the workspace title (nav column only), permanently stuck.
-  - *Stuck ancestor rows* — VS Code sticky-header semantics: a container sticks below the stack
+  - _Pinned title row_ — the workspace title (nav column only), permanently stuck.
+  - _Stuck ancestor rows_ — VS Code sticky-header semantics: a container sticks below the stack
     while the viewport is inside its subtree, replaced when it scrolls past. No other special
     behavior.
-  - *Focus-drill row* — the row drilled into for the next column. Persistent accent (2px left
+  - _Focus-drill row_ — the row drilled into for the next column. Persistent accent (2px left
     bar + throughline off the column's right edge into the next panel) and always visible: pins
     under the top stack when scrolled past, docks to the panel's bottom edge when below the fold.
-  - *Drill-path ancestors* — every ancestor of a drill row carries a lighter left-edge accent
+  - _Drill-path ancestors_ — every ancestor of a drill row carries a lighter left-edge accent
     (dimmed 2px bar) wherever it sits, in flow or stuck, so each level of the cross-column
     ancestry chain shows some accent.
   - Implementation: fixed 28px row rhythm + an overlay stack recomputed from scroll offset
     (VS Code's own approach; the stuck set is arithmetic on the flat row list, anchored on the
-    first line below the *permanent* stack — anchoring on the transient chain oscillates at
+    first line below the _permanent_ stack — anchoring on the transient chain oscillates at
     subtree boundaries).
 
 Stories in the group: **FocusPanel** (component in isolation over its children outline),
@@ -283,10 +283,11 @@ files are touched (they shouldn't be).
 ## Reference files
 
 **Code (read before writing any):**
-- [src/design/overlaid-cards/OverlaidCards.tsx](../src/design/overlaid-cards/OverlaidCards.tsx) — renderer `<Switch>`, `positionTabs`, `PanelColumns`, layout/color helpers
-- [src/design/overlaid-cards/types.ts](../src/design/overlaid-cards/types.ts) — `OverlaidCardsProps<P>` / `OverlaidAncestor` / `OverlaidCardsTheme`
-- [src/design/overlaid-cards/OverlaidCards.css](../src/design/overlaid-cards/OverlaidCards.css) — the `--card-*` custom-property set (variant-local token pattern to follow)
-- [src/design/overlaid-cards/OverlaidCards.stories.tsx](../src/design/overlaid-cards/OverlaidCards.stories.tsx) — fixtures + `StubPanelBody` to replace
+
+- Historical `src/design/overlaid-cards/OverlaidCards.tsx` — renderer `<Switch>`, `positionTabs`, `PanelColumns`, layout/color helpers
+- Historical `src/design/overlaid-cards/types.ts` — `OverlaidCardsProps<P>` / `OverlaidAncestor` / `OverlaidCardsTheme`
+- Historical `src/design/overlaid-cards/OverlaidCards.css` — the `--card-*` custom-property set (variant-local token pattern to follow)
+- Historical `src/design/overlaid-cards/OverlaidCards.stories.tsx` — fixtures + `StubPanelBody` to replace
 - [src/design/outline/Outline.tsx](../src/design/outline/Outline.tsx) + [types.ts](../src/design/outline/types.ts) + [Outline.stories.tsx](../src/design/outline/Outline.stories.tsx) — the presentational outline (`OutlineNode` tree wrapper) and its stub-data style
 - [src/design/tokens.css](../src/design/tokens.css) — canonical tokens (do not modify this session)
 

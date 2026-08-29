@@ -189,7 +189,8 @@ These are defects. They are not part of Ghost, Null, or Wipeout character.
 3. Adapt the approved widget to paged production data and the production virtualizer.
 4. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
    navigation-outline configuration.
-5. Remove the executable overlaid-card implementation and its legacy styles after live review.
+5. Session 4q removed the executable overlaid-card implementation and its legacy styles after live
+   review.
 6. Migrate the launcher and shared overlays.
 7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an

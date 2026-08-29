@@ -89,10 +89,10 @@ canonical token contract, then closed the sticky-motion and outline-treatment ga
 boundary rubber-band in the navigation view, and passed user review.
 [Session 4o](Phase-10-Session-4o-plan.md) adapted the widget to paged production data and the
 virtualizer, passed live and trackpad review, and received user approval.
-[Session 4p](Phase-10-Sessions-4p-4q-plan.md) has migrated the live workspace and passed its
-automated, focused E2E, live-theme, narrow-width, cross-matrix, reduced-motion, and performance
-checks. It awaits user approval. Session 4q will remove the executable overlaid-card implementation
-only after that approval.
+[Session 4p](Phase-10-Sessions-4p-4q-plan.md) migrated the live workspace, passed its automated and
+live checks, and received user approval. Session 4q removed the executable overlaid-card
+implementation, moved the surviving fixture data into the approved workspace, and passed final
+verification. The next session plans the launcher and shared-overlay migration.
 
 - [x] **Reconcile the visual language:** Ghost owns structure and minimum semantic affordances. Null
       and Wipeout own only value overrides and optional decoration. The overlaid-card depth language
@@ -121,10 +121,11 @@ only after that approval.
 
 - [x] **Session 4o:** adapt integrated sticky navigation to paged production data and the
       production virtualizer without widening the rendered range.
-- [ ] **Session 4p:** migrate the approved workspace into the live shell without changing workspace
-      data or gestures. The cutover and verification are complete. User approval remains open.
-- [ ] **Session 4q:** remove the executable overlaid-card renderer, variants, styles, stories, and
-      fixture coupling after the cutover passes review.
+- [x] **Session 4p:** migrate the approved workspace into the live shell without changing workspace
+      data or gestures. The cutover passed verification and user review.
+- [x] **Session 4q:** remove the executable overlaid-card renderer, variants, styles, stories, and
+      fixture coupling after the cutover passes review. The removal passed automated and live
+      verification.
 
 **Incoming deferral — substrate / x-ray fidelity (from [Phase 9.2](Phase-9.2.md#composed-vs-substrate-fidelity-and-x-ray), re-confirmed by [§9.5](Phase-9.md)).** The **composed vs. substrate** fidelity axis (and its global **x-ray** toggle) is a rendering-convention that spans _every_ surface at every granularity — the same scope this token/theming pass unifies. It was deliberately deferred from 9.2/9.5 (which only lean on substrate as a _concept_: §9.5's boundary-hop far side reuses the role-adaptive `FocusPanel`, not a built substrate face). **Point of no return:** the elevation/surface/fade token model decided here is what a substrate face would render against; building substrate before this pass would mint tokens this phase then has to reconcile. So settle the fidelity axis as part of the token model (how composed vs. substrate read; whether x-ray is a theme or an orthogonal overlay) and add it to the migration checklist. The **identity face** ([Architecture.md](Architecture.md#identity-face)) is its conformance test — "does every surface x-ray cleanly?"
 

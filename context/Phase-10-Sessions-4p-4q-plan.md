@@ -173,7 +173,7 @@ Stage 4 evidence:
 - [x] Check Ghost, Null, and Wipeout in both polarities. Check keyboard focus and reduced motion.
 - [x] Record a scroll trace with live virtualized data. Confirm that sticky updates do not cause
       repeated forced layout or long tasks.
-- [ ] Get user approval before starting Session 4q.
+- [x] Get user approval before starting Session 4q.
 
 Stage 5 evidence:
 
@@ -233,52 +233,98 @@ history.
 
 ### Stage 1 — Prove the deletion boundary
 
-- [ ] Confirm that Session 4p is approved and its closeout gate is complete.
-- [ ] Search tracked source, Storybook configuration, tests, and build inputs for
+- [x] Confirm that Session 4p is approved and its closeout gate is complete.
+- [x] Search tracked source, Storybook configuration, tests, and build inputs for
       `overlaid-cards`, `OverlaidCards`, `OverlaidAncestor`, `--card-*`, and retired renderer names.
-- [ ] Classify every result as forward dependency, executable archive, stale style/comment, or
+- [x] Classify every result as forward dependency, executable archive, stale style/comment, or
       historical documentation.
-- [ ] Stop if any live consumer remains. Move that dependency through the canonical workspace
+- [x] Stop if any live consumer remains. Move that dependency through the canonical workspace
       contract before deleting source.
+
+Stage 1 evidence:
+
+- The Session 4p closeout is complete and has user approval.
+- The only forward dependency was `src/design/workspace/fixtures.ts`. It imported two neutral
+  fixture values from the retired fixture module.
+- All other executable results were inside `src/design/overlaid-cards/`. No runtime, test,
+  Storybook configuration, or build consumer existed outside that directory.
+- Phase 7 and Phase 10 results are historical documentation. Archived HTML files remain evidence.
 
 ### Stage 2 — Own the surviving fixture data
 
-- [ ] Move the neutral Reading queue fixture data used by the forward workspace into
+- [x] Move the neutral Reading queue fixture data used by the forward workspace into
       `src/design/workspace/fixtures.ts` or a local sibling.
-- [ ] Remove all imports from forward stories or tests into `src/design/overlaid-cards`.
-- [ ] Keep only fixture content that supports current workspace, theme, sticky, and outline tests.
+- [x] Remove all imports from forward stories or tests into `src/design/overlaid-cards`.
+- [x] Keep only fixture content that supports current workspace, theme, sticky, and outline tests.
       Do not preserve retired layout options in the new fixture.
+
+Stage 2 evidence:
+
+- `src/design/workspace/reading-queue-fixture.ts` now owns the neutral title, tree, focus content,
+  properties, and backlinks used by the current workspace stories.
+- The new fixture does not contain gap cards, card themes, renderer options, or retired story
+  scenarios. The 13 focused workspace, sticky, and outline tests pass.
 
 ### Stage 3 — Delete executable retirement artifacts
 
-- [ ] Remove the complete `src/design/overlaid-cards/` directory, including the renderer, types,
+- [x] Remove the complete `src/design/overlaid-cards/` directory, including the renderer, types,
       CSS, variants, fixtures, and Storybook stories.
-- [ ] Remove obsolete `.card-*` rules, `--card-*` variables, fallbacks, imports, and comments from
+- [x] Remove obsolete `.card-*` rules, `--card-*` variables, fallbacks, imports, and comments from
       live source and `global.css`.
-- [ ] Rename any surviving generic helpers whose names still claim overlaid-card ownership.
-- [ ] Remove obsolete tests, test IDs, story parameters, and archive navigation entries that can
+- [x] Rename any surviving generic helpers whose names still claim overlaid-card ownership.
+- [x] Remove obsolete tests, test IDs, story parameters, and archive navigation entries that can
       execute the retired renderer.
+
+Stage 3 evidence:
+
+- All 20 files in the retired directory are deleted. The deletion includes two Storybook groups,
+  the renderer, shared types, fixtures, CSS, and all variants.
+- Runtime, tests, stories, styles, and Storybook inputs have zero retired-name, `--card-*`, or
+  `.card-*` references. No helper or test ID still claims retired ownership.
 
 ### Stage 4 — Preserve history without dead code
 
-- [ ] Keep Phase 7 and Phase 10 decision records and archived HTML artifacts. Mark deleted source
+- [x] Keep Phase 7 and Phase 10 decision records and archived HTML artifacts. Mark deleted source
       paths as historical text instead of active file links where needed.
-- [ ] Update the inventory and design documents to state that the executable implementation was
+- [x] Update the inventory and design documents to state that the executable implementation was
       removed in Session 4q.
-- [ ] Keep the approved workspace stories as the only executable layout reference.
-- [ ] Update `NOW.md` and the Phase 10 checklist with the removal result and next migration session.
+- [x] Keep the approved workspace stories as the only executable layout reference.
+- [x] Update `NOW.md` and the Phase 10 checklist with the removal result and next migration session.
+
+Stage 4 evidence:
+
+- Phase 7, Phase 10, and the archived HTML files retain the design history. References to deleted
+  source are historical text, not current file links.
+- The inventory and design documents record the Session 4q removal. `Design/Workspace` is the only
+  executable Storybook layout reference.
 
 ### Stage 5 — Prove full removal
 
-- [ ] Run a zero-reference search for `overlaid-cards`, `OverlaidCards`, `OverlaidAncestor`, and
+- [x] Run a zero-reference search for `overlaid-cards`, `OverlaidCards`, `OverlaidAncestor`, and
       `--card-*` across runtime, tests, stories, and styles. Historical documents can retain the
       terms but must not link to deleted source as current code.
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
-- [ ] Run `pnpm build-storybook` and confirm that no retired story appears in the index.
-- [ ] Run the focused workspace E2E suite with the repository-required system browser permissions.
-- [ ] Use Chrome DevTools for a final live smoke test of root navigation, deep focus, back,
+- [x] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
+- [x] Run `pnpm build-storybook` and confirm that no retired story appears in the index.
+- [x] Run the focused workspace E2E suite with the repository-required system browser permissions.
+- [x] Use Chrome DevTools for a final live smoke test of root navigation, deep focus, back,
       cross-matrix focus, sticky transitions, and theme switching.
-- [ ] Run `git diff --check` and inspect the staged deletion list before handoff.
+- [x] Run `git diff --check` and inspect the deletion list before handoff.
+
+Stage 5 evidence:
+
+- Runtime, tests, stories, styles, Storybook configuration, and build inputs have zero retired-name,
+  `--card-*`, or `.card-*` references. Historical documents do not link to deleted source as
+  current code.
+- Formatting, static types, all 917 unit tests, and the Storybook build pass. Lint passes with the
+  existing 14 warnings and no errors. The Storybook index contains only the six current
+  `Design/Workspace` layout stories.
+- The focused system-Chromium suite has 39 passing tests. It covers the app shell, stream view,
+  focus panel, folded-row drill-in, and production sticky navigation.
+- The final DevTools smoke covers root navigation, forward and reverse sticky transitions,
+  four-column deep focus, cross-matrix focus, and a real `Meta+ArrowLeft` back operation. Ghost,
+  Null, and Wipeout keep the same panel and outline-guide structure in both polarities.
+- `git diff --check` passes. The deletion list contains only the 20 retired executable files. The
+  remaining changes move the neutral fixture and update current documentation.
 
 ## Follow-on order
 

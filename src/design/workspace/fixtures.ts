@@ -1,8 +1,4 @@
-import {
-  workspacePanels as archivedWorkspacePanels,
-  workspaceTitle,
-} from '../overlaid-cards/fixtures'
-
+import { readingQueuePanels, workspaceTitle } from './reading-queue-fixture'
 import type { WorkspaceAncestry, WorkspaceAncestryItem, WorkspacePanel } from './types'
 
 const denseLeaves = (prefix: string, count: number) =>
@@ -31,14 +27,14 @@ const rootToChapter: WorkspaceAncestry = {
   source: 'provenance',
   items: [
     ...rootToBook.items,
-    ancestryItem('ddia', archivedWorkspacePanels[1]!.title),
+    ancestryItem('ddia', readingQueuePanels[1]!.title),
     ancestryItem('part-1', 'Part I — Foundations of Data Systems'),
   ],
 }
 
 const rootToSection: WorkspaceAncestry = {
   source: 'provenance',
-  items: [...rootToChapter.items, ancestryItem('chapter-3', archivedWorkspacePanels[2]!.title)],
+  items: [...rootToChapter.items, ancestryItem('chapter-3', readingQueuePanels[2]!.title)],
 }
 
 const sectionPanel: WorkspacePanel = {
@@ -94,8 +90,8 @@ const comparisonPanel: WorkspacePanel = {
   },
 }
 
-const adaptArchivedPanel = (index: number): WorkspacePanel => {
-  const panel = archivedWorkspacePanels[index]!
+const createReadingQueuePanel = (index: number): WorkspacePanel => {
+  const panel = readingQueuePanels[index]!
   const ancestry =
     index === 1 ? rootToBook
     : index === 2 ? rootToChapter
@@ -119,9 +115,9 @@ const adaptArchivedPanel = (index: number): WorkspacePanel => {
 }
 
 export const rootVisiblePanels: readonly WorkspacePanel[] = [
-  adaptArchivedPanel(0),
-  adaptArchivedPanel(1),
-  adaptArchivedPanel(2),
+  createReadingQueuePanel(0),
+  createReadingQueuePanel(1),
+  createReadingQueuePanel(2),
 ]
 
 export const fourColumnPanels: readonly WorkspacePanel[] = [...rootVisiblePanels, sectionPanel]
@@ -165,7 +161,7 @@ export const crossMatrixPanels: readonly WorkspacePanel[] = [
         ancestryItem('root', workspaceTitle, 1),
         ancestryItem('research', 'Research', 1),
         ancestryItem('reading-queue', 'Reading queue', 1),
-        ancestryItem('ddia', archivedWorkspacePanels[1]!.title, 1),
+        ancestryItem('ddia', readingQueuePanels[1]!.title, 1),
         ancestryItem('task-type', '#task', 7),
       ],
     },
