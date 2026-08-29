@@ -44,23 +44,25 @@ live remote transport.
 
 **Outcome:** one reviewed manifest classifies every current table and column.
 
-- [ ] Enumerate the fresh-database schema from SQLite, including dynamic matrix data tables.
-- [ ] Classify each table as replicated source of truth, derived/rebuildable, or device-local.
-- [ ] Classify every column of each replicated core table.
-- [ ] Confirm that user-authored content, ownership, position truth, promoted types, view SQL, face
+- [x] Enumerate the fresh-database schema from SQLite, including dynamic matrix data tables.
+- [x] Classify each table as replicated source of truth, derived/rebuildable, or device-local.
+- [x] Classify every column of each replicated core table.
+- [x] Confirm that user-authored content, ownership, position truth, promoted types, view SQL, face
       recipes, plugin metadata, and schema metadata have a replicated owner.
-- [ ] Confirm that closure, scroll index, reactive caches, worker state, and session UI state are
+- [x] Confirm that closure, scroll index, reactive caches, worker state, and session UI state are
       either rebuildable or intentionally local.
-- [ ] Record any proposed device-local user preference with its user-visible consequence and review
+- [x] Record any proposed device-local user preference with its user-visible consequence and review
       it before implementation.
-- [ ] Review composite-key identity and delete semantics for `joins`, promoted nodes, block sources,
+- [x] Review composite-key identity and delete semantics for `joins`, promoted nodes, block sources,
       and normalized face tables.
+
+Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md).
 
 ### Stage 1 verification
 
-- [ ] A generated schema report and the policy manifest contain the same table set.
-- [ ] Every fresh-schema column is classified exactly once.
-- [ ] Review the manifest before changing triggers or remote apply.
+- [x] A generated schema report and the policy manifest contain the same table set.
+- [x] Every fresh-schema column is classified exactly once.
+- [x] Review the manifest before changing triggers or remote apply.
 
 ## Stage 2 — Repair change tracking and remote apply
 
@@ -69,20 +71,31 @@ live remote transport.
 - [ ] Track `matrix.owner_matrix_id` and `matrix.owner_row_id`.
 - [ ] Track `promoted_nodes` with logical composite identity and correct delete data.
 - [ ] Promote `block_sources` from its Phase 9.7 local-only exception to replicated source of truth.
-- [ ] Verify every normalized face-config table and current plugin metadata field.
+- [ ] Verify every normalized face-config table and current plugin metadata field. Replace the
+      replica-local filter identity/order with stable logical identity and explicit order.
+- [ ] Keep derived `face_configs.slot_bindings` out of changesets while ensuring remote face-config
+      inserts satisfy the physical schema and normalized slot bindings remain authoritative.
 - [ ] Replace or generate `CORE_TABLE_COLUMNS` from the reviewed policy so schema and tracking
       cannot drift silently.
-- [ ] Make remote apply use logical identities for every composite-key table. Do not rely on
-      replica-local `rowid`.
-- [ ] Rebuild derived closure and scroll-index state after remote structural changes. Do not sync
-      their rows.
+- [ ] Make remote apply and conflict detection use the manifest's logical identity for every
+      replicated table, including stable text and composite keys. Do not rely on replica-local
+      `rowid`.
+- [ ] Reconstruct and evolve dynamic matrix data tables from replicated matrix and column metadata
+      before applying their rows. Install complete tracking without emitting local echo changes.
+- [ ] Rebuild derived closure and scroll-index state after remote structural changes, and formula
+      dependencies after remote formula metadata changes. Do not sync derived rows.
 - [ ] Define ordering and dependency handling when a changeset creates a marker, its position, and
       its block source together.
 
 ### Stage 2 verification
 
 - [ ] Focused trigger tests cover insert, update, and delete for every repaired table/column.
-- [ ] Remote apply tests cover logical-key upsert and delete for every composite-key table.
+- [ ] Remote apply and conflict tests cover logical-key upsert and delete for stable text,
+      composite, and integer identities whose values are stable across replicas.
+- [ ] A face config inserts remotely without transmitting the derived `slot_bindings` JSON copy,
+      and its normalized bindings reconstruct the same recipe.
+- [ ] Applying a new matrix to a fresh replica materializes its physical data table before its rows,
+      installs complete tracking, and emits no local echo changes.
 - [ ] A structural apply rebuilds caches without emitting local echo changes.
 - [ ] Formatting, lint, static types, and unit tests pass.
 
