@@ -43,9 +43,7 @@ const openFocusPanelOnRow = async (page: Page, rowIndex: number) => {
   const focusBtn = row.locator('.nav-row-open-focus')
   await row.hover()
   await expect(async () => {
-    const opacity = await focusBtn.evaluate(
-      (el) => window.getComputedStyle(el).opacity,
-    )
+    const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
     expect(Number(opacity)).toBeGreaterThan(0)
   }).toPass({ timeout: 3000 })
   await focusBtn.click()
@@ -54,6 +52,14 @@ const openFocusPanelOnRow = async (page: Page, rowIndex: number) => {
 
 const rowEditorAt = (page: Page, i: number) =>
   page.locator('.outline-row').nth(i).locator('.nav-label-editor .ProseMirror')
+
+const workspaceColumns = (page: Page) => page.getByTestId('workspace-shell-column')
+
+const navigationColumns = (page: Page) =>
+  page.locator('[data-testid="workspace-shell-column"][data-panel-kind="navigation"]')
+
+const focusColumns = (page: Page) =>
+  page.locator('[data-testid="workspace-shell-column"][data-panel-kind="focus"]')
 
 // Build a single linear ancestry chain `names[0] > names[1] > ...` in the root
 // navigation panel. Rows are first created flat (deterministic count), then
@@ -94,7 +100,7 @@ const buildLinearChain = async (page: Page, names: string[]) => {
 // From the deepest (rightmost) focus panel, open a focus on the named child via
 // its right-arrow button -- the same path the live nav rows use.
 const drillIntoChild = async (page: Page, childText: string) => {
-  const children = page.getByTestId('stream-focus-column').last().getByTestId('focus-panel-children')
+  const children = focusColumns(page).last().getByTestId('focus-panel-children')
   await expect(children).toBeVisible({ timeout: 5000 })
   const childRow = children.locator('.outline-row').filter({ hasText: childText }).first()
   await expect(childRow).toBeVisible({ timeout: 5000 })
@@ -118,26 +124,34 @@ test.describe('Stream view: panel management', () => {
   })
 
   test('initial state is single navigation panel at full width', async ({ page }) => {
-    const streamView = page.getByTestId('stream-view')
-    await expect(streamView).toBeVisible()
+    const workspaceShell = page.getByTestId('workspace-shell')
+    await expect(workspaceShell).toBeVisible()
 
-    const navColumns = page.getByTestId('stream-nav-column')
+    const navColumns = navigationColumns(page)
     await expect(navColumns).toHaveCount(1)
 
-    const focusColumns = page.getByTestId('stream-focus-column')
-    await expect(focusColumns).toHaveCount(0)
+    await expect(focusColumns(page)).toHaveCount(0)
 
     await expect(page.getByTestId('navigation-panel')).toBeVisible()
+  })
+
+  test('reduced motion keeps the shell and removes feedback duration', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+
+    await expect(page.getByTestId('workspace-shell')).toBeVisible()
+    const feedbackDuration = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--duration-feedback').trim(),
+    )
+    expect(feedbackDuration).toBe('0ms')
   })
 
   test('click right-arrow opens focus panel to the right', async ({ page }) => {
     await openFocusPanelOnRow(page, 0)
 
-    const navColumns = page.getByTestId('stream-nav-column')
+    const navColumns = navigationColumns(page)
     await expect(navColumns).toHaveCount(1)
 
-    const focusColumns = page.getByTestId('stream-focus-column')
-    await expect(focusColumns).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
 
     const labelEditor = page.getByTestId('focus-label-editor')
     await expect(labelEditor).toBeVisible()
@@ -145,7 +159,9 @@ test.describe('Stream view: panel management', () => {
     expect(text).toContain('Welcome to Hila')
   })
 
-  test('click right-arrow on child in nested nav panel appends a new focus column', async ({ page }) => {
+  test('click right-arrow on child in nested nav panel appends a new focus column', async ({
+    page,
+  }) => {
     // Create a child row
     const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
     await firstEditor.click()
@@ -189,17 +205,14 @@ test.describe('Stream view: panel management', () => {
     const childFocusBtn = childRow.locator('.nav-row-open-focus')
     await childRow.hover()
     await expect(async () => {
-      const opacity = await childFocusBtn.evaluate(
-        (el) => window.getComputedStyle(el).opacity,
-      )
+      const opacity = await childFocusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
       expect(Number(opacity)).toBeGreaterThan(0)
     }).toPass({ timeout: 3000 })
     await childFocusBtn.click()
 
     // A second focus panel should appear showing the child
     await expect(async () => {
-      const focusColumns = page.getByTestId('stream-focus-column')
-      await expect(focusColumns).toHaveCount(2)
+      await expect(focusColumns(page)).toHaveCount(2)
     }).toPass({ timeout: 5000 })
 
     // The new (rightmost) focus panel shows the child label
@@ -216,7 +229,7 @@ test.describe('Stream view: panel management', () => {
     await firstEditor.click()
 
     // No focus panel yet
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(0)
+    await expect(focusColumns(page)).toHaveCount(0)
 
     // Press Cmd/Ctrl+L
     const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
@@ -224,27 +237,26 @@ test.describe('Stream view: panel management', () => {
 
     // Focus panel should open
     await expect(page.getByTestId('focus-panel')).toBeVisible({ timeout: 5000 })
-    const focusColumns = page.getByTestId('stream-focus-column')
-    await expect(focusColumns).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
   })
 
   test('Cmd+Left closes rightmost panel', async ({ page }) => {
     // Open a focus panel first
     await openFocusPanelOnRow(page, 0)
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
 
     // Press Cmd+Left (Meta+ArrowLeft)
     await page.keyboard.press('Meta+ArrowLeft')
 
     // Focus panel should be closed
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(0)
+    await expect(focusColumns(page)).toHaveCount(0)
 
     // Navigation panel should still be visible
-    await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
+    await expect(navigationColumns(page)).toHaveCount(1)
     await expect(page.getByTestId('navigation-panel')).toBeVisible()
   })
 
-  test('gap ancestor cards appear between panels when a deeper descendant is focused', async ({ page }) => {
+  test('breadcrumb stays hidden while root navigation is visible', async ({ page }) => {
     // Build a nested tree: "Root" > "Child" > "Grandchild".
     // Gate each step on the row's text/depth to avoid editor focus races.
     const rowEditor = (i: number) =>
@@ -300,10 +312,10 @@ test.describe('Stream view: panel management', () => {
 
     // Open a focus panel on the root row (depth 0)
     await openFocusPanelOnRow(page, 0)
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
 
-    // No gap cards yet -- the focus panel's row is the leftmost (top-level) node.
-    await expect(page.getByTestId('card-ancestor')).toHaveCount(0)
+    // Root navigation is first, so the simple breadcrumb stays hidden.
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toHaveCount(0)
 
     // From the focus panel's embedded outline, open a focus on "Grandchild"
     // (a deep descendant, skipping the "Child" level).
@@ -323,74 +335,58 @@ test.describe('Stream view: panel management', () => {
     await gcFocusBtn.click()
 
     // A second focus panel appears showing the grandchild.
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
-
-    // The skipped "Child" level is now rendered as a gap ancestor card + tab
-    // between the two focus panels.
-    await expect(async () => {
-      const ancestorCount = await page.getByTestId('card-ancestor').count()
-      expect(ancestorCount).toBeGreaterThanOrEqual(1)
-    }).toPass({ timeout: 5000 })
-
-    await expect(async () => {
-      const tabTexts = await page.getByTestId('card-tab').allTextContents()
-      expect(tabTexts.join(' | ')).toContain('Child')
-    }).toPass({ timeout: 5000 })
+    await expect(focusColumns(page)).toHaveCount(2)
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toHaveCount(0)
   })
 
   test('total column count stays within limit of 4', async ({ page }) => {
-    // Start with 1 nav column
-    await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
-
-    // Open a focus panel (2 columns: nav + focus)
+    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
     await openFocusPanelOnRow(page, 0)
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await drillIntoChild(page, 'Bravo')
+    await drillIntoChild(page, 'Charlie')
+    await drillIntoChild(page, 'Delta')
+    await drillIntoChild(page, 'Echo')
 
-    // Total columns = 2 (1 nav + 1 focus)
-    const totalBefore = await page.locator('[data-testid="stream-nav-column"], [data-testid="stream-focus-column"]').count()
-    expect(totalBefore).toBe(2)
+    await expect(workspaceColumns(page)).toHaveCount(4)
+    await expect(navigationColumns(page)).toHaveCount(0)
+    await expect(focusColumns(page)).toHaveCount(4)
   })
 })
 
-test.describe('Stream view: clickable ancestor tabs', () => {
+test.describe('Stream view: clickable breadcrumb', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
     await waitForRows(page, 1)
     // The dev-tools sidebar overlaps the far-right/deep focus columns these
-    // tests exercise; close it so card-tab and row interactions aren't blocked.
+    // tests exercise. Close it so breadcrumb and row interactions are not blocked.
     await closeSidebar(page)
   })
 
-  test('clicking an ancestor tab focuses that ancestor and replaces deeper panels', async ({ page }) => {
-    // Chain Alpha > Bravo > Charlie (distinct, non-substring names so tab/label
-    // filters are unambiguous).
-    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie'])
-
-    // Focus Alpha, then drill straight to Charlie (skipping Bravo) so Bravo is
-    // rendered as a gap ancestor tab between the two focus panels.
+  test('clicking an ancestor focuses it and replaces deeper panels', async ({ page }) => {
+    await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
     await openFocusPanelOnRow(page, 0)
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await drillIntoChild(page, 'Bravo')
     await drillIntoChild(page, 'Charlie')
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    await drillIntoChild(page, 'Delta')
+    await drillIntoChild(page, 'Echo')
 
-    const bravoTab = page.getByTestId('card-tab').filter({ hasText: 'Bravo' })
-    await expect(bravoTab).toBeVisible({ timeout: 5000 })
-
-    // Click the Bravo tab -> Bravo becomes the rightmost focused card and the
-    // deeper Charlie panel is replaced.
-    await bravoTab.click()
+    const breadcrumb = page.getByTestId('workspace-shell-breadcrumb')
+    await expect(breadcrumb).toBeVisible({ timeout: 5000 })
+    await expect(breadcrumb.getByRole('button', { name: 'Workspace' })).toBeVisible()
+    const alphaButton = breadcrumb.getByRole('button', { name: 'Alpha' })
+    await expect(alphaButton).toBeVisible()
+    await alphaButton.click()
 
     await expect(async () => {
       const text = await page.getByTestId('focus-label-editor').last().textContent()
-      expect(text).toContain('Bravo')
+      expect(text).toContain('Alpha')
     }).toPass({ timeout: 5000 })
 
-    // Still two focus columns (Alpha, Bravo); no gap ancestor cards remain.
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
-    await expect(page.getByTestId('card-ancestor')).toHaveCount(0)
+    await expect(focusColumns(page)).toHaveCount(1)
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toBeVisible()
   })
 
-  test('clicking the workspace-title tab returns to the root navigation panel (nav shifted off)', async ({ page }) => {
+  test('clicking the workspace title returns to root navigation', async ({ page }) => {
     // A 5-deep chain so that drilling down past MAX_COLUMNS shifts both the nav
     // panel and the top-level focus panel off the front. The resulting leftmost
     // panel (Bravo) has a hidden ancestor (Alpha), which is what makes the
@@ -403,16 +399,15 @@ test.describe('Stream view: clickable ancestor tabs', () => {
     await drillIntoChild(page, 'Delta')
     await drillIntoChild(page, 'Echo')
 
-    // Nav panel has been shifted off; the workspace-title tab is now present.
-    await expect(page.getByTestId('stream-nav-column')).toHaveCount(0)
-    const titleTab = page.getByTestId('card-tab').filter({ hasText: 'Workspace' })
-    await expect(titleTab).toBeVisible({ timeout: 5000 })
+    await expect(navigationColumns(page)).toHaveCount(0)
+    const breadcrumb = page.getByTestId('workspace-shell-breadcrumb')
+    const titleButton = breadcrumb.getByRole('button', { name: 'Workspace' })
+    await expect(titleButton).toBeVisible({ timeout: 5000 })
 
-    // Clicking it returns to the root navigation panel.
-    await titleTab.click()
+    await titleButton.click()
 
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(0)
-    await expect(page.getByTestId('stream-nav-column')).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(0)
+    await expect(navigationColumns(page)).toHaveCount(1)
     await expect(page.getByTestId('navigation-panel')).toBeVisible({ timeout: 5000 })
     await expect(page.getByTestId('workspace-title-editor')).toBeVisible({ timeout: 5000 })
   })
@@ -430,14 +425,16 @@ test.describe('Stream view: focus panel headers + collapse', () => {
   const buildChainAndDrill = async (page: Page) => {
     await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie'])
     await openFocusPanelOnRow(page, 0) // focus Alpha
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
     await drillIntoChild(page, 'Bravo')
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    await expect(focusColumns(page)).toHaveCount(2)
     await drillIntoChild(page, 'Charlie')
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(3)
+    await expect(focusColumns(page)).toHaveCount(3)
   }
 
-  test('every focus panel shows a header; only the active one is editable', async ({ page }) => {
+  test('every focus panel shows a header; only the active one is editable', async ({
+    page,
+  }) => {
     await buildChainAndDrill(page)
 
     // All three focus panels (Alpha, Bravo, Charlie) carry a header.
@@ -459,13 +456,15 @@ test.describe('Stream view: focus panel headers + collapse', () => {
     expect(texts.join(' | ')).toContain('Bravo')
   })
 
-  test('clicking a non-active panel header collapses deeper panels and makes it active', async ({ page }) => {
+  test('clicking a non-active panel header collapses deeper panels and makes it active', async ({
+    page,
+  }) => {
     await buildChainAndDrill(page)
 
     // Click Alpha's (non-active) header -> collapse everything to its right.
     await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Alpha' }).click()
 
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    await expect(focusColumns(page)).toHaveCount(1)
     // Alpha is now active: its header is the editable editor and no collapse
     // targets remain. (The collapse click itself does not enter edit mode --
     // the non-active header has no editor to focus.)
@@ -483,7 +482,7 @@ test.describe('Stream view: focus panel headers + collapse', () => {
     // Click Bravo's (non-active, middle) header -> collapse only Charlie.
     await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Bravo' }).click()
 
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2)
+    await expect(focusColumns(page)).toHaveCount(2)
     // Bravo is now active and editable; Alpha remains a collapse target.
     await expect(page.locator('.focus-panel-label-collapse')).toHaveCount(1)
     await expect(async () => {

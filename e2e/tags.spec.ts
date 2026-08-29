@@ -1014,7 +1014,7 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     // aspect row with a chip reading the matrix title ("task"), not a raw
     // "matrix <id>" fallback.
     const focusChildren = page
-      .getByTestId('stream-focus-column')
+      .locator('[data-testid="workspace-shell-column"][data-panel-kind="focus"]')
       .last()
       .getByTestId('focus-panel-children')
     const taskRow = focusChildren

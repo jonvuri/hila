@@ -2,17 +2,19 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-08-27
+updated: 2026-08-28
 phase: phase-10
-session: phase-10-session-4p-live-review
+session: phase-10-session-4p-approval
 ---
 
 # Now
 
-Phase 10 Session 4p Stage 4 is complete. `StreamView` now renders the production workspace shell
-directly from the typed stream controller. No live workspace module imports `OverlaidCards` or
-`OverlaidAncestor`. Stable shell wrappers preserve mounted navigation and focus panels when
-ancestry or active state changes.
+Phase 10 Session 4p implementation and verification are complete. User approval remains open.
+Do not start Session 4q or remove the archived implementation before that approval.
+
+`StreamView` renders the production workspace shell directly from the typed stream controller. No
+live workspace module imports `OverlaidCards` or `OverlaidAncestor`. Stable shell wrappers preserve
+mounted navigation and focus panels when ancestry or active state changes.
 
 The simple breadcrumb appears only when the first visible panel is a focus panel. It starts with
 the workspace title and then uses the existing controller ancestry. The title returns to root.
@@ -40,58 +42,57 @@ state uses canonical roles. The existing navigation and focus components still o
 empty, error, unresolved-position, narrow-width, and long-label behavior. Paging, retained
 metadata, virtual windows, sticky geometry, and transition calculations did not change.
 
-Session 4o-c found four integration defects. Ancestry replacements no longer flash an empty chain.
-Numeric source jumps now reconcile retained virtual windows. Focused navigation now owns a bounded
-scrollport. Bounded virtualizers now end at their measured or estimated final window instead of a
-synthetic safety tail. The new production E2E proof covers 465 rows, five pages, root and focused
-navigation, unmounted ancestry, push-off in both directions, source reveal, and drill.
+Stage 5 found stale E2E selectors for the retired stream and card DOM. The tests now use the
+production shell contract. Retired gap-card scenarios now prove the simple breadcrumb predicate,
+four-column eviction, ancestor selection, and return to root. A new system-browser test proves the
+reduced-motion token override.
 
 ## Verification
 
-- Stage 4 static types pass.
-- The focused `StreamView` controller, configuration, and cutover contract has nine passing tests.
-- The production workspace-shell contract has two passing tests.
-- The Stage 3 baseline has 916 passing tests. Formatting, lint, the production build, and the
-  Storybook build pass at that baseline. Stage 5 must rerun them after the cutover.
-- The focused production E2E proof passes in system Chromium.
-- The six reset-based paging, editing, keyboard, collapse, and drag E2E scenarios pass.
-- Focused E2E proves that non-navigation content still scrolls and that navigation boundary input
-  does not move the outer scroller.
-- A 180-frame production trace has zero rebuilds for an unchanged chain, 180 final-row position
-  writes, CLS 0.00, and no reported performance insight or long-task finding.
-- Live inspection confirms all active thresholds in both directions, 265 retained metadata rows,
-  265 mounted source rows, two bounded ancestors, correct title masking, and correct classic and
-  hidden scrollbar widths. At a 390-pixel viewport, the widget fits the 369-pixel content width
-  and the long label keeps one line with ellipsis.
-- Final user review confirms that macOS trackpad scrolling and sticky-header behavior match the
-  approved Storybook treatment.
+- Formatting makes no changes. Lint passes with the existing 14 warnings and no errors. Static
+  types, all 917 unit tests, and the Storybook build pass.
+- The updated stream and cross-matrix boundary-hop E2E set has 13 passing tests in system Chromium.
+  The production sticky, folded-row, app-shell, and affected tag set has 11 passing tests. The new
+  reduced-motion proof passes.
+- The production sticky proof covers 465 rows, five pages, root and focused navigation, unmounted
+  ancestry, push-off in both directions, source reveal, drill, bounded metadata, and outer-scroll
+  isolation.
+- Live DevTools review covers root visible, root shifted, four columns, cross-matrix focus, narrow
+  width, long labels, keyboard focus, and all six visual-theme and polarity pairs. All navigation
+  panels keep `guides`.
+- At 390 pixels, each widget stops at its content width and leaves the 15-pixel scrollbar gutter
+  clear. A 667-pixel long label uses one 239-pixel line with ellipsis.
+- A 180-frame bidirectional trace has CLS 0.00 and no reported performance insight or long-task
+  finding. The console has no errors. It has the existing Solid disposal warnings and form-field
+  naming issue.
 
 ## Production boundary
 
 The widget is mounted in root and focused production navigation. `StreamView` renders the
-production workspace shell. The executable overlaid-card presentation has no live consumer. Its
-archived stories remain, and the forward workspace fixture still imports archived Reading queue
-data. Session 4q owns that fixture move and archive removal after Stage 5 approval.
+production workspace shell. The executable overlaid-card presentation has no live consumer. The
+remaining source dependency is exact: `src/design/workspace/fixtures.ts` imports `workspacePanels`
+and `workspaceTitle` from `src/design/overlaid-cards/fixtures.tsx`. The archived stories and their
+internal renderer, type, variant, style, and fixture imports remain inside
+`src/design/overlaid-cards/`. Session 4q owns the fixture move and complete archive removal after
+user approval.
 
 The Session 4o change set is staged and reviewed. The current visual and content mismatch between
 source rows and sticky rows is not a blocker while row design remains unsettled. The future
 continuity requirement is recorded in the [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).
 
-## Read for Session 4p Stage 5
+## Read for approval and Session 4q
 
-1. The [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md), especially the fixed decisions and
-   Session 4p Stage 5.
-2. The Session 4o [closeout](Phase-10-Session-4o-plan.md#closeout-gate).
-3. The approved workspace rules in [Design.md](Design.md).
-4. The browser and E2E [testing guide](Testing.md).
-5. `src/workspace/StreamView.tsx`, `WorkspaceShell.tsx`, `NavigationPanel.tsx`, and
-   `ProductionStickyNavigation.tsx`.
+1. The Session 4p Stage 5 evidence and Session 4p closeout in the
+   [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).
+2. Session 4q in the same plan, but only after user approval.
+3. Phase 10 [section 4](Phase-10.md#4-cohesive-design-token-and-theming-system).
+4. `src/design/workspace/fixtures.ts` and the archived `src/design/overlaid-cards/` directory.
 
 ## Next action
 
-Execute Session 4p Stage 5 in order. Run the full automated checks, focused production E2E proof,
-live state and theme review, and scroll trace. Get user approval before Session 4q. Do not remove
-the archived implementation or start Session 4q early.
+Get user approval for Session 4p. If approved, check the final Stage 5 item, mark Session 4p complete
+in Phase 10, and execute Session 4q in order. Do not remove the archived implementation or start
+Session 4q before approval.
 
 ## Documentation boundary
 

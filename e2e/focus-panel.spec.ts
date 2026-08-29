@@ -471,14 +471,17 @@ test.describe('Focus panel — boundary hop (Phase 9.5)', () => {
     }).toPass({ timeout: 5000 })
 
     // One focus column so far (the focal node).
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(1)
+    const focusColumns = page.locator(
+      '[data-testid="workspace-shell-column"][data-panel-kind="focus"]',
+    )
+    await expect(focusColumns).toHaveCount(1)
 
     // Drill into the sub-table row via its per-row open affordance — the boundary
     // hop: the row lives in the sub-matrix, owned by the workspace focal node.
     await bandItem.getByTestId('table-open-row-btn').first().click()
 
     // A second focus column opens for the sub-matrix row (panel keyed by its matrix).
-    await expect(page.getByTestId('stream-focus-column')).toHaveCount(2, { timeout: 5000 })
+    await expect(focusColumns).toHaveCount(2, { timeout: 5000 })
 
     // Role-adaptive far side: the sub-table's label column is `title`, not `label`.
     // Typing into the far-side header must persist to `title` (no write to a missing

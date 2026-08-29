@@ -30,8 +30,8 @@ test.describe('App shell: workspace-based layout', () => {
   })
 
   test('stream view renders on load', async ({ page }) => {
-    const streamView = page.getByTestId('stream-view')
-    await expect(streamView).toBeVisible({ timeout: 5000 })
+    const workspaceShell = page.getByTestId('workspace-shell')
+    await expect(workspaceShell).toBeVisible({ timeout: 5000 })
 
     await expect(page.getByTestId('navigation-panel')).toBeVisible({ timeout: 5000 })
   })

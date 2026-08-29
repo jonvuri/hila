@@ -165,23 +165,45 @@ Stage 4 evidence:
 
 ### Stage 5 — Live review and verification
 
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
-- [ ] Run `pnpm build-storybook`.
-- [ ] Run focused E2E tests with the repository-required system browser permissions.
-- [ ] Use Chrome DevTools to inspect root visible, root shifted, four columns, narrow width,
+- [x] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
+- [x] Run `pnpm build-storybook`.
+- [x] Run focused E2E tests with the repository-required system browser permissions.
+- [x] Use Chrome DevTools to inspect root visible, root shifted, four columns, narrow width,
       cross-matrix focus, long labels, sticky thresholds, and outline switching.
-- [ ] Check Ghost, Null, and Wipeout in both polarities. Check keyboard focus and reduced motion.
-- [ ] Record a scroll trace with live virtualized data. Confirm that sticky updates do not cause
+- [x] Check Ghost, Null, and Wipeout in both polarities. Check keyboard focus and reduced motion.
+- [x] Record a scroll trace with live virtualized data. Confirm that sticky updates do not cause
       repeated forced layout or long tasks.
 - [ ] Get user approval before starting Session 4q.
 
+Stage 5 evidence:
+
+- Formatting made no changes. Lint passes with the existing 14 warnings and no errors. Static
+  types, all 917 unit tests, and the Storybook build pass. The build keeps its existing chunk-size
+  warnings.
+- Verification found stale E2E selectors for the retired stream and card DOM. The tests now use
+  the production workspace-shell contract. The retired gap-card scenarios now cover the simple
+  breadcrumb predicate, four-column eviction, ancestor selection, and return to root. The updated
+  stream and boundary-hop set has 13 passing tests. The production sticky, folded-row, app-shell,
+  and affected tag set has 11 passing tests. A new reduced-motion proof also passes.
+- Live DevTools review used more than 200 virtualized rows. Root-visible, root-shifted, four-column, nested,
+  and cross-matrix focus states keep the production shell. The first shifted focus panel shows the
+  correct workspace and hidden-ancestor breadcrumb. All live navigation panels report `guides`.
+- Ghost, Null, and Wipeout keep one shell and widget DOM in both polarities. At 390 pixels, the
+  widget stops at the content width and leaves the 15-pixel scrollbar gutter clear. The long
+  sticky label uses one line with ellipsis: 239 visible pixels for 667 pixels of content. A real
+  Tab event shows a distinct focus outline. Reduced motion resolves feedback duration to zero.
+- A 180-frame bidirectional trace has CLS 0.00 and no DevTools performance insight or long-task
+  finding. The live widget keeps bounded ancestry and numeric retained geometry. The DevTools
+  console has no errors. It reports the existing Solid disposal warnings and form-field naming
+  issue.
+
 ### Session 4p closeout gate
 
-- [ ] No production module imports `src/design/overlaid-cards`.
-- [ ] No production style consumes `--card-*` or `.card-*` layout classes.
-- [ ] The old directory is used only by its archived stories and any fixture dependency that
+- [x] No production module imports `src/design/overlaid-cards`.
+- [x] No production style consumes `--card-*` or `.card-*` layout classes.
+- [x] The old directory is used only by its archived stories and any fixture dependency that
       Session 4q will remove.
-- [ ] Update Phase 10 and `NOW.md` with the cutover result, verification, and exact remaining
+- [x] Update Phase 10 and `NOW.md` with the cutover result, verification, and exact remaining
       dependency list.
 
 ### Deferred navigation-row and sticky continuity

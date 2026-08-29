@@ -89,8 +89,10 @@ canonical token contract, then closed the sticky-motion and outline-treatment ga
 boundary rubber-band in the navigation view, and passed user review.
 [Session 4o](Phase-10-Session-4o-plan.md) adapted the widget to paged production data and the
 virtualizer, passed live and trackpad review, and received user approval.
-[Sessions 4p–4q](Phase-10-Sessions-4p-4q-plan.md) now migrate the live workspace and remove the
-executable overlaid-card implementation.
+[Session 4p](Phase-10-Sessions-4p-4q-plan.md) has migrated the live workspace and passed its
+automated, focused E2E, live-theme, narrow-width, cross-matrix, reduced-motion, and performance
+checks. It awaits user approval. Session 4q will remove the executable overlaid-card implementation
+only after that approval.
 
 - [x] **Reconcile the visual language:** Ghost owns structure and minimum semantic affordances. Null
       and Wipeout own only value overrides and optional decoration. The overlaid-card depth language
@@ -120,7 +122,7 @@ executable overlaid-card implementation.
 - [x] **Session 4o:** adapt integrated sticky navigation to paged production data and the
       production virtualizer without widening the rendered range.
 - [ ] **Session 4p:** migrate the approved workspace into the live shell without changing workspace
-      data or gestures.
+      data or gestures. The cutover and verification are complete. User approval remains open.
 - [ ] **Session 4q:** remove the executable overlaid-card renderer, variants, styles, stories, and
       fixture coupling after the cutover passes review.
 
