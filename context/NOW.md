@@ -4,7 +4,7 @@ kind: status
 state: active
 updated: 2026-08-29
 phase: phase-10
-session: phase-10-launcher-migration-planning
+session: phase-boundary-reconciliation-planning
 ---
 
 # Now
@@ -41,21 +41,23 @@ surface design is unsettled. The future requirement is in the
 
 ## Read for the next session
 
-1. Phase 10 §3b and §4 in [Phase-10.md](Phase-10.md).
-2. The launcher contract in [Launcher.md](Launcher.md).
-3. The migration rules in [Design.md](Design.md).
-4. The follow-on order in the [Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md#follow-on-order).
+1. The [phase-boundary reconciliation brief](Phase-Boundary-Reconciliation-plan.md).
+2. The original Phase 10 charter and current completion state in [Phase-10.md](Phase-10.md).
+3. The current roadmap boundary in [Plan.md](Plan.md#phase-10----app-structure-and-cohesive-design-system).
+4. The context roles and current reading routes in [README.md](README.md).
 
 ## Next action
 
-Create a dedicated plan for the launcher and shared-overlay migration onto canonical tokens. Land
-the launcher before removing the Table and Tags tabs. Do not start the tab, face, or browser
-migrations early.
+Run the fresh planning session in the reconciliation brief. Close Phase 10 at its original
+design-hardening boundary, audit the active context and implementation, restructure the context
+corpus, and rebuild the roadmap. Use focused subagents for independent, context-heavy reviews.
+Do not implement the launcher or other product features.
 
 ## Documentation boundary
 
-Until Phase 10 settles, limit cleanup to routing, current-state accuracy, and clear historical
-markers. Keep the broader documentation audit deferred until after Phase 10.
+The next session owns the previously deferred broad documentation audit. Review authority and
+dependencies before moving files. Preserve history, but remove inactive material from the active
+reading path. Add durable documentation-hygiene instructions and link them from this file.
 
 ## Handoff rule
 
