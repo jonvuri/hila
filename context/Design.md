@@ -1,5 +1,10 @@
 # Design System
 
+> **Implementation status.** Canonical tokens, theme values, the component-variant registry, and
+> the production workspace/sticky slice ship. App-wide fidelity behavior and remaining face,
+> browser, overlay, and system-edge migrations do not. Future sequencing belongs in
+> [Plan.md](Plan.md), not this topic contract.
+
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
 
 ## Design principles
@@ -19,15 +24,15 @@ The hila design system provides a set of design tokens, structural primitives, a
 
 ### Files
 
-| File                    | Role                                                                                                                 |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `src/design/tokens.css` | Single source of truth for all CSS custom properties. Storybook imports it. The app will import it during migration. |
-| `src/design/tokens.ts`  | Typed token names, axis values, and registry helpers for TypeScript consumers.                                       |
-| `src/design/reset.css`  | Minimal global reset that uses token variables.                                                                      |
+| File                    | Role                                                                                   |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `src/design/tokens.css` | Single source of truth for all CSS custom properties. Storybook and the app import it. |
+| `src/design/tokens.ts`  | Typed token names, axis values, and registry helpers for TypeScript consumers.         |
+| `src/design/reset.css`  | Minimal global reset that uses token variables.                                        |
 
-Session 4k replaces the old token names with this contract. It updates all current design-system
-consumers in the same change and adds no compatibility aliases. Live styles that do not yet consume
-canonical tokens stay unchanged until their planned migration slice.
+Session 4k replaced the old token names with this contract. It updated all then-current
+design-system consumers in the same change and added no compatibility aliases. Live styles that do
+not yet consume canonical tokens stay unchanged until their migration slice.
 
 ### Two token layers
 
@@ -171,6 +176,8 @@ the identity-face conformance check.
 
 ### Accessibility ownership
 
+Session 4k resolved the ThemeCard defects that exposed these durable ownership rules.
+
 | Open ThemeCard finding                  | Owner                         | Required work                                                                                                 |
 | --------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Faint 10-pixel labels have low contrast | Text semantic tokens and type | Reserve faint text for supplemental content. Meet contrast at the rendered size and weight for required text. |
@@ -180,7 +187,10 @@ the identity-face conformance check.
 
 These are defects. They are not part of Ghost, Null, or Wipeout character.
 
-### Ordered migration
+### Migration status
+
+Steps 1–5 below shipped in Phase 10. Steps 6–8 are re-homed by the phase-boundary reconciliation.
+The approved roadmap owns their future order.
 
 1. Implement both token layers and migrate all current design-system and approved specimen
    consumers in one change. Delete the old token names and the temporary ThemeCard role layer.
@@ -220,7 +230,8 @@ Normal push-off reuses the sticky DOM and writes only the final row transform.
 
 ## Component inventory
 
-All components live in `src/design/` as flat files (no subdirectories).
+Design-system components live in `src/design/` and its focused `outline/`, `table/`, `theme-card/`,
+and `workspace/` directories.
 
 ### Structural primitives
 

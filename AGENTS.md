@@ -11,17 +11,19 @@ in the part that you touch. Do not start an unrelated rewrite.
 2. Use [context/README.md](context/README.md) to find architecture, design, roadmap,
    and historical context. `NOW.md` records execution state; it is not architectural
    authority.
-3. Ask a question only when a missing answer can materially change the result.
-4. When a session closes, update the relevant plan and leave `NOW.md` as a short,
+3. Follow [context/Documentation.md](context/Documentation.md) for document roles,
+   archive boundaries, and verification.
+4. Ask a question only when a missing answer can materially change the result.
+5. When a session closes, update the relevant plan and leave `NOW.md` as a short,
    accurate handoff for the next session. It should not be a historical
    log.
-5. Stage changes for review and suggest a short commit message. Do not
+6. Stage changes for review and suggest a short commit message. Do not
    run writing git operations.
 
 ## Working with phased plans
 
-Implementation plans live in `context/Phase-*.md` as numbered stages with checkbox
-items (`- [ ]` / `- [x]`). When executing a stage:
+Implementation plans live in `context/phases/Phase-*.md` as numbered stages with
+checkbox items (`- [ ]` / `- [x]`). When executing a stage:
 
 - Work through each item in order and run the verification specified for that stage.
 - Check off each item, including test and implementation sub-items, as it is completed.

@@ -86,3 +86,18 @@ The Playwright suite remains the regression source of truth.
 - For keyboard/editor checks, drive a real Chrome session. Embedded browser pointer
   actions can still be useful for clicking and inspection, but their synthetic keyboard
   events may not reach the editor.
+
+## Performance and churn
+
+[Performance.md](Performance.md) owns performance budgets and test design. Keep two layers:
+
+- deterministic query-plan, work-count, scaling, invalidation, and lifecycle guards;
+- bounded browser stress cases for layout, DOM, WASM, and constant-factor regressions.
+
+Calibrate browser runs against the estimated slowdown from this development machine to a typical
+downmarket target. Use Chrome DevTools' maximum CPU slowdown when it is at least as severe as that
+estimate. Record the estimate, throttle, browser, fixture, warmed median, and p95 with the result.
+
+Use the ProseMirror counters in `src/debug/debugState.ts` for exact mount/unmount assertions. A
+performance test must fail on unrelated editor churn even when its wall-clock result remains under
+budget.

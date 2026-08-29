@@ -1,0 +1,546 @@
+# Architecture
+
+> **Archived snapshot.** This is the pre-reconciliation architecture. Use the active
+> [Architecture](../../Architecture.md). The reasons for replacement are preserved in
+> [phase-boundary reconciliation](../phases/Phase-Boundary-Reconciliation.md#code-versus-context-gap-register).
+
+## Objectives
+
+- Create an app that combines the experiences of personal note taking, outlining, document authoring, and maintaining a personal database of spreadsheets into one unified experience. The same data can be viewed and edited through different faces -- an outline, a document editor, a spreadsheet -- all backed by the same SQLite tables.
+- Focus on performance - the results of all interactions should take place in under 50ms, for a snappy and fluid feel.
+- Focus on simplicity and composability - functionality that works completely and harmoniously together as a gestalt experience, rather than a disconnected suite of features.
+
+## Development principles
+
+### Incremental and intentional evolution
+
+Only tackle complexity that is necessary right now. Don't build abstractions, frameworks, or systems ahead of proven need. At the same time, stay aware of high-level goals and potential future directions, and let that awareness inform today's decisions -- not by building for the future, but by not painting into corners.
+
+Any aspect of the design or implementation may change as concrete outcomes reveal better approaches. Treat the architecture as a living document, not a fixed spec.
+
+### Gestalt awareness
+
+As the design and implementation evolve, every change should be considered in context of the whole. The architecture, code, and documentation should remain internally consistent, well-structured, and clean at all times -- not just locally correct but coherent as a unified whole.
+
+This applies to documentation as much as code: when one part of the architecture changes, all related parts should be updated to reflect the change, so that the full picture is always accurate and navigable.
+
+## Inspiration
+
+- Obsidian
+- Workflowy
+- Tana
+- Linear
+- Notion
+- Airtable
+- Google Sheets
+- https://github.com/callumalpass/tasknotes/blob/main/docs/features/task-management.md
+
+## Tech stack
+
+### Local-first app
+
+- The app is a Javascript app meant to run in a browser environment, but local-first and with no external dependencies -- it runs as a local app once loaded and stores all of its data locally.
+- Continuous background syncing of the database and files to a remote provider (Dropbox initially) keeps data backed up and synchronized across devices. Syncing occurs in the background after optimistic local edits are made -- all reads and writes are local-first. See [Sync](../../Sync.md) for the full specification.
+
+### Database (Local SQLite)
+
+- All structured data is stored locally in SQLite, in the same browser environment (using the WASM SQLite build and web workers).
+
+### File storage (Local OPFS)
+
+- Binary files (images, PDFs, etc.) are stored as content-addressed blobs in the Origin Private File System alongside the SQLite database. File metadata lives in SQLite; file content lives in OPFS. See [Sync - File management](../../Sync.md#file-management).
+
+### Sync engine
+
+- A changeset-based sync engine exchanges changes with a remote storage provider. Change tracking uses SQLite triggers that log mutations to a changelog table. Conflict resolution is last-write-wins per row, with losing versions preserved for user review. The changeset mechanism is abstracted behind a pluggable interface. See [Sync](../../Sync.md).
+
+### Solid.js UI
+
+- The app is built with Solid.js, a lightweight and super-performant reactive UI library, in order to serve the performance objectives.
+
+## Layered architecture
+
+The system is organized in three layers, from bottom to top:
+
+```
+┌───────────────────────────────────────────────────┐
+│  Plugins (user-facing)                            │
+│  ┌──────────┐ ┌───────┐ ┌──────┐ ┌─────┐         │
+│  │ Outline  │ │ Notes │ │ Tags │ │ ... │         │
+│  └──────────┘ └───────┘ └──────┘ └─────┘         │
+├───────────────────────────────────────────────────┤
+│  Core                                             │
+│  ┌────────────────┐ ┌──────────────┐ ┌──────────┐ │
+│  │ Matrix registry│ │ Plugin system│ │  Query   │ │
+│  │ + data tables  │ │ + face reg.  │ │  engine  │ │
+│  ├────────────────┤ ├──────────────┘ └──────────┘ │
+│  │ Trait system   │                               │
+│  │ rank, closure  │  ┌──────────────────────────┐ │
+│  │ (per-matrix)   │  │ Join table (global)      │ │
+│  └────────────────┘  └──────────────────────────┘ │
+├───────────────────────────────────────────────────┤
+│  Storage and sync                                 │
+│  ┌──────────┐ ┌───────────┐ ┌──────────────────┐  │
+│  │  SQLite  │ │ File store│ │  Sync engine +   │  │
+│  │  (OPFS)  │ │  (OPFS)   │ │  provider iface  │  │
+│  └──────────┘ └───────────┘ └──────────────────┘  │
+└───────────────────────────────────────────────────┘
+```
+
+### Storage and sync
+
+The bottom layer manages local persistence and remote synchronization. SQLite (in OPFS) stores all structured data. A content-addressed file store (also in OPFS) stores binary files. The sync engine exchanges changesets with a remote provider (Dropbox initially) for backup and cross-device sync. See [Sync](../../Sync.md) for the full specification.
+
+### Core
+
+The core provides the foundation: creating and managing **matrixes** (typed data tables), a **plugin system** for registering plugins and faces, a **query engine** for sandboxed evaluation of SQL expressions over matrixes, the **trait system** for per-matrix structural metadata, the global **join table** for cross-matrix references, and raw SQLite access.
+
+### Traits
+
+Traits are per-matrix metadata tables that provide structural capabilities. A matrix "has the rank trait" or "has the closure trait." Traits are auto-provisioned on first request and shared by all consumers (plugins, faces, the system itself). See [Traits](./Traits-pre-reconciliation.md) for detailed specs.
+
+- **Rank** -- Lexorank-based tree-position ordering. The rank table is global; provisioning records the matrix's participation. See [Traits - Current scope and future evolution](./Traits-pre-reconciliation.md#current-scope-and-future-evolution) for how this may evolve for non-tree ordering consumers.
+- **Closure** -- ancestor/descendant hierarchy tracking (per-matrix table, created on demand).
+
+Traits are not plugins and have no independent agency. They are purpose-specific data structures that the core knows how to create, maintain, and optimize.
+
+**Provisioning model.** Any consumer can request `ensureTrait(type, matrixId)`. If the backing table exists, the existing handle is returned. If not, the core creates it. Traits are idempotent to request, shared across consumers, provisioned lazily on demand, and persistent (they survive plugin removal).
+
+**The join table** is global infrastructure, not a trait. It is always present and provides cross-matrix row references with lifecycle semantics. Each join entry carries a `kind` -- either `ref` (independent reference) or `own` (lifecycle-bound ownership). Owned joins enable cascade deletion: when a source row is deleted or the join is severed, the owned target row is automatically cleaned up. This is the core primitive that supports tags (as owned aspect rows), file attachments, and other lifecycle-bound cross-matrix patterns. Every matrix can participate in joins without requesting anything. See [Traits - Join](./Traits-pre-reconciliation.md#join).
+
+### Data boundary: matrixes vs system tables
+
+Matrixes are the substrate for **user-meaningful data** -- data whose meaning is intrinsic to the values themselves and that a human or agent could reasonably inspect, query, and modify through the standard matrix interface (identity face, SQL sandbox, ops). Plugin-managed data that users interact with (tag type registries, note content, configuration data with user-visible fields) belongs in matrixes, where it gets sync tracking, query sandbox access, identity faces, and the full programmability of the ops layer.
+
+**System tables** are the substrate for **algorithmic structures** whose correctness depends on invariants that only the core can maintain. Rank keys are opaque Lexorank blobs encoding tree position; closure tables are derived facts about hierarchy; join table entries carry cascade-deletion lifecycle semantics. These structures are meaningful only in the context of the algorithms that create and maintain them. They cannot be safely edited through a spreadsheet view, and exposing them as matrixes would invite modifications that corrupt structural invariants.
+
+The boundary test: **could a human or LLM agent look at this data in a table and understand it, edit it safely, and make useful queries against it?** If yes, it belongs in a matrix. If the data is an internal index whose semantics require understanding the underlying algorithm, it belongs in a system table.
+
+Full programmability does not require everything to be a matrix. System tables are accessible through the typed op interface (reads via query ops, writes via structural ops like `reparentRow`, `insertJoin`). The ops enforce the invariants that system table data requires. The distinction is about the nature of the data, not about access control.
+
+### Plugins
+
+Plugins compose core matrixes, traits, and the join table to provide user-facing functionality. Each plugin can create matrixes, request traits for them, and register faces. See [Plugins](../../Plugins.md) for the plugin model and concrete examples.
+
+### Faces
+
+Faces are the views and interaction surfaces that plugins provide. Every face renders the result of a **query expression** -- a sandboxed SQL query evaluated against the matrix namespace.
+
+#### Face types and slots
+
+A **face type** (outline, note, table, flashcard, etc.) defines how query results are rendered and what interactions are available. Each face type declares **slots** -- named positions with preferred column types that define the face's ideal data shape. When a face is applied to a matrix, the matrix's columns are **bound** to the face's slots.
+
+Slot binding follows a resolution chain: explicit manual binding (stored in face configuration) > column name matching slot name > column type + position matching slot preference > fallback to first available column. A face always renders something -- it never refuses a matrix. Rendering quality degrades gracefully when the data shape doesn't match the slots.
+
+Columns that don't bind to any slot are **overflow columns**, rendered in a face-type-specific secondary area (e.g. side-columns in an outline, a property panel in a note view). Overflow columns follow the same hydration rules as slot-bound columns.
+
+A **face configuration** is a serializable data object combining a query, a face type, slot bindings (optional manual overrides), and face-type-specific settings. This allows the same matrix to be viewed through different face types with different column-to-slot mappings.
+
+#### What faces can represent
+
+- A matrix's full contents (the **identity face** -- see below).
+- A filtered, sorted, or grouped subset of a matrix.
+- A joined view across multiple matrixes.
+- Aggregations, computed results, or dashboards.
+- Forms to insert new rows.
+- Lightweight always-on surfaces (e.g. a notification tray that reactively shows fired reminders or status updates). Not every face is a full panel -- a face can be as small as a badge or toast.
+
+#### Cross-face data sharing
+
+The same matrix can be viewed through multiple face types simultaneously. Edits in any face write to the same underlying matrix rows and propagate via reactive query invalidation. Applying a face to a matrix may trigger auto-provisioning of traits the matrix didn't originally have (e.g. closure for hierarchy when applying the outline face).
+
+This is not an abstract capability -- it enables concrete workflows:
+
+**Switching faces for different tasks.** A user switches between face types on the same data to match their current activity. View flashcards as a compact outline for quick bulk editing, then switch to the flashcard face for review. Write outline bullets, then switch to the note face to focus on longer prose for a particular item. The data stays the same; the interaction surface adapts.
+
+**Nesting faces within each other.** A face can embed another face as part of its content. An outline row can expand into an inline note face for writing longer content without leaving the outline. A note can embed a live outline of a subtree, or a live table showing filtered rows from another matrix. This enables compositions like a project note that contains an editable task table, or a study guide outline with embedded flashcard lists.
+
+**Live embedded queries.** A note includes a live, editable table of "all tasks tagged #project-X" or "all flashcards from this chapter." The embedded face is a table (or outline, or any face type) bound to a filtered query over another matrix. Edits propagate to the source matrix. This is like Notion's linked database views but editable in-place and composable with any face type.
+
+**Side-by-side synchronized editing.** Two faces of the same matrix open in a split view. Edit a task's status in the table face; see the inline tag update in the outline in real time. Useful for bulk data management (table) alongside contextual editing (outline or notes).
+
+**Progressive depth.** The workspace stream view embodies this directly: every row has a `label` (the outline bullet) and a `content` (the document body). In the navigation panel, a row appears as a compact bullet. Opening it in a focus panel reveals the full document. The data doesn't change -- just the rendering granularity. A bullet IS a note if you zoom in far enough. The stream view's composable panels let the user hold context at multiple depths simultaneously.
+
+**Alternative visualization face types.** The same task matrix viewed as a kanban board (status column mapped to lanes), a calendar (due date column mapped to timeline positions), or a table (all columns as spreadsheet cells). No data duplication -- just different face types with different slot bindings over the same query. New face types can be added without changing the data model.
+
+Faces update optimistically with user input and propagate updates to underlying data asynchronously. If updates fail, faces retry and get user input if intervention is needed.
+
+#### Composed and substrate fidelity
+
+Faces render at one of two **fidelities** -- an axis orthogonal to density (panel width):
+
+- **Composed** (default): structure is _suggested_ -- bullets, prose bodies, chip strips, tethers -- optimized for fluid viewing and editing.
+- **Substrate**: structure is _spelled out_ -- explicit row borders, column names (per-cell or a shared header), `role` chips, and visible relationship metadata (own-edge kind, anchoring, view mode). The substrate is the [identity face](#identity-face) generalized from "a per-matrix table view" to a fidelity available at any granularity (cell / row / band / focus column / workspace).
+
+A global **x-ray** toggle forces substrate everywhere at once (the debugging/inspector view); fidelity otherwise cascades down a scope unless overridden finer. Because the substrate must render _everything_ -- every column as a labeled cell, all relationship metadata -- it doubles as a conformance test: any datum it cannot show is a gap in the model. The view-layer composition this enables (a focal node's related row-sets, an **anchoring** axis, and a shared schema-adaptive row renderer keyed on `(row, columns, density, fidelity)`) is developed in [Phase 9.2](../phases/Phase-9.2.md). The [Phase 9.7 convergence](../phases/Phase-9.7.md#3-three-child-sourcing-modes-the-unification) later replaces the per-node stack of **bands** with three **child-sourcing modes** of one node -- `loose` (the mesh), `container` (a matrix bounded here), and `view` (a query) -- all drawn by that one substrate renderer; "substrate first" is the v1 fidelity, with composed sugar as [Phase 10](../phases/Phase-10.md).
+
+## Execution model
+
+SQLite is not just a storage engine -- it is the primary computation and data manipulation substrate. All relational logic (reads, writes, structural operations) is expressed in SQL and executes inside the SQLite engine. TypeScript serves as a thin orchestration layer that routes user actions to the appropriate SQL operations and wires results to the UI.
+
+### Three tiers
+
+| Tier                          | What lives here                                                                                                                                                                            | Examples                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Custom SQLite functions**   | Byte-level algorithms that are procedural by nature, registered as deterministic SQLite functions at init. They execute inside the SQLite engine and can be called from any SQL statement. | `lexo_between(prev, next)` for Lexorank key computation, `lexo_next_prefix(key)` for subtree bounds                                         |
+| **Prepared SQL transactions** | All relational operations: queries, data mutations, trait operations. Expressed as parameterized SQL and kept as prepared statements in the worker for repeated use.                       | Closure maintenance (`INSERT ... SELECT` for ancestor relationships), rank key rewriting, data table inserts/updates, join table operations |
+| **TypeScript orchestration**  | Routing: which prepared statement to execute for a given user action. Binding parameters. Error handling. UI event dispatch. No data manipulation logic.                                   | Determining which insert case applies (after sibling? first child? at end?), binding the parameters, executing the prepared transaction     |
+
+### Why SQL-first
+
+**Atomic transactions.** Operations that span multiple related tables (ordering + closure + data) execute as a single SQL transaction. No partial states, no JS-interleaved failure modes.
+
+**Prepared statements.** Frequently executed operations (insert row, reorder, query visible rows) are prepared once and reused with different bound parameters. The SQLite engine skips parsing and planning on reuse. The worker can keep statements warm and send reactive updates immediately when subscribed queries are invalidated.
+
+**Minimal round trips.** Set-based SQL operations replace fetch-loop-insert patterns. For example, creating closure relationships for a new child row is a single `INSERT ... SELECT` that generates all ancestor rows inside the engine, rather than querying ancestors to JavaScript, looping, and inserting one at a time.
+
+**One computational substrate.** The same SQL that powers user-facing query expressions (formula columns, live searches, face data sources) also powers core operations (rank traits, closure traits, join table). Plugins compose SQL for both reads and writes. There is one language for data, not two.
+
+### Boundary: what stays in TypeScript
+
+TypeScript handles things that are not relational:
+
+- **UI rendering and interaction** (Solid.js components, event handlers).
+- **Routing logic** (determining which operation to execute based on user intent).
+- **Worker communication** (message passing between the main thread and the SQLite worker).
+- **Lifecycle management** (plugin init/destroy, scheduling).
+- **Non-relational algorithms** that are registered as custom SQLite functions (the functions themselves are authored in TypeScript but execute inside SQLite).
+
+The guiding principle: **prefer SQL** whenever it is nearly as simple as the TypeScript alternative and the benefits (atomicity, prepared statements, fewer round trips) apply well. SQL is a strong default, not a strict requirement. If an operation would be significantly simpler or more maintainable in TypeScript outside the SQL engine, do it in TypeScript -- the goal is clarity and fitness, not purity. TypeScript is the orchestrator; SQL is the preferred operator.
+
+## Operations
+
+All data mutations in the system are expressed as **ops** (operations) -- typed, named functions with defined parameters and results. Ops are the single abstraction through which all write paths flow: the UI, plugins, MCP agents, batch compositions, and test fixtures all invoke the same op definitions.
+
+### Op registry
+
+The op registry is a single TypeScript type (`MatrixOperationMap`) that maps op names to their parameter and result types. Every op has exactly one entry in this map, and all consumers derive their interfaces from it:
+
+- The **worker message protocol** generates request/response message types from the registry.
+- The **client layer** generates typed async wrapper functions from the registry.
+- The **batch executor** validates and dispatches ops from the registry.
+- The **MCP tool layer** generates tool schemas from the registry.
+
+Adding a new op means adding one entry to the registry. The worker handler, client functions, batch support, and MCP tool exposure follow mechanically.
+
+### Op categories
+
+Ops fall into natural categories based on what they touch:
+
+| Category        | Examples                                                               | Invariants enforced                                                                                           |
+| --------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Data**        | `insertRow`, `updateRow`, `deleteRow`, `seedRow`                       | Random ID generation, rank/closure auto-handling, cascade deletion of owned targets, formula column rejection |
+| **Structure**   | `reparentRow`, `deleteSubtree`                                         | Rank key computation, closure table consistency, cycle prevention                                             |
+| **Schema**      | `addColumn`, `removeColumn`, `renameColumn`, `addFormulaColumn`        | Column registry sync, trigger reinstallation, data table DDL                                                  |
+| **Joins**       | `insertJoin`, `deleteJoin`, `createDependentRow`, `deleteOwnedTarget`  | Single-ownership enforcement, cascade deletion, join kind semantics                                           |
+| **Plugin/face** | `registerPlugin`, `ensureTrait`, `applyFaceToMatrix`, `saveFaceConfig` | Plugin identity, trait idempotency, face-triggered trait provisioning                                         |
+| **Query**       | `getColumns`, `getTargets`, `getSources`, `getFaceConfigs`             | Read-only, no invariants to enforce                                                                           |
+
+### Batch ops
+
+A **batch** is an ordered sequence of ops executed in a single SQLite transaction. If any op fails, the entire batch rolls back. Batches add two capabilities beyond sequential individual ops:
+
+**Atomicity.** Multiple ops that should succeed or fail together -- creating a row and its joins, or setting up a plugin's matrixes and traits -- execute as one transaction. No partial state is observable.
+
+**Forward references.** An op can name its result with a `ref` string. Later ops in the same batch can reference that result using a `$ref` placeholder anywhere an ID is expected. The batch executor resolves references from a growing result map as it processes each op.
+
+```json
+{
+  "ops": [
+    {
+      "op": "insertRow",
+      "ref": "note",
+      "params": { "matrixId": 5, "values": { "title": "Summary" } }
+    },
+    {
+      "op": "insertJoin",
+      "params": {
+        "sourceMatrixId": 5,
+        "sourceRowId": "$note.rowId",
+        "targetMatrixId": 5,
+        "targetRowId": 789,
+        "kind": "ref"
+      }
+    }
+  ]
+}
+```
+
+The batch executor is a thin loop: open a transaction, dispatch each op to the same handler functions used by individual op execution, resolve `$ref` placeholders from prior results, and commit or roll back.
+
+**Consumers of batch ops:**
+
+- **MCP agents.** An agent composes multiple ops into a single atomic request. Forward references let it create rows and reference them in subsequent ops without making sequential round-trips.
+- **Plugin registration.** The declarative portion of a `PluginDefinition` (matrixes, traits, face bindings) compiles to a batch. The existing `registerPlugin` function becomes syntactic sugar over a batch, with lifecycle hooks (`init`/`destroy`) running after the batch commits. This migration unifies plugin setup with the general-purpose batch executor.
+- **Templates.** A parameterized batch stored as data: "New project from template" creates a note, a task matrix, and cross-references in one atomic operation. User-defined and plugin-provided templates use the same format.
+- **Test fixtures.** Test setup code that seeds multiple matrixes with sample data and relationships uses batches for atomicity and clarity.
+
+### What batch ops do not replace
+
+Batch ops are for composition at API boundaries. They do not replace:
+
+- **Named SQL mutations.** The internal hot path (rank key computation, closure maintenance, prepared statements) stays as SQL-first operations inside the core. Ops call these internally.
+- **Undo/redo.** The granularity mismatch (ProseMirror text edits vs. structural operations) requires its own abstraction.
+- **Sync changesets.** Row-level snapshots with LWW conflict resolution are a different abstraction level than operation-level batches.
+
+## External interfaces
+
+The system exposes two external interfaces for programmatic access: a **read-only SQL sandbox** for queries, and a **typed op interface** for writes. Together they give external clients (MCP agents, CLI tools, future integrations) full access to the system's capabilities without bypassing invariants.
+
+### Read: SQL sandbox
+
+External clients can execute arbitrary `SELECT` queries against matrix data tables. The same authorizer-based sandbox used for face query expressions applies: read-only, scoped to `mx_{id}_data` tables, no access to system tables, resource-limited. This gives agents and tools the full power of SQL for search, analysis, and data retrieval.
+
+### Write: typed ops
+
+All writes go through the op interface (individual ops or batches). No raw SQL writes are exposed externally. This ensures that every mutation flows through the core's invariant enforcement: cascade deletion, rank/closure consistency, change tracking triggers, and schema validation.
+
+Direct SQLite write access is not exposed to external clients because it would bypass application-level invariants that SQL constraints alone cannot enforce -- cascade deletion of owned join targets, closure table maintenance, rank key computation, and column schema consistency. See [Execution model](#execution-model) for the boundary between SQL-enforceable and application-enforced invariants.
+
+### Markdown content format
+
+Rich text columns (ProseMirror JSON) are translated to and from Markdown at external interfaces. ProseMirror JSON remains the internal storage format for performance (no parsing step on editor load) and fidelity. The Markdown projection is produced on read and parsed on write.
+
+The Markdown format includes custom syntax for inline references:
+
+- **`@[Display Title](hexId)`** for `ref`-kind references (wiki-links).
+- **`#[Tag Name](hexId)`** for `own`-kind references (tags).
+
+Where `hexId` is the hex encoding of the target row's integer ID. The display text is the cached title; the hex ID is the stable identity.
+
+On write, the system parses Markdown back to ProseMirror JSON and runs the standard inline ref sync process (`syncInlineRefs`) to update the join table. If a write would remove an `own`-kind reference (triggering cascade deletion), the op returns a validation error by default, requiring the caller to use an explicit deletion op instead. This prevents accidental data loss from Markdown editing.
+
+### MCP server
+
+The primary external interface. An MCP server exposes the op registry as MCP tools, with tool schemas generated from the op type definitions. The MCP server also exposes the SQL read sandbox as a query tool and provides Markdown-formatted content for rich text columns.
+
+See [Plan - Phase 16](../../Plan.md#phase-16----op-system-batch-ops-and-mcp-server) for the implementation plan.
+
+## Core concepts
+
+### Matrix
+
+- **Matrixes** are the elemental data container of the app. A matrix is a typed SQLite data table with a schema (columns and types).
+- A matrix's data table is a normal, user-expandable SQLite rowid table. Columns can carry constraints (NOT NULL, UNIQUE, CHECK, foreign keys) declared at creation time, providing engine-level validation of data invariants. Plugins declare constraints on their columns to enforce schema contracts; user-added columns are unconstrained by default.
+- Each matrix has exactly one **identity face** that is lifecycle-bound to it. Creating a matrix creates its identity face; deleting the identity face deletes the matrix. The identity face is the matrix's representation in the outline and the full-authority surface for managing its contents.
+- Matrixes can be created by users, by plugins, or programmatically. The matrix registry includes metadata (`source_plugin_id`) to track provenance.
+
+### Row
+
+- **Rows** are the addressable units within a matrix -- they correspond directly to rows in the matrix's SQLite data table.
+- Each row has a globally unique integer ID (random large integer, not sequential auto-increment) to support sync across devices without collisions. A row is globally identified by its `(matrix_id, row_id)` pair.
+- Rows carry typed column values as defined by the matrix's schema, including both literal columns (user-editable data) and formula columns (SQL expressions evaluated per-row).
+
+### Column identity
+
+Columns have a **stable integer ID** in the `matrix_columns` registry, independent of their human-readable name. Column names are mutable labels -- renaming a column does not change its identity. This parallels row identity: rows have stable IDs and mutable content; columns have stable IDs and mutable names.
+
+Stable column IDs enable **durable cross-references to columns** that survive renames. Any system feature that stores a reference to a column -- face slot bindings, sort/filter configurations, formula expressions -- references the column by its stable ID, not by name. The name is resolved from the ID at display and query time. This is the same pattern as inline references, where the ProseMirror document stores a `targetRowId` and resolves the display title reactively.
+
+**Column constraints.** Column definitions can carry SQLite constraints (`NOT NULL`, `UNIQUE`, `CHECK`, foreign keys) declared at creation time and stored in `matrix_columns`. When `createMatrix` builds the data table DDL, it compiles these constraints into the column definitions. Constraints provide engine-level validation regardless of write path -- ops, batch ops, MCP writes, and any future write mechanism all hit the same SQLite constraints.
+
+**Plugin schema contracts.** Columns declared by a plugin are marked in `matrix_columns` with a `managed_by` field recording the plugin ID. Schema mutation ops (`removeColumn`, `renameColumn`) refuse to modify plugin-managed columns unless the caller passes `force`. This protects plugin invariants without preventing power users or agents from overriding when they know what they're doing.
+
+**FK-backed column references.** Structured references to columns -- face slot bindings, sort configurations, filter configurations -- are stored in normalized tables with foreign keys to `matrix_columns` (by stable column ID). The FK carries `ON UPDATE CASCADE` for renames and appropriate `ON DELETE` behavior (e.g. `SET NULL` for slot bindings, `CASCADE` for sort configs, `RESTRICT` for formula dependencies). This means `renameColumn` only updates `matrix_columns.name` -- all downstream references are cascaded automatically by the SQLite FK engine. No application code enumerates consumers, and new features that reference columns automatically participate by creating their own FK-backed table. The convention is structural: **if you reference a column, FK to `matrix_columns`.**
+
+**Column display roles.** Columns carry an optional `role` annotation indicating their semantic purpose in the matrix: `label` (the short identifying text of a row) or `content` (the rich body content). At most one column per role per matrix, enforced by a partial unique index. Roles serve two purposes: (1) they enable search infrastructure (FTS5 indexes `label`-role columns for quick search, `content`-role columns for deep search), and (2) they allow the workspace face to locate its target columns by semantic role rather than by hardcoded column name. Roles are data-level semantics, independent of face-level slots -- a column's role describes what it _means_, while its slot binding describes where it _renders_ in a particular face.
+
+### Query expression
+
+SQLite is the user-facing computation engine. A **query expression** is a sandboxed SQL query that produces a result set for a face to render. Every face receives its data through a query expression, making query evaluation the uniform interface between data and presentation.
+
+Query expressions appear at three granularities:
+
+- **Face query** -- the data source for a face. The identity face's query is implicitly `SELECT * FROM matrix_N`. Other faces have explicit queries that may filter, join, aggregate, or compute over one or more matrixes.
+- **Formula column** -- a matrix column whose value is a SQL expression evaluated per-row, with access to the current row's values. Formula columns appear alongside literal columns in query results but are not directly editable. Formulas reference other columns by stable column ID using `{{columnId}}` syntax rather than raw column names. At evaluation time, the system compiles `{{id}}` references to current column names before executing the SQL. In the formula editor, column references display as styled tokens showing the current column name (analogous to how inline refs display the current row title). A `formula_column_deps` table tracks which columns each formula depends on, with FK constraints that prevent removing a column used by a formula.
+- **Inline expression** -- a SQL expression embedded in text content that evaluates to a scalar value rendered inline.
+
+#### Sandboxing
+
+Query expressions run in a read-only sandbox using SQLite's authorizer callback:
+
+- **Read-only.** Only `SELECT` operations are authorized. `INSERT`, `UPDATE`, `DELETE`, and DDL are rejected at parse time.
+- **Table scoping.** Only matrix data tables are accessible, not internal system tables (matrix registry, trait tables, plugin config).
+- **Resource limits.** Step limits via `sqlite3_progress_handler` prevent runaway queries. Result sets are capped.
+- **No side effects.** Dangerous functions (e.g. `load_extension()`) are blocked. Only pure, deterministic functions are available.
+
+#### Name resolution
+
+The query engine resolves human-readable matrix names to their underlying tables, so queries reference matrixes by name rather than internal ID. Custom SQL functions provide ergonomic shortcuts for common patterns (e.g. following join references).
+
+#### Reactive updates
+
+All data mutations flow through prepared SQL transactions in the worker. When a mutation touches a table, the worker invalidates and re-evaluates any prepared subscription whose query reads from that table. Subscriptions for currently visible faces fire immediately; off-screen faces are marked stale and re-evaluated lazily when scrolled into view.
+
+### Identity face
+
+The **identity face** is the canonical face for a matrix, bound to it 1-to-1. It is always a **table face** (no slots, every column rendered as a spreadsheet column) and serves as the full-context, full-authority surface for the matrix's data.
+
+**What the identity face shows:**
+
+- All columns (literal and formula, with formula columns visually distinct).
+- All rows (no filter applied).
+- The matrix schema (column names, types, which columns are formulas).
+- The matrix identity (name, metadata).
+
+**What the identity face uniquely permits (beyond what other faces allow):**
+
+- Row deletion.
+- Schema modification (add, remove, rename columns; define formula columns).
+- Matrix deletion (deleting the identity face deletes the matrix).
+
+The identity face is also the **source** in the hydration model -- the pool from which data flows downstream to other faces.
+
+A matrix can also be viewed through **specialized face types** with slot bindings (outline, note, flashcard, etc.). These are additional views, not replacements for the identity face. The identity face remains the authoritative surface for schema and destructive operations. A note matrix's primary user-facing view might be the note face, but its identity face (the table view) is always accessible for full-authority management.
+
+The identity face also generalizes into the **substrate** fidelity (see [Composed and substrate fidelity](#composed-and-substrate-fidelity)): the same "every column as a labeled cell, full metadata shown" treatment, lifted from a per-matrix table view to a fidelity available at any granularity. As such it is the universal drill-in fallback when an attachment/matrix declares no preferred face ([Plan.md open question #5](../../Plan.md)).
+
+The [Phase 9.7 convergence](../phases/Phase-9.7.md#4-ownership-vs-position-the-data-layer-crux) sharpens what the identity face _is_: it is a matrix's **container** border, generalized -- it bounds membership + the matrix-axis drop cascade around a matrix's rows _without positioning them_. A container is precisely **not** a "view" (a query owns and positions nothing) and not the `loose` mesh (which positions rows directly); it is the third thing. A dedicated sub-table and a shared type-node's extent are the same container primitive, differing only in where each row's `own`-edge lands (all into the owner vs. out to various hosts).
+
+**Dependent rows and the identity face.** A matrix may contain rows created as owned aspects of rows in other matrixes (via `own`-kind joins -- see [Traits - Join kinds](./Traits-pre-reconciliation.md#join-kinds)). These dependent rows appear in the identity face like any other row. Deleting a dependent row from the identity face is permitted -- the core removes the `own` join entry and the plugin managing the source-side reference handles cleanup (removing an inline tag node from rich text, or nulling a cell value in a table). Cascade deletion through owned joins is an automatic lifecycle consequence, not a manual destructive operation -- it does not require the identity face.
+
+### Hydration
+
+The hydration model governs what is editable and what is read-only across all faces. Data originates at its **source** (the identity face for a matrix) and **flows** downstream through query expressions to other faces.
+
+> **Editability is per-cell, computed uniformly.** Under the [Phase 9.7 convergence](../phases/Phase-9.7.md#8-simplifies--risks--migration-touch-original-goal-3), whether a cell is editable depends only on whether it is hydrated (traces back to a source cell) -- never on _which band_ it renders in. The three former bands are gone; a single substrate renderer draws every row across the `loose` mesh, so the [§9.6 host-matrix sharp edge](../phases/Phase-9.md#96-the-unified-creation-gesture) (where an `/attach`ed aspect on a non-workspace node became uneditable because it fell outside a host-matrix-scoped band query) **cannot recur** -- there is no per-band query left to carry that restriction.
+
+#### Hydrated columns
+
+A column in a face's query result is **hydrated** if it has flowed from its source matrix without modification -- the face has the matrix ID, the rowid, and the column value corresponds directly to a literal column in the source table. Hydrated columns are live and editable from any face, because editing them writes back to a specific, identifiable cell in a specific source row. Hydration applies equally to slot-bound columns and overflow columns -- editability depends on whether the column traces back to a source cell, not on which slot (if any) it occupies.
+
+Join reference columns are hydrated like any other column. A visible join reference can be edited (relinked to a different target row), cleared (unlinked), or filled (creating a new link). These operations translate to changes on the join table, but from the user's perspective it is simply editing a visible cell value. If the join reference column is not selected in the query, the join relationship is invisible and untouchable. Clearing a join reference cell respects the join's `kind`: clearing a `ref`-kind cell removes the join entry; clearing an `own`-kind cell removes the join entry and cascade-deletes the target row.
+
+#### Dry columns
+
+A column is **dry** if it is computed -- a formula column, an aggregation, or a derived expression in the query. Dry columns are read-only. There is no source cell to write back to.
+
+#### Row addition
+
+New rows can be added from any face where the source matrix is unambiguous. When adding a row through a filtered face, the filter criteria are used as default values for the new row.
+
+#### Destructive operations
+
+Water only flows downstream from the source. Destructive operations -- row deletion, schema modification, matrix deletion -- require being at the source: the identity face. This ensures the user has full context (all columns, all rows, the complete picture) before destroying data.
+
+This does not mean deletion is absolutely never available outside the identity face, but if offered, it would be a special, confirmation-gated operation -- not the default affordance. The default state of non-identity faces is: edit what you can see, add new things, but don't destroy what you might not fully see.
+
+#### Summary
+
+| Operation                   | Any face (hydrated)       | Identity face |
+| --------------------------- | ------------------------- | ------------- |
+| Edit a literal column value | ✓                         | ✓             |
+| Edit a join reference       | ✓ (if column visible)     | ✓             |
+| Add a new row               | ✓ (if source unambiguous) | ✓             |
+| Delete a row                | ✗ (default)               | ✓             |
+| Modify schema               | ✗                         | ✓             |
+| Delete the matrix           | ✗                         | ✓             |
+
+### Inline references
+
+Inline references are the user-facing mechanism for creating and displaying cross-matrix joins inside rich text and table cells. They appear in two modes that share rendering infrastructure but differ in creation behavior and join kind:
+
+- **`@` (reference mode).** Links to an existing row in another matrix. Creates a `ref`-kind join. The target row has independent lifecycle. Autocomplete searches existing rows. Referencing a nonexistent target (e.g. a note title that doesn't exist yet) creates the reference in an "empty" state with no join entry -- the user can later click to create the target on demand. This is the wiki-link pattern.
+
+- **`#` (tag mode).** Classifies the current row by creating a new dependent row in the tag's matrix. Creates an `own`-kind join via `createDependentRow`. The target row is a lifecycle-bound aspect of the source row. Autocomplete shows available tag types (matrixes registered for tag use).
+
+Both modes are provided by plugins, not the core. The core provides the join table with `kind` semantics and the `createDependentRow` / `createRefJoin` operations. Plugins provide the inline node types, autocomplete, rendering, and cache management.
+
+#### Surfaces
+
+Inline references appear on two surfaces:
+
+- **Rich text (ProseMirror).** Inline nodes embedded in outline row or note body text. Rendered as badges (title link for `@`, colored badge with optional property chips for `#`). The ProseMirror document is the source of truth for which references exist in the text; the join table is synced from the document on save.
+
+- **Table cells.** A column type that holds a reference to a row in another matrix, analogous to a foreign key. `ref`-kind cells are independent references; `own`-kind cells are cascade-delete foreign keys. Cell references share UX patterns and iconography with inline text references but may be more optimized (no ProseMirror overhead).
+
+#### Reference states
+
+An inline reference can be in one of three states:
+
+- **Live.** The target row exists. The reference resolves dynamically, showing the target's current title or content preview via a reactive query.
+- **Empty.** The target doesn't exist yet (a forward reference to something the user intends to create). No join entry exists. The reference carries a cached "desired" state (e.g. the intended note title) in the ProseMirror document attrs. Clicking the reference offers to create the target.
+- **Ghost.** The target existed but has been deleted. The join entry is gone. The reference retains cached metadata (last known title) from the ProseMirror document attrs and renders with a visual indicator (e.g. trash icon). Clicking offers to restore the target if recoverable.
+
+The ProseMirror document attrs serve as the persistent cache for reference metadata (title, preview, status). Live rendering always prefers the reactive query result; cached data is the fallback for empty and ghost states. The cache is refreshed on document save.
+
+#### Portals: the structural member of the ref family
+
+The [Phase 9.7 convergence](../phases/Phase-9.7.md#5-portals-and-refs-one-family-split-by-anchoring) adds a third non-owning reference, the **portal**, and shows that refs and portals are **one family split by anchoring**. Both are non-owning (severing is non-destructive) and share the live / empty / ghost state machine and backlinks; they differ only in anchoring and rendering:
+
+- An **`@`-ref** is _content-anchored_ -- its edge lives inside a node's prose and it renders as an inline **badge**.
+- A **portal** is _structurally-anchored_ -- it occupies a position in the forest (a `scroll_index` entry) and **transcludes** the node as a full inline block, **deep** by default (the node _and its owned subtree_). It is the missing cell of the ownership × anchoring square (non-owning + structural).
+
+The ref machinery is **reused**, not replaced. One intentional divergence in the ghost state: an `@`-ref ghost renders from cached ProseMirror doc attrs, but a structural portal has no doc cache, so a deleted home leaves a surviving `is_ghost` tombstone _entry_ that holds the position at each portal appearance (see [Phase 9.7a §2](../phases/Phase-9.7a.md#2-incremental-maintenance--cases-covered)). Portal storage is a `joins` row with `kind='portal'` ([Traits — Join kinds](./Traits-pre-reconciliation.md#join-kinds)); Phase 9.7 shipped the deep-mirror maintenance and plural-position windowing validated by the 9.7a and 9.7b spikes.
+
+## View hierarchy and navigation
+
+> Decided in [Phase 10 §2](../phases/Phase-10.md#2-view-hierarchy-and-navigation-model) (visual companion: [Phase-10-Session-2-visuals.html](../visuals/Phase-10-Session-2-visuals.html)). The detailed face composition contract is formalized in [Phase 10 §3](../phases/Phase-10.md#3-plugin-view-composition-model). The query/authoring model shared by the launcher and `view` blocks is [Query-Spec.md](../../Query-Spec.md) ([Phase 10 §3b-i](../phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec)); the launcher surface itself is [Launcher.md](../../Launcher.md) (§3b-ii).
+
+Everything the user touches at the view layer is one of exactly three kinds:
+
+- **Places** — positions in the one forest. Every node, container, and view is somewhere; the stream renders it.
+- **Gestures** — transient, keyboard-first surfaces that act and vanish: **`⌘K` (go)** finds and navigates to anything; **`/` (make)** creates and acts (the [Phase 9 §9.6](../phases/Phase-9.md#96-the-unified-creation-gesture) slash surface). Gestures are never places — they jump you or create, then disappear.
+- **The system edge** — the few surfaces that live above/outside the database: settings (account, sync, filesystem locations) and the dev-tools drawer. Deliberately paradigm-free and dead simple to find. Kept tight: configuring faces/blocks/views is _not_ settings — it is expressed idiomatically as per-panel/per-block chrome (arriving with composed fidelity in Phase 10 §4).
+
+No fourth kind. In the target architecture, there are no top-level feature tabs: the current
+Workspace/Table/Tags tabs are temporary prototyping scaffolding and retire only after the launcher
+can replace their navigation role. After the [Phase 9.7 convergence](../phases/Phase-9.7.md), every tab's
+content is expressible as a place or a lens (a container node's grid rendering; a launcher lens over
+type-nodes), so tabs would be a second, redundant index over the same space. Tabs may return later
+as **saved stream states** (browser-tab-like session contexts): a convenience layer, not a
+navigation paradigm.
+
+### One root; focus, not zoom
+
+The stream (panel sequence) is the app's single primary surface, and it hangs from the one global root — literally. **Ancestry up to the root is never lost**: the selected Phase-10 structure carries it spatially through unique sticky headers and the cross-column drill path. When the bounded column window shifts the root navigation panel offscreen, one simple ancestry breadcrumb appears at the top of the leftmost visible focus panel; it is absent from later focus panels and from root-visible streams. Consequently there is no "zoom" primitive. The only re-rooting mechanic is **focus**, using the drill path, focus-panel collapse headers, and that deep-window breadcrumb where necessary. "Open matrix X as a table" is a focus state on its container node; "browse all types" is a launcher lens. Identity-based entry (launcher, backlinks, notifications) reconstructs a rooted focus state — never a rootless view. The prior overlaid-card edges/tabs remain implementation history, not the forward navigation model.
+
+The workspace root matrix's identity-face content is the root panel at substrate fidelity (x-ray); a truly flat all-rows grid, if ever wanted, is just a `view` node — no dedicated surface is minted.
+
+### Two planes: position and membership
+
+The view layer navigates one fabric and lenses the other:
+
+- The **position fabric** — the forest of `own`/`portal` edges — is what users compose and traverse. It holds order, ancestry, and breadcrumbs. Navigation follows position; the forest is the one root.
+- The **membership fabric** — matrixes (extent + schema) — is a grouping with no order or ancestry to walk. It is exposed through **lenses**: `view` nodes and launcher dimension filters ("all containers", "#task where …"), never as a second root. The database-app root analog ("browse all matrixes") is a lens.
+
+The membership plane is load-bearing underneath: it powers the launcher's dimension filters and the ancestry fallback below.
+
+### Cross-cutting CRUD: views find, faces edit, commands make
+
+There are no management surfaces. Any cross-cutting management need (tag management was the motivating instance) is served by one triad, meshed into the stream:
+
+- **`view` nodes find** the set — live queries with a place.
+- **Faces edit** the members where they render — hydrated cells, with the substrate floor guaranteeing every field is reachable.
+- **Commands make and destroy** — `/` commands and promotion ops to create, label edit to rename, node delete to destroy (confirmation-gated where cascades are large).
+
+### Ancestry resolution ladder
+
+A panel's breadcrumb/ancestry resolves down a fixed ladder; an arbitrary portal appearance is **never** auto-chosen:
+
+1. **Provenance** — the appearance actually traversed, via its lexkey-prefix ancestry (the [Phase 9.7](../phases/Phase-9.7.md#6-the-one-interleaved-index) rule). Covers nearly all navigation.
+2. **Home** — for identity-based entry: the single distinguished position every live row has (owner = where created).
+3. **Membership** — for ghost-homed or positionless rows: matrix → owner node → its home chain, with the row's surviving appearances listed. The state is surfaced honestly rather than silently adopting a portal.
+
+### Placeless creation homes by provenance
+
+Creation from a placeless gesture (e.g. saving a launcher search as a `view` node) homes under the node/panel that was focused when the gesture was invoked — owner-where-created, extended to placeless gestures.
+
+### What plugins contribute
+
+The shell — stream + launcher + system edge — is fixed core infrastructure, like the table face type. Plugins contribute exactly two things: **face types** and **commands** (`/` entries and `⌘K` actions, one registry with two surfaces).
+
+A **face type** declares at most two renderings and nothing about panel layout: a **line** (a single row as a participant in a parent's region) and a **collection** (a row-set arranged — an outline list, a coalesced grid, kanban lanes, a calendar). **Host presentations** request these: a _row slot_ requests the line; a _block region_ requests both; a _panel_'s collection region requests the collection. The panel scaffold (identity · fields · collection region · relations) is shell-owned and outside the plugin contract — only the collection region is delegated to a face — so its arrangement can evolve without breaking plugins. The rendering is resolved by an **affinity ladder** (appearance override [deferred] → the subject's/matrix's preferred recipe → the substrate floor); the substrate is the guaranteed floor in every presentation. Hosts own all chrome, recursion (faces never mount faces — a nested subject yields a slot back to the host), sizing (width + a computed density tier), and the composed↔substrate fidelity cascade. The full contract — the query/recipe split, the ladder, and the host-owned chrome/sizing/fidelity/recursion — is formalized in [Plugins.md — Plugin view composition model](../../Plugins.md#plugin-view-composition-model) ([Phase 10 §3](../phases/Phase-10.md#3-plugin-view-composition-model)).
+
+### Deferred
+
+- **URLs / deep links** — deferred until sharing/publishing matters. The only standing requirement: stream state stays a plain serializable value (focus root + panel identities), so history, saved stream states, and eventual URLs remain cheap.
+- **Saved stream states** (tabs-as-sessions).
+- **Split view** — dropped as a design driver; the real side-by-side workflows (e.g. a grid of tasks beside the outline hosting them) render inline as blocks in one stream.
+
+## UI concepts
+
+- Performance is king - everything in a single frame.
+- Simple, obvious keyboard shortcuts for everything.
+- Outline is maximally easy to work with as an outline.
+  - Drag-and-drop reordering with handles.

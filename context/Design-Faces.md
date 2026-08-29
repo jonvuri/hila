@@ -1,5 +1,9 @@
 # Design System — Component Variants
 
+> **Implementation status.** The navigation-outline registry and Guides production treatment ship.
+> Table treatments and the remaining face migrations are design inputs, not shipped runtime
+> variants. Future sequencing belongs in [Plan.md](Plan.md).
+
 This document plans configurable outline and table treatments. These components build on the
 shared semantic token system. An outline treatment can serve the shell navigation panel and an
 outline face without changing either host's behavior.
@@ -60,11 +64,8 @@ The navigation row owns one fixed geometry and exposes decoration slots. A regis
 tokens from the active visual theme and polarity.
 
 The forward Storybook specimen has visual-theme and polarity controls. It does not expose a
-single-option outline control. Production adoption lands with the later live workspace migration.
-
-The old renderer currently mixes row behavior with decoration. Do not reuse it as the host row.
-Adapt its calculations and paint, then preserve its standalone stories as references until the
-forward adapters pass.
+single-option outline control. Production uses the approved Guides adapter through the independent
+`navigationOutline` setting. The old renderer remains historical reference material.
 
 ### Windowing contract
 
@@ -75,9 +76,9 @@ the window, and one-row look-ahead. Deterministic tests compare full and windowe
 ### Implementation phases
 
 Session 4m established the registry and host seam, reviewed seven candidates, and approved Guides.
-Session 4n rebuilt sticky navigation as a bounded widget integrated with its scroll component. It
-also approved scoped suppression of scroll-boundary rubber-band behavior. Session 4o adapts the
-same widget and Guides renderer to paged production data before the live shell migration.
+Session 4n rebuilt sticky navigation as a bounded widget integrated with its scroll component.
+Session 4o adapted that widget and Guides renderer to paged production data. Sessions 4p–4q moved
+it into the live shell and removed the retired renderer.
 
 ## Table face treatments
 
@@ -170,10 +171,10 @@ Each component variant renders the same bound data. The outline face binds a mat
 title slot. The table face binds multiple columns to column slots. Variant rendering is visual and
 does not affect slot bindings.
 
-## Migration plan
+## Migration record
 
-The existing `src/global.css` contains face-specific styles for the outline, note list, note face,
-and matrix browser. The migration order is:
+The existing `src/global.css` still contains face-specific and system-surface styles. Phase 10
+completed steps 1–6. The remaining work is re-homed by the phase-boundary reconciliation.
 
 1. Define and implement canonical tokens in Sessions 4j–4k.
 2. Close the sticky and navigation-outline design gates in Sessions 4l–4m.
@@ -185,7 +186,7 @@ and matrix browser. The migration order is:
 7. Migrate the launcher and shared overlays before top-level tabs are removed.
 8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
-The detailed order is in the [Sessions 4j–4m plan](Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
-the [Session 4n plan](Phase-10-Session-4n-plan.md), and the
-[Session 4o plan](Phase-10-Session-4o-plan.md). Live migration and removal are in the
-[Sessions 4p–4q plan](Phase-10-Sessions-4p-4q-plan.md).
+The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
+the [Session 4n plan](./archive/phases/Phase-10-Session-4n-plan.md), and the
+[Session 4o plan](./archive/phases/Phase-10-Session-4o-plan.md). Live migration and removal are in the
+[Sessions 4p–4q plan](./archive/phases/Phase-10-Sessions-4p-4q-plan.md).

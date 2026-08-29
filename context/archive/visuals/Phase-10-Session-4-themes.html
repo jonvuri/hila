@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phase 10 · Session 4 — Theme fan-out index</title>
+<style>
+  :root {
+    --bg: #14161d; --panel: #1b1e27; --line: #2c3140;
+    --text: #c9cfdb; --dim: #99a1b3; --muted: #6b7488; --accent: #6ea8fe;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 40px 28px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 44px 0 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); color: #e6eaf2; }
+  .lede { color: var(--dim); margin: 0 0 8px; max-width: 780px; }
+  .lede b { color: var(--text); }
+  .note { color: var(--muted); font-size: 12.5px; margin-top: 8px; max-width: 780px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .card .preview { height: 210px; overflow: hidden; position: relative; border-bottom: 1px solid var(--line); background: #0a0a0c; }
+  .card .preview iframe {
+    width: 1280px; height: 960px; border: 0;
+    transform: scale(0.262); transform-origin: top left;
+    pointer-events: none;
+  }
+  .card .preview a.cover { position: absolute; inset: 0; }
+  .card .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .card h3 { font-size: 15px; color: #e6eaf2; }
+  .card h3 .no { font-size: 10.5px; color: var(--muted); font-weight: 400; margin-right: 8px; letter-spacing: 0.08em; }
+  .card p { font-size: 12.5px; color: var(--dim); flex: 1; }
+  .card a.open { font-size: 12.5px; color: var(--accent); text-decoration: none; }
+  .card a.open:hover { text-decoration: underline; }
+
+  table.cmp { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 12.5px; }
+  table.cmp th, table.cmp td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.cmp th { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  table.cmp td:first-child { color: #e6eaf2; white-space: nowrap; font-weight: 500; }
+  table.cmp td { color: var(--dim); }
+  table.cmp td b { color: var(--text); font-weight: 600; }
+
+  ul.tight { margin: 8px 0 0; padding-left: 20px; }
+  ul.tight li { margin: 6px 0; color: var(--dim); }
+  ul.tight li b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<aside style="margin-bottom:24px;padding:12px 14px;border:1px solid var(--line);border-left:3px solid var(--accent);color:var(--dim);font-size:12.5px;">
+  <strong style="color:var(--text);">Archive — Phase 10 Session 4.</strong>
+  These catalogs and prototypes are design history, not current design authority. The archived
+  Sticky Headers story is the only structural source reference. Its Wipeout styling is not the
+  forward base. See the <a href="../phases/Phase-10-Session-4c-plan.md" style="color:var(--accent);">Ghost
+  convergence plan</a>.
+</aside>
+
+<h1>Phase 10 · Session 4 — Visual direction fan-out</h1>
+<p class="lede">
+  Three theme catalogs, built to the <b>same skeleton</b> (inspiration → foundations → chrome →
+  components → gestalt → dials) with the <b>same demo content</b> (the "Reading queue" scenario),
+  so they compare cell-for-cell. Each is a standalone page with a dark/light toggle and live dials —
+  open them full-size and play with the knobs.
+</p>
+<p class="note">
+  Intent (per the session brief): a creative fan-out first; at least two survivors later, to force the
+  token/theming system to span genuinely different languages — the same way the substrate face forces
+  discipline on view configuration.
+</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="preview"><iframe src="Phase-10-Session-4-theme-wipeout.html" scrolling="no" tabindex="-1"></iframe><a class="cover" href="Phase-10-Session-4-theme-wipeout.html" aria-label="Open Wipeout catalog"></a></div>
+    <div class="body">
+      <h3><span class="no">01</span>Wipeout</h3>
+      <p>Low-poly HUD at modern fidelity. Typography is the chrome; bounds are suggested (brackets, ticks, one chamfer), never enclosed. Accent = focus/live only.</p>
+      <a class="open" href="Phase-10-Session-4-theme-wipeout.html">Open catalog →</a>
+    </div>
+  </div>
+  <div class="card">
+    <div class="preview"><iframe src="Phase-10-Session-4-theme-null.html" scrolling="no" tabindex="-1"></iframe><a class="cover" href="Phase-10-Session-4-theme-null.html" aria-label="Open Null catalog"></a></div>
+    <div class="body">
+      <h3><span class="no">02</span>Null</h3>
+      <p>Unsurprising to the point of invisible — Linear/paper register. Personality confined to a budgeted quirk or two imported from Wipeout (flags, margin ticks), each a dial.</p>
+      <a class="open" href="Phase-10-Session-4-theme-null.html">Open catalog →</a>
+    </div>
+  </div>
+  <div class="card">
+    <div class="preview"><iframe src="Phase-10-Session-4-theme-ultramodern.html" scrolling="no" tabindex="-1"></iframe><a class="cover" href="Phase-10-Session-4-theme-ultramodern.html" aria-label="Open Ultramodern catalog"></a></div>
+    <div class="body">
+      <h3><span class="no">03</span>Ultramodern</h3>
+      <p>Soft, fluid, abstract materials — frosted glass, ambient washes, glow. Raycast's instrument, Vercel's typography, Apple's materials. Depth is literal.</p>
+      <a class="open" href="Phase-10-Session-4-theme-ultramodern.html">Open catalog →</a>
+    </div>
+  </div>
+</div>
+
+<h2>Side-by-side: where the themes actually disagree</h2>
+<p class="lede">These axes are the future token system's stress tests — any two survivors must both be expressible by the same semantic tokens.</p>
+<table class="cmp">
+  <tr><th style="width:150px;">Axis</th><th>Wipeout</th><th>Null</th><th>Ultramodern</th></tr>
+  <tr>
+    <td>Accent discipline</td>
+    <td><b>Focus / selection / live only.</b> A lit element means something is happening.</td>
+    <td><b>Conventional.</b> Interactive, selected, linked — what users expect.</td>
+    <td><b>Expressive.</b> Selection, primary action, live — with glow; accent behaves like light.</td>
+  </tr>
+  <tr>
+    <td>Corners</td>
+    <td>0 radius; one chamfer per filled block (canon-compatible).</td>
+    <td>5/8px radius — the invisible default (canon break, dial to 0 available).</td>
+    <td>12/18px + pills (full canon break).</td>
+  </tr>
+  <tr>
+    <td>Bounds</td>
+    <td>Suggested: header + rule + 3-corner brackets; full enclosure only for modals.</td>
+    <td>Hairline cards; enclosure is normal and expected.</td>
+    <td>Material panes; the edge is a lit surface boundary, not a line.</td>
+  </tr>
+  <tr>
+    <td>Depth</td>
+    <td>Hard edge-steps + brightness (ancestor staircase). No shadows ever.</td>
+    <td>Shadows for true overlays only; resting UI is flat on paper.</td>
+    <td>Literal altitude: blur, translucency, layered shadows everywhere.</td>
+  </tr>
+  <tr>
+    <td>Type voices</td>
+    <td>Three strict voices: display (structure) / mono (instrumentation) / body (content-as-guest).</td>
+    <td>One family; weight and gray do all the work.</td>
+    <td>One family, tight tracking, heavy weights; one gradient flourish per composition.</td>
+  </tr>
+  <tr>
+    <td>Texture</td>
+    <td>VFD ghost segments (alpha only — no blur/gradients).</td>
+    <td>None. Texture is the absence of texture.</td>
+    <td>Frosted glass, ambient washes, fresnel "impossible objects".</td>
+  </tr>
+  <tr>
+    <td>Launcher</td>
+    <td>Fully-bracketed instrument over a flat scrim; key-legend footer.</td>
+    <td>Standard centered modal with real shadow; quietest possible chips.</td>
+    <td>The centerpiece: heaviest glass, icon tiles, gradient selection, blurred scrim.</td>
+  </tr>
+  <tr>
+    <td>Ancestry</td>
+    <td>Edge-step staircase with monogram stubs.</td>
+    <td>Breadcrumb text line.</td>
+    <td>Receding pill crumbs.</td>
+  </tr>
+  <tr>
+    <td>Overlaid cards (§5b)</td>
+    <td>Tab layer = descending strip of chamfered bars (baselines staircase 3px/depth); edges <b>step brightness</b> instead of fading; active tab = accent marker. Plus a <a href="Phase-10-Session-4-wipeout-overlaid-cards.html" style="color:var(--accent);">dedicated deep dive</a> with 6 concepts (gauge, edge-on sheets, spines, chevrons, terrace).</td>
+    <td>Tab layer = <b>per-column breadcrumb runs</b>, each flush over its column; ancestor cards = hairline slivers; titles redundantly in crumb <b>and</b> panel (deliberate Resolution-B break).</td>
+    <td>Cards = literal glass panes at altitudes; ancestors visible <b>through</b> the pane in front; tab layer = <b>column-locked pill groups</b>, active = gradient pill.</td>
+  </tr>
+  <tr>
+    <td>Danger</td>
+    <td>Semantic red only when <b>armed</b>; hold-to-confirm segment strip.</td>
+    <td>Hover-revealed red (platform convention).</td>
+    <td>Hover-revealed red wash.</td>
+  </tr>
+  <tr>
+    <td>Main risk</td>
+    <td>Uppercase/mono pressure in an all-day text tool.</td>
+    <td>Total collapse into the mundane if the quirk budget goes to zero.</td>
+    <td>Blur cost + marketing-skin-on-a-workshop dissonance.</td>
+  </tr>
+</table>
+
+<h2>How to review</h2>
+<ul class="tight">
+  <li>Each catalog: toggle <b>dark/light</b> (top-right) — both polarities are meant to be first-class in all three.</li>
+  <li>Play the <b>dials (§6)</b>: Wipeout's accent hue + display face + chamfer; Null's quirk budget + radius + label register; Ultramodern's blur + glow + radius + gradient stop.</li>
+  <li>Judge the <b>gestalt (§5)</b> before the parts — the same shell mock exists in all three.</li>
+  <li>The <b>§4c launcher</b> and <b>§4d table</b> are the highest-stakes comparisons: they carry the 3b chip grammar and the ƒ formula mark in every theme.</li>
+  <li><b>§5b stream</b> is where each theme gets stretched: the 7b overlaid-cards mechanics (tab layer, ancestor edge cards, depth staircase) morphed per theme, plus the full three-panel Miller stream (root nav · combined focus/nav · active focus) on identical content. In Null and Ultramodern the ancestry runs are <b>column-locked</b> — each column's path segments sit flush above it.</li>
+  <li>The <a href="Phase-10-Session-4-wipeout-overlaid-cards.html" style="color:var(--accent);"><b>Wipeout × Overlaid Cards deep dive</b></a> explores six concepts for physically representing deep hierarchy in Miller columns (instrument strip, depth gauge, edge-on sheets, spines, chevron flow, terrace) with a side-by-side judgment table.</li>
+</ul>
+
+<h2>Not decided here</h2>
+<ul class="tight">
+  <li>Which two (or more) directions survive into the token system.</li>
+  <li>The semantic token vocabulary that spans the survivors (accent discipline is the hard one — three different contracts above).</li>
+  <li>Whether canon rules (no radius, single flat violet) get amended per-theme or globally.</li>
+  <li>Composed vs substrate vs x-ray treatment per theme (Ultramodern §U3c sketches one; the others owe an answer).</li>
+</ul>
+
+</div>
+</body>
+</html>
