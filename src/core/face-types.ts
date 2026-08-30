@@ -20,7 +20,7 @@ export type FaceConfig = {
   settings: Record<string, unknown> // non-column-referencing settings only
   createdByPlugin?: string | null
   sort: { columnId: number; direction: 'ASC' | 'DESC' } | null
-  filters: { columnId: number; operator: string; value: string }[]
+  filters: { id?: string; columnId: number; operator: string; value: string; order?: number }[]
 }
 
 export type ResolvedSlotBinding = {

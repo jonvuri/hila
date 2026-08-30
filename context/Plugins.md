@@ -69,6 +69,9 @@ The current runtime has:
 - `FaceConfig` with matrix, query, face type, bindings, and settings;
 - whole-component dispatch through `FaceRenderer`.
 
+Normalized slot bindings are authoritative; the JSON copy on `face_configs` is derived
+compatibility state. Filter rows use stable UUID identity and an explicit order field.
+
 Slot resolution is:
 
 1. explicit stable column binding;

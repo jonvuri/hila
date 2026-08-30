@@ -19,9 +19,11 @@ export type SortConfig = {
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=' | 'LIKE' | 'NOT LIKE'
 
 export type FilterConfig = {
+  id?: string
   columnId: number
   operator: FilterOperator
   value: string
+  order?: number
 }
 
 export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`

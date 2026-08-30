@@ -214,7 +214,7 @@ export const initMatrixSchema = (db: Database) => {
       face_type_id     TEXT NOT NULL,
       matrix_id        INTEGER NOT NULL REFERENCES matrix(id),
       query            TEXT NOT NULL,
-      slot_bindings    TEXT NOT NULL,  -- JSON
+      slot_bindings    TEXT NOT NULL DEFAULT '{}',  -- derived compatibility JSON
       settings         TEXT,           -- JSON
       created_by_plugin TEXT REFERENCES plugins(id)
     ) STRICT;
@@ -385,11 +385,9 @@ export const initMatrixSchema = (db: Database) => {
   // (context/Phase-9.7.md §6: "a view persists only its SQL + its block marker's
   // position").
   //
-  // LOCAL-ONLY this phase (as `bands` was): no change-tracking/sync triggers
-  // (absent from installCoreTableTriggers), so view SQL is local view state. The
-  // SQLite update hook still fires, so `useQuery` subscriptions stay reactive.
-  // The marker node itself (own-edge in `joins`) syncs normally; promoting the
-  // SQL to synced source-of-truth is additive, deferred until multi-device.
+  // Phase 11 promotes this table to replicated source of truth. SQLite update
+  // hooks also keep `useQuery` subscriptions reactive. The marker and this
+  // source row form one durable view subject.
   db.exec(`
     CREATE TABLE IF NOT EXISTS block_sources (
       marker_matrix_id INTEGER NOT NULL,
@@ -418,11 +416,12 @@ export const initMatrixSchema = (db: Database) => {
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS face_filter_configs (
-      id             INTEGER PRIMARY KEY,
+      id             TEXT    PRIMARY KEY,
       face_config_id TEXT    NOT NULL REFERENCES face_configs(id) ON DELETE CASCADE,
       column_id      INTEGER NOT NULL REFERENCES matrix_columns(id) ON DELETE CASCADE,
       operator       TEXT    NOT NULL,
-      value          TEXT    NOT NULL
+      value          TEXT    NOT NULL,
+      "order"        INTEGER NOT NULL
     ) STRICT;
   `)
 }

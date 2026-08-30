@@ -1,7 +1,14 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import { parseFormulaRefs } from '../table/formula'
+
 import type { ApplyResult, ChangeEntry, Changeset, ConflictRecord } from './sync-types'
 import { rebuildClosure } from './closure'
+import {
+  DYNAMIC_DATA_TABLE_PATTERN,
+  getReplicatedTableDefinitions,
+  getTableDurabilityPolicy,
+} from './durability-policy'
 import { rebuildScrollIndex } from './scroll-index'
 import { withTransaction } from './transaction'
 
@@ -40,9 +47,8 @@ export const installChangeTrackingTriggers = (
 
   const insertJson = buildJsonObjectExpr(columns, 'NEW')
   const updateJson = buildJsonObjectExpr(columns, 'NEW')
-  // For composite-key tables (e.g. `joins`), record the OLD row on delete so a
-  // remote apply can locate the row by its logical key rather than the local
-  // (replica-unstable) SQLite rowid.
+  // Every delete carries OLD data so remote apply and conflict detection can
+  // use the manifest's logical identity. SQLite rowid is replica-local.
   const deleteData = options.recordOldOnDelete ? buildJsonObjectExpr(columns, 'OLD') : 'NULL'
 
   db.exec(`
@@ -82,77 +88,12 @@ export const dropChangeTrackingTriggers = (db: Database, tableName: string): voi
   db.exec(`DROP TRIGGER IF EXISTS "_sync_track_${tableName}_DELETE"`)
 }
 
-const CORE_TABLE_COLUMNS: Record<string, TrackedColumn[]> = {
-  plugins: [
-    { name: 'id', type: 'TEXT' },
-    { name: 'name', type: 'TEXT' },
-    { name: 'version', type: 'TEXT' },
-    { name: 'enabled', type: 'INTEGER' },
-    { name: 'metadata', type: 'TEXT' },
-  ],
-  matrix: [
-    { name: 'id', type: 'INTEGER' },
-    { name: 'title', type: 'TEXT' },
-    { name: 'source_plugin_id', type: 'TEXT' },
-  ],
-  matrix_columns: [
-    { name: 'id', type: 'INTEGER' },
-    { name: 'matrix_id', type: 'INTEGER' },
-    { name: 'name', type: 'TEXT' },
-    { name: 'type', type: 'TEXT' },
-    { name: 'display_type', type: 'TEXT' },
-    { name: 'order', type: 'INTEGER' },
-    { name: 'options', type: 'TEXT' },
-    { name: 'formula', type: 'TEXT' },
-    { name: 'constraints', type: 'TEXT' },
-    { name: 'managed_by', type: 'TEXT' },
-    { name: 'role', type: 'TEXT' },
-  ],
-  joins: [
-    { name: 'source_matrix_id', type: 'INTEGER' },
-    { name: 'source_row_id', type: 'INTEGER' },
-    { name: 'target_matrix_id', type: 'INTEGER' },
-    { name: 'target_row_id', type: 'INTEGER' },
-    { name: 'kind', type: 'TEXT' },
-    { name: 'edge_key', type: 'BLOB' },
-  ],
-  face_configs: [
-    { name: 'id', type: 'TEXT' },
-    { name: 'face_type_id', type: 'TEXT' },
-    { name: 'matrix_id', type: 'INTEGER' },
-    { name: 'query', type: 'TEXT' },
-    { name: 'slot_bindings', type: 'TEXT' },
-    { name: 'settings', type: 'TEXT' },
-    { name: 'created_by_plugin', type: 'TEXT' },
-  ],
-  face_slot_bindings: [
-    { name: 'face_config_id', type: 'TEXT' },
-    { name: 'slot_name', type: 'TEXT' },
-    { name: 'column_id', type: 'INTEGER' },
-  ],
-  face_sort_config: [
-    { name: 'face_config_id', type: 'TEXT' },
-    { name: 'column_id', type: 'INTEGER' },
-    { name: 'direction', type: 'TEXT' },
-  ],
-  face_filter_configs: [
-    { name: 'id', type: 'INTEGER' },
-    { name: 'face_config_id', type: 'TEXT' },
-    { name: 'column_id', type: 'INTEGER' },
-    { name: 'operator', type: 'TEXT' },
-    { name: 'value', type: 'TEXT' },
-  ],
-}
-
 /** Install change-tracking triggers on the core tables (drop+recreate to pick up column changes). */
 export const installCoreTableTriggers = (db: Database, deviceId: string): void => {
-  for (const [tableName, columns] of Object.entries(CORE_TABLE_COLUMNS)) {
+  for (const { tableName, columns } of getReplicatedTableDefinitions()) {
     dropChangeTrackingTriggers(db, tableName)
-    // `joins` is a composite-key table carrying the own-forest structure; its
-    // deletes must record the old row so remote applies key off the logical
-    // (source/target) identity, not the replica-unstable rowid.
     installChangeTrackingTriggers(db, tableName, deviceId, columns, {
-      recordOldOnDelete: tableName === 'joins',
+      recordOldOnDelete: true,
     })
   }
 }
@@ -166,7 +107,9 @@ export const installDataTableTriggers = (
 ): void => {
   const tableName = `mx_${matrixId}_data`
   const allColumns: TrackedColumn[] = [{ name: 'id', type: 'INTEGER' }, ...columns]
-  installChangeTrackingTriggers(db, tableName, deviceId, allColumns)
+  installChangeTrackingTriggers(db, tableName, deviceId, allColumns, {
+    recordOldOnDelete: true,
+  })
 }
 
 /** Drop and recreate data table triggers after a schema change. */
@@ -291,60 +234,101 @@ const setDeviceHighWaterMark = (db: Database, remoteDeviceId: string, seq: numbe
   )
 }
 
-/**
- * Check if there are local modifications to the same (table_name, row_id)
- * since the last sync with the remote device.
- * Returns the most recent local changelog entry if a conflict exists, null otherwise.
- */
+const getIdentityColumns = (tableName: string): readonly string[] => {
+  const policy = getTableDurabilityPolicy(tableName)
+  if (!policy || policy.durability !== 'replicated-source') {
+    throw new Error(`Remote changes cannot target unreplicated table "${tableName}"`)
+  }
+  return policy.identity
+}
+
+const getIdentityData = (entry: ChangeEntry): Record<string, unknown> => {
+  const identity = getIdentityColumns(entry.table)
+  if (entry.data && identity.every((column) => column in entry.data!)) return entry.data
+  if (identity.length === 1 && identity[0] === 'id') return { id: entry.rowId }
+  throw new Error(`Remote ${entry.operation} for ${entry.table} lacks its logical identity`)
+}
+
+const hasSameIdentity = (
+  tableName: string,
+  left: Record<string, unknown>,
+  right: Record<string, unknown>,
+): boolean => {
+  // An own-edge's parent is mutable, so concurrent reparents conflict by the
+  // single-owned target rather than by the row's full composite primary key.
+  if (tableName === 'joins' && left.kind === 'own' && right.kind === 'own') {
+    return (
+      left.target_matrix_id === right.target_matrix_id &&
+      left.target_row_id === right.target_row_id
+    )
+  }
+  return getIdentityColumns(tableName).every((column) => left[column] === right[column])
+}
+
+/** Find the newest local mutation with the same manifest-defined logical identity. */
 const findLocalConflict = (
   db: Database,
-  tableName: string,
-  rowId: number,
+  entry: ChangeEntry,
   localDeviceId: string,
   sinceSeq: number,
 ): { timestamp: string; data: string | null; operation: string } | null => {
+  const remoteIdentity = getIdentityData(entry)
   const stmt = db.prepare(
-    `SELECT timestamp, data, operation FROM _sync_changelog
-     WHERE table_name = ? AND row_id = ? AND device_id = ? AND seq > ?
-     ORDER BY seq DESC LIMIT 1`,
+    `SELECT timestamp, data, operation, row_id FROM _sync_changelog
+     WHERE table_name = ? AND device_id = ? AND seq > ?
+     ORDER BY seq DESC`,
   )
-  stmt.bind([tableName, rowId, localDeviceId, sinceSeq])
+  stmt.bind([entry.table, localDeviceId, sinceSeq])
   let result: { timestamp: string; data: string | null; operation: string } | null = null
-  if (stmt.step()) {
-    result = stmt.get({}) as { timestamp: string; data: string | null; operation: string }
+  while (stmt.step()) {
+    const row = stmt.get({}) as {
+      timestamp: string
+      data: string | null
+      operation: string
+      row_id: number
+    }
+    const localData = row.data ? (JSON.parse(row.data) as Record<string, unknown>) : null
+    const comparableData = localData ?? { id: row.row_id }
+    if (hasSameIdentity(entry.table, remoteIdentity, comparableData)) {
+      result = { timestamp: row.timestamp, data: row.data, operation: row.operation }
+      break
+    }
   }
   stmt.finalize()
   return result
 }
 
-/**
- * Build column list from a data record for SQL operations.
- */
-const buildInsertSql = (
+const buildUpsertSql = (
   tableName: string,
   data: Record<string, unknown>,
 ): { sql: string; values: (string | number | Uint8Array | null)[] } => {
+  const identity = getIdentityColumns(tableName)
   const columns = Object.keys(data)
-  const quotedCols = columns.map(quoteIdent).join(', ')
-  const placeholders = columns.map(() => '?').join(', ')
-  const values = columns.map((c) => data[c] as string | number | Uint8Array | null)
+  const updates = columns.filter((column) => !identity.includes(column))
+  const conflictAction =
+    updates.length > 0 ?
+      `DO UPDATE SET ${updates
+        .map((column) => `${quoteIdent(column)} = excluded.${quoteIdent(column)}`)
+        .join(', ')}`
+    : 'DO NOTHING'
   return {
-    sql: `INSERT OR REPLACE INTO ${quoteIdent(tableName)} (${quotedCols}) VALUES (${placeholders})`,
-    values,
+    sql: `INSERT INTO ${quoteIdent(tableName)} (${columns.map(quoteIdent).join(', ')})
+          VALUES (${columns.map(() => '?').join(', ')})
+          ON CONFLICT (${identity.map(quoteIdent).join(', ')}) ${conflictAction}`,
+    values: columns.map((column) => data[column] as string | number | Uint8Array | null),
   }
 }
 
-const buildUpdateSql = (
+const buildDeleteSql = (
   tableName: string,
-  rowId: number,
   data: Record<string, unknown>,
 ): { sql: string; values: (string | number | Uint8Array | null)[] } => {
-  const columns = Object.keys(data).filter((c) => c !== 'id' && c !== 'rowid')
-  const setClauses = columns.map((c) => `${quoteIdent(c)} = ?`).join(', ')
-  const values = [...columns.map((c) => data[c] as string | number | Uint8Array | null), rowId]
+  const identity = getIdentityColumns(tableName)
   return {
-    sql: `UPDATE ${quoteIdent(tableName)} SET ${setClauses} WHERE rowid = ?`,
-    values,
+    sql: `DELETE FROM ${quoteIdent(tableName)} WHERE ${identity
+      .map((column) => `${quoteIdent(column)} = ?`)
+      .join(' AND ')}`,
+    values: identity.map((column) => data[column] as string | number | Uint8Array | null),
   }
 }
 
@@ -367,10 +351,125 @@ const prepareDataForTable = (
   tableName: string,
   data: Record<string, unknown>,
 ): Record<string, unknown> => {
-  if (tableName === 'joins' && typeof data.edge_key === 'string') {
-    return { ...data, edge_key: hexToBytes(data.edge_key as string) }
+  const policy = getTableDurabilityPolicy(tableName)
+  const sourceData =
+    policy && !DYNAMIC_DATA_TABLE_PATTERN.test(tableName) ?
+      Object.fromEntries(
+        Object.entries(data).filter(([column]) => {
+          const columnPolicy = policy.columns[column as keyof typeof policy.columns]
+          return columnPolicy?.durability === 'replicated-source'
+        }),
+      )
+    : data
+  if (tableName === 'joins' && typeof sourceData.edge_key === 'string') {
+    return { ...sourceData, edge_key: hexToBytes(sourceData.edge_key) }
   }
-  return data
+  return sourceData
+}
+
+type MatrixColumnSnapshot = {
+  id: number
+  matrix_id: number
+  name: string
+  type: string
+  formula: string | null
+}
+
+const getMatrixColumnSnapshot = (
+  db: Database,
+  columnId: number,
+): MatrixColumnSnapshot | null => {
+  const stmt = db.prepare(
+    'SELECT id, matrix_id, name, type, formula FROM matrix_columns WHERE id = ?',
+  )
+  stmt.bind([columnId])
+  const result = stmt.step() ? (stmt.get({}) as MatrixColumnSnapshot) : null
+  stmt.finalize()
+  return result
+}
+
+const getPhysicalColumns = (
+  db: Database,
+  matrixId: number,
+): { name: string; type: string; constraints: string | null }[] => {
+  const stmt = db.prepare(
+    'SELECT name, type, constraints FROM matrix_columns WHERE matrix_id = ? AND formula IS NULL ORDER BY "order", id',
+  )
+  stmt.bind([matrixId])
+  const columns: { name: string; type: string; constraints: string | null }[] = []
+  while (stmt.step()) {
+    columns.push(stmt.get({}) as { name: string; type: string; constraints: string | null })
+  }
+  stmt.finalize()
+  return columns
+}
+
+const tableExists = (db: Database, tableName: string): boolean => {
+  const stmt = db.prepare("SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?")
+  stmt.bind([tableName])
+  const exists = stmt.step()
+  stmt.finalize()
+  return exists
+}
+
+const reconcileDataTable = (db: Database, matrixId: number, deviceId: string): void => {
+  const tableName = `mx_${matrixId}_data`
+  const desired = getPhysicalColumns(db, matrixId)
+  dropChangeTrackingTriggers(db, tableName)
+
+  if (!tableExists(db, tableName)) {
+    const columnSql = desired
+      .map((column) => {
+        const definition = `${quoteIdent(column.name)} ${column.type}`
+        return column.constraints ? `${definition} ${column.constraints}` : definition
+      })
+      .join(', ')
+    db.exec(
+      `CREATE TABLE ${quoteIdent(tableName)} (
+         id INTEGER PRIMARY KEY DEFAULT ((abs(random()) >> 10) + 1)
+         ${columnSql ? `, ${columnSql}` : ''}
+       ) STRICT`,
+    )
+  }
+
+  const infoStmt = db.prepare(`PRAGMA table_info(${quoteIdent(tableName)})`)
+  const actual = new Set<string>()
+  while (infoStmt.step()) actual.add((infoStmt.get({}) as { name: string }).name)
+  infoStmt.finalize()
+
+  const desiredNames = new Set(['id', ...desired.map((column) => column.name)])
+  for (const name of actual) {
+    if (name !== 'id' && !desiredNames.has(name)) {
+      db.exec(`ALTER TABLE ${quoteIdent(tableName)} DROP COLUMN ${quoteIdent(name)}`)
+    }
+  }
+  for (const column of desired) {
+    if (!actual.has(column.name)) {
+      db.exec(
+        `ALTER TABLE ${quoteIdent(tableName)} ADD COLUMN ${quoteIdent(column.name)} ${column.type}`,
+      )
+    }
+  }
+
+  installDataTableTriggers(db, matrixId, deviceId, desired)
+}
+
+const rebuildFormulaDependencies = (db: Database): void => {
+  db.exec('DELETE FROM formula_column_deps')
+  const stmt = db.prepare('SELECT id, formula FROM matrix_columns WHERE formula IS NOT NULL')
+  const rows: { id: number; formula: string }[] = []
+  while (stmt.step()) rows.push(stmt.get({}) as { id: number; formula: string })
+  stmt.finalize()
+
+  for (const row of rows) {
+    for (const dependencyId of new Set(parseFormulaRefs(row.formula))) {
+      db.exec(
+        `INSERT INTO formula_column_deps (formula_col_id, dep_col_id)
+         SELECT ?, ? WHERE EXISTS (SELECT 1 FROM matrix_columns WHERE id = ?)`,
+        { bind: [row.id, dependencyId, dependencyId] },
+      )
+    }
+  }
 }
 
 /**
@@ -382,8 +481,10 @@ const prepareDataForTable = (
  * - Saves conflict records with both versions
  * - Suppresses change-tracking triggers during apply
  *
- * After applying, if any `joins` entries were modified the derived caches
- * (closure, scroll index) are rebuilt from the updated edge truth.
+ * Preserves the source sequence so later mutations supersede earlier ones.
+ * Source operations are already dependency-valid because they committed in
+ * this order. Dynamic data tables reconcile as metadata and row entries arrive.
+ * Derived indexes rebuild inside the suppression window.
  */
 export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyResult => {
   const localDeviceId = getLocalDeviceId(db)
@@ -391,19 +492,17 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
   const conflicts: ConflictRecord[] = []
   let applied = 0
   let joinsModified = false
+  const dirtyMatrixIds = new Set<number>()
+  const matrixColumnsModified = changeset.entries.some(
+    (entry) => entry.table === 'matrix_columns',
+  )
 
   withTransaction(db, () => {
-    // Suppress change-tracking triggers
     db.exec('INSERT INTO _sync_applying (flag) VALUES (1)')
+    if (matrixColumnsModified) db.exec('DELETE FROM formula_column_deps')
 
     for (const entry of changeset.entries) {
-      const localConflict = findLocalConflict(
-        db,
-        entry.table,
-        entry.rowId,
-        localDeviceId,
-        lastAckedSeq,
-      )
+      const localConflict = findLocalConflict(db, entry, localDeviceId, lastAckedSeq)
 
       if (localConflict) {
         // Conflict detected — resolve via LWW
@@ -429,7 +528,6 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
           resolved: 0,
         }
 
-        // Insert conflict record (with trigger suppression off for _sync_conflicts — it's not tracked)
         const insertConflictStmt = db.prepare(
           `INSERT INTO _sync_conflicts (table_name, row_id, winner, losing_data, winning_data)
            VALUES (?, ?, ?, ?, ?) RETURNING id, detected_at`,
@@ -456,62 +554,98 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
         }
       }
 
-      // Apply the change
       const preparedData = entry.data ? prepareDataForTable(entry.table, entry.data) : null
+      const identityData = prepareDataForTable(entry.table, getIdentityData(entry))
+      const oldColumn =
+        entry.table === 'matrix_columns' ?
+          getMatrixColumnSnapshot(db, identityData.id as number)
+        : null
 
-      if (entry.operation === 'INSERT' && preparedData) {
-        const { sql, values } = buildInsertSql(entry.table, preparedData)
+      if (entry.table === 'matrix' && entry.operation === 'DELETE') {
+        const matrixId = identityData.id as number
+        dirtyMatrixIds.delete(matrixId)
+        dropChangeTrackingTriggers(db, `mx_${matrixId}_data`)
+        db.exec(`DROP TABLE IF EXISTS ${quoteIdent(`mx_${matrixId}_data`)}`)
+      }
+
+      if (
+        entry.table === 'matrix_columns' &&
+        entry.operation === 'UPDATE' &&
+        preparedData &&
+        oldColumn?.formula === null &&
+        preparedData.formula == null &&
+        oldColumn.name !== preparedData.name
+      ) {
+        const tableName = `mx_${oldColumn.matrix_id}_data`
+        dropChangeTrackingTriggers(db, tableName)
+        db.exec(
+          `ALTER TABLE ${quoteIdent(tableName)} RENAME COLUMN ${quoteIdent(oldColumn.name)} TO ${quoteIdent(String(preparedData.name))}`,
+        )
+      }
+
+      if (DYNAMIC_DATA_TABLE_PATTERN.test(entry.table)) {
+        const matrixId = Number(entry.table.slice(3, -5))
+        reconcileDataTable(db, matrixId, localDeviceId)
+        dirtyMatrixIds.delete(matrixId)
+      }
+
+      if ((entry.operation === 'INSERT' || entry.operation === 'UPDATE') && preparedData) {
+        if (entry.table === 'joins') {
+          if (preparedData.kind === 'own') {
+            db.exec(
+              `DELETE FROM joins
+               WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,
+              {
+                bind: [
+                  preparedData.target_matrix_id as number,
+                  preparedData.target_row_id as number,
+                ],
+              },
+            )
+          }
+        }
+        const { sql, values } = buildUpsertSql(entry.table, preparedData)
         db.exec(sql, { bind: values })
         applied++
-      } else if (entry.operation === 'UPDATE' && preparedData) {
-        if (entry.table === 'joins') {
-          // `joins` has a composite key, and a reparent changes the own-edge's
-          // source (part of that key). Apply as an upsert keyed by the row data
-          // rather than the replica-unstable rowid: INSERT OR REPLACE replaces
-          // both the PK row and the conflicting single-owner edge (its
-          // partial-unique index), re-homing the own-edge to its new parent.
-          const { sql, values } = buildInsertSql(entry.table, preparedData)
-          db.exec(sql, { bind: values })
-        } else {
-          const { sql, values } = buildUpdateSql(entry.table, entry.rowId, preparedData)
-          db.exec(sql, { bind: values })
-        }
-        applied++
       } else if (entry.operation === 'DELETE') {
-        if (entry.table === 'joins' && preparedData) {
-          // Delete by the logical composite key carried in the changelog (the
-          // DELETE trigger records the OLD row for `joins`), not the rowid.
+        if (entry.table === 'joins' && identityData.kind === 'own') {
           db.exec(
             `DELETE FROM joins
-             WHERE source_matrix_id = ? AND source_row_id = ?
-               AND target_matrix_id = ? AND target_row_id = ?`,
+             WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,
             {
               bind: [
-                preparedData.source_matrix_id as number,
-                preparedData.source_row_id as number,
-                preparedData.target_matrix_id as number,
-                preparedData.target_row_id as number,
+                identityData.target_matrix_id as number,
+                identityData.target_row_id as number,
               ],
             },
           )
         } else {
-          db.exec(`DELETE FROM ${quoteIdent(entry.table)} WHERE rowid = ?`, {
-            bind: [entry.rowId],
-          })
+          const { sql, values } = buildDeleteSql(entry.table, identityData)
+          db.exec(sql, { bind: values })
         }
         applied++
       }
 
       if (entry.table === 'joins') joinsModified = true
+
+      if (entry.table === 'matrix' && entry.operation !== 'DELETE') {
+        dirtyMatrixIds.add(identityData.id as number)
+      } else if (entry.table === 'matrix_columns') {
+        const matrixId = (preparedData?.matrix_id ?? oldColumn?.matrix_id) as number
+        dirtyMatrixIds.add(matrixId)
+      }
     }
 
-    // Rebuild derived caches when the own-forest edges changed.
+    for (const matrixId of dirtyMatrixIds) {
+      reconcileDataTable(db, matrixId, localDeviceId)
+    }
+
     if (joinsModified) {
       rebuildClosure(db)
       rebuildScrollIndex(db)
     }
+    if (matrixColumnsModified) rebuildFormulaDependencies(db)
 
-    // Re-enable change-tracking triggers
     db.exec('DELETE FROM _sync_applying')
 
     // Update per-device high-water mark

@@ -37,12 +37,24 @@ const loadFaceConfig = (db: Database, row: FaceConfigRow): FaceConfig => {
   // Load filter configs
   const filters: FaceConfig['filters'] = []
   const filterStmt = db.prepare(
-    'SELECT column_id, operator, value FROM face_filter_configs WHERE face_config_id = ? ORDER BY id',
+    'SELECT id, column_id, operator, value, "order" FROM face_filter_configs WHERE face_config_id = ? ORDER BY "order", id',
   )
   filterStmt.bind([row.id])
   while (filterStmt.step()) {
-    const f = filterStmt.get({}) as { column_id: number; operator: string; value: string }
-    filters.push({ columnId: f.column_id, operator: f.operator, value: f.value })
+    const f = filterStmt.get({}) as {
+      id: string
+      column_id: number
+      operator: string
+      value: string
+      order: number
+    }
+    filters.push({
+      id: f.id,
+      columnId: f.column_id,
+      operator: f.operator,
+      value: f.value,
+      order: f.order,
+    })
   }
   filterStmt.finalize()
 
@@ -100,13 +112,20 @@ export const applyFaceToMatrix = (
   })
 }
 
-/** Insert or replace a face configuration (writes normalized tables). */
+/** Insert or update a face configuration (writes normalized tables). */
 export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
-  // Upsert the main face_configs row (slot_bindings kept as empty JSON for backward compat)
+  // Upsert without REPLACE so the main-row write cannot cascade-delete normalized children.
+  // slot_bindings stays an empty derived compatibility copy.
   db.exec(
-    `INSERT OR REPLACE INTO face_configs
+    `INSERT INTO face_configs
        (id, face_type_id, matrix_id, query, slot_bindings, settings, created_by_plugin)
-     VALUES (?, ?, ?, ?, '{}', ?, ?)`,
+     VALUES (?, ?, ?, ?, '{}', ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       face_type_id = excluded.face_type_id,
+       matrix_id = excluded.matrix_id,
+       query = excluded.query,
+       settings = excluded.settings,
+       created_by_plugin = excluded.created_by_plugin`,
     {
       bind: [
         config.id,
@@ -145,10 +164,16 @@ export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
   db.exec('DELETE FROM face_filter_configs WHERE face_config_id = ?', {
     bind: [config.id],
   })
-  for (const f of config.filters) {
+  for (let index = 0; index < config.filters.length; index++) {
+    const f = config.filters[index]!
+    const filterId = f.id ?? crypto.randomUUID()
+    f.id = filterId
+    f.order = index
     db.exec(
-      'INSERT INTO face_filter_configs (face_config_id, column_id, operator, value) VALUES (?, ?, ?, ?)',
-      { bind: [config.id, f.columnId, f.operator, f.value] },
+      'INSERT INTO face_filter_configs (id, face_config_id, column_id, operator, value, "order") VALUES (?, ?, ?, ?, ?, ?)',
+      {
+        bind: [filterId, config.id, f.columnId, f.operator, f.value, index],
+      },
     )
   }
 }

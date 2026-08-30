@@ -10,6 +10,7 @@ export type Changeset = {
   deviceId: string
   fromSeq: number
   toSeq: number
+  /** Source changelog order. Receivers must preserve it during apply. */
   entries: ChangeEntry[]
 }
 

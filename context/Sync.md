@@ -1,15 +1,15 @@
 ---
 title: Replication and sync
 kind: canonical
-state: repair-planned
+state: repair-in-progress
 updated: 2026-08-29
 ---
 
 # Replication and sync
 
 The app ships a local change-tracking and remote-apply foundation. It does not ship remote
-transport, files, provider integration, or a sync UI. Later schema evolution weakened Phase 3's
-original coverage guarantee; Phase 11 repairs and locks that boundary before saved views land.
+transport, files, provider integration, or a sync UI. Phase 11 Stage 2 repaired current-schema
+tracking and apply. Stages 3 and 4 lock the guardrails and prove a full two-replica round trip.
 
 ## Durability policy
 
@@ -22,7 +22,8 @@ Every table and column must be explicitly classified:
 The default for user-authored or user-visible data is replicated. Device-local is an exception that
 requires a reason and test.
 
-Phase 11 adds a schema-policy manifest and contract test that fail when:
+The schema-policy manifest classifies the full current schema. Stage 3 extends its contract tests
+to fail when:
 
 - a fresh-schema table or column is unclassified;
 - a replicated column is absent from installed tracking;
@@ -38,12 +39,12 @@ installation has a device UUID in `_sync_state`.
 
 ### Changelog
 
-SQLite triggers append full-row insert/update snapshots and delete records to `_sync_changelog`.
-Dynamic matrix data tables reinstall tracking after schema changes. Core tables use declared column
-lists. Remote apply suppresses local triggers through `_sync_applying`.
+SQLite triggers append full-row insert/update snapshots and full old-row delete records to
+`_sync_changelog`. Dynamic matrix data tables reinstall tracking after schema changes. Fixed-table
+columns are generated from the durability manifest. Remote apply suppresses local triggers through
+`_sync_applying`.
 
-Full-row changes simplify row-level last-write-wins and conflict retention. They do not imply that
-all current schema is covered.
+Full-row changes simplify row-level last-write-wins and conflict retention.
 
 ### Changesets
 
@@ -59,36 +60,30 @@ Changesets are transport-neutral JSON. No provider currently sends them between 
 
 ### Conflict retention
 
-Remote apply detects concurrent local modification and uses row-level last-write-wins. Losing data
-is retained in `_sync_conflicts` for future recovery UI. Remote writes must not echo into the local
-changelog.
+Remote apply detects concurrent local modification by manifest-defined logical identity and uses
+row-level last-write-wins. Losing data is retained in `_sync_conflicts` for future recovery UI.
+Remote writes must not echo into the local changelog.
 
 ### Structural apply
 
-`joins` carries logical composite identity and the ownership forest. Remote upsert/delete must use
-source/target identity rather than replica-local `rowid`. Structural apply rebuilds closure and the
-scroll index from relation truth.
+Remote upsert/delete uses stable integer, text, or composite identity from the manifest rather than
+replica-local `rowid`. Changesets retain their source sequence, which is dependency-valid because
+each source operation committed in that order. Remote matrix metadata materializes and evolves
+physical data tables as its entries arrive. Structural apply rebuilds closure and the scroll index;
+formula metadata apply rebuilds formula dependencies.
 
 Derived cache rows do not replicate.
 
-## Known coverage gap
+## Repaired current coverage
 
-The hardcoded core tracking list predates later schema additions. It currently omits or incompletely
-covers:
+Stage 2 added matrix ownership, promoted nodes, saved-view SQL, normalized face state, and all
+plugin metadata to manifest-driven tracking. `face_configs.slot_bindings` remains an untracked
+derived compatibility copy; normalized slot bindings are authoritative. Face filters use stable
+UUID identity and explicit order.
 
-- `matrix.owner_matrix_id` and `matrix.owner_row_id`;
-- `promoted_nodes`;
-- `block_sources`.
-
-`block_sources` was deliberately local-only in Phase 9.7 to keep that rendering phase scoped. Its
-marker position syncs through `joins`, while its SQL does not. That exception is no longer suitable
-for named saved views.
-
-The matrix owner and promoted-node omissions have no matching durable rationale and are treated as
-coverage regressions.
-
-Until Phase 11 completes, the code must not claim that all user-visible state reconstructs on a
-second replica.
+Remote apply now materializes new matrix data tables, evolves columns, installs complete triggers,
+and rebuilds derived state inside the no-echo apply transaction. Stage 4 still owns the complete
+two-replica user-visible reconstruction proof.
 
 ## Phase 11 repair contract
 

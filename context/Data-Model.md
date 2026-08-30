@@ -148,8 +148,8 @@ A `view` block consists of:
 The marker currently has no normal name/place behavior and is excluded from loose navigation.
 Phase 11 completes its named, focusable place contract without creating another SQL store.
 
-`block_sources` was deliberately device-local in Phase 9.7. Phase 11 promotes it to replicated
-source of truth before launcher save creates durable views.
+`block_sources` is replicated source of truth. Phase 11 Stage 2 removed its Phase 9.7 device-local
+exception before launcher save creates durable views.
 
 ## Source of truth and replication
 
@@ -166,7 +166,7 @@ Current known classifications:
 
 - Replicated: matrix data tables, matrix and column metadata, ownership/reference/portal edges,
   face configuration, plugin metadata, matrix ownership, promoted-node identity, and saved view
-  SQL after the Phase 11 repair.
+  SQL.
 - Derived: closure, scroll index, matrix-title caches where reconstructible, and reactive query
   state.
 - Device-local: device identity, sync high-water marks, and transient session UI state.

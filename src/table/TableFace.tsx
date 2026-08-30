@@ -158,9 +158,11 @@ const TableFace: Component<TableFaceProps> = (props) => {
   const initialSort = (): SortConfig | null => props.config.sort ?? null
   const initialFilters = (): FilterConfig[] =>
     (props.config.filters ?? []).map((f) => ({
+      id: f.id,
       columnId: f.columnId,
       operator: f.operator as FilterOperator,
       value: f.value,
+      order: f.order,
     }))
 
   const [sort, setSort] = createSignal<SortConfig | null>(initialSort())
@@ -239,7 +241,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
   }
 
   const addFilter = async (f: FilterConfig) => {
-    const next = [...filters(), f]
+    const next = [...filters(), { ...f, id: crypto.randomUUID(), order: filters().length }]
     setFilters(next)
     setAddingFilter(false)
     await persistSettings(sort(), next)

@@ -268,12 +268,26 @@ describe('Face config', () => {
     const loaded = getFaceConfig(db, 'cfg-filters')
 
     expect(loaded!.filters).toHaveLength(2)
-    expect(loaded!.filters[0]).toEqual({ columnId: ageColId, operator: '>', value: '30' })
+    expect(loaded!.filters[0]).toEqual({
+      id: expect.any(String),
+      columnId: ageColId,
+      operator: '>',
+      value: '30',
+      order: 0,
+    })
     expect(loaded!.filters[1]).toEqual({
+      id: expect.any(String),
       columnId: titleColId,
       operator: 'LIKE',
       value: 'test',
+      order: 1,
     })
+
+    const filterIds = loaded!.filters.map((filter) => filter.id)
+    saveFaceConfig(db, config)
+    expect(getFaceConfig(db, 'cfg-filters')!.filters.map((filter) => filter.id)).toEqual(
+      filterIds,
+    )
   })
 
   test('removing a sorted column cascade-deletes sort config', () => {

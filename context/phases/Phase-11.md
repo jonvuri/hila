@@ -68,36 +68,36 @@ Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md
 
 **Outcome:** the current source-of-truth schema is fully tracked and safely applicable.
 
-- [ ] Track `matrix.owner_matrix_id` and `matrix.owner_row_id`.
-- [ ] Track `promoted_nodes` with logical composite identity and correct delete data.
-- [ ] Promote `block_sources` from its Phase 9.7 local-only exception to replicated source of truth.
-- [ ] Verify every normalized face-config table and current plugin metadata field. Replace the
+- [x] Track `matrix.owner_matrix_id` and `matrix.owner_row_id`.
+- [x] Track `promoted_nodes` with logical composite identity and correct delete data.
+- [x] Promote `block_sources` from its Phase 9.7 local-only exception to replicated source of truth.
+- [x] Verify every normalized face-config table and current plugin metadata field. Replace the
       replica-local filter identity/order with stable logical identity and explicit order.
-- [ ] Keep derived `face_configs.slot_bindings` out of changesets while ensuring remote face-config
+- [x] Keep derived `face_configs.slot_bindings` out of changesets while ensuring remote face-config
       inserts satisfy the physical schema and normalized slot bindings remain authoritative.
-- [ ] Replace or generate `CORE_TABLE_COLUMNS` from the reviewed policy so schema and tracking
+- [x] Replace or generate `CORE_TABLE_COLUMNS` from the reviewed policy so schema and tracking
       cannot drift silently.
-- [ ] Make remote apply and conflict detection use the manifest's logical identity for every
+- [x] Make remote apply and conflict detection use the manifest's logical identity for every
       replicated table, including stable text and composite keys. Do not rely on replica-local
       `rowid`.
-- [ ] Reconstruct and evolve dynamic matrix data tables from replicated matrix and column metadata
+- [x] Reconstruct and evolve dynamic matrix data tables from replicated matrix and column metadata
       before applying their rows. Install complete tracking without emitting local echo changes.
-- [ ] Rebuild derived closure and scroll-index state after remote structural changes, and formula
+- [x] Rebuild derived closure and scroll-index state after remote structural changes, and formula
       dependencies after remote formula metadata changes. Do not sync derived rows.
-- [ ] Define ordering and dependency handling when a changeset creates a marker, its position, and
+- [x] Define ordering and dependency handling when a changeset creates a marker, its position, and
       its block source together.
 
 ### Stage 2 verification
 
-- [ ] Focused trigger tests cover insert, update, and delete for every repaired table/column.
-- [ ] Remote apply and conflict tests cover logical-key upsert and delete for stable text,
+- [x] Focused trigger tests cover insert, update, and delete for every repaired table/column.
+- [x] Remote apply and conflict tests cover logical-key upsert and delete for stable text,
       composite, and integer identities whose values are stable across replicas.
-- [ ] A face config inserts remotely without transmitting the derived `slot_bindings` JSON copy,
+- [x] A face config inserts remotely without transmitting the derived `slot_bindings` JSON copy,
       and its normalized bindings reconstruct the same recipe.
-- [ ] Applying a new matrix to a fresh replica materializes its physical data table before its rows,
+- [x] Applying a new matrix to a fresh replica materializes its physical data table before its rows,
       installs complete tracking, and emits no local echo changes.
-- [ ] A structural apply rebuilds caches without emitting local echo changes.
-- [ ] Formatting, lint, static types, and unit tests pass.
+- [x] A structural apply rebuilds caches without emitting local echo changes.
+- [x] Formatting, lint, static types, and unit tests pass.
 
 ## Stage 3 — Make coverage durable
 

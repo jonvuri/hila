@@ -265,17 +265,14 @@ export const CORE_DURABILITY_POLICY = {
     durability: 'replicated-source',
     responsibility: 'Ordered durable filter rules for a face recipe.',
     identity: ['id'],
-    deleteSemantics:
-      'Current integer ID is replica-local and unsafe; Stage 2 must add stable logical identity and ordering.',
+    deleteSemantics: 'Delete by stable filter UUID; order is an independent durable field.',
     columns: {
-      id: source(
-        'INTEGER',
-        'Current filter identity and order; generation is replica-local and requires Stage 2 repair.',
-      ),
+      id: source('TEXT', 'Stable filter UUID.'),
       face_config_id: source('TEXT', 'Owning face-config UUID.'),
       column_id: source('INTEGER', 'Filtered stable column ID.'),
       operator: source('TEXT', 'Filter operator.'),
       value: source('TEXT', 'Serialized filter value.'),
+      order: source('INTEGER', 'Explicit order within the face recipe.'),
     },
   },
 } as const satisfies Record<string, DurabilityTablePolicy>
@@ -320,3 +317,22 @@ export const getColumnDurabilityPolicy = (
       DYNAMIC_DATA_TABLE_POLICY.additionalColumnPolicy
     : null
 }
+
+export type ReplicatedTableDefinition = {
+  tableName: string
+  identity: readonly string[]
+  columns: { name: string; type: string }[]
+}
+
+/** Fixed-table tracking definitions generated from the reviewed durability policy. */
+export const getReplicatedTableDefinitions = (): ReplicatedTableDefinition[] =>
+  Object.entries(CORE_DURABILITY_POLICY).flatMap(([tableName, tablePolicy]) => {
+    if (tablePolicy.durability !== 'replicated-source') return []
+
+    const columns = Object.entries(tablePolicy.columns).flatMap(([name, columnPolicy]) =>
+      columnPolicy.durability === 'replicated-source' ?
+        [{ name, type: columnPolicy.storageType }]
+      : [],
+    )
+    return [{ tableName, identity: tablePolicy.identity, columns }]
+  })

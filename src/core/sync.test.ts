@@ -15,7 +15,7 @@ import {
   getColumns,
   updateColumnRole,
 } from './matrix'
-import { createTreePosition, removeTreePosition } from './tree'
+import { createTreePosition, removeTreePosition, reparentRow } from './tree'
 import {
   installCoreTableTriggers,
   getLocalChanges,
@@ -136,7 +136,7 @@ describe('Change tracking infrastructure', () => {
 
   // -- Data table DELETE tracking --
 
-  test('DELETE on data table logs changelog entry with data=NULL', () => {
+  test('DELETE on data table records OLD data for logical identity', () => {
     const matrixId = createMatrixWithTraits(db, 'Test')
     const rowId = insertDataRow(db, matrixId, { title: 'Doomed' })
     createTreePosition(db, matrixId, rowId)
@@ -151,7 +151,7 @@ describe('Change tracking infrastructure', () => {
 
     expect(dataDelete).toBeDefined()
     expect(dataDelete!.row_id).toBe(rowId)
-    expect(dataDelete!.data).toBeNull()
+    expect(JSON.parse(dataDelete!.data!)).toEqual({ id: rowId, title: 'Doomed' })
   })
 
   // -- device_id correctness --
@@ -484,7 +484,7 @@ describe('Change tracking infrastructure', () => {
       expect(cs.entries).toHaveLength(0)
     })
 
-    test('getLocalChanges includes DELETE entries with null data', () => {
+    test('getLocalChanges includes DELETE entries with old logical identity data', () => {
       const matrixId = createMatrixWithTraits(db, 'Test')
       const rowId = insertDataRow(db, matrixId, { title: 'Gone' })
       createTreePosition(db, matrixId, rowId)
@@ -499,7 +499,7 @@ describe('Change tracking infrastructure', () => {
       )
 
       expect(dataDelete).toBeDefined()
-      expect(dataDelete!.data).toBeNull()
+      expect(dataDelete!.data).toEqual({ id: rowId, title: 'Gone' })
     })
 
     test('changeset entries have parsed data objects, not JSON strings', () => {
@@ -901,6 +901,82 @@ describe('Change tracking infrastructure', () => {
       expect(result.applied).toBe(1)
       // The own-edge now originates from P2; the old P1 edge is gone (single-owner).
       expect(ownSourcesOf(matrixId, child)).toEqual([p2])
+    })
+
+    test('concurrent own-edge reparents conflict by target identity', () => {
+      const matrixId = createMatrixWithTraits(db, 'Test')
+      const p1 = insertDataRow(db, matrixId, { title: 'P1' })
+      createTreePosition(db, matrixId, p1)
+      const p2 = insertDataRow(db, matrixId, { title: 'P2' })
+      createTreePosition(db, matrixId, p2)
+      const p3 = insertDataRow(db, matrixId, { title: 'P3' })
+      createTreePosition(db, matrixId, p3)
+      const child = insertDataRow(db, matrixId, { title: 'C' })
+      createTreePosition(db, matrixId, child, { parent: { matrixId, rowId: p1 } })
+      clearChangelog()
+
+      reparentRow(db, { matrixId, rowId: child, newParent: { matrixId, rowId: p2 } })
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'joins',
+            rowId: 99999999,
+            operation: 'UPDATE',
+            timestamp: '2000-01-01 00:00:00',
+            data: {
+              source_matrix_id: matrixId,
+              source_row_id: p3,
+              target_matrix_id: matrixId,
+              target_row_id: child,
+              kind: 'own',
+              edge_key: '8000',
+            },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(0)
+      expect(result.conflicts).toHaveLength(1)
+      expect(result.conflicts[0]?.winner).toBe('local')
+      expect(ownSourcesOf(matrixId, child)).toEqual([p2])
+    })
+
+    test('newer remote own-edge delete removes a concurrently reparented edge', () => {
+      const matrixId = createMatrixWithTraits(db, 'Test')
+      const p1 = insertDataRow(db, matrixId, { title: 'P1' })
+      createTreePosition(db, matrixId, p1)
+      const p2 = insertDataRow(db, matrixId, { title: 'P2' })
+      createTreePosition(db, matrixId, p2)
+      const child = insertDataRow(db, matrixId, { title: 'C' })
+      createTreePosition(db, matrixId, child, { parent: { matrixId, rowId: p1 } })
+      clearChangelog()
+
+      reparentRow(db, { matrixId, rowId: child, newParent: { matrixId, rowId: p2 } })
+      const result = applyRemoteChanges(
+        db,
+        makeRemoteChangeset([
+          {
+            table: 'joins',
+            rowId: 99999999,
+            operation: 'DELETE',
+            timestamp: '2099-01-01 00:00:00',
+            data: {
+              source_matrix_id: matrixId,
+              source_row_id: p1,
+              target_matrix_id: matrixId,
+              target_row_id: child,
+              kind: 'own',
+              edge_key: '8000',
+            },
+          },
+        ]),
+      )
+
+      expect(result.applied).toBe(1)
+      expect(result.conflicts).toHaveLength(1)
+      expect(result.conflicts[0]?.winner).toBe('remote')
+      expect(ownSourcesOf(matrixId, child)).toEqual([])
     })
 
     test('apply remote joins DELETE removes the own-edge by composite key, not rowid', () => {
