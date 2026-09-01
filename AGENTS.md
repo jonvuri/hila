@@ -42,6 +42,11 @@ checkbox items (`- [ ]` / `- [x]`). When executing a stage:
 - Prefer `type` over `interface` for type definitions.
 - Prefer arrow function expressions over function declarations.
 
+## Schema changes
+
+Every schema change must update the durability policy. Add a two-replica case, or state why
+existing coverage is sufficient.
+
 ## Verification
 
 After major code changes, run the checks relevant to the active plan:

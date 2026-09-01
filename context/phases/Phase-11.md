@@ -2,7 +2,7 @@
 title: Phase 11 — Durable data and place contracts
 kind: phase-plan
 state: planned
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # Phase 11 — Durable data and place contracts
@@ -103,21 +103,21 @@ Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md
 
 **Outcome:** future schema evolution cannot silently weaken sync readiness.
 
-- [ ] Add a schema-policy contract test that introspects `sqlite_schema` and table columns.
-- [ ] Fail on every unclassified table or column.
-- [ ] Fail when the replicated column set differs from installed tracking triggers.
-- [ ] Fail when a derived table is accidentally tracked.
-- [ ] Require dynamic matrix data tables to install tracking after create/add/remove/rename column
+- [x] Add a schema-policy contract test that introspects `sqlite_schema` and table columns.
+- [x] Fail on every unclassified table or column.
+- [x] Fail when the replicated column set differs from installed tracking triggers.
+- [x] Fail when a derived table is accidentally tracked.
+- [x] Require dynamic matrix data tables to install tracking after create/add/remove/rename column
       operations.
-- [ ] Add a repository instruction: every schema change must update the durability policy and add a
+- [x] Add a repository instruction: every schema change must update the durability policy and add a
       two-replica case or state why existing coverage is sufficient.
-- [ ] Document how a deliberately device-local field is proposed, reviewed, and tested.
+- [x] Document how a deliberately device-local field is proposed, reviewed, and tested.
 
 ### Stage 3 verification
 
-- [ ] Prove the guard fails by adding a temporary unclassified table and column in a test fixture.
-- [ ] Prove it detects a stale trigger column list.
-- [ ] Prove normal schema mutations keep dynamic data-table tracking complete.
+- [x] Prove the guard fails by adding a temporary unclassified table and column in a test fixture.
+- [x] Prove it detects a stale trigger column list.
+- [x] Prove normal schema mutations keep dynamic data-table tracking complete.
 
 ## Stage 4 — Two-replica current-schema round trip
 

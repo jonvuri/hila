@@ -474,6 +474,11 @@ export type ColumnDefinition = {
   role: 'label' | 'content' | null
 }
 
+const getPhysicalTrackedColumns = (
+  columns: ColumnDefinition[],
+): { name: string; type: string }[] =>
+  columns.filter((column) => column.formula === null).map(({ name, type }) => ({ name, type }))
+
 /**
  * Typed error for SQLite constraint violations (NOT NULL, UNIQUE, CHECK).
  * The UI can distinguish this from generic errors to show user-friendly messages.
@@ -579,7 +584,7 @@ export const ensureRootMatrix = (db: Database): number => {
   if (exists) {
     const deviceId = getOrCreateDeviceId(db)
     const columns = getColumns(db, 1)
-    installDataTableTriggers(db, 1, deviceId, columns)
+    installDataTableTriggers(db, 1, deviceId, getPhysicalTrackedColumns(columns))
     return 1
   }
 
@@ -1409,7 +1414,10 @@ export const addColumn = (
     stmt.finalize()
 
     const deviceId = getOrCreateDeviceId(db)
-    reinstallDataTableTriggers(db, matrixId, deviceId, [...current, column])
+    reinstallDataTableTriggers(db, matrixId, deviceId, [
+      ...getPhysicalTrackedColumns(current),
+      column,
+    ])
 
     return colId
   })
@@ -1467,7 +1475,7 @@ export const removeColumn = (
     if (!isFormula) {
       const deviceId = getOrCreateDeviceId(db)
       const remaining = current.filter((c) => c.name !== columnName)
-      installDataTableTriggers(db, matrixId, deviceId, remaining)
+      installDataTableTriggers(db, matrixId, deviceId, getPhysicalTrackedColumns(remaining))
     }
   })
 }
@@ -1527,7 +1535,7 @@ export const renameColumn = (
 
     const deviceId = getOrCreateDeviceId(db)
     const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
-    installDataTableTriggers(db, matrixId, deviceId, updated)
+    installDataTableTriggers(db, matrixId, deviceId, getPhysicalTrackedColumns(updated))
   })
 }
 

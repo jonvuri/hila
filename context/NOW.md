@@ -2,17 +2,17 @@
 title: Current state
 kind: status
 state: ready
-updated: 2026-08-29
+updated: 2026-08-30
 phase: 11
-session: stage-3-coverage-guards
+session: stage-4-two-replica-round-trip
 ---
 
 # Now
 
-Phase 11 Stage 2 is complete. Fixed-table tracking is generated from the durability manifest.
-Remote apply and conflicts use stable logical identity, source-sequence ordering, and no-echo
-derived rebuilds. Fresh replicas materialize dynamic matrix tables before their rows. Normalized
-face state, plugin metadata, matrix ownership, promoted nodes, and saved-view SQL are tracked.
+Phase 11 Stage 3 is complete. A reusable audit compares live tables, columns, and tracking triggers
+with the durability manifest. Failure controls cover unclassified schema, stale trigger columns,
+derived-table tracking, and dynamic schema mutations. Dynamic trigger reinstalls exclude formula
+columns because they have no physical storage.
 
 Phase 11 must repair schema-complete replication coverage before the launcher adds durable saved
 views. It then completes the saved-view place contract and begins the required subject/recipe/host
@@ -21,8 +21,8 @@ is complete.
 
 ## Read next
 
-1. [Phase 11](phases/Phase-11.md), starting with Stage 3.
-2. [Sync.md](Sync.md) for the repaired durability boundary and remaining guardrails.
+1. [Phase 11](phases/Phase-11.md), starting with Stage 4.
+2. [Sync.md](Sync.md) for the guarded durability boundary and round-trip contract.
 3. [Stage 1 durability inventory](phases/Phase-11-Stage-1-Inventory.md) for the reviewed policy.
 4. [Documentation.md](Documentation.md) for session closeout rules.
 
@@ -33,5 +33,5 @@ design migration early.
 
 ## Next action
 
-Begin Stage 3: compare installed triggers with the durability policy, add failure controls for
-unclassified schema and stale tracking, and lock dynamic schema-mutation coverage.
+Begin Stage 4: build the complete two-replica fixture and compare source-of-truth and rebuilt state
+by logical identity.

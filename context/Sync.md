@@ -2,14 +2,14 @@
 title: Replication and sync
 kind: canonical
 state: repair-in-progress
-updated: 2026-08-29
+updated: 2026-08-30
 ---
 
 # Replication and sync
 
 The app ships a local change-tracking and remote-apply foundation. It does not ship remote
-transport, files, provider integration, or a sync UI. Phase 11 Stage 2 repaired current-schema
-tracking and apply. Stages 3 and 4 lock the guardrails and prove a full two-replica round trip.
+transport, files, provider integration, or a sync UI. Phase 11 Stages 2 and 3 repaired
+current-schema tracking and locked its guardrails. Stage 4 proves a full two-replica round trip.
 
 ## Durability policy
 
@@ -22,8 +22,7 @@ Every table and column must be explicitly classified:
 The default for user-authored or user-visible data is replicated. Device-local is an exception that
 requires a reason and test.
 
-The schema-policy manifest classifies the full current schema. Stage 3 extends its contract tests
-to fail when:
+The schema-policy manifest classifies the full current schema. Its contract audit fails when:
 
 - a fresh-schema table or column is unclassified;
 - a replicated column is absent from installed tracking;
@@ -85,6 +84,10 @@ Remote apply now materializes new matrix data tables, evolves columns, installs 
 and rebuilds derived state inside the no-echo apply transaction. Stage 4 still owns the complete
 two-replica user-visible reconstruction proof.
 
+The schema-policy audit introspects live tables, columns, and installed trigger SQL. It compares
+all three with the manifest. Failure controls cover unclassified schema, stale trigger columns,
+tracking on derived state, and dynamic create/add/remove/rename operations.
+
 ## Phase 11 repair contract
 
 Phase 11 must:
@@ -112,6 +115,18 @@ Every schema-changing phase must:
 - keep derived-cache rebuilds deterministic.
 
 A new unclassified field is a test failure, not documentation debt.
+
+### Device-local exception review
+
+Propose a device-local field before implementation. The active phase or session plan must name its
+owner, explain why replication is wrong, and state the user-visible consequence when another
+device does not receive it. Review that exception against the default that user-authored and
+user-visible state replicates.
+
+After approval, add the field to the durability manifest with that responsibility. Add a contract
+test proving no tracking trigger includes it and a two-replica test proving the intended local
+behavior. If an existing case is sufficient, record why in the active plan. No device-local user
+preference is currently approved.
 
 ## Retention and history
 
