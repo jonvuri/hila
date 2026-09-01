@@ -1,8 +1,8 @@
 ---
 title: Phase 11 — Durable data and place contracts
 kind: phase-plan
-state: planned
-updated: 2026-08-30
+state: in-progress
+updated: 2026-08-31
 ---
 
 # Phase 11 — Durable data and place contracts
@@ -123,20 +123,20 @@ Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md
 
 **Outcome:** user-visible state reconstructs on a second fresh replica.
 
-- [ ] Build a fixture containing workspace content, hierarchy, cross-matrix ownership, a portal,
+- [x] Build a fixture containing workspace content, hierarchy, cross-matrix ownership, a portal,
       promoted type-node, owned matrix, inline ref/tag, face recipe, and saved view marker/SQL.
-- [ ] Export changes from replica A and apply them to replica B in dependency-safe order.
-- [ ] Compare source-of-truth state by logical identity, not row order or replica-local metadata.
-- [ ] Rebuild derived caches on B and compare rendered position/ancestry results.
-- [ ] Modify promoted/view/owner state on both replicas and cover conflict detection and retention.
-- [ ] Delete each composite entity and verify the remote lifecycle result.
+- [x] Export changes from replica A and apply them to replica B in dependency-safe order.
+- [x] Compare source-of-truth state by logical identity, not row order or replica-local metadata.
+- [x] Rebuild derived caches on B and compare rendered position/ancestry results.
+- [x] Modify promoted/view/owner state on both replicas and cover conflict detection and retention.
+- [x] Delete each composite entity and verify the remote lifecycle result.
 
 ### Stage 4 verification
 
-- [ ] Replica B reconstructs every user-visible fixture state.
-- [ ] Derived caches contain no replicated changelog entries.
-- [ ] Remote apply produces no local echo entries.
-- [ ] The full sync unit suite passes.
+- [x] Replica B reconstructs every user-visible fixture state.
+- [x] Derived caches contain no replicated changelog entries.
+- [x] Remote apply produces no local echo entries.
+- [x] The full sync unit suite passes.
 
 ## Stage 5 — Complete the `view` place contract
 

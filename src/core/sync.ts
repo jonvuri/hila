@@ -208,11 +208,19 @@ export const setLastUploadedSeq = (db: Database, seq: number): void => {
 }
 
 /**
- * Read the per-device high-water mark from `_sync_state`.
- * Returns 0 if no mark exists for this device.
+ * Update the per-device high-water mark in `_sync_state`.
  */
-const getDeviceHighWaterMark = (db: Database, remoteDeviceId: string): number => {
+const setDeviceHighWaterMark = (db: Database, remoteDeviceId: string, seq: number): void => {
   const key = `last_acked_seq_${remoteDeviceId}`
+  db.exec(
+    'INSERT INTO _sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    { bind: [key, String(seq)] },
+  )
+}
+
+/** Local changelog boundary from the last apply by one remote device. */
+const getLocalSeqAtRemoteApply = (db: Database, remoteDeviceId: string): number => {
+  const key = `last_local_seq_at_apply_${remoteDeviceId}`
   const stmt = db.prepare('SELECT value FROM _sync_state WHERE key = ?')
   stmt.bind([key])
   let result = 0
@@ -223,11 +231,8 @@ const getDeviceHighWaterMark = (db: Database, remoteDeviceId: string): number =>
   return result
 }
 
-/**
- * Update the per-device high-water mark in `_sync_state`.
- */
-const setDeviceHighWaterMark = (db: Database, remoteDeviceId: string, seq: number): void => {
-  const key = `last_acked_seq_${remoteDeviceId}`
+const setLocalSeqAtRemoteApply = (db: Database, remoteDeviceId: string, seq: number): void => {
+  const key = `last_local_seq_at_apply_${remoteDeviceId}`
   db.exec(
     'INSERT INTO _sync_state (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     { bind: [key, String(seq)] },
@@ -362,7 +367,10 @@ const prepareDataForTable = (
       )
     : data
   if (tableName === 'joins' && typeof sourceData.edge_key === 'string') {
-    return { ...sourceData, edge_key: hexToBytes(sourceData.edge_key) }
+    return {
+      ...sourceData,
+      edge_key: sourceData.edge_key === '' ? null : hexToBytes(sourceData.edge_key),
+    }
   }
   return sourceData
 }
@@ -488,7 +496,7 @@ const rebuildFormulaDependencies = (db: Database): void => {
  */
 export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyResult => {
   const localDeviceId = getLocalDeviceId(db)
-  const lastAckedSeq = getDeviceHighWaterMark(db, changeset.deviceId)
+  const localSeqAtLastApply = getLocalSeqAtRemoteApply(db, changeset.deviceId)
   const conflicts: ConflictRecord[] = []
   let applied = 0
   let joinsModified = false
@@ -502,7 +510,7 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
     if (matrixColumnsModified) db.exec('DELETE FROM formula_column_deps')
 
     for (const entry of changeset.entries) {
-      const localConflict = findLocalConflict(db, entry, localDeviceId, lastAckedSeq)
+      const localConflict = findLocalConflict(db, entry, localDeviceId, localSeqAtLastApply)
 
       if (localConflict) {
         // Conflict detected — resolve via LWW
@@ -650,6 +658,7 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
 
     // Update per-device high-water mark
     setDeviceHighWaterMark(db, changeset.deviceId, changeset.toSeq)
+    setLocalSeqAtRemoteApply(db, changeset.deviceId, getLastSeq(db))
   })
 
   return { applied, conflicts }

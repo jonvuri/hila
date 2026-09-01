@@ -2,17 +2,18 @@
 title: Current state
 kind: status
 state: ready
-updated: 2026-08-30
+updated: 2026-08-31
 phase: 11
-session: stage-4-two-replica-round-trip
+session: stage-5-view-place-contract
 ---
 
 # Now
 
-Phase 11 Stage 3 is complete. A reusable audit compares live tables, columns, and tracking triggers
-with the durability manifest. Failure controls cover unclassified schema, stale trigger columns,
-derived-table tracking, and dynamic schema mutations. Dynamic trigger reinstalls exclude formula
-columns because they have no physical storage.
+Phase 11 Stage 4 is complete. A full two-replica fixture reconstructs source truth by logical
+identity and matches rebuilt position and ancestry results. It covers workspace content, hierarchy,
+cross-matrix ownership, portals, promoted types, owned matrixes, inline refs/tags, face recipes, and
+saved-view SQL. Concurrent promoted/view/owner changes retain conflicts, and composite deletes
+round-trip without echoes.
 
 Phase 11 must repair schema-complete replication coverage before the launcher adds durable saved
 views. It then completes the saved-view place contract and begins the required subject/recipe/host
@@ -21,9 +22,9 @@ is complete.
 
 ## Read next
 
-1. [Phase 11](phases/Phase-11.md), starting with Stage 4.
-2. [Sync.md](Sync.md) for the guarded durability boundary and round-trip contract.
-3. [Stage 1 durability inventory](phases/Phase-11-Stage-1-Inventory.md) for the reviewed policy.
+1. [Phase 11](phases/Phase-11.md), starting with Stage 5.
+2. [Data Model](Data-Model.md) for block-marker ownership and place identity.
+3. [Architecture](Architecture.md) for focus and navigation boundaries.
 4. [Documentation.md](Documentation.md) for session closeout rules.
 
 ## Boundary
@@ -33,5 +34,5 @@ design migration early.
 
 ## Next action
 
-Begin Stage 4: build the complete two-replica fixture and compare source-of-truth and rebuilt state
-by logical identity.
+Begin Stage 5: complete the named, focusable, navigable `view` place contract on the existing marker
+identity and `block_sources` SQL.

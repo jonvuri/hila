@@ -2,14 +2,14 @@
 title: Replication and sync
 kind: canonical
 state: repair-in-progress
-updated: 2026-08-30
+updated: 2026-08-31
 ---
 
 # Replication and sync
 
 The app ships a local change-tracking and remote-apply foundation. It does not ship remote
-transport, files, provider integration, or a sync UI. Phase 11 Stages 2 and 3 repaired
-current-schema tracking and locked its guardrails. Stage 4 proves a full two-replica round trip.
+transport, files, provider integration, or a sync UI. Phase 11 Stages 2 through 4 repaired
+current-schema tracking, locked its guardrails, and proved a full two-replica round trip.
 
 ## Durability policy
 
@@ -60,8 +60,10 @@ Changesets are transport-neutral JSON. No provider currently sends them between 
 ### Conflict retention
 
 Remote apply detects concurrent local modification by manifest-defined logical identity and uses
-row-level last-write-wins. Losing data is retained in `_sync_conflicts` for future recovery UI.
-Remote writes must not echo into the local changelog.
+row-level last-write-wins. Each remote device has an independent receiver-local changelog boundary;
+the remote source sequence is not compared with unrelated local sequence numbers. Losing data is
+retained in `_sync_conflicts` for future recovery UI. Remote writes must not echo into the local
+changelog.
 
 ### Structural apply
 
@@ -81,8 +83,14 @@ derived compatibility copy; normalized slot bindings are authoritative. Face fil
 UUID identity and explicit order.
 
 Remote apply now materializes new matrix data tables, evolves columns, installs complete triggers,
-and rebuilds derived state inside the no-echo apply transaction. Stage 4 still owns the complete
-two-replica user-visible reconstruction proof.
+and rebuilds derived state inside the no-echo apply transaction. Reference joins restore their
+serialized empty BLOB representation to SQL `NULL` during apply.
+
+Stage 4's complete fixture reconstructs workspace content, hierarchy, cross-matrix ownership,
+portals, promoted types, owned matrixes, inline references and tags, face recipes, and saved-view
+SQL on a fresh replica. It compares source truth by logical identity, rebuilds and compares rendered
+position and ancestry state, retains concurrent promoted/view/owner conflicts, and proves remote
+delete lifecycles for every composite fixture entity.
 
 The schema-policy audit introspects live tables, columns, and installed trigger SQL. It compares
 all three with the manifest. Failure controls cover unclassified schema, stale trigger columns,
