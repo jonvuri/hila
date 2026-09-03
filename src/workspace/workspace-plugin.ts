@@ -84,8 +84,35 @@ export {
 // workspace matrix), so this is correct for everything reachable today.
 export const buildAncestryForRowsQuery = (
   labelMatrixId: number,
-  pairs: { matrixId: number; rowId: number }[],
+  pairs: { matrixId: number; rowId: number; key?: Uint8Array }[],
 ): string => {
+  if (pairs.every((pair) => pair.key)) {
+    const tuples = pairs
+      .map(
+        (pair) =>
+          `(${pair.matrixId}, ${pair.rowId}, X'${Array.from(pair.key!)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join('')}')`,
+      )
+      .join(', ')
+    return `
+WITH requested(for_matrix_id, for_row_id, appearance_key) AS (
+  VALUES ${tuples}
+)
+SELECT requested.for_matrix_id, requested.for_row_id,
+       s.global_lexkey AS key, s.depth,
+       s.matrix_id, s.row_id,
+       dt.label
+FROM requested
+JOIN scroll_index s
+  ON length(s.global_lexkey) < length(requested.appearance_key)
+ AND substr(requested.appearance_key, 1, length(s.global_lexkey)) = s.global_lexkey
+LEFT JOIN "mx_${labelMatrixId}_data" dt
+  ON s.matrix_id = ${labelMatrixId} AND s.row_id = dt.id
+ORDER BY requested.for_matrix_id, requested.for_row_id, s.depth
+`
+  }
+
   const tuples = pairs.map((p) => `(${p.matrixId}, ${p.rowId})`).join(', ')
   return `
 SELECT c.descendant_matrix_id AS for_matrix_id, c.descendant_row_id AS for_row_id,

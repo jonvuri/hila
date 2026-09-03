@@ -9,15 +9,10 @@ import {
 } from 'solid-js'
 
 import { resolveDrillInPosition } from '../core/client/matrix-client'
-import { execQuery } from '../core/client/sql-client'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { useQuery } from '../sql/useQuery'
 
-import {
-  buildAncestryForRowsQuery,
-  buildMatrixTitleQuery,
-  buildRowGlobalKeyQuery,
-} from './workspace-plugin'
+import { buildAncestryForRowsQuery, buildMatrixTitleQuery } from './workspace-plugin'
 
 export type StreamPanel =
   | { id: string; type: 'navigation'; rootKey?: Uint8Array }
@@ -36,6 +31,7 @@ export type StreamAncestor = {
   label: string
   rowId?: number
   matrixId?: number
+  key?: Uint8Array
 }
 
 export type StreamControllerInput = {
@@ -136,7 +132,9 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
 
   const focusPairs = createMemo(() =>
     panels().flatMap((panel) =>
-      panel.type === 'focus' ? [{ matrixId: panel.matrixId, rowId: panel.rowId }] : [],
+      panel.type === 'focus' ?
+        [{ matrixId: panel.matrixId, rowId: panel.rowId, key: panel.rowKey }]
+      : [],
     ),
   )
 
@@ -204,6 +202,7 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
         label: extractTextFromPmDoc(ancestor.label ?? '') || 'Untitled',
         rowId: ancestor.row_id,
         matrixId: ancestor.matrix_id,
+        key: new Uint8Array(ancestor.key),
       }))
     })
   })
@@ -232,20 +231,19 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
       setPanels([{ id: ROOT_PANEL_ID, type: 'navigation' }])
       return
     }
-    const key = ancestorKeyByCompositeKey().get(
-      panelCompositeKey(ancestor.matrixId, ancestor.rowId),
-    )
+    const key =
+      ancestor.key ??
+      ancestorKeyByCompositeKey().get(panelCompositeKey(ancestor.matrixId, ancestor.rowId))
     if (key) {
       replaceFocus(panelIndex, ancestor.matrixId, ancestor.rowId, new Uint8Array(key))
     }
   }
 
   const openRowReference = async (fromIndex: number, matrixId: number, rowId: number) => {
-    const result = await execQuery(buildRowGlobalKeyQuery(matrixId, rowId))
-    if (result && result.length > 0) {
-      const key = (result[0] as { key: Uint8Array }).key
-      appendFocus(fromIndex, matrixId, rowId, new Uint8Array(key))
-    }
+    // Identity navigation chooses the ownership home. A traversed appearance
+    // already carries its provenance key and uses appendFocus directly.
+    const resolved = await resolveDrillInPosition(matrixId, rowId)
+    if (resolved) appendFocus(fromIndex, matrixId, rowId, new Uint8Array(resolved.key))
   }
 
   const openFoldedFocus = async (fromIndex: number, matrixId: number, rowId: number) => {
@@ -283,10 +281,10 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
   }
 
   const handleInlineReferenceNavigate = (event: Event) => {
-    const rowId = (event as CustomEvent<{ rowId: number }>).detail?.rowId
-    if (rowId == null) return
+    const detail = (event as CustomEvent<{ matrixId?: number; rowId: number }>).detail
+    if (detail?.rowId == null) return
     event.stopPropagation()
-    navigateToRow(rowId)
+    void openRowReference(0, detail.matrixId ?? input.matrixId, detail.rowId)
   }
 
   onMount(() => {

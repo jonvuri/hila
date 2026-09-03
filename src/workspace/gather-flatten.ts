@@ -77,7 +77,15 @@ export const buildBlock = (db: Database, spec: GatherBlockSpec): Block => {
     spec.kind === 'view' ?
       viewBlockCountSql(spec.sql!)
     : containerBlockCountSql(spec.sourceMatrixId)
-  const count = Number((selectOne(db, countSql)?.n as number | undefined) ?? 0)
+  let count = 0
+  try {
+    count = Number((selectOne(db, countSql)?.n as number | undefined) ?? 0)
+  } catch {
+    // A saved view remains a place when its SQL becomes invalid. Inline folding
+    // degrades that one collection to zero rows; the focused presentation owns
+    // the stated SQL error and surrounding loose rows keep rendering.
+    count = 0
+  }
 
   return {
     key: markerKey,
@@ -87,7 +95,12 @@ export const buildBlock = (db: Database, spec: GatherBlockSpec): Block => {
         spec.kind === 'view' ?
           viewBlockSliceSql(spec.sql!)
         : containerBlockSliceSql(spec.sourceMatrixId)
-      const raw = sliceDb.selectObjects(sliceSql, [limit, offset]) as unknown as GatherRow[]
+      let raw: GatherRow[]
+      try {
+        raw = sliceDb.selectObjects(sliceSql, [limit, offset]) as unknown as GatherRow[]
+      } catch {
+        return []
+      }
       return raw.map((r, i) => {
         const globalOffset = offset + i
         const id = Number(r.id)

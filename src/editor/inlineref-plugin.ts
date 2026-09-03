@@ -192,6 +192,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
       insertInlinerefNode(view, {
         targetMatrixId: matrixId,
         targetRowId: option.id,
+        cachedTitle: option.title,
       })
     }
 

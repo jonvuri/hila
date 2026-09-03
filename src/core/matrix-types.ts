@@ -199,7 +199,7 @@ export type MatrixOperationMap = {
     result: JoinRow | null
   }
   createViewBlock: {
-    params: { focalMatrixId: number; focalRowId: number; sql: string }
+    params: { focalMatrixId: number; focalRowId: number; sql: string; name?: string }
     result: { matrixId: number; rowId: number }
   }
   updateViewBlock: {

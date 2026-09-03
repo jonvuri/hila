@@ -258,7 +258,7 @@ describe('StreamView controller contract', () => {
   })
 
   test('external row navigation resolves a key and replaces panels after root', async () => {
-    mocks.execQuery.mockResolvedValue([{ key: Uint8Array.of(30) }])
+    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(30), isHome: true })
     const onNavigated = vi.fn()
     let setNavigateToRowId!: (rowId: number | null) => void
 
@@ -280,11 +280,12 @@ describe('StreamView controller contract', () => {
     await flushPromises()
 
     expect(onNavigated).toHaveBeenCalledOnce()
+    expect(mocks.resolveDrillInPosition).toHaveBeenCalledWith(10, 300)
     expect(panelIdentity(container)).toEqual(['navigation', '10:300'])
   })
 
   test('inline-reference navigation uses the root navigation path', async () => {
-    mocks.execQuery.mockResolvedValue([{ key: Uint8Array.of(40) }])
+    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(40), isHome: true })
     mount()
     click(container, 'Append focus')
     click(container, 'Append child')
@@ -294,12 +295,13 @@ describe('StreamView controller contract', () => {
     source.dispatchEvent(
       new CustomEvent('inlineref-navigate', {
         bubbles: true,
-        detail: { rowId: 400 },
+        detail: { matrixId: 20, rowId: 400 },
       }),
     )
     await flushPromises()
 
-    expect(panelIdentity(container)).toEqual(['navigation', '10:400'])
+    expect(mocks.resolveDrillInPosition).toHaveBeenCalledWith(20, 400)
+    expect(panelIdentity(container)).toEqual(['navigation', '20:400'])
   })
 
   test('folded focus preserves resolved and unresolved position states', async () => {
@@ -324,7 +326,7 @@ describe('StreamView controller contract', () => {
   })
 
   test('cross-matrix boundary hops keep the target matrix identity', async () => {
-    mocks.execQuery.mockResolvedValue([{ key: Uint8Array.of(60) }])
+    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(60), isHome: true })
     mount()
     click(container, 'Append focus')
 

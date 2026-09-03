@@ -1,6 +1,12 @@
 import type { AutocompleteOption, TriggerChar } from '../editor/inlineref-plugin'
 import { execQuery } from '../core/client/sql-client'
-import { getAllTagTypes, createTagType, createDependentRow } from '../core/client/matrix-client'
+import {
+  getAllTagTypes,
+  createTagType,
+  createDependentRow,
+  getColumns,
+} from '../core/client/matrix-client'
+import { extractTextFromPmDoc } from '../editor/pm-text'
 
 export type TagAutocompleteOption = AutocompleteOption & {
   matrixId: number
@@ -25,10 +31,22 @@ export const createTagSearchProvider = (
   matrixId: number,
 ): ((trigger: TriggerChar, query: string) => Promise<AutocompleteOption[]>) => {
   const defaultSearch = async (query: string): Promise<AutocompleteOption[]> => {
+    const columns = await getColumns(matrixId)
+    const labelColumn =
+      columns.find((column) => column.role === 'label') ??
+      columns.find((column) => ['label', 'title', 'name'].includes(column.name.toLowerCase()))
+    if (!labelColumn) return []
     const escapedQuery = query.replace(/'/g, "''")
-    const sql = `SELECT id, title FROM "mx_${matrixId}_data" WHERE title LIKE '%${escapedQuery}%' ORDER BY title LIMIT 20`
+    const quotedLabel = `"${labelColumn.name.replaceAll('"', '""')}"`
+    const sql = `SELECT id, ${quotedLabel} AS stored_name FROM "mx_${matrixId}_data" WHERE ${quotedLabel} LIKE '%${escapedQuery}%' ORDER BY ${quotedLabel} LIMIT 20`
     const result = await execQuery(sql)
-    return result.map((r) => ({ id: r.id as number, title: r.title as string }))
+    return result.map((row) => {
+      const stored = String(row.stored_name ?? '')
+      return {
+        id: row.id as number,
+        title: extractTextFromPmDoc(stored) || stored || 'Untitled',
+      }
+    })
   }
 
   return async (trigger: TriggerChar, query: string): Promise<AutocompleteOption[]> => {

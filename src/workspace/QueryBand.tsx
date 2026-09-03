@@ -14,8 +14,9 @@ import {
   recognizeUpdatableQuery,
   resolveEditableColumns,
 } from '../sql/recognize-updatable'
-import { PropertyRow } from '../shared/PropertyRow'
+import { FieldEditor } from '../shared/FieldEditor'
 import { buildTagTypesWithCountsQuery } from '../tags/tag-queries'
+import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-marker-queries'
 
@@ -24,10 +25,10 @@ import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-ma
  *
  * A focal node's persisted live SQL views, now backed by `view` block markers
  * (a real forest node + its SQL in `block_sources`) rather than the removed
- * `bands` table. Each block runs its SQL via `useQuery` and renders the result
- * set through the schema-adaptive `PropertyRow`, with a `query:` header. The rows
- * are foreign (owned by various hosts), so the block has no tether and cannot
- * mesh — it is a view, not a collection.
+ * `bands` table. Each block runs its SQL via `useQuery` and renders every result
+ * field through a schema-adaptive collection. The rows are foreign (owned by
+ * various hosts), so the block has no tether and cannot mesh — it is a view,
+ * not a collection.
  *
  * Rendered here in the focus panel (the FocusPanel section). Folding the view
  * block's content inline into the loose outline via count+slice
@@ -44,6 +45,7 @@ import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-ma
 type ViewBlockRow = {
   marker_matrix_id: number
   marker_row_id: number
+  name?: string | null
   sql: string
 }
 
@@ -58,9 +60,7 @@ type TagTypeOption = {
  * Synthesize a column definition for a result key, defaulting to a plain text
  * field. Arbitrary-SELECT results carry no ColumnDefinition, so this is the
  * degraded baseline; recognized passthrough columns are enriched below with
- * their base column's real display type. Name-based label detection
- * (`partitionPropertyColumns` → LABEL_LIKE_COLUMNS) still surfaces `label` /
- * `title` / etc. prominently.
+ * their base column's real display type.
  */
 const synthesizeColumn = (name: string, order: number): ColumnDefinition => ({
   id: order,
@@ -75,7 +75,12 @@ const synthesizeColumn = (name: string, order: number): ColumnDefinition => ({
   role: null,
 })
 
-const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (props) => {
+export const ViewCollection: Component<{
+  block: ViewBlockRow
+  onDelete?: () => void
+  onOpen?: () => void
+  focused?: boolean
+}> = (props) => {
   const { result, error } = useQuery(() => props.block.sql)
 
   const rows = createMemo<Record<string, unknown>[]>(() => {
@@ -133,7 +138,8 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
     })
   })
 
-  const isEditable = (col: ColumnDefinition): boolean => editable().has(col.name)
+  const isEditable = (col: ColumnDefinition): boolean =>
+    col.name.toLowerCase() !== 'id' && editable().has(col.name)
 
   const saveCell = (row: Record<string, unknown>, outputName: string, value: string) => {
     const rec = recognition()
@@ -148,6 +154,9 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
     <div
       class="query-band"
       data-testid="query-band"
+      data-fidelity="substrate"
+      data-marker-matrix-id={props.block.marker_matrix_id}
+      data-marker-row-id={props.block.marker_row_id}
       style={{
         border: '1px solid hsl(230, 15%, 18%)',
         'border-radius': '4px',
@@ -173,7 +182,30 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
             'font-family': 'monospace',
           }}
         >
-          query:
+          <Show
+            when={props.onOpen}
+            fallback={<span>{props.focused ? '≔ view' : 'query:'}</span>}
+          >
+            {(open) => (
+              <button
+                type="button"
+                data-testid="view-place-open"
+                onClick={() => open()()}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-strong)',
+                  cursor: 'pointer',
+                  padding: 0,
+                  'font-family': 'inherit',
+                  'font-size': 'inherit',
+                  'font-weight': 'inherit',
+                }}
+              >
+                ≔ {extractTextFromPmDoc(props.block.name ?? '') || 'Untitled view'}
+              </button>
+            )}
+          </Show>
           <Show when={editable().size > 0}>
             <span
               data-testid="query-band-editable-badge"
@@ -204,23 +236,40 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
             </button>
           </Show>
         </span>
-        <button
-          type="button"
-          class="query-band-delete"
-          data-testid="query-band-delete"
-          aria-label="Delete band"
-          onClick={() => props.onDelete()}
+        <Show when={props.onDelete}>
+          {(remove) => (
+            <button
+              type="button"
+              class="query-band-delete"
+              data-testid="query-band-delete"
+              aria-label="Delete view"
+              onClick={() => remove()()}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--color-danger)',
+                'font-size': '13px',
+              }}
+            >
+              ×
+            </button>
+          )}
+        </Show>
+      </div>
+
+      <Show when={props.focused}>
+        <code
+          data-testid="view-place-sql"
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            'font-size': '13px',
+            color: 'var(--color-text-muted)',
+            'font-size': '11px',
+            'overflow-wrap': 'anywhere',
           }}
         >
-          ×
-        </button>
-      </div>
+          {props.block.sql}
+        </code>
+      </Show>
 
       <Show
         when={!error()}
@@ -255,14 +304,47 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
           <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
             <For each={rows()}>
               {(row) => (
-                <div class="query-band-row" data-testid="query-band-row">
-                  <PropertyRow
-                    columns={columns()}
-                    data={row}
-                    density="wide"
-                    isEditable={isEditable}
-                    onSave={(outputName, value) => saveCell(row, outputName, value)}
-                  />
+                <div
+                  class="query-band-row"
+                  data-testid="query-band-row"
+                  role="row"
+                  style={{
+                    display: 'grid',
+                    'grid-template-columns': 'repeat(auto-fit, minmax(120px, 1fr))',
+                    gap: 'var(--space-control-gap)',
+                    border: 'var(--width-line) solid var(--color-line-subtle)',
+                    padding: 'var(--space-8)',
+                  }}
+                >
+                  <For each={columns()}>
+                    {(column) => (
+                      <div role="cell" data-result-column={column.name}>
+                        <div
+                          style={{
+                            color: 'var(--color-text-muted)',
+                            'font-size': '10px',
+                            'font-family': 'var(--type-data-family)',
+                          }}
+                        >
+                          {column.name}
+                        </div>
+                        <Show
+                          when={isEditable(column)}
+                          fallback={
+                            <span data-testid="property-row-readonly-cell">
+                              {String(row[column.name] ?? '')}
+                            </span>
+                          }
+                        >
+                          <FieldEditor
+                            column={column}
+                            value={String(row[column.name] ?? '')}
+                            onSave={(value) => saveCell(row, column.name, value)}
+                          />
+                        </Show>
+                      </div>
+                    )}
+                  </For>
                 </div>
               )}
             </For>
@@ -277,9 +359,19 @@ const QueryBand: Component<{ block: ViewBlockRow; onDelete: () => void }> = (pro
  * The bands stack for a focal node, plus the dev-grade authoring affordance.
  * Mounted in the focus panel like the aspect band.
  */
-export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> = (props) => {
+export const QueryBandsSection: Component<{
+  matrixId: number
+  rowId: number
+  onOpenView?: (matrixId: number, rowId: number) => void
+}> = (props) => {
+  const [labelColumn, setLabelColumn] = createSignal<string | null>(null)
+  createEffect(() => {
+    void getColumns(props.matrixId).then((columns) => {
+      setLabelColumn(columns.find((column) => column.role === 'label')?.name ?? null)
+    })
+  })
   const { result: blocksResult } = useQuery(() =>
-    buildViewBlocksForNodeQuery(props.matrixId, props.rowId),
+    buildViewBlocksForNodeQuery(props.matrixId, props.rowId, labelColumn() ?? undefined),
   )
   const blocks = createMemo<ViewBlockRow[]>(() => {
     const data = blocksResult()
@@ -298,6 +390,7 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
   })
 
   const [sqlDraft, setSqlDraft] = createSignal('')
+  const [nameDraft, setNameDraft] = createSignal('Untitled view')
   const [selectedType, setSelectedType] = createSignal<number | null>(null)
 
   const insertSnippet = () => {
@@ -309,7 +402,10 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
   const saveBand = () => {
     const sql = sqlDraft().trim()
     if (!sql) return
-    void createViewBlock(props.matrixId, props.rowId, sql).then(() => setSqlDraft(''))
+    void createViewBlock(props.matrixId, props.rowId, sql, nameDraft()).then(() => {
+      setSqlDraft('')
+      setNameDraft('Untitled view')
+    })
   }
 
   return (
@@ -328,8 +424,13 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
       <Show when={blocks().length > 0}>
         <For each={blocks()}>
           {(block) => (
-            <QueryBand
+            <ViewCollection
               block={block}
+              onOpen={
+                props.onOpenView ?
+                  () => props.onOpenView?.(block.marker_matrix_id, block.marker_row_id)
+                : undefined
+              }
               onDelete={() => void deleteViewBlock(block.marker_matrix_id, block.marker_row_id)}
             />
           )}
@@ -342,6 +443,13 @@ export const QueryBandsSection: Component<{ matrixId: number; rowId: number }> =
         data-testid="query-band-authoring"
         style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}
       >
+        <input
+          data-testid="query-band-name-input"
+          aria-label="View name"
+          value={nameDraft()}
+          onInput={(event) => setNameDraft(event.currentTarget.value)}
+          style={{ 'font-size': '12px' }}
+        />
         <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
           <select
             data-testid="query-band-type-select"

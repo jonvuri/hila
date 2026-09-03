@@ -239,8 +239,9 @@ export const createViewBlock = (
   focalMatrixId: number,
   focalRowId: number,
   sql: string,
+  name?: string,
 ): Promise<{ matrixId: number; rowId: number }> =>
-  workerCall('createViewBlock', { focalMatrixId, focalRowId, sql })
+  workerCall('createViewBlock', { focalMatrixId, focalRowId, sql, name })
 
 export const updateViewBlock = (
   markerMatrixId: number,

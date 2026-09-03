@@ -259,6 +259,11 @@ const deleteHomeSubtree = (db: Database, node: NodeRef): void => {
   if (home) deleteScrollSubtreeRange(db, home)
 
   for (const n of subtree) {
+    // A ghost portal preserves only the appearance. The deleted marker's view
+    // SQL must not survive as an executable orphan.
+    db.exec('DELETE FROM block_sources WHERE marker_matrix_id = ? AND marker_row_id = ?', {
+      bind: [n.matrixId, n.rowId],
+    })
     db.exec(`DELETE FROM "mx_${n.matrixId}_data" WHERE id = ?`, { bind: [n.rowId] })
     // Sever own-edges touching this subtree node; portal edges (into node,
     // carrying the surviving appearances) are left untouched.

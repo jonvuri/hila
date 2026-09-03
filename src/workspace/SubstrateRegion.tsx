@@ -270,7 +270,11 @@ const SubstrateRegion: Component<{
       <LooseRegion focal={focal()} contentAnchoredKeys={props.contentAnchoredKeys} />
 
       {/* view — persisted SQL blocks (owns nothing; the firewall) */}
-      <QueryBandsSection matrixId={props.focalMatrixId} rowId={props.focalRowId} />
+      <QueryBandsSection
+        matrixId={props.focalMatrixId}
+        rowId={props.focalRowId}
+        onOpenView={props.onOpenRowRef}
+      />
 
       {/* container — dedicated sub-tables (matrix bounded here, with its border) */}
       <SubTableBand

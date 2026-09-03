@@ -150,4 +150,23 @@ describe('Phase 9.7 Stage C2 — gather flatten (production filters)', () => {
     expect(rows.length).toBe(plain.length)
     expect(rows.map((r) => r.row_id)).toEqual(plain.map((r) => r.row_id))
   })
+
+  test('empty and invalid views preserve surrounding rows without minting structure', () => {
+    const { spec } = setup()
+    const joinsBefore = h.rawDb.selectValue('SELECT COUNT(*) FROM joins')
+    const positionsBefore = h.rawDb.selectValue('SELECT COUNT(*) FROM scroll_index')
+
+    for (const sql of ['SELECT 1 WHERE 0', 'SELECT * FROM missing_view_source']) {
+      const result = computeGather(h.rawDb, {
+        ...spec,
+        blocks: [{ ...spec.blocks[0]!, sql }],
+      })
+      expect(result.totalVirtual).toBe(10)
+      expect(result.rows).toHaveLength(10)
+      expect(result.rows.every((row) => row.is_block_row === 0)).toBe(true)
+    }
+
+    expect(h.rawDb.selectValue('SELECT COUNT(*) FROM joins')).toBe(joinsBefore)
+    expect(h.rawDb.selectValue('SELECT COUNT(*) FROM scroll_index')).toBe(positionsBefore)
+  })
 })

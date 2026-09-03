@@ -142,23 +142,23 @@ Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md
 
 **Outcome:** a view marker is a named, focusable place backed by its existing SQL.
 
-- [ ] Define which existing row field stores the view name. Do not add a parallel identity record.
-- [ ] Include view nodes in normal place discovery and identity navigation without rendering them as
+- [x] Define which existing row field stores the view name. Do not add a parallel identity record.
+- [x] Include view nodes in normal place discovery and identity navigation without rendering them as
       duplicate loose result rows.
-- [ ] Define home/provenance, ancestry, focus/back, rename, delete, empty, invalid-SQL, and ghost
+- [x] Define home/provenance, ancestry, focus/back, rename, delete, empty, invalid-SQL, and ghost
       behavior.
-- [ ] Preserve the view firewall: query results own nothing and cannot imply insert position.
-- [ ] Keep inline folding as one presentation of the same subject, not a second view object.
-- [ ] Add a focus-panel collection region that renders the stored SQL result at substrate fidelity.
-- [ ] Keep block authoring on the current development surface; launcher/chip authoring remains Phase 12.
+- [x] Preserve the view firewall: query results own nothing and cannot imply insert position.
+- [x] Keep inline folding as one presentation of the same subject, not a second view object.
+- [x] Add a focus-panel collection region that renders the stored SQL result at substrate fidelity.
+- [x] Keep block authoring on the current development surface; launcher/chip authoring remains Phase 12.
 
 ### Stage 5 verification
 
-- [ ] A named view can be created, focused, renamed, navigated back from, and deleted.
-- [ ] Inline and focused presentations use the same marker identity and `block_sources` row.
-- [ ] A view with no real result positions remains a valid place.
-- [ ] Query results cannot create ownership through the view.
-- [ ] Focused component and E2E coverage passes.
+- [x] A named view can be created, focused, renamed, navigated back from, and deleted.
+- [x] Inline and focused presentations use the same marker identity and `block_sources` row.
+- [x] A view with no real result positions remains a valid place.
+- [x] Query results cannot create ownership through the view.
+- [x] Focused component and E2E coverage passes.
 
 ## Stage 6 — Begin the subject/recipe/host runtime
 

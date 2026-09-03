@@ -10,6 +10,9 @@ import {
   insertJoin,
 } from '../core/matrix'
 import { createTreePosition, type NodeRef } from '../core/tree'
+import { addPortal } from '../core/portal'
+import { getGlobalKey, positionsOf } from '../core/scroll-index'
+import { createViewBlock } from '../core/block-marker'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
@@ -223,6 +226,19 @@ describe('Workspace paginated outline query', () => {
     expect(rows.every((r) => r.is_type_node === 0)).toBe(true)
   })
 
+  test('discovers a named view row without duplicating its marker in the loose outline', () => {
+    const parent = insertWorkspaceRow('Parent')
+    const marker = createViewBlock(db, parent.ref, 'SELECT 1 WHERE 0', 'Saved view')
+
+    const rows = runQuery(buildPaginatedOutlineQuery())
+    expect(rows.map((row) => row.row_id)).toEqual([parent.rowId])
+    expect(rows[0]!.has_children).toBe(0)
+    expect(runCount(buildOutlineCountQuery())).toBe(1)
+    expect(
+      db.selectValue(`SELECT label FROM "mx_${matrixId}_data" WHERE id = ?`, [marker.rowId]),
+    ).toContain('Saved view')
+  })
+
   test('hydration query fetches label/content for a window of row ids', () => {
     const { a, b } = buildTree()
     const stmt = db.prepare(buildHydrationQuery(matrixId, [a.rowId, b.rowId]))
@@ -371,6 +387,34 @@ describe('Workspace ancestry-for-rows query', () => {
 
     const rows = runQuery(buildAncestryForRowsQuery(matrixId, [{ matrixId, rowId: a }]))
     expect(rows).toHaveLength(0)
+  })
+
+  test('uses the traversed appearance key for portal ancestry', () => {
+    const homeParent = insertDataRow(db, matrixId, { label: makeLabel('Home'), content: null })
+    createTreePosition(db, matrixId, homeParent)
+    const portalHost = insertDataRow(db, matrixId, {
+      label: makeLabel('Portal host'),
+      content: null,
+    })
+    createTreePosition(db, matrixId, portalHost)
+    const target = insertDataRow(db, matrixId, { label: makeLabel('Target'), content: null })
+    createTreePosition(db, matrixId, target, {
+      parent: { matrixId, rowId: homeParent },
+    })
+    addPortal(db, { matrixId, rowId: portalHost }, { matrixId, rowId: target })
+
+    const homeKey = getGlobalKey(db, matrixId, target)!
+    const portalKey = positionsOf(db, { matrixId, rowId: target }).find(
+      (position) =>
+        position.key.length !== homeKey.length ||
+        position.key.some((byte, index) => byte !== homeKey[index]),
+    )!.key
+    const rows = runQuery(
+      buildAncestryForRowsQuery(matrixId, [{ matrixId, rowId: target, key: portalKey }]),
+    )
+
+    expect(rows.map((row) => row.row_id)).toEqual([portalHost])
+    expect(rows[0]!.label).toContain('Portal host')
   })
 
   // Phase 9.5 boundary hop: a descendant in a *foreign* matrix whose own-parent is a

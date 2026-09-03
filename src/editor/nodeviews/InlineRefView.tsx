@@ -6,6 +6,7 @@ import { getColumns } from '../../core/client/matrix-client'
 import type { ColumnDefinition } from '../../core/matrix'
 import { tagColorFromName, tagBadgeBackground } from '../../tags/tag-color'
 import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../aspect-tether'
+import { extractTextFromPmDoc } from '../pm-text'
 
 const MAX_KEY_PROPS = 2
 const LABEL_COLUMNS = new Set(['id', 'label', 'title', 'name'])
@@ -20,6 +21,21 @@ export const InlineRefView: Component = () => {
   const isEmpty = createMemo(() => targetMatrixId() == null || targetRowId() == null)
   const isOwn = createMemo(() => kind() === 'own')
 
+  const [refLabelColumn, setRefLabelColumn] = createSignal<string | null>(null)
+  createEffect(() => {
+    const matrixId = targetMatrixId()
+    if (matrixId == null || isOwn()) {
+      setRefLabelColumn(null)
+      return
+    }
+    void getColumns(matrixId).then((columns) => {
+      const label =
+        columns.find((column) => column.role === 'label') ??
+        columns.find((column) => ['label', 'title', 'name'].includes(column.name.toLowerCase()))
+      setRefLabelColumn(label?.name ?? null)
+    })
+  })
+
   // Resolve target row existence and title (live vs ghost detection).
   // Uses `SELECT id` as a universal existence check since tag matrixes
   // may not have a `title` column. The title for ref-kind refs is
@@ -32,8 +48,10 @@ export const InlineRefView: Component = () => {
 
   // Resolve title for ref-kind refs (own-kind uses tag type name instead)
   const refTitleQueryStr = createMemo(() => {
-    if (isEmpty() || isOwn()) return ''
-    return `SELECT title FROM "mx_${targetMatrixId()}_data" WHERE id = ${targetRowId()}`
+    const labelColumn = refLabelColumn()
+    if (isEmpty() || isOwn() || !labelColumn) return ''
+    const quotedLabel = `"${labelColumn.replaceAll('"', '""')}"`
+    return `SELECT ${quotedLabel} AS stored_name FROM "mx_${targetMatrixId()}_data" WHERE id = ${targetRowId()}`
   })
   const { result: refTitleResult } = useQuery(() => refTitleQueryStr())
 
@@ -95,7 +113,8 @@ export const InlineRefView: Component = () => {
   const resolvedTitle = createMemo(() => {
     const data = refTitleResult()
     if (!data || data.length === 0) return null
-    return (data[0] as { title: string }).title
+    const stored = (data[0] as { stored_name: string | null }).stored_name ?? ''
+    return extractTextFromPmDoc(stored) || stored
   })
 
   const isLive = createMemo(
@@ -191,7 +210,7 @@ export const InlineRefView: Component = () => {
     }
 
     const event = new CustomEvent('inlineref-navigate', {
-      detail: { rowId: targetRowId() },
+      detail: { matrixId: targetMatrixId(), rowId: targetRowId() },
       bubbles: true,
     })
     ;(e.currentTarget as HTMLElement).dispatchEvent(event)

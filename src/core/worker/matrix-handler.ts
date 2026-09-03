@@ -776,13 +776,14 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
     }
 
     case 'createViewBlock': {
-      const { id, focalMatrixId, focalRowId, sql } = message
+      const { id, focalMatrixId, focalRowId, sql, name } = message
       try {
         const { db } = await sqliteWasm
         const marker = createViewBlockImpl(
           db,
           { matrixId: focalMatrixId, rowId: focalRowId },
           sql,
+          name,
         )
         postMessage({ type: 'createViewBlockSuccess', id, result: marker })
       } catch (err: unknown) {

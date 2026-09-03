@@ -427,6 +427,10 @@ export const deleteSubtree = (
       // Remove from scroll index.
       removeFromScrollIndex(db, node.matrixId, node.rowId)
 
+      // View SQL follows the marker row through generic ancestor deletion.
+      db.exec('DELETE FROM block_sources WHERE marker_matrix_id = ? AND marker_row_id = ?', {
+        bind: [node.matrixId, node.rowId],
+      })
       db.exec(`DELETE FROM "mx_${node.matrixId}_data" WHERE id = ?`, { bind: [node.rowId] })
       db.exec(
         `DELETE FROM joins

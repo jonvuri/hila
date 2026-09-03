@@ -848,7 +848,9 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     }
 
     const vRows = visibleRows()
-    const nonDragged = vRows.filter((r) => !drag.subtreeCks.has(r.rk))
+    // Folded view results are render-only. They cannot become a parent or
+    // sibling anchor for a structural drop.
+    const nonDragged = vRows.filter((r) => !drag.subtreeCks.has(r.rk) && r.is_block_row !== 1)
     const rowEls = getRowElements()
 
     const target = computeDropTarget(
@@ -901,6 +903,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
     const row = vRows[index]!
     if (row.is_ghost === 1) return
+    if (row.is_block_row === 1) return
     if (!isPlainWorkspaceRow(row)) return
     const subtreeCks = new Set<string>([ck])
     for (let i = index + 1; i < vRows.length; i++) {
@@ -963,7 +966,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   // create/reparent are §9.6. Cross-matrix aspect rows are render +
   // inline-label-edit only.
   const isPlainWorkspaceRow = (row: WorkspaceRowData): boolean =>
-    isWorkspaceRow(row) && row.is_type_node !== 1
+    isWorkspaceRow(row) && row.is_type_node !== 1 && row.is_block_row !== 1
 
   const makeCallbacks = (ck: string): OutlineCallbacks => ({
     onEnter: (view: EditorView) => {
@@ -1429,6 +1432,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   class="outline-row"
                   data-row-id={rowId}
                   data-row-ck={rowCk}
+                  data-block-row={isBlockRow ? 'true' : 'false'}
                   data-depth={row.depth - depthOffset()}
                   style={{
                     display: 'flex',
@@ -1439,27 +1443,32 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     transition: 'opacity 0.15s',
                   }}
                 >
-                  {/* Drag handle */}
-                  <div
-                    class="outline-row-handle"
-                    style={{
-                      width: '20px',
-                      'flex-shrink': 0,
-                      cursor: 'grab',
-                      display: 'flex',
-                      'align-items': 'center',
-                      'justify-content': 'center',
-                      height: `${ESTIMATED_ROW_HEIGHT_PX}px`,
-                      'user-select': 'none',
-                      opacity: 0.4,
-                    }}
-                    onPointerDown={(e: PointerEvent) => {
-                      e.preventDefault()
-                      startDrag(rowCk, e)
-                    }}
+                  {/* Folded view results have no structural drag affordance. */}
+                  <Show
+                    when={!isBlockRow}
+                    fallback={<div style={{ width: '20px', 'flex-shrink': 0 }} />}
                   >
-                    ⠿
-                  </div>
+                    <div
+                      class="outline-row-handle"
+                      style={{
+                        width: '20px',
+                        'flex-shrink': 0,
+                        cursor: 'grab',
+                        display: 'flex',
+                        'align-items': 'center',
+                        'justify-content': 'center',
+                        height: `${ESTIMATED_ROW_HEIGHT_PX}px`,
+                        'user-select': 'none',
+                        opacity: 0.4,
+                      }}
+                      onPointerDown={(e: PointerEvent) => {
+                        e.preventDefault()
+                        startDrag(rowCk, e)
+                      }}
+                    >
+                      ⠿
+                    </div>
+                  </Show>
 
                   {/* Row content: bullet + label + content preview */}
                   <div style={{ flex: 1, 'min-width': 0 }}>

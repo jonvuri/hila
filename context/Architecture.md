@@ -121,6 +121,12 @@ The target view layer has three kinds:
 The stream is the primary surface. Local navigation uses focus panels and rooted ancestry. Global
 identity navigation reconstructs a rooted focus state rather than creating a second root.
 
+Saved views now participate in this contract. Their marker label is discoverable like another
+named row, their inline block opens the marker identity, and their focus panel renders the marker's
+stored SQL as a substrate collection. Empty and invalid collections remain places. Query result
+rows retain source-cell write-back where recognized, but never expose structural insertion,
+reparenting, drag, or ownership gestures.
+
 The current Workspace/Table/Tags tabs are temporary. Phase 12 removes them only after the launcher
 can replace their navigation role. URLs, deep links, and saved stream states remain deferred.
 
@@ -142,6 +148,10 @@ When identity navigation needs a place, resolve in order:
 
 An arbitrary portal is never silently selected. Placeless creation homes under the node focused
 when the gesture began.
+
+The shipped stream preserves a traversed appearance key when one is available and derives ancestry
+from that position. Identity-only navigation resolves the ownership home first. A deleted home can
+leave ghost portal positions, but those ghosts are not focusable subjects.
 
 ## Subjects, recipes, faces, and hosts
 

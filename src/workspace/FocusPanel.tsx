@@ -16,7 +16,7 @@ import { keymap } from 'prosemirror-keymap'
 import { toggleMark } from 'prosemirror-commands'
 import 'prosemirror-view/style/prosemirror.css'
 
-import { updateRow, getColumns } from '../core/client/matrix-client'
+import { deleteViewBlock, updateRow, getColumns } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
 import { filterIntrinsicOverflowColumns } from '../shared/property-surface'
@@ -43,11 +43,13 @@ import { FieldEditor } from '../shared/FieldEditor'
 import type { NavigationOutlineVariant } from '../design/tokens'
 
 import SubstrateRegion from './SubstrateRegion'
+import { ViewCollection } from './QueryBand'
 import {
   buildSingleRowQuery,
   buildBacklinksQuery,
   buildChildCountQuery,
 } from './workspace-plugin'
+import { buildViewSourceQuery } from './block-marker-queries'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
 
@@ -109,6 +111,12 @@ type BacklinkData = {
   id: number
   kind: string
   label: string | null
+}
+
+type ViewSourceData = {
+  marker_matrix_id: number
+  marker_row_id: number
+  sql: string
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +440,13 @@ const FocusPanel = (props: FocusPanelProps) => {
     return data[0] as unknown as RowData
   })
 
+  const viewSourceQuery = createMemo(() => buildViewSourceQuery(props.matrixId, props.rowId))
+  const { result: viewSourceResult } = useQuery(() => viewSourceQuery())
+  const viewSource = createMemo((): ViewSourceData | null => {
+    const data = viewSourceResult()
+    return data?.[0] ? (data[0] as unknown as ViewSourceData) : null
+  })
+
   // Backlinks query
   const backlinksQuery = createMemo(() => buildBacklinksQuery(props.matrixId, props.rowId))
   const { result: backlinksResult } = useQuery(() => backlinksQuery())
@@ -563,7 +578,12 @@ const FocusPanel = (props: FocusPanelProps) => {
         <Show
           when={rowData()}
           fallback={
-            <div style={{ padding: '16px', color: 'var(--text-muted)' }}>Loading...</div>
+            <div
+              data-testid={rowResult() === null ? 'focus-loading' : 'focus-place-unavailable'}
+              style={{ padding: '16px', color: 'var(--color-text-muted)' }}
+            >
+              {rowResult() === null ? 'Loading…' : 'This place is no longer available.'}
+            </div>
           }
         >
           {
@@ -637,8 +657,36 @@ const FocusPanel = (props: FocusPanelProps) => {
                 </div>
               </Show>
 
+              <Show when={viewSource()}>
+                {(source) => (
+                  <section
+                    aria-label="View collection"
+                    data-testid="view-place-collection"
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Escape') return
+                      event.preventDefault()
+                      props.onClose()
+                    }}
+                    style={{
+                      display: 'flex',
+                      'flex-direction': 'column',
+                      gap: 'var(--space-control-gap)',
+                      'margin-bottom': 'var(--space-section-gap)',
+                    }}
+                  >
+                    <ViewCollection
+                      block={source()}
+                      focused
+                      onDelete={() => {
+                        void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
+                      }}
+                    />
+                  </section>
+                )}
+              </Show>
+
               {/* Content section: only when the matrix has a content column. */}
-              <Show when={contentCol()}>
+              <Show when={!viewSource() && contentCol()}>
                 {(col) => (
                   <div
                     class="focus-panel-content"
@@ -675,7 +723,7 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               {/* Properties section: intrinsic overflow columns. The owned-aspect
                   half of the property surface renders as an aspect band (Phase 9.2). */}
-              <Show when={overflowColumns().length > 0}>
+              <Show when={!viewSource() && overflowColumns().length > 0}>
                 <div
                   class="focus-panel-overflow"
                   data-testid="focus-panel-overflow"
@@ -714,12 +762,14 @@ const FocusPanel = (props: FocusPanelProps) => {
                   region — loose owned aspects (per-cell editable, grid-coalesced,
                   with the portal / move-owner / two-tier-delete gestures), view
                   blocks, and dedicated containers. */}
-              <SubstrateRegion
-                focalMatrixId={props.matrixId}
-                focalRowId={props.rowId}
-                contentAnchoredKeys={contentAnchoredKeys()}
-                onOpenRowRef={props.onOpenRowRef}
-              />
+              <Show when={!viewSource()}>
+                <SubstrateRegion
+                  focalMatrixId={props.matrixId}
+                  focalRowId={props.rowId}
+                  contentAnchoredKeys={contentAnchoredKeys()}
+                  onOpenRowRef={props.onOpenRowRef}
+                />
+              </Show>
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
@@ -788,39 +838,23 @@ const FocusPanel = (props: FocusPanelProps) => {
               </Show>
 
               {/* Children section */}
-              <div
-                class="focus-panel-children"
-                data-testid="focus-panel-children"
-                style={{
-                  'border-top': '1px solid hsl(230, 15%, 18%)',
-                  'padding-top': '12px',
-                  flex: 1,
-                  'min-height': '120px',
-                  overflow: 'hidden',
-                }}
-              >
-                <Show
-                  when={!props.unresolvedPosition}
-                  fallback={
-                    <div
-                      data-testid="focus-no-position"
-                      style={{
-                        color: 'var(--text-muted)',
-                        'font-size': '13px',
-                        'font-style': 'italic',
-                        padding: '8px 0',
-                      }}
-                    >
-                      This row isn't placed in the outline, so it has no separate children view
-                      here.
-                    </div>
-                  }
+              <Show when={!viewSource()}>
+                <div
+                  class="focus-panel-children"
+                  data-testid="focus-panel-children"
+                  style={{
+                    'border-top': '1px solid hsl(230, 15%, 18%)',
+                    'padding-top': '12px',
+                    flex: 1,
+                    'min-height': '120px',
+                    overflow: 'hidden',
+                  }}
                 >
                   <Show
-                    when={hasChildren()}
+                    when={!props.unresolvedPosition}
                     fallback={
                       <div
-                        data-testid="focus-no-children"
+                        data-testid="focus-no-position"
                         style={{
                           color: 'var(--text-muted)',
                           'font-size': '13px',
@@ -828,28 +862,46 @@ const FocusPanel = (props: FocusPanelProps) => {
                           padding: '8px 0',
                         }}
                       >
-                        No children. Press Enter in the outline to add items.
+                        This row isn't placed in the outline, so it has no separate children
+                        view here.
                       </div>
                     }
                   >
-                    <Suspense
+                    <Show
+                      when={hasChildren()}
                       fallback={
-                        <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
-                          Loading children...
+                        <div
+                          data-testid="focus-no-children"
+                          style={{
+                            color: 'var(--text-muted)',
+                            'font-size': '13px',
+                            'font-style': 'italic',
+                            padding: '8px 0',
+                          }}
+                        >
+                          No children. Press Enter in the outline to add items.
                         </div>
                       }
                     >
-                      <NavigationPanel
-                        matrixId={props.matrixId}
-                        navigationOutline={props.navigationOutline}
-                        rootKey={props.rowKey}
-                        onOpenFocus={props.onAppendFocus}
-                        onOpenFoldedFocus={props.onOpenFoldedFocus}
-                      />
-                    </Suspense>
+                      <Suspense
+                        fallback={
+                          <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
+                            Loading children...
+                          </div>
+                        }
+                      >
+                        <NavigationPanel
+                          matrixId={props.matrixId}
+                          navigationOutline={props.navigationOutline}
+                          rootKey={props.rowKey}
+                          onOpenFocus={props.onAppendFocus}
+                          onOpenFoldedFocus={props.onOpenFoldedFocus}
+                        />
+                      </Suspense>
+                    </Show>
                   </Show>
-                </Show>
-              </div>
+                </div>
+              </Show>
             </>
           }
         </Show>

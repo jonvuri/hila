@@ -145,8 +145,21 @@ A `view` block consists of:
 - a real marker node positioned by an `own` edge;
 - one `block_sources` row keyed by marker identity containing its SQL.
 
-The marker currently has no normal name/place behavior and is excluded from loose navigation.
-Phase 11 completes its named, focusable place contract without creating another SQL store.
+The marker's writable `label`-role field stores the view name. Creating a view therefore requires
+the marker matrix to have that field. The marker is a normal named place for reference discovery
+and identity navigation, but loose outline scans exclude it because its inline presentation already
+occupies that position. Inline and focused presentations use the same marker identity and
+`block_sources` row.
+
+The marker's inbound `own` edge is its home and records the provenance under which it was created.
+Navigation from a concrete appearance preserves that appearance's ancestry; identity-only
+navigation chooses the ownership home. Ordinary deletion removes the marker data and SQL and
+ghosts surviving portal appearances. Hard deletion removes every appearance. A ghost is not an
+executable view.
+
+Empty results and invalid SQL do not invalidate the place. The focused collection shows an empty
+or stated error state while preserving the marker identity and name. Inline folding degrades an
+invalid collection to zero rows without interrupting surrounding loose content.
 
 `block_sources` is replicated source of truth. Phase 11 Stage 2 removed its Phase 9.7 device-local
 exception before launcher save creates durable views.
