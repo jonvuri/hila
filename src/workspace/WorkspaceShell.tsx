@@ -20,7 +20,7 @@ export type WorkspaceShellPanel = {
 export type WorkspaceShellProps<Panel extends WorkspaceShellPanel> = {
   ariaLabel?: string
   panels: readonly Panel[]
-  renderPanel: (panel: Panel, index: number) => JSX.Element
+  renderPanel: (panel: Panel) => JSX.Element
   onAncestorSelect?: (panelIndex: number, ancestor: WorkspaceShellAncestor) => void
 }
 
@@ -66,7 +66,7 @@ const WorkspaceShell = <Panel extends WorkspaceShellPanel>(
               </ol>
             </nav>
           </Show>
-          <div class="workspace-shell-content">{props.renderPanel(panel, index())}</div>
+          <div class="workspace-shell-content">{props.renderPanel(panel)}</div>
         </article>
       )}
     </For>

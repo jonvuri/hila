@@ -101,3 +101,13 @@ estimate. Record the estimate, throttle, browser, fixture, warmed median, and p9
 Use the ProseMirror counters in `src/debug/debugState.ts` for exact mount/unmount assertions. A
 performance test must fail on unrelated editor churn even when its wall-clock result remains under
 budget.
+
+Run the canonical Stage 8 coverage with:
+
+```sh
+pnpm test:e2e --grep "canonical performance contract"
+```
+
+The browser test attaches `performance-results.json` with its environment, warmed samples, median,
+p95, trace counts, mounted-row bound, and editor churn. Run it outside the sandbox with the
+system-installed browser.

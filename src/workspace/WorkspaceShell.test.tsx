@@ -80,4 +80,25 @@ describe('WorkspaceShell', () => {
     setTheme('wipeout')
     expect(structure()).toEqual(ghostStructure)
   })
+
+  test('preserves panel content when an earlier column leaves the retained stack', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    let setPanels!: (panels: readonly WorkspaceShellPanel[]) => void
+    dispose = render(() => {
+      const [visiblePanels, updatePanels] = createSignal(panels)
+      setPanels = updatePanels
+      return (
+        <WorkspaceShell
+          panels={visiblePanels()}
+          renderPanel={(panel) => <div data-content-id={panel.id}>{panel.title}</div>}
+        />
+      )
+    }, container)
+
+    const retained = container.querySelector('[data-content-id="focus-2"]')
+    expect(retained).toBeTruthy()
+    setPanels([panels[1]!])
+    expect(container.querySelector('[data-content-id="focus-2"]')).toBe(retained)
+  })
 })

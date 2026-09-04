@@ -14,6 +14,8 @@ import { createMatrix, insertRow } from '../core/matrix'
 import {
   assertQueryPlan,
   assertScaling,
+  assertWorkCount,
+  assertNoCrossInvalidation,
   categorizeTables,
   createPerfDb,
   explainQueryPlan,
@@ -203,5 +205,28 @@ describe('assertScaling', () => {
       { size: 10, work: 20 },
       { size: 20, work: 40 },
     ])
+  })
+})
+
+// -- Guard-family failure controls -------------------------------------------
+
+describe('remaining guard-family failure controls', () => {
+  test('work-count guard rejects one unexpected write', () => {
+    expect(() => assertWorkCount('controlled insert', 2, 1)).toThrow(
+      /Work-count guard failed.*expected 1, received 2/,
+    )
+  })
+
+  test('invalidation guard rejects one unrelated recompute', () => {
+    const isolatedSql = 'SELECT * FROM matrix WHERE id = 2'
+    expect(() =>
+      assertNoCrossInvalidation(
+        {
+          writtenTables: new Set(['matrix']),
+          recomputed: new Set([isolatedSql]),
+        },
+        isolatedSql,
+      ),
+    ).toThrow(/Invalidation guard failed/)
   })
 })

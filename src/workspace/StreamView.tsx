@@ -62,8 +62,10 @@ const StreamView = (props: StreamViewProps) => {
     }),
   )
 
-  const renderPanel = (shellPanel: StreamShellPanel, index: number) => {
+  const renderPanel = (shellPanel: StreamShellPanel) => {
     const panel = shellPanel.source
+    const panelIndex = () =>
+      controller.panels().findIndex((candidate) => candidate.id === panel.id)
     if (panel.type === 'navigation') {
       return (
         <NavigationPanel
@@ -71,12 +73,12 @@ const StreamView = (props: StreamViewProps) => {
           navigationOutline={navigationOutline()}
           rootKey={panel.rootKey}
           onOpenFocus={(matrixId, rowId, key) =>
-            controller.appendFocus(index, matrixId, rowId, new Uint8Array(key))
+            controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
           }
           onOpenFoldedFocus={(matrixId, rowId) =>
-            void controller.openFoldedFocus(index, matrixId, rowId)
+            void controller.openFoldedFocus(panelIndex(), matrixId, rowId)
           }
-          focusedRowId={controller.focusedRowForNavigation(index)}
+          focusedRowId={controller.focusedRowForNavigation(panelIndex())}
         />
       )
     }
@@ -89,21 +91,21 @@ const StreamView = (props: StreamViewProps) => {
         rowKey={panel.rowKey}
         foldedOrigin={panel.foldedOrigin}
         unresolvedPosition={panel.unresolvedPosition}
-        active={index === controller.panels().length - 1}
+        active={shellPanel.active}
         onAppendFocus={(matrixId, rowId, key) =>
-          controller.appendFocus(index, matrixId, rowId, new Uint8Array(key))
+          controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
         }
         onReplaceFocus={(matrixId, rowId, key) =>
-          controller.replaceFocus(index, matrixId, rowId, new Uint8Array(key))
+          controller.replaceFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
         }
         onOpenRowRef={(matrixId, rowId) =>
-          void controller.openRowReference(index, matrixId, rowId)
+          void controller.openRowReference(panelIndex(), matrixId, rowId)
         }
         onOpenFoldedFocus={(matrixId, rowId) =>
-          void controller.openFoldedFocus(index, matrixId, rowId)
+          void controller.openFoldedFocus(panelIndex(), matrixId, rowId)
         }
-        onCollapse={() => controller.closeFrom(index + 1)}
-        onClose={() => controller.closeFrom(index)}
+        onCollapse={() => controller.closeFrom(panelIndex() + 1)}
+        onClose={() => controller.closeFrom(panelIndex())}
       />
     )
   }

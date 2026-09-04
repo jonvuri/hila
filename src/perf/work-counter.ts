@@ -86,6 +86,15 @@ export type WorkCounters = {
   byTable: Record<string, TableWork>
 }
 
+/** Fail a deterministic work-count gate with a useful operation label. */
+export const assertWorkCount = (label: string, actual: number, expected: number): void => {
+  if (actual !== expected) {
+    throw new Error(
+      `Work-count guard failed for ${label}: expected ${expected}, received ${actual}`,
+    )
+  }
+}
+
 const emptyCounters = (): WorkCounters => ({
   statements: 0,
   steps: 0,

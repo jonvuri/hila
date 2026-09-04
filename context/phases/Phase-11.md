@@ -216,28 +216,28 @@ version 1, and enables the runner proven here.
 
 **Outcome:** the active performance contract has deterministic and throttled-browser proof.
 
-- [ ] Keep query-plan, work-count, scaling-ratio, and invalidation fan-out guards as unit-test gates.
-- [ ] Restore exact ProseMirror lifecycle tests for within-page insert, page-boundary insert/delete,
+- [x] Keep query-plan, work-count, scaling-ratio, and invalidation fan-out guards as unit-test gates.
+- [x] Restore exact ProseMirror lifecycle tests for within-page insert, page-boundary insert/delete,
       collapse, expand, and unaffected-row stability.
-- [ ] Add stable-instance assertions for focus panels and workspace content across ancestry/sticky
+- [x] Add stable-instance assertions for focus panels and workspace content across ancestry/sticky
       presentation updates.
-- [ ] Define bounded browser stress fixtures for deep trees, cross-matrix rows, portals, folded
+- [x] Define bounded browser stress fixtures for deep trees, cross-matrix rows, portals, folded
       views, and large visible result sets.
-- [ ] Estimate the slowdown from this development machine to a typical downmarket target and record
+- [x] Estimate the slowdown from this development machine to a typical downmarket target and record
       the basis.
-- [ ] Compare that estimate with Chrome DevTools' maximum available CPU slowdown. Use the maximum
+- [x] Compare that estimate with Chrome DevTools' maximum available CPU slowdown. Use the maximum
       throttle when it is at least as severe; otherwise apply a conservative threshold adjustment.
-- [ ] Record warmed median and p95 wall-clock results, long tasks, forced layout, mounted-row bounds,
+- [x] Record warmed median and p95 wall-clock results, long tasks, forced layout, mounted-row bounds,
       and editor churn.
-- [ ] Keep the stress suite bounded and repeatable. Do not make raw uncalibrated timing the only CI
+- [x] Keep the stress suite bounded and repeatable. Do not make raw uncalibrated timing the only CI
       guard.
 
 ### Stage 8 verification
 
-- [ ] Each deterministic guard family has a failure control.
-- [ ] Exact editor-churn cases pass.
-- [ ] Throttled browser results meet the documented target-equivalent budgets.
-- [ ] No repeated forced layout or unexpected long task appears in the reviewed traces.
+- [x] Each deterministic guard family has a failure control.
+- [x] Exact editor-churn cases pass.
+- [x] Throttled browser results meet the documented target-equivalent budgets.
+- [x] No repeated forced layout or unexpected long task appears in the reviewed traces.
 
 ## Stage 9 — Canonical document closeout
 

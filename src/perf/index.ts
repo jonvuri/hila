@@ -20,7 +20,7 @@ export type { PerfHarness, CreatePerfDbOptions } from './setup'
 export { assertQueryPlan, explainQueryPlan, formatQueryPlan } from './query-plan'
 export type { QueryPlanRow, QueryPlanAssertions } from './query-plan'
 
-export { createWorkCounter, installWriteHook } from './work-counter'
+export { assertWorkCount, createWorkCounter, installWriteHook } from './work-counter'
 export type {
   WorkCounter,
   WorkCounters,

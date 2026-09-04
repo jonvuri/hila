@@ -2,7 +2,7 @@
 title: Performance contract
 kind: canonical
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Performance contract
@@ -49,6 +49,37 @@ Bounded wall-clock tests provide that backstop.
 
 Wall-clock tests may use generous thresholds to avoid false failures, but repeated threshold drift
 is a regression signal. They supplement rather than replace deterministic guards.
+
+### Stage 8 browser reference
+
+The bounded browser backstop is `e2e/performance-contract.spec.ts`. Its fixed fixture contains a
+72-row deep branch with a 10-level spine, 12 cross-matrix rows, one portal appearance, and a
+120-row folded view. It warms two fold transitions, measures seven, then traces a 48-frame
+bidirectional scroll. The acceptance bounds are:
+
+- large fold-transition p95 at or below 3,500 milliseconds at 20× CPU slowdown;
+- no 50-millisecond `RunTask` in the reviewed scroll trace;
+- no `Layout` or `UpdateLayoutTree` initiated from a script stack in that trace;
+- no editor churn while the traced rows remain resident;
+- no more than 400 mounted outline rows.
+
+The fold limit is a generous constant-factor backstop for a large synchronous presentation change,
+not the budget for an ordinary row edit. Exact churn and the deterministic guards remain the CI
+authority for structural regressions.
+
+The 2026-09-03 reference host was a 14-core Apple M4 Pro MacBook Pro with 24 GB memory. The working
+downmarket-target estimate is 6× slower, based on Chrome's documented low-end mobile preset. Chrome
+also documents 20× as its maximum standard CPU slowdown and recommends it for low-end testing on
+fast development machines. Because 20× is more severe than the 6× estimate, the suite uses 20×
+without adjusting the threshold. Chrome notes that throttling is relative and cannot reproduce all
+mobile hardware differences, so this remains a conservative browser backstop rather than a device
+certification. See Chrome's [device-mode throttling reference](https://developer.chrome.com/docs/devtools/device-mode#throttle) and [runtime performance guide](https://developer.chrome.com/docs/devtools/performance).
+
+The recorded Chromium 145 run at 1280×720 produced a warmed median of 2,258 milliseconds and p95 of
+2,552 milliseconds. The scroll trace contained zero long tasks and zero script-forced layout
+candidates. It held 210 rows before and after the trace and produced zero editor mounts or
+unmounts. Re-run and replace this reference when the host class, browser, fixture, or throttle
+changes materially.
 
 ## Budgets
 
