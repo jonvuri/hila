@@ -83,8 +83,10 @@ SQLite is both persistence and the primary relational computation engine.
    manages UI state. It should not reimplement relational work in application loops.
 
 Operations that maintain invariants are exposed through typed core functions and the worker/client
-boundary. Arbitrary read-only SQL is sandboxed. A future batch executor composes typed operations in
-one transaction; it does not bypass their validation.
+boundary. Arbitrary query SQL must be read-only and sandboxed. The current general worker execution
+path does not yet enforce that boundary; Phase 12 must do so before exposing new custom-query
+authoring. A future batch executor composes typed operations in one transaction; it does not bypass
+their validation.
 
 The unreleased app remains at reset-only schema version 0. The
 [durable dogfooding gate](Plan.md#durable-dogfooding-gate) establishes version 1 when development

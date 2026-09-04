@@ -50,6 +50,8 @@ has one durable identity, SQL source, and host-rendered place contract.
 
 Depends on Phase 11.
 
+> Detailed plan: [phases/Phase-12.md](phases/Phase-12.md)
+
 - Extract one command registry for `/` and `⌘K`.
 - Implement the query-spec compiler, recognizer, and conformance suite.
 - Build quick navigation, chip/deep tempo, save-as-view, insert-ref handoff, and session memory.

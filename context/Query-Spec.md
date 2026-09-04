@@ -28,7 +28,7 @@ Derived state, one per gesture surface. Six dimensions; each is one gesture, one
 type QuerySpec = {
   kind:  { matrixId } | 'containers' | 'everything'   // which extent(s) — the FROM
   scope: { node } | 'all'                             // subtree fence — EXISTS over the position index
-  text:  string                                       // label-role LIKE now; FTS later, spec unchanged
+  text:  string                                       // label/content-role LIKE now; FTS later, spec unchanged
   where: Predicate[]                                  // flat AND list (v1); col · op · value,
                                                       //   or an opaque SQL fragment leaf
   order: { columnId, dir } | 'natural'                // natural = rank for containers
@@ -37,8 +37,15 @@ type QuerySpec = {
 ```
 
 - **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so hydration and write-back editability hold by construction. Column _visibility_ is the face recipe's business ([Plugins.md — composition model](Plugins.md#forward-composition-model)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
-- **Text is the residue; chips are the commitments.** The launcher's bare typed words are the `text` dimension. When FTS lands ([Plan.md — deferred decisions](Plan.md#deferred-decisions)), only the compile rule changes — every surface, saved node, and gesture is untouched.
-- **`kind: everything`** (the launcher's zero-chip cross-matrix union) is fine transiently; saving it is allowed but flagged read-only, with a nudge to pick a kind for an editable view.
+- **Text is the residue; chips are the commitments.** The launcher's bare typed words are the
+  `text` dimension. It searches label- and content-role fields, while launcher ranking favors label
+  matches by default. When FTS lands
+  ([Plan.md — deferred decisions](Plan.md#deferred-decisions)), only the compile rule changes —
+  every surface, saved node, and gesture is untouched.
+- **`kind: everything`** (the launcher's zero-chip cross-matrix search) and `containers` are transient
+  discovery lenses in v1. Saving requires a concrete matrix/type kind. A durable heterogeneous lens
+  would otherwise freeze the current runtime matrix set; it waits for a dynamic global-search
+  substrate.
 
 ## Surfaces and lifetimes
 
@@ -48,7 +55,11 @@ The same spec is designed to drive three surfaces at three tempos:
 - **View blocks / `view` nodes** — persisted. Chips are derived by recognizing the block's stored SQL on mount; editing a chip recompiles and stores new SQL. "view SQL ▸" (the query's x-ray) is always one keystroke away and editable in place.
 - **Result surfaces** — in place. Substrate/grid column headers offer sort (v1) and filter-on-value (fast-follow), emitting the same spec ops against the enclosing subject's query.
 
-**Save-search-as-node** is the escalation between lifetimes: compile the launcher's spec → store the SQL as a `view` node via the existing block path → home by provenance ([ancestry contract](Architecture.md#ancestry)) → focus it. No new storage; a saved search is indistinguishable from a hand-made block, and because its SQL was compiler-emitted, it recognizes back into chips by construction.
+**Save-search-as-node** is the escalation between lifetimes after a concrete matrix/type kind is
+committed: compile the launcher's spec → store the SQL as a `view` node via the existing block path
+→ home by provenance ([ancestry contract](Architecture.md#ancestry)) → focus it. No new storage; a
+saved search is indistinguishable from a hand-made block, and because its SQL was compiler-emitted,
+it recognizes back into chips by construction.
 
 ## Escalation tiers
 
@@ -135,5 +146,6 @@ Sequence, by value:
 
 - ~~Session 3b-ii — the launcher surface proper~~ **Resolved:** the launcher surface is designed in [Launcher.md](Launcher.md) (Phase 10 §3b-ii, determinations D20–D32) — result layout, ranking, family narrowing, tempo continuum, keyboard map, value editors, save flow, and the stage-4 build items.
 - **Live-relative date tokens** (a saved "today" view that is always today) — the designed dialect extension, deferred on need: the compile rule emits a reserved **runtime parameter** (`:today`-family) that the recognizer lifts back to the token; the executor binds an environment at run time; the invalidation engine gains clock-based invalidation (re-run at date rollover). In v1 relative tokens freeze to literal ranges at compile (stated by a save nudge — [Launcher.md](Launcher.md) D29). No second runtime-parameter consumer exists in the immediate plan (host execution params are a different, already-general layer; Phase 11's `date('now')` column defaults evaluate at write time); identity (`:me`) and context (`:here`) are the eventual siblings that would justify extracting the general environment mechanism.
-- **Block-chrome follow-up:** the full view-block authoring chrome replacing the dev textarea (direction fixed; details ride the §4 token pass).
+- **Saved-view chip chrome:** Phase 12 implements the shared authoring grammar over stored view SQL
+  and replaces the development textarea. Raw SQL remains available as x-ray/custom mode.
 - **FTS** (compile-rule swap; Phase 11+) · **frecency ranking** (slots into launcher ranking only; the spec is untouched) · **view-node-as-source** · the growth items above, each on proven need.

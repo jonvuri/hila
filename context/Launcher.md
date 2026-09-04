@@ -68,20 +68,20 @@ Quick tempo is the ranked go-list above. Deep tempo — entered the moment a chi
 
 ## Keyboard map (D27 · D28)
 
-| key             | context         | action                                                                                                                                                                                                                                                                     |
-| --------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `⌘K`            | everywhere (I1) | open, seeded with the provenance node; `⌘K` again or `Esc` dismisses. During implementation, retire the editors' current `Mod-k` insert-link binding and absorb its job into `⌘⏎` below.                                                                                   |
-| `⏎`             | on a result     | **go** (reconstruct a focus state at the place/row) or **run** (a command); dismisses. On a recent-deep-search row: restore.                                                                                                                                               |
-| `⌘⏎`            | on a result     | **insert a ref at the invoking cursor** (D28) — the launcher as link dialog. Enabled only when invoked from an editor with a cursor; disabled with a stated reason otherwise; ignored on command rows.                                                                     |
-| `↑` `↓`         | list            | move selection (one flat sequence).                                                                                                                                                                                                                                        |
-| `⇥`             | on a suggestion | the object-first commit (D15/D16): commit the object and open its op menu — chip authoring. On a family row: apply the filter token.                                                                                                                                       |
-| `⌫`             | input empty     | pop the newest chip back into editing; again deletes it. At input start with a filter token: delete the token.                                                                                                                                                             |
-| `←` `→`         | at input edges  | walk chip focus (focused chip: `⏎` edits, `⌫` deletes — the D14 grammar).                                                                                                                                                                                                  |
-| `Esc`           | layered         | op/value menu open → close it; otherwise dismiss immediately, discarding the spec (recoverable via recent deep searches — the two are one design).                                                                                                                         |
-| `⌘S`            | spec non-empty  | save-as-node (D30). Live for _any_ non-empty spec — text-only quick searches save as the `kind: everything` union, read-only + pick-a-kind nudge, per [Query-Spec.md](Query-Spec.md). Only a truly empty spec disables it (stated reason). Tempo never gates a capability. |
-| `@` `#` `>` `[` | input start     | family filter tokens (D31).                                                                                                                                                                                                                                                |
-| `?`             | empty input     | the one-screen keyboard guide (D32).                                                                                                                                                                                                                                       |
-| typed ops       | input           | the D16 fluent path unchanged (`due<`, `status!=` … commit chips directly).                                                                                                                                                                                                |
+| key             | context         | action                                                                                                                                                                                                                               |
+| --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `⌘K`            | everywhere (I1) | open, seeded with the provenance node; `⌘K` again or `Esc` dismisses. During implementation, retire the editors' current `Mod-k` insert-link binding and absorb its job into `⌘⏎` below.                                             |
+| `⏎`             | on a result     | **go** (reconstruct a focus state at the place/row) or **run** (a command); dismisses. On a recent-deep-search row: restore.                                                                                                         |
+| `⌘⏎`            | on a result     | **insert a ref at the invoking cursor** (D28) — the launcher as link dialog. Enabled only when invoked from an editor with a cursor; disabled with a stated reason otherwise; ignored on command rows.                               |
+| `↑` `↓`         | list            | move selection (one flat sequence).                                                                                                                                                                                                  |
+| `⇥`             | on a suggestion | the object-first commit (D15/D16): commit the object and open its op menu — chip authoring. On a family row: apply the filter token.                                                                                                 |
+| `⌫`             | input empty     | pop the newest chip back into editing; again deletes it. At input start with a filter token: delete the token.                                                                                                                       |
+| `←` `→`         | at input edges  | walk chip focus (focused chip: `⏎` edits, `⌫` deletes — the D14 grammar).                                                                                                                                                            |
+| `Esc`           | layered         | op/value menu open → close it; otherwise dismiss immediately, discarding the spec (recoverable via recent deep searches — the two are one design).                                                                                   |
+| `⌘S`            | concrete spec   | save-as-node (D30). Requires a committed concrete matrix/type kind and valid provenance. Heterogeneous searches and absent provenance keep the action visible with a stated reason and a path to commit a kind or return to a place. |
+| `@` `#` `>` `[` | input start     | family filter tokens (D31).                                                                                                                                                                                                          |
+| `?`             | empty input     | the one-screen keyboard guide (D32).                                                                                                                                                                                                 |
+| typed ops       | input           | the D16 fluent path unchanged (`due<`, `status!=` … commit chips directly).                                                                                                                                                          |
 
 ## Value entry (D29)
 
@@ -91,7 +91,12 @@ Token-based, one physics, per column type — menu → typeahead → typed, per 
 
 ## Save flow (D30)
 
-`⌘S` compiles the spec, stores the SQL as a `view` node via the existing block path, homes by provenance, and focuses it — with the **name input pre-selected** holding the default name: the chip row's prose rendering ("task · due < this week · ↓ due"). Save-then-name, the `/table` pending-handoff precedent — zero prompts inside the gesture. Nudges render in the save bar before commit, informative and non-blocking: `kind: everything` → saves read-only, pick a kind for editable; relative dates → saves as the literal range.
+`⌘S` compiles a concrete-matrix spec, stores the SQL as a `view` node via the existing block path,
+homes by provenance, and focuses it — with the **name input pre-selected** holding the default name:
+the chip row's prose rendering ("task · due < this week · ↓ due"). Save-then-name, the `/table`
+pending-handoff precedent — zero prompts inside the gesture. Nudges render in the save bar before
+commit: a heterogeneous lens must commit a matrix/type kind first; absent provenance must return to
+a valid place; relative dates save as literal ranges.
 
 ## Stage-4 build items
 
@@ -112,4 +117,5 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 - **Live-relative date tokens** — the runtime-parameter dialect extension above, on a second consumer or proven need.
 - **Family-filter hotkeys** (local or global) · **a view-family sigil** · **filter-strip counts** (a count can ride the filter token) — each on proven need.
 - **Preview-pane peek** (`⌘⏎` alternate considered and rejected for v1) · per-type widget editors — §4-era garnish.
-- **Block-chrome follow-up** — the view-block authoring chrome replacing the dev textarea shares this chip grammar; details ride the §4 token pass (queued in [Phase-10.md](./archive/phases/Phase-10.md)).
+- **Saved-view chip chrome** — Phase 12 applies the same grammar to recognized stored SQL and keeps
+  raw SQL as x-ray/custom mode.
