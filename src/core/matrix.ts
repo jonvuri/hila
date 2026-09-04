@@ -4,6 +4,7 @@ import { compileFormula, parseFormulaRefs } from '../table/formula'
 
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
 import { extractTextFromPmDoc } from './pm-text'
+import { getSchemaVersion, migrateSchema } from './schema-migrations'
 import {
   dropChangeTrackingTriggers,
   installDataTableTriggers,
@@ -43,6 +44,13 @@ export const initMatrixSchema = (db: Database) => {
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
   `)
+
+  // Version 0 remains the disposable bootstrap path until durable dogfooding.
+  // A positive version is unsupported until that gate activates the runner.
+  if (getSchemaVersion(db) > 0) {
+    migrateSchema(db)
+    return
+  }
 
   // Create core matrix tables
   db.exec(`

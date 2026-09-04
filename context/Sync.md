@@ -177,11 +177,45 @@ file mirroring depends on the Phase 20 provider engine.
 
 ## Migration policy
 
-The project is pre-alpha and may reset databases through Phase 11. Phase 11 defines and proves the
-versioned migration runner, then records the durability milestone after which schema changes must
-migrate existing data or demonstrate compatibility.
+The unreleased app remains at schema version 0 and makes no promise to preserve databases across
+upgrades. Bootstrap migrations may be rewritten, and reset is the supported response to an
+incompatible development database. SQLite's `user_version` will hold the version after activation;
+it is local schema metadata, not replicated application state.
 
-The obsolete `wikilink` migration is waived only because it predates that milestone.
+The [durable dogfooding gate](Plan.md#durable-dogfooding-gate) activates with the first dogfood
+build whose data is expected to survive upgrades. The gate is event-based and may occur after the
+currently planned phases. It freezes that build's coherent schema as version 1. Existing version-0
+databases must be reset or pass an explicit reviewed adoption path; initialization must not stamp
+an arbitrary version-0 database as durable.
+
+The obsolete stored-ProseMirror `wikilink` to `inlineref` transform is waived because it predates
+the gate. No post-milestone migration may use that waiver as precedent.
+
+Phase 11 ships the migration runner and representative fixtures without activating it. After the
+gate, fresh initialization creates the current schema and records its version. The Reset DB action
+clears the file and follows the same initialization path. A versioned database opens through the
+migration runner:
+
+1. Reject a database newer than the build.
+2. Require one immutable migration for each integer version between the stored and current
+   versions.
+3. Apply migrations once in ascending order.
+4. Run the complete pending batch and its `user_version` writes in one transaction. Any failure
+   rolls back schema, data, and version metadata, then aborts initialization.
+5. Reinstall schema-derived tracking after migration. A migration that removes or renames a
+   tracked column must first remove any trigger that refers to it.
+
+Before the first `1 → 2` migration can run against persistent OPFS, its open path must create a
+restorable pre-migration database backup outside the active file. Keep the backup until the
+migrated database reopens and passes its integrity and schema-policy checks. A destructive or lossy
+migration also requires an explicit user export path and a reviewed recovery procedure.
+
+Every schema change after version 1 must update fresh initialization, increment the current schema
+version, and include either the corresponding migration or an explicit proof that the prior
+physical schema is already compatible. It must also satisfy the durability-policy and two-replica
+rules above. The representative runner fixture covers ordered data/DDL evolution and atomic
+rollback; `user_version` adds no table or replicated column, so the existing two-replica coverage
+is sufficient for the dormant runner itself.
 
 ## Non-goals of the readiness layer
 

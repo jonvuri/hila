@@ -47,6 +47,12 @@ checkbox items (`- [ ]` / `- [x]`). When executing a stage:
 Every schema change must update the durability policy. Add a two-replica case, or state why
 existing coverage is sufficient.
 
+Databases remain reset-only at schema version 0 until the durable dogfooding gate in
+`context/Plan.md`. Before that gate, bootstrap migrations may be rewritten. After activation,
+every schema change must update fresh initialization, increment the version, and add a forward
+migration or an explicit compatible no-op proof. Follow the backup and rollback contract in
+`context/Sync.md`.
+
 ## Verification
 
 After major code changes, run the checks relevant to the active plan:

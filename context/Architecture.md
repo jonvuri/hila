@@ -86,6 +86,12 @@ Operations that maintain invariants are exposed through typed core functions and
 boundary. Arbitrary read-only SQL is sandboxed. A future batch executor composes typed operations in
 one transaction; it does not bypass their validation.
 
+The unreleased app remains at reset-only schema version 0. The
+[durable dogfooding gate](Plan.md#durable-dogfooding-gate) establishes version 1 when development
+first promises to preserve data across upgrades. Later versions advance through contiguous forward
+migrations in one transaction. The detailed migration and backup contract lives in
+[Sync.md](Sync.md#migration-policy).
+
 ## Matrix and row identity
 
 Matrix and row IDs are random positive integers safe for JavaScript serialization and cross-device

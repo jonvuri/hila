@@ -127,6 +127,24 @@ the engine contract.
 Separate local content-addressed attachment storage and UI from remote file mirroring. Local
 attachments may move earlier if product priority changes; only remote mirroring depends on Phase 20.
 
+## Durable dogfooding gate
+
+Reset-only development ends with the first dogfood build whose data is expected to survive
+upgrades. This gate is event-based and may occur after all currently planned phases. Until then,
+databases remain at schema version 0, may be reset, and may use rewritten bootstrap migrations.
+
+Before declaring that build ready:
+
+1. Freeze its coherent schema as version 1 and activate versioned initialization.
+2. Reset remaining version-0 databases or adopt them through an explicit reviewed path. Never stamp
+   an arbitrary version-0 database as durable.
+3. Remove obsolete reset-era compatibility migrations.
+4. Run the schema-policy, fresh-initialization, reset, and migration-runner verification.
+5. Establish the backup and recovery path required before the first `1 → 2` migration.
+
+After activation, every incompatible schema change requires a forward migration. See
+[Sync.md](Sync.md#migration-policy) for ordering, rollback, and backup requirements.
+
 ## Dependency spine
 
 ```text
@@ -177,6 +195,8 @@ can move earlier independently of remote sync.
 11. Every source-of-truth schema field must declare replicated, derived, or device-local status.
 12. Performance uses deterministic complexity/fan-out guards plus bounded browser stress tests at a
     target-equivalent Chrome CPU slowdown.
+13. Schema version 0 remains reset-only until the durable dogfooding gate explicitly establishes
+    version 1.
 
 ## Deferred decisions
 

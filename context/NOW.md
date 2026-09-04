@@ -4,29 +4,27 @@ kind: status
 state: ready
 updated: 2026-09-03
 phase: 11
-session: stage-7-migration-policy
+session: stage-8-performance-coverage
 ---
 
 # Now
 
-Phase 11 Stage 6 is complete. Forward face recipes and `face_configs` carry no SQL. Container
-subjects derive their extent from matrix identity, while view subjects own stored SQL through
-`block_sources`.
+Phase 11 Stage 7 is complete. The unreleased app remains at reset-only schema version 0. The first
+dogfood build whose data should survive upgrades activates the durable dogfooding gate and
+establishes version 1; the gate may follow all currently planned phases.
 
-The focused view now requests a registered substrate `collection` interior through a host-owned
-slot. The focus host retains chrome, fidelity, sizing, navigation, recursion, and the no-insert
-firewall. Unmigrated table behavior remains behind `TemporaryLegacyFaceAdapter`; Phase 13 has an
-enumerated removal list.
+The dormant migration runner already proves ordered schema/data evolution and full rollback. The
+gate requires explicit reset or reviewed adoption of version-0 databases, removal of reset-era
+compatibility migrations, and a backup path before the first `1 → 2` migration.
 
-Phase 11 next defines the reset-to-migration milestone, restores canonical performance coverage,
-and closes out the active documents. Phase 13 owns removal of the legacy face contract and blocks
-Phase 14 until it is complete.
+Phase 11 next restores canonical performance coverage, then closes out the active documents.
+Phase 13 still owns removal of the legacy face contract and blocks Phase 14 until it is complete.
 
 ## Read next
 
-1. [Phase 11](phases/Phase-11.md), starting with Stage 7.
-2. [Architecture](Architecture.md) for the storage and runtime boundary.
-3. [Sync](Sync.md) for durability and version-state constraints.
+1. [Phase 11](phases/Phase-11.md), starting with Stage 8.
+2. [Performance](Performance.md) for deterministic and browser budgets.
+3. [Testing](Testing.md) before adding or running browser coverage.
 4. [Documentation.md](Documentation.md) for session closeout rules.
 
 ## Boundary
@@ -36,5 +34,5 @@ design migration early.
 
 ## Next action
 
-Begin Stage 7: define when reset-only development ends and prove the first versioned migration
-runner and rollback fixture.
+Begin Stage 8: restore exact editor-churn coverage and calibrate the bounded throttled-browser
+performance backstop.

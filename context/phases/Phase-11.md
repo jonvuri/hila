@@ -36,8 +36,8 @@ live remote transport.
   column list.
 - Phase 11 begins the target face runtime only where focusable views require it. Phase 13 completes
   the migration and removes compatibility code before Phase 14.
-- Pre-alpha databases remain disposable through this phase. The phase defines the milestone after
-  which versioned migrations become mandatory.
+- Unreleased databases remain disposable until the durable dogfooding gate. This phase defines the
+  gate and proves its migration runner without activating version 1.
 - Performance retains deterministic CI guards and adds bounded throttled-browser backstops.
 
 ## Stage 1 — Current-schema durability inventory
@@ -194,19 +194,23 @@ one.
 
 **Outcome:** the project knows when reset-only development ends.
 
-- [ ] Record that databases before the durability milestone may be reset.
-- [ ] Waive the obsolete `wikilink` migration under that policy.
-- [ ] Define the durability milestone and the version metadata stored with the database.
-- [ ] Define forward migration ordering, transactional failure behavior, backup/export expectations,
+- [x] Record that databases before the durability milestone may be reset.
+- [x] Waive the obsolete `wikilink` migration under that policy.
+- [x] Define the durability milestone and the version metadata stored with the database.
+- [x] Define forward migration ordering, transactional failure behavior, backup/export expectations,
       and test fixtures after the milestone.
-- [ ] Require every post-milestone schema change to include a migration or an explicit compatible
+- [x] Require every post-milestone schema change to include a migration or an explicit compatible
       no-op proof.
 
 ### Stage 7 verification
 
-- [ ] Fresh initialization and reset remain supported.
-- [ ] A representative versioned migration fixture proves the runner and rollback behavior before
+- [x] Fresh initialization and reset remain supported.
+- [x] A representative versioned migration fixture proves the runner and rollback behavior before
       the milestone is declared complete.
+
+Version 0 remains the shipped reset-only state. The first dogfood build whose data should survive
+upgrades activates the [durable dogfooding gate](../Plan.md#durable-dogfooding-gate), establishes
+version 1, and enables the runner proven here.
 
 ## Stage 8 — Canonical performance coverage
 
