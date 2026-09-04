@@ -183,10 +183,10 @@ The resolution ladder is:
 2. subject or matrix preferred recipe;
 3. substrate floor.
 
-The shipped first slice keeps SQL on view subjects and lets the focus-panel host request a
-registered `collection` interior. Unmigrated table consumers remain behind an explicitly temporary
-whole-component adapter. Phase 13 completes host dispatch and removes that adapter before new
-product faces land. See [Plugins.md](Plugins.md).
+The shipped Phase 11 slice keeps SQL on view subjects and lets the focus-panel host request a
+registered `collection` interior. Unmigrated table consumers remain behind the explicitly
+temporary `TemporaryLegacyFaceAdapter`. Phase 13 completes host dispatch and removes every
+enumerated compatibility use before new product faces land. See [Plugins.md](Plugins.md).
 
 ## Fidelity and design axes
 

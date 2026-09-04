@@ -1,8 +1,8 @@
 ---
 title: Replication and sync
 kind: canonical
-state: repair-in-progress
-updated: 2026-08-31
+state: active
+updated: 2026-09-03
 ---
 
 # Replication and sync
@@ -96,20 +96,20 @@ The schema-policy audit introspects live tables, columns, and installed trigger 
 all three with the manifest. Failure controls cover unclassified schema, stale trigger columns,
 tracking on derived state, and dynamic create/add/remove/rename operations.
 
-## Phase 11 repair contract
+## Shipped repair guarantees
 
-Phase 11 must:
+Phase 11 completed the current-schema boundary:
 
-1. Introspect and classify the entire current schema.
-2. Track all current replicated source-of-truth columns.
-3. Give composite-key tables logical apply/delete rules.
-4. Replicate saved-view SQL with marker identity and position.
-5. Prove a two-replica fixture containing content, ownership, portals, promoted types, owned
+1. The durability manifest classifies the entire current schema.
+2. Tracking covers all current replicated source-of-truth columns.
+3. Composite-key tables have logical apply/delete rules.
+4. Saved-view SQL replicates with marker identity and position.
+5. A two-replica fixture covers content, ownership, portals, promoted types, owned
    matrixes, face recipes, and saved views.
-6. Install schema-policy tests that protect future changes.
-7. Define the reset-to-versioned-migration durability milestone.
+6. Schema-policy tests protect future changes.
+7. The durable dogfooding gate defines the reset-to-versioned-migration milestone.
 
-The detailed work is in [Phase 11](phases/Phase-11.md).
+The completed implementation record is [Phase 11](phases/Phase-11.md).
 
 ## Ongoing schema rule
 
@@ -191,10 +191,10 @@ an arbitrary version-0 database as durable.
 The obsolete stored-ProseMirror `wikilink` to `inlineref` transform is waived because it predates
 the gate. No post-milestone migration may use that waiver as precedent.
 
-Phase 11 ships the migration runner and representative fixtures without activating it. After the
-gate, fresh initialization creates the current schema and records its version. The Reset DB action
-clears the file and follows the same initialization path. A versioned database opens through the
-migration runner:
+The dormant migration runner and representative fixtures ship without activating version 1. After
+the gate, fresh initialization creates the current schema and records its version. The Reset DB
+action clears the file and follows the same initialization path. A versioned database opens
+through the migration runner:
 
 1. Reject a database newer than the build.
 2. Require one immutable migration for each integer version between the stored and current

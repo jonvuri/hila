@@ -50,7 +50,7 @@ Passive sectioning is replaced by an active, one-keystroke gesture. A sigil at t
 
 ## Commands in the list (D22)
 
-Commands (registry entries with `'launcher'` in `surfaces` — [Plugins.md](Plugins.md#commands-one-registry-two-surfaces)) rank on merit in the one list; `>` narrows to them. A command row shows its subject inline when `context: 'node'` ("New table — under ⟨Planning⟩"), with the **provenance node** — the node focused when `⌘K` fired — resolved at open time (the session-2 homing rule). A command whose required subject is absent disables with a stated reason.
+Commands (registry entries with `'launcher'` in `surfaces` — [Plugins.md](Plugins.md#commands)) rank on merit in the one list; `>` narrows to them. A command row shows its subject inline when `context: 'node'` ("New table — under ⟨Planning⟩"), with the **provenance node** — the node focused when `⌘K` fired — resolved at open time (the session-2 homing rule). A command whose required subject is absent disables with a stated reason.
 
 ## The empty state (D24 · D32)
 

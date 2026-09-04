@@ -36,8 +36,8 @@ type QuerySpec = {
 }
 ```
 
-- **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so hydration and write-back editability hold by construction. Column _visibility_ is the face recipe's business ([Plugins.md — composition model](Plugins.md#plugin-view-composition-model)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
-- **Text is the residue; chips are the commitments.** The launcher's bare typed words are the `text` dimension. When FTS lands ([Plan.md — Search](Plan.md#search)), only the compile rule changes — every surface, saved node, and gesture is untouched.
+- **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so hydration and write-back editability hold by construction. Column _visibility_ is the face recipe's business ([Plugins.md — composition model](Plugins.md#forward-composition-model)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
+- **Text is the residue; chips are the commitments.** The launcher's bare typed words are the `text` dimension. When FTS lands ([Plan.md — deferred decisions](Plan.md#deferred-decisions)), only the compile rule changes — every surface, saved node, and gesture is untouched.
 - **`kind: everything`** (the launcher's zero-chip cross-matrix union) is fine transiently; saving it is allowed but flagged read-only, with a nudge to pick a kind for an editable view.
 
 ## Surfaces and lifetimes
@@ -48,7 +48,7 @@ The same spec is designed to drive three surfaces at three tempos:
 - **View blocks / `view` nodes** — persisted. Chips are derived by recognizing the block's stored SQL on mount; editing a chip recompiles and stores new SQL. "view SQL ▸" (the query's x-ray) is always one keystroke away and editable in place.
 - **Result surfaces** — in place. Substrate/grid column headers offer sort (v1) and filter-on-value (fast-follow), emitting the same spec ops against the enclosing subject's query.
 
-**Save-search-as-node** is the escalation between lifetimes: compile the launcher's spec → store the SQL as a `view` node via the existing block path → home by provenance ([session 2](Architecture.md#placeless-creation-homes-by-provenance)) → focus it. No new storage; a saved search is indistinguishable from a hand-made block, and because its SQL was compiler-emitted, it recognizes back into chips by construction.
+**Save-search-as-node** is the escalation between lifetimes: compile the launcher's spec → store the SQL as a `view` node via the existing block path → home by provenance ([ancestry contract](Architecture.md#ancestry)) → focus it. No new storage; a saved search is indistinguishable from a hand-made block, and because its SQL was compiler-emitted, it recognizes back into chips by construction.
 
 ## Escalation tiers
 

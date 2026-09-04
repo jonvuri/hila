@@ -50,7 +50,7 @@ Bounded wall-clock tests provide that backstop.
 Wall-clock tests may use generous thresholds to avoid false failures, but repeated threshold drift
 is a regression signal. They supplement rather than replace deterministic guards.
 
-### Stage 8 browser reference
+### Current browser reference
 
 The bounded browser backstop is `e2e/performance-contract.spec.ts`. Its fixed fixture contains a
 72-row deep branch with a 10-level spine, 12 cross-matrix rows, one portal appearance, and a

@@ -175,7 +175,7 @@ Every table and column must have one declared durability class:
 The schema-policy contract test fails when a table or column is unclassified, or when the tracked
 column set differs from the declared replicated schema.
 
-Current known classifications:
+The shipped classifications include:
 
 - Replicated: matrix data tables, matrix and column metadata, ownership/reference/portal edges,
   query-free face recipes, plugin metadata, matrix ownership, promoted-node identity, and saved
@@ -183,6 +183,10 @@ Current known classifications:
 - Derived: closure, scroll index, matrix-title caches where reconstructible, and reactive query
   state.
 - Device-local: device identity, sync high-water marks, and transient session UI state.
+
+Remote apply uses the same manifest to resolve stable logical identities. It reconstructs dynamic
+matrix tables before their rows and rebuilds closure, scroll order, and formula dependencies after
+source truth changes. It does not replicate those derived rows or emit local echo changes.
 
 ## Structural upgrades
 

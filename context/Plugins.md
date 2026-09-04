@@ -32,9 +32,9 @@ Registration is transactional and idempotent:
 
 Unregistering removes the plugin row and runs `destroy`; user data and matrixes persist.
 
-Named queries and mutations are present in the declaration type but are not yet stored or
-dispatched by the runtime. Phase 11 must either narrow that promise or give it an explicit future
-owner. Phase 15 owns the general typed/batch operation system.
+Named queries and mutations remain a declaration-only compatibility surface: the runtime neither
+stores nor dispatches them. Phase 15 owns the general typed/batch operation system and must either
+implement that contribution surface or narrow the declaration type.
 
 ## Plugin boundaries
 
@@ -107,7 +107,7 @@ type FaceRecipe = {
 }
 ```
 
-SQL is not part of the recipe. Phase 11 re-homes query ownership while completing focusable views.
+SQL is not part of the recipe. Shipped view subjects own it through `block_sources`.
 
 ### Faces provide line and collection renderings
 
@@ -154,7 +154,7 @@ inside the recipe.
 
 The migration has mandatory boundaries:
 
-### Phase 11
+### Shipped Phase 11 boundary
 
 - SQL is absent from the forward recipe and `face_configs` persistence;
 - the existing view subject owns its SQL through `block_sources`;
@@ -167,7 +167,10 @@ The migration has mandatory boundaries:
 - migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete host recursion, affinity, and fidelity behavior;
-- remove legacy whole-component dispatch and all compatibility adapters.
+- remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
+- replace the direct `TableFace` mounts in `App.tsx` and `SubTableBand.tsx`;
+- move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
+- replace the direct `TagBrowserFace` application mount with the launcher-selected host path.
 
 Phase 14 cannot add task/review renderers until Phase 13 completes this contract.
 

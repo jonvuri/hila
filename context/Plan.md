@@ -24,19 +24,23 @@ The app currently provides:
 - inline references, promoted type-nodes, tag aspects, property editing, and table/browser surfaces;
 - the production four-column workspace, bounded sticky navigation, Guides outline treatment, and
   Ghost/Null/Wipeout runtime theme contracts;
-- a trigger-based sync-readiness layer whose current-schema coverage requires repair.
+- schema-complete change tracking, logical remote apply, conflict retention, and two-replica
+  reconstruction tests;
+- named, focusable saved views whose marker owns one durable SQL source and whose focus host requests
+  a registered collection rendering;
+- deterministic performance guards plus a bounded 20×-throttled Chromium backstop.
 
 Temporary Workspace, Table, and Tags tabs remain. The launcher, shared command registry, app-wide
 face-host contract, remaining style migration, live sync transport, attachments, scheduling, and
 later product systems do not ship.
 
-## Phase 11 — Durable data and place contracts
+## Phase 11 — Durable data and place contracts (complete)
 
 > Detailed plan: [phases/Phase-11.md](phases/Phase-11.md)
 
-Repair the current durability boundary before new saved data lands. Establish the canonical data,
-sync, virtualization, performance, and face-host contracts. Make the existing view marker a named,
-focusable place without adding a second SQL store.
+Phase 11 repaired the current durability boundary before new saved data lands. It established the
+canonical data, sync, virtualization, performance, and face-host contracts, and made the existing
+view marker a named, focusable place without adding a second SQL store.
 
 **Proves:** every current source-of-truth field has an explicit replication policy; two replicas
 round-trip the current schema; future schema additions cannot bypass classification; a saved view
@@ -62,8 +66,8 @@ Depends on Phase 12.
 - Migrate table, tags, face configuration, browser, editor, and system-edge surfaces from legacy
   global styles.
 - Complete host-owned `line`/`collection` dispatch, recursion, panel scaffold, and affinity.
-- Remove whole-component dispatch and the enumerated temporary compatibility adapter uses left by
-  Phase 11.
+- Remove `TemporaryLegacyFaceAdapter`, direct `TableFace` mounts, workspace recipe/config-panel
+  bypasses, and the direct `TagBrowserFace` application mount left by Phase 11.
 - Implement or explicitly narrow composed/substrate/x-ray behavior.
 - Decide whether theme selection needs user-facing choice and persistence.
 - Resolve source-row/sticky-row visual and interaction continuity.

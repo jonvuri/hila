@@ -2,7 +2,7 @@
 title: Virtualization and bounded residency
 kind: canonical
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Virtualization and bounded residency
@@ -63,9 +63,11 @@ or block size. A view owns no result positions and cannot imply an insertion loc
 - Sticky navigation uses a bounded metadata plane for ancestry and handoff. It does not retain or
   hydrate source DOM outside the normal window range.
 
-The production browser contract currently asserts more than 100 and no more than 400 mounted rows
-for its large sticky-navigation fixture. Any change to page size or retention distance must update
-the bound and its rationale together.
+The production browser contract asserts more than 100 and no more than 400 mounted rows for its
+large sticky-navigation fixture. The canonical mixed stress fixture combines a deep tree,
+cross-matrix rows, a portal, and a 120-row folded view; its current 1280×720 reference retains 210
+rows. Any change to page size or retention distance must update the bound and its rationale
+together.
 
 ## Query and invalidation rules
 

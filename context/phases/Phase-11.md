@@ -1,7 +1,7 @@
 ---
 title: Phase 11 — Durable data and place contracts
 kind: phase-plan
-state: in-progress
+state: complete
 updated: 2026-09-03
 ---
 
@@ -243,22 +243,27 @@ version 1, and enables the runner proven here.
 
 **Outcome:** active documentation describes the implemented Phase 11 boundary.
 
-- [ ] Update Data Model, Architecture, Plugins, Sync, Virtualization, Performance, and Testing with
+- [x] Update Data Model, Architecture, Plugins, Sync, Virtualization, Performance, and Testing with
       the shipped result.
-- [ ] Remove Phase 11 status warnings that are no longer true.
-- [ ] Record any intentionally deferred compatibility adapter in Phase 13.
-- [ ] Keep `NOW.md` short and route the next session through the Phase 12 front door.
+- [x] Remove Phase 11 status warnings that are no longer true.
+- [x] Record any intentionally deferred compatibility adapter in Phase 13.
+- [x] Keep `NOW.md` short and route the next session through the Phase 12 front door.
 
 ### Phase verification
 
-- [ ] Run `npm run format`.
-- [ ] Run `npm run lint`.
-- [ ] Run `npm run typecheck`.
-- [ ] Run `npm run test:run`.
-- [ ] Run focused system-browser E2E and throttled performance suites outside the sandbox.
-- [ ] Build Storybook if a host or face presentation changed.
-- [ ] Format touched documentation and run `git diff --check`.
-- [ ] Verify all active context links.
+- [x] Run `npm run format`.
+- [x] Run `npm run lint`.
+- [x] Run `npm run typecheck`.
+- [x] Run `npm run test:run`.
+- [x] Run focused system-browser E2E and throttled performance suites outside the sandbox.
+- [x] Build Storybook if a host or face presentation changed.
+- [x] Format touched documentation and run `git diff --check`.
+- [x] Verify all active context links.
+
+Closeout verification passed on 2026-09-03. The focused Chromium 145 run passed four saved-view,
+churn, stable-instance, and throttled-performance tests. At 20× CPU slowdown, the warmed fold
+samples measured 1,089.7 ms median and 1,261.4 ms p95 with no long tasks, forced-layout candidates,
+or editor churn, and 210 mounted rows.
 
 ## Exit gate
 

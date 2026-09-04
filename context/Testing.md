@@ -1,3 +1,10 @@
+---
+title: Browser and E2E testing
+kind: canonical
+state: active
+updated: 2026-09-03
+---
+
 # Browser and E2E testing guide
 
 Read this guide before writing or running Playwright tests, diagnosing browser failures,
@@ -102,10 +109,11 @@ Use the ProseMirror counters in `src/debug/debugState.ts` for exact mount/unmoun
 performance test must fail on unrelated editor churn even when its wall-clock result remains under
 budget.
 
-Run the canonical Stage 8 coverage with:
+Run the current saved-view and performance contracts with:
 
 ```sh
-pnpm test:e2e --grep "canonical performance contract"
+pnpm test:e2e e2e/view-place.spec.ts
+pnpm test:e2e e2e/performance-contract.spec.ts
 ```
 
 The browser test attaches `performance-results.json` with its environment, warmed samples, median,

@@ -3,16 +3,16 @@ title: Current state
 kind: status
 state: ready
 updated: 2026-09-03
-phase: 11
-session: stage-9-document-closeout
+phase: 12
+session: launcher-and-shell-convergence
 ---
 
 # Now
 
-Phase 11 Stage 8 is complete. Exact editor-churn and stable-instance coverage now passes. The
-bounded Chromium 145 backstop runs the representative mixed fixture at 20× CPU slowdown; the
-reference run measured 2,258 ms median and 2,552 ms p95 with no long tasks, script-forced layout
-candidates, or scroll editor churn, and 210 mounted rows.
+Phase 11 is complete. Current durable state is schema-classified, tracked, and covered by a full
+two-replica fixture. Saved views are named places with one replicated SQL source and a host-owned
+collection region. Deterministic performance guards, exact churn checks, and the bounded
+20×-throttled Chromium backstop pass.
 
 The unreleased app remains at reset-only schema version 0. The first
 dogfood build whose data should survive upgrades activates the durable dogfooding gate and
@@ -22,21 +22,21 @@ The dormant migration runner already proves ordered schema/data evolution and fu
 gate requires explicit reset or reviewed adoption of version-0 databases, removal of reset-era
 compatibility migrations, and a backup path before the first `1 → 2` migration.
 
-Phase 11 next closes out the active documents. Phase 13 still owns removal of the legacy face
-contract and blocks Phase 14 until it is complete.
+Phase 12 owns the launcher, shared command registry, query-spec compiler/recognizer, saved-view
+authoring, and temporary tab retirement. Phase 13 still owns removal of the enumerated legacy face
+adapter uses and blocks Phase 14 until that work is complete.
 
 ## Read next
 
-1. [Phase 11](phases/Phase-11.md), starting with Stage 9.
-2. [Documentation.md](Documentation.md) for canonical closeout rules.
-3. The canonical documents named by Stage 9.
+1. [Roadmap — Phase 12](Plan.md#phase-12--launcher-and-shell-convergence).
+2. [Query spec](Query-Spec.md) for the compiler, recognizer, and gesture contract.
+3. [Launcher](Launcher.md) for the shell, command, save, and tab-retirement sequence.
 
 ## Boundary
 
-Execute Phase 11 stages in order. Do not build the launcher, retire tabs, or complete the global
-design migration early.
+Keep Phase 12 behind the shipped view-place and replication contracts. Do not complete the global
+face/design migration assigned to Phase 13.
 
 ## Next action
 
-Begin Stage 9: reconcile the canonical documents with the shipped Phase 11 boundary and complete
-the phase verification.
+Begin Phase 12 with command-registry extraction, then follow the launcher build order.
