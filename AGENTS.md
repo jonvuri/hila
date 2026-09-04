@@ -4,6 +4,9 @@ Keep sentences concise, direct, and easy to read. When you already
 change a document or comment, correct unclear or overly verbose prose
 in the part that you touch. Do not start an unrelated rewrite.
 
+Use subagents as needed for isolated, context-heavy tasks. Delegate to preserve
+main-session context and run independent work in parallel.
+
 ## Context and planning
 
 1. Start with [context/NOW.md](context/NOW.md), then read the linked active-session
