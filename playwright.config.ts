@@ -2,8 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  // Run tests serially -- each test resets the database, so parallelism would corrupt state
-  workers: 1,
+  // Test browser contexts isolate their OPFS databases. Parallelize spec files,
+  // while keeping tests within each file ordered.
+  workers: 4,
   fullyParallel: false,
   retries: 0,
   reporter: 'list',
@@ -15,6 +16,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: /performance-contract\.spec\.ts/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'chromium-performance',
+      testMatch: /performance-contract\.spec\.ts/,
+      dependencies: ['chromium'],
+      workers: 1,
       use: { ...devices['Desktop Chrome'] },
     },
   ],

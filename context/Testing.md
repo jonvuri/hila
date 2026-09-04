@@ -15,10 +15,13 @@ or interactively testing the live app. The general verification commands remain 
 
 ### Running tests
 
-- Full suite: `pnpm test:e2e` (about four minutes).
+- Full suite: `pnpm test:e2e`. Functional spec files run with up to four workers. The timing-sensitive
+  performance contract runs afterward with one worker.
 - Single test by name: `pnpm test:e2e --grep "test name substring"`.
 - Always run outside the sandbox so Playwright can use the system-installed browsers.
   Sandboxed browser binaries do not persist and can trigger a large download.
+- Each test receives an isolated browser context and OPFS database. Database resets and mutations in
+  one test do not affect other workers or a developer's normal browser profile.
 
 ### Writing robust tests
 
@@ -113,7 +116,7 @@ Run the current saved-view and performance contracts with:
 
 ```sh
 pnpm test:e2e e2e/view-place.spec.ts
-pnpm test:e2e e2e/performance-contract.spec.ts
+pnpm test:e2e e2e/performance-contract.spec.ts --no-deps
 ```
 
 The browser test attaches `performance-results.json` with its environment, warmed samples, median,

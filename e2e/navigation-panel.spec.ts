@@ -210,24 +210,25 @@ test.describe('Navigation panel', () => {
     await goToWorkspace(page)
     await waitForRows(page, 3)
 
-    const collapseBtn = page.getByTestId('outline-bullet').first()
-    const label = await collapseBtn.getAttribute('aria-label')
-    if (label === 'Collapse') {
-      const countBefore = await page.locator('.outline-row').count()
-      await collapseBtn.click()
+    const panel = page.getByTestId('navigation-panel').first()
+    const collapseBtn = panel.getByRole('button', { name: /^Collapse / }).first()
+    await expect(collapseBtn).toBeVisible({ timeout: 5000 })
 
-      await expect(async () => {
-        const countAfter = await page.locator('.outline-row').count()
-        expect(countAfter).toBeLessThan(countBefore)
-      }).toPass({ timeout: 5000 })
+    const countBefore = await page.locator('.outline-row').count()
+    await collapseBtn.click()
 
-      await collapseBtn.click()
+    await expect(async () => {
+      const countAfter = await page.locator('.outline-row').count()
+      expect(countAfter).toBeLessThan(countBefore)
+    }).toPass({ timeout: 5000 })
 
-      await expect(async () => {
-        const countAfter = await page.locator('.outline-row').count()
-        expect(countAfter).toBe(countBefore)
-      }).toPass({ timeout: 5000 })
-    }
+    const expandBtn = panel.getByRole('button', { name: /^Expand / }).first()
+    await expandBtn.click()
+
+    await expect(async () => {
+      const countAfter = await page.locator('.outline-row').count()
+      expect(countAfter).toBe(countBefore)
+    }).toPass({ timeout: 5000 })
   })
 
   test('Right-arrow button appears on hover', async ({ page }) => {

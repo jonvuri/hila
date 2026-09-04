@@ -317,9 +317,9 @@ const runSlashOnFirstRow = async (page: Page, cmd: string, cmdLabel: string) => 
   // Every editor mounts its own (hidden) dropdown div, so target the active one by
   // the command's menu label.
   const item = page.locator('.slash-autocomplete', { hasText: cmdLabel })
-  await expect(item).toBeVisible({ timeout: 3000 })
+  await expect(item).toBeVisible({ timeout: 10_000 })
   await page.keyboard.press('Enter')
-  await expect(item).toBeHidden({ timeout: 3000 })
+  await expect(item).toBeHidden({ timeout: 10_000 })
 }
 
 /**
