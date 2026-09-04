@@ -222,7 +222,6 @@ const createSourceFixture = (db: Database): FixtureIds => {
     id: faceConfigId,
     faceTypeId: 'hila.table',
     matrixId: ownedMatrixId,
-    query: `SELECT * FROM "mx_${ownedMatrixId}_data"`,
     slotBindings: { title: labelColumnId, status: statusColumnId },
     settings: { density: 'compact' },
     createdByPlugin: 'plugin.stage4',
@@ -307,6 +306,9 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
     const { a, b, ids, initialChanges } = fixture
 
     expect(initialChanges.entries.some((entry) => DERIVED_TABLES.has(entry.table))).toBe(false)
+    expect(
+      initialChanges.entries.find((entry) => entry.table === 'face_configs')?.data,
+    ).not.toHaveProperty('query')
     expect(getLocalChanges(b, 0).entries).toEqual([])
     expect(logicalSnapshot(b)).toEqual(logicalSnapshot(a))
 

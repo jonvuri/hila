@@ -262,7 +262,6 @@ describe('Table face schema', () => {
     expect(config.faceTypeId).toBe('hila.table')
     expect(config.matrixId).toBe(matrixId)
     expect(config.slotBindings).toEqual({})
-    expect(config.query).toBe(`SELECT * FROM "mx_${matrixId}_data"`)
     expect(config.sort).toBeNull()
     expect(config.filters).toEqual([])
 

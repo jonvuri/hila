@@ -2,7 +2,7 @@
 title: Phase 11 Stage 1 — Durability inventory
 kind: evidence
 state: complete
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Phase 11 Stage 1 — Durability inventory
@@ -29,7 +29,7 @@ filter-order field identified by this review.
 | `matrix`              | replicated source | `id`, `title`, `source_plugin_id`, `owner_matrix_id`, `owner_row_id`                                                  | `id`                               |
 | `matrix_columns`      | replicated source | `id`, `matrix_id`, `name`, `type`, `display_type`, `order`, `options`, `formula`, `constraints`, `managed_by`, `role` | `id`                               |
 | `joins`               | replicated source | `source_matrix_id`, `source_row_id`, `target_matrix_id`, `target_row_id`, `kind`, `edge_key`                          | source and target node identities  |
-| `face_configs`        | replicated source | `id`, `face_type_id`, `matrix_id`, `query`, `slot_bindings`, `settings`, `created_by_plugin`                          | `id`                               |
+| `face_configs`        | replicated source | `id`, `face_type_id`, `matrix_id`, `slot_bindings`, `settings`, `created_by_plugin`                                   | `id`                               |
 | `promoted_nodes`      | replicated source | `matrix_id`, `row_id`                                                                                                 | node identity                      |
 | `block_sources`       | replicated source | `marker_matrix_id`, `marker_row_id`, `kind`, `sql`                                                                    | marker identity                    |
 | `face_slot_bindings`  | replicated source | `face_config_id`, `slot_name`, `column_id`                                                                            | face config and slot               |

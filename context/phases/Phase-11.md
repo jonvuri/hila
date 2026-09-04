@@ -2,7 +2,7 @@
 title: Phase 11 — Durable data and place contracts
 kind: phase-plan
 state: in-progress
-updated: 2026-08-31
+updated: 2026-09-03
 ---
 
 # Phase 11 — Durable data and place contracts
@@ -165,22 +165,30 @@ Reviewed inventory: [Stage 1 durability inventory](Phase-11-Stage-1-Inventory.md
 **Outcome:** the focusable view uses the approved runtime boundary instead of extending the legacy
 one.
 
-- [ ] Move query ownership from `FaceConfig` to the `container` or `view` subject.
-- [ ] Remove `query` from the forward face recipe type and persistence path.
-- [ ] Define the minimum `line` and `collection` render registrations needed by current hosts.
-- [ ] Make the view focus panel request a collection rendering through a host-owned slot.
-- [ ] Keep identity, fields, relations, sizing, fidelity, recursion, and insert affordances
+- [x] Move query ownership from `FaceConfig` to the `container` or `view` subject.
+- [x] Remove `query` from the forward face recipe type and persistence path.
+- [x] Define the minimum `line` and `collection` render registrations needed by current hosts.
+- [x] Make the view focus panel request a collection rendering through a host-owned slot.
+- [x] Keep identity, fields, relations, sizing, fidelity, recursion, and insert affordances
       host-owned.
-- [ ] Add a narrow compatibility adapter for unmigrated table/tag consumers only if required. Name
+- [x] Add a narrow compatibility adapter for unmigrated table/tag consumers only if required. Name
       it as temporary and assign its removal to Phase 13.
-- [ ] Do not implement appearance-level recipe storage or a general dashboard-region API.
+- [x] Do not implement appearance-level recipe storage or a general dashboard-region API.
 
 ### Stage 6 verification
 
-- [ ] No forward face recipe carries SQL.
-- [ ] The focused view's host, not its face, owns panel chrome and recursion.
-- [ ] Existing unmigrated faces retain behavior through the explicit temporary boundary.
-- [ ] Phase 13 has an enumerable removal list for every compatibility use.
+- [x] No forward face recipe carries SQL.
+- [x] The focused view's host, not its face, owns panel chrome and recursion.
+- [x] Existing unmigrated faces retain behavior through the explicit temporary boundary.
+- [x] Phase 13 has an enumerable removal list for every compatibility use.
+
+### Phase 13 compatibility removal list
+
+- Remove `TemporaryLegacyFaceAdapter` and its registration call in `App.tsx`.
+- Move `TableFace` and its direct mounts in `App.tsx` and `SubTableBand.tsx` to registered
+  `line`/`collection` interiors.
+- Move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution.
+- Replace the direct `TagBrowserFace` application mount with the launcher-selected host path.
 
 ## Stage 7 — Migration policy
 

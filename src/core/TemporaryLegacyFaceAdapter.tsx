@@ -1,41 +1,45 @@
 import { type Component, type JSX, Show } from 'solid-js'
+import { Dynamic } from 'solid-js/web'
 
 import type { FaceConfig, SlotBindingResult } from './face-types'
 import { getFaceType } from './face-registry'
 import { resolveSlotBindings } from './slot-binding'
 
-export type FaceComponentProps = {
+export type TemporaryLegacyFaceComponentProps = {
   config: FaceConfig
   bindings: SlotBindingResult
 }
 
-type FaceComponent = Component<FaceComponentProps>
+type TemporaryLegacyFaceComponent = Component<TemporaryLegacyFaceComponentProps>
 
-const componentMap = new Map<string, FaceComponent>()
+const componentMap = new Map<string, TemporaryLegacyFaceComponent>()
 
-/** Register a UI component for a face type ID. Called at app startup by plugins. */
-export const registerFaceComponent = (faceTypeId: string, component: FaceComponent): void => {
+/** Temporary whole-component registry for unmigrated Phase 13 consumers. */
+export const registerTemporaryLegacyFaceComponent = (
+  faceTypeId: string,
+  component: TemporaryLegacyFaceComponent,
+): void => {
   componentMap.set(faceTypeId, component)
 }
 
 /** Clear registered face components. Intended for tests only. */
-export const clearFaceComponents = (): void => {
+export const clearTemporaryLegacyFaceComponents = (): void => {
   componentMap.clear()
 }
 
-/**
- * Renders the appropriate face component for a given FaceConfig.
- * Resolves slot bindings and passes them alongside the config to the
- * registered face type component.
- */
-const FaceRenderer: Component<{
+/** Temporary whole-component dispatch. Phase 13 replaces all remaining uses. */
+const TemporaryLegacyFaceAdapter: Component<{
   config: FaceConfig
   columns: { id: number; name: string; type: string }[]
+  render?: (props: TemporaryLegacyFaceComponentProps) => JSX.Element
 }> = (props) => {
-  const resolve = (): { Comp: FaceComponent; bindings: SlotBindingResult } | null => {
+  const resolve = (): {
+    Comp?: TemporaryLegacyFaceComponent
+    bindings: SlotBindingResult
+  } | null => {
     const faceType = getFaceType(props.config.faceTypeId)
     const Comp = componentMap.get(props.config.faceTypeId)
-    if (!faceType || !Comp) return null
+    if (!faceType || (!Comp && !props.render)) return null
     const explicit: Record<string, number> = {}
     for (const [slot, colId] of Object.entries(props.config.slotBindings)) {
       if (colId != null) explicit[slot] = colId
@@ -51,10 +55,11 @@ const FaceRenderer: Component<{
     >
       {(resolved): JSX.Element => {
         const { Comp, bindings } = resolved()
-        return <Comp config={props.config} bindings={bindings} />
+        if (props.render) return props.render({ config: props.config, bindings })
+        return <Dynamic component={Comp!} config={props.config} bindings={bindings} />
       }}
     </Show>
   )
 }
 
-export default FaceRenderer
+export default TemporaryLegacyFaceAdapter

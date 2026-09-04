@@ -41,9 +41,11 @@ import {
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 import type { NavigationOutlineVariant } from '../design/tokens'
+import { FaceHostSlot } from '../core/face-runtime'
+import type { FaceRecipe, ViewSubject } from '../core/face-types'
 
 import SubstrateRegion from './SubstrateRegion'
-import { ViewCollection } from './QueryBand'
+import { registerViewCollectionRendering } from './QueryBand'
 import {
   buildSingleRowQuery,
   buildBacklinksQuery,
@@ -118,6 +120,14 @@ type ViewSourceData = {
   marker_row_id: number
   sql: string
 }
+
+const SUBSTRATE_COLLECTION_RECIPE: FaceRecipe = {
+  faceTypeId: 'hila.substrate',
+  slotBindings: {},
+  settings: {},
+}
+
+registerViewCollectionRendering(SUBSTRATE_COLLECTION_RECIPE.faceTypeId)
 
 // ---------------------------------------------------------------------------
 // Focus panel keymaps (Escape to close, schema-aware marks)
@@ -446,6 +456,16 @@ const FocusPanel = (props: FocusPanelProps) => {
     const data = viewSourceResult()
     return data?.[0] ? (data[0] as unknown as ViewSourceData) : null
   })
+  const viewSubject = createMemo((): ViewSubject | null => {
+    const source = viewSource()
+    if (!source) return null
+    return {
+      mode: 'view',
+      matrixId: source.marker_matrix_id,
+      rowId: source.marker_row_id,
+      sql: source.sql,
+    }
+  })
 
   // Backlinks query
   const backlinksQuery = createMemo(() => buildBacklinksQuery(props.matrixId, props.rowId))
@@ -674,12 +694,53 @@ const FocusPanel = (props: FocusPanelProps) => {
                       'margin-bottom': 'var(--space-section-gap)',
                     }}
                   >
-                    <ViewCollection
-                      block={source()}
-                      focused
-                      onDelete={() => {
-                        void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
+                    <div
+                      data-testid="view-collection-host-chrome"
+                      style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        'justify-content': 'space-between',
+                        gap: '8px',
                       }}
+                    >
+                      <span style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>
+                        Collection
+                      </span>
+                      <button
+                        type="button"
+                        data-testid="query-band-delete"
+                        aria-label="Delete view"
+                        onClick={() => {
+                          void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--color-danger)',
+                          'font-size': '13px',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <code
+                      data-testid="view-place-sql"
+                      style={{
+                        color: 'var(--color-text-muted)',
+                        'font-size': '11px',
+                        'overflow-wrap': 'anywhere',
+                      }}
+                    >
+                      {source().sql}
+                    </code>
+                    <FaceHostSlot
+                      host="focus-panel"
+                      kind="collection"
+                      subject={viewSubject()!}
+                      recipe={SUBSTRATE_COLLECTION_RECIPE}
+                      fidelity="substrate"
+                      fallback={<div data-testid="view-collection-unavailable" />}
                     />
                   </section>
                 )}

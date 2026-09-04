@@ -62,7 +62,6 @@ const loadFaceConfig = (db: Database, row: FaceConfigRow): FaceConfig => {
     id: row.id,
     faceTypeId: row.face_type_id,
     matrixId: row.matrix_id,
-    query: row.query,
     slotBindings,
     settings: row.settings ? (JSON.parse(row.settings) as Record<string, unknown>) : {},
     createdByPlugin: row.created_by_plugin,
@@ -99,7 +98,6 @@ export const applyFaceToMatrix = (
       id: crypto.randomUUID(),
       faceTypeId,
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings,
       settings: {},
       createdByPlugin: pluginId ?? null,
@@ -118,12 +116,11 @@ export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
   // slot_bindings stays an empty derived compatibility copy.
   db.exec(
     `INSERT INTO face_configs
-       (id, face_type_id, matrix_id, query, slot_bindings, settings, created_by_plugin)
-     VALUES (?, ?, ?, ?, '{}', ?, ?)
+       (id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin)
+     VALUES (?, ?, ?, '{}', ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        face_type_id = excluded.face_type_id,
        matrix_id = excluded.matrix_id,
-       query = excluded.query,
        settings = excluded.settings,
        created_by_plugin = excluded.created_by_plugin`,
     {
@@ -131,7 +128,6 @@ export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
         config.id,
         config.faceTypeId,
         config.matrixId,
-        config.query,
         Object.keys(config.settings).length > 0 ? JSON.stringify(config.settings) : null,
         config.createdByPlugin ?? null,
       ],
@@ -181,7 +177,7 @@ export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
 /** Retrieve a single face config by ID, or null if not found. */
 export const getFaceConfig = (db: Database, id: string): FaceConfig | null => {
   const stmt = db.prepare(
-    `SELECT id, face_type_id, matrix_id, query, slot_bindings, settings, created_by_plugin
+    `SELECT id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin
      FROM face_configs WHERE id = ?`,
   )
   stmt.bind([id])
@@ -199,7 +195,7 @@ export const getFaceConfig = (db: Database, id: string): FaceConfig | null => {
 /** Retrieve all face configurations for a given matrix. */
 export const getFaceConfigsForMatrix = (db: Database, matrixId: number): FaceConfig[] => {
   const stmt = db.prepare(
-    `SELECT id, face_type_id, matrix_id, query, slot_bindings, settings, created_by_plugin
+    `SELECT id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin
      FROM face_configs WHERE matrix_id = ?`,
   )
   stmt.bind([matrixId])

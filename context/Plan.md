@@ -2,7 +2,7 @@
 title: Roadmap
 kind: roadmap
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Roadmap
@@ -62,7 +62,8 @@ Depends on Phase 12.
 - Migrate table, tags, face configuration, browser, editor, and system-edge surfaces from legacy
   global styles.
 - Complete host-owned `line`/`collection` dispatch, recursion, panel scaffold, and affinity.
-- Remove `FaceConfig.query`, whole-component dispatch, and temporary compatibility adapters.
+- Remove whole-component dispatch and the enumerated temporary compatibility adapter uses left by
+  Phase 11.
 - Implement or explicitly narrow composed/substrate/x-ray behavior.
 - Decide whether theme selection needs user-facing choice and persistence.
 - Resolve source-row/sticky-row visual and interaction continuity.

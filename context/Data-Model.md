@@ -2,7 +2,7 @@
 title: Data model
 kind: canonical
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Data model
@@ -172,14 +172,14 @@ Every table and column must have one declared durability class:
 2. **Derived/rebuildable** — cache or index reproducible from source of truth.
 3. **Device-local** — deliberately local preference or transient state with a stated reason.
 
-Phase 11 installs a schema-policy contract test that fails when a table or column is unclassified,
-or when the tracked column set differs from the declared replicated schema.
+The schema-policy contract test fails when a table or column is unclassified, or when the tracked
+column set differs from the declared replicated schema.
 
 Current known classifications:
 
 - Replicated: matrix data tables, matrix and column metadata, ownership/reference/portal edges,
-  face configuration, plugin metadata, matrix ownership, promoted-node identity, and saved view
-  SQL.
+  query-free face recipes, plugin metadata, matrix ownership, promoted-node identity, and saved
+  view SQL.
 - Derived: closure, scroll index, matrix-title caches where reconstructible, and reactive query
   state.
 - Device-local: device identity, sync high-water marks, and transient session UI state.

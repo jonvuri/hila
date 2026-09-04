@@ -11,17 +11,41 @@ export type FaceTypeDefinition = {
   overflowBehavior: 'side-columns' | 'property-panel' | 'none'
 }
 
-export type FaceConfig = {
-  id: string
+export type FaceRecipe = {
   faceTypeId: string
-  matrixId: number
-  query: string
   slotBindings: Record<string, number | null> // slot name → column ID (null if unresolved)
   settings: Record<string, unknown> // non-column-referencing settings only
+}
+
+export type FaceConfig = FaceRecipe & {
+  id: string
+  matrixId: number
   createdByPlugin?: string | null
   sort: { columnId: number; direction: 'ASC' | 'DESC' } | null
   filters: { id?: string; columnId: number; operator: string; value: string; order?: number }[]
 }
+
+export type LooseSubject = {
+  mode: 'loose'
+  matrixId: number
+  rowId: number
+}
+
+export type ContainerSubject = {
+  mode: 'container'
+  matrixId: number
+  rowId: number
+  extentMatrixId: number
+}
+
+export type ViewSubject = {
+  mode: 'view'
+  matrixId: number
+  rowId: number
+  sql: string
+}
+
+export type FaceSubject = LooseSubject | ContainerSubject | ViewSubject
 
 export type ResolvedSlotBinding = {
   slotName: string
@@ -40,7 +64,6 @@ export type FaceConfigRow = {
   id: string
   face_type_id: string
   matrix_id: number
-  query: string
   slot_bindings: string // JSON (legacy, kept for backward compat)
   settings: string | null // JSON (non-column-referencing settings only)
   created_by_plugin: string | null

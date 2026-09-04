@@ -189,7 +189,6 @@ export const CORE_DURABILITY_POLICY = {
       id: source('TEXT', 'Stable face-config UUID.'),
       face_type_id: source('TEXT', 'Selected face type.'),
       matrix_id: source('INTEGER', 'Configured matrix.'),
-      query: source('TEXT', 'Legacy face-owned SQL until Phase 11 Stage 6 removes it.'),
       slot_bindings: derived(
         'TEXT',
         'Obsolete JSON compatibility copy; normalized rows are truth.',

@@ -213,7 +213,6 @@ export const initMatrixSchema = (db: Database) => {
       id               TEXT PRIMARY KEY,
       face_type_id     TEXT NOT NULL,
       matrix_id        INTEGER NOT NULL REFERENCES matrix(id),
-      query            TEXT NOT NULL,
       slot_bindings    TEXT NOT NULL DEFAULT '{}',  -- derived compatibility JSON
       settings         TEXT,           -- JSON
       created_by_plugin TEXT REFERENCES plugins(id)
@@ -424,6 +423,17 @@ export const initMatrixSchema = (db: Database) => {
       "order"        INTEGER NOT NULL
     ) STRICT;
   `)
+
+  // Pre-milestone schema cleanup: SQL belongs to container/view subjects, not
+  // face recipes. Drop old tracking first because its JSON expression names
+  // every replicated column and would otherwise block DROP COLUMN.
+  const hasLegacyFaceQuery = db.selectValue(
+    "SELECT COUNT(*) FROM pragma_table_info('face_configs') WHERE name = 'query'",
+  ) as number
+  if (hasLegacyFaceQuery > 0) {
+    dropChangeTrackingTriggers(db, 'face_configs')
+    db.exec('ALTER TABLE face_configs DROP COLUMN query')
+  }
 }
 
 /**

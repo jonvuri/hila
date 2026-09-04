@@ -86,6 +86,12 @@ test.describe('named view places', () => {
     const focused = page.getByTestId('focus-panel').last()
     const focusedCollection = focused.getByTestId('query-band')
     await expect(focused.getByTestId('view-place-collection')).toBeVisible()
+    await expect(focused.getByTestId('view-collection-host-chrome')).toBeVisible()
+    const hostSlot = focused.getByTestId('face-host-slot')
+    await expect(hostSlot).toHaveAttribute('data-host', 'focus-panel')
+    await expect(hostSlot).toHaveAttribute('data-face-rendering', 'collection')
+    await expect(hostSlot).toHaveAttribute('data-fidelity', 'substrate')
+    await expect(hostSlot).toHaveAttribute('data-subject-mode', 'view')
     await expect(focusedCollection).toHaveAttribute('data-marker-row-id', String(markerRowId))
     await expect(focusedCollection.getByTestId('query-band-row').locator('input')).toHaveValue(
       'Task A',

@@ -114,8 +114,8 @@ describe('Phase 11 Stage 2 sync repair', () => {
     db.exec("UPDATE plugins SET metadata = '{\"matrix\":1}' WHERE id = 'plugin.face'")
     db.exec(
       `INSERT INTO face_configs
-       (id, face_type_id, matrix_id, query, slot_bindings, settings, created_by_plugin)
-       VALUES ('face-a', 'hila.table', ?, 'SELECT 1', '{"legacy":1}', NULL, 'plugin.face')`,
+       (id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin)
+       VALUES ('face-a', 'hila.table', ?, '{"legacy":1}', NULL, 'plugin.face')`,
       { bind: [matrixId] },
     )
     db.exec(
@@ -136,6 +136,7 @@ describe('Phase 11 Stage 2 sync repair', () => {
     const face = changes.find((entry) => entry.table === 'face_configs')
     const filter = changes.find((entry) => entry.table === 'face_filter_configs')
     expect(face?.data).not.toHaveProperty('slot_bindings')
+    expect(face?.data).not.toHaveProperty('query')
     expect(filter?.data).toMatchObject({ id: 'filter-a', order: 0 })
     expect(
       changes.find((entry) => entry.table === 'plugins' && entry.operation === 'UPDATE')?.data,
@@ -215,7 +216,6 @@ describe('Phase 11 Stage 2 sync repair', () => {
           id: 'face-remote',
           face_type_id: 'hila.table',
           matrix_id: matrixId,
-          query: `SELECT * FROM mx_${matrixId}_data`,
           settings: null,
           created_by_plugin: null,
         },

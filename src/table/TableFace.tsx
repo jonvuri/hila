@@ -9,7 +9,7 @@ import {
 } from 'solid-js'
 import { Portal } from 'solid-js/web'
 
-import type { FaceComponentProps } from '../core/FaceRenderer'
+import type { TemporaryLegacyFaceComponentProps } from '../core/TemporaryLegacyFaceAdapter'
 import {
   updateRow,
   insertRow,
@@ -146,7 +146,7 @@ type CellAddress = { row: number; col: number }
 // `onOpenRow` (Phase 9.5) makes the embedded table's rows navigable: clicking a
 // row's open affordance drills into a focus panel for that `(matrix_id, row_id)` —
 // the boundary hop from a dedicated sub-table into the sub-matrix.
-type TableFaceProps = FaceComponentProps & {
+type TableFaceProps = TemporaryLegacyFaceComponentProps & {
   insertParent?: NodeRef
   onOpenRow?: (rowId: number) => void
 }

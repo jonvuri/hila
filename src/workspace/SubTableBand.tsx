@@ -14,6 +14,7 @@ import {
 
 import { applyFaceToMatrix, getFaceConfigs, renameMatrix } from '../core/client/matrix-client'
 import type { FaceConfig, SlotBindingResult } from '../core/face-types'
+import TemporaryLegacyFaceAdapter from '../core/TemporaryLegacyFaceAdapter'
 import { pendingNewTableMatrixId, clearPendingNewTable } from '../editor/pending-table'
 import { useQuery } from '../sql/useQuery'
 
@@ -140,11 +141,17 @@ const EmbeddedSubTable: Component<{
       >
         <Show when={config()}>
           {(c) => (
-            <TableFace
+            <TemporaryLegacyFaceAdapter
               config={c()}
-              bindings={EMBED_BINDINGS}
-              insertParent={{ matrixId: props.focalMatrixId, rowId: props.focalRowId }}
-              onOpenRow={(rowId) => props.onOpenRowRef(props.matrixId, rowId)}
+              columns={[]}
+              render={() => (
+                <TableFace
+                  config={c()}
+                  bindings={EMBED_BINDINGS}
+                  insertParent={{ matrixId: props.focalMatrixId, rowId: props.focalRowId }}
+                  onOpenRow={(rowId) => props.onOpenRowRef(props.matrixId, rowId)}
+                />
+              )}
             />
           )}
         </Show>

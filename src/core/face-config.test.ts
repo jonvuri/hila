@@ -30,6 +30,23 @@ describe('Face config', () => {
 
   // -- FaceConfig CRUD ----------------------------------------------------------
 
+  test('keeps SQL out of the forward recipe persistence path', () => {
+    const columns = db.selectObjects('PRAGMA table_info(face_configs)') as unknown as {
+      name: string
+    }[]
+    expect(columns.map(({ name }) => name)).not.toContain('query')
+  })
+
+  test('removes the pre-milestone legacy query column during schema initialization', () => {
+    db.exec("ALTER TABLE face_configs ADD COLUMN query TEXT NOT NULL DEFAULT ''")
+    initMatrixSchema(db)
+
+    const columns = db.selectObjects('PRAGMA table_info(face_configs)') as unknown as {
+      name: string
+    }[]
+    expect(columns.map(({ name }) => name)).not.toContain('query')
+  })
+
   test('saveFaceConfig and getFaceConfig round-trip', () => {
     const matrixId = createMatrix(db, 'Test', [{ name: 'title', type: 'TEXT' }])
     const cols = getColumns(db, matrixId)
@@ -39,7 +56,6 @@ describe('Face config', () => {
       id: 'cfg-1',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: { title: titleColId },
       settings: { sortBy: 'title' },
       createdByPlugin: null,
@@ -67,7 +83,6 @@ describe('Face config', () => {
       id: 'cfg-1',
       faceTypeId: 'hila.table',
       matrixId,
-      query: 'SELECT 1',
       slotBindings: {},
       settings: {},
       sort: null,
@@ -75,10 +90,10 @@ describe('Face config', () => {
     }
 
     saveFaceConfig(db, config)
-    saveFaceConfig(db, { ...config, query: 'SELECT 2' })
+    saveFaceConfig(db, { ...config, settings: { density: 'compact' } })
 
     const loaded = getFaceConfig(db, 'cfg-1')
-    expect(loaded!.query).toBe('SELECT 2')
+    expect(loaded!.settings).toEqual({ density: 'compact' })
   })
 
   test('getFaceConfig returns null for nonexistent ID', () => {
@@ -93,7 +108,6 @@ describe('Face config', () => {
       id: 'cfg-a',
       faceTypeId: 'hila.table',
       matrixId: m1,
-      query: 'SELECT 1',
       slotBindings: {},
       settings: {},
       sort: null,
@@ -103,7 +117,6 @@ describe('Face config', () => {
       id: 'cfg-b',
       faceTypeId: 'hila.outline',
       matrixId: m1,
-      query: 'SELECT 2',
       slotBindings: {},
       settings: {},
       sort: null,
@@ -113,7 +126,6 @@ describe('Face config', () => {
       id: 'cfg-c',
       faceTypeId: 'hila.table',
       matrixId: m2,
-      query: 'SELECT 3',
       slotBindings: {},
       settings: {},
       sort: null,
@@ -201,7 +213,6 @@ describe('Face config', () => {
       id: 'cfg-null-settings',
       faceTypeId: 'hila.table',
       matrixId,
-      query: 'SELECT 1',
       slotBindings: {},
       settings: {},
       sort: null,
@@ -226,7 +237,6 @@ describe('Face config', () => {
       id: 'cfg-sort',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: {},
       settings: {},
       createdByPlugin: null,
@@ -253,7 +263,6 @@ describe('Face config', () => {
       id: 'cfg-filters',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: {},
       settings: {},
       createdByPlugin: null,
@@ -302,7 +311,6 @@ describe('Face config', () => {
       id: 'cfg-cascade-sort',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: {},
       settings: {},
       createdByPlugin: null,
@@ -330,7 +338,6 @@ describe('Face config', () => {
       id: 'cfg-cascade-filter',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: {},
       settings: {},
       createdByPlugin: null,
@@ -362,7 +369,6 @@ describe('Face config', () => {
       id: 'cfg-cascade-slot',
       faceTypeId: 'hila.note',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: { title: titleColId, body: bodyColId },
       settings: {},
       createdByPlugin: null,
@@ -387,7 +393,6 @@ describe('Face config', () => {
       id: 'cfg-rename',
       faceTypeId: 'hila.table',
       matrixId,
-      query: `SELECT * FROM "mx_${matrixId}_data"`,
       slotBindings: { title: titleColId },
       settings: {},
       createdByPlugin: null,

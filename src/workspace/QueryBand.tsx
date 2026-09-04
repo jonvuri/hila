@@ -17,6 +17,7 @@ import {
 import { FieldEditor } from '../shared/FieldEditor'
 import { buildTagTypesWithCountsQuery } from '../tags/tag-queries'
 import { extractTextFromPmDoc } from '../editor/pm-text'
+import { registerFaceRenderings, type FaceRenderingProps } from '../core/face-runtime'
 
 import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-marker-queries'
 
@@ -80,6 +81,7 @@ export const ViewCollection: Component<{
   onDelete?: () => void
   onOpen?: () => void
   focused?: boolean
+  interiorOnly?: boolean
 }> = (props) => {
   const { result, error } = useQuery(() => props.block.sql)
 
@@ -166,99 +168,101 @@ export const ViewCollection: Component<{
         gap: '4px',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          'align-items': 'center',
-          'justify-content': 'space-between',
-          gap: '8px',
-        }}
-      >
-        <span
+      <Show when={!props.interiorOnly}>
+        <div
           style={{
-            'font-size': '11px',
-            'font-weight': 600,
-            color: 'var(--text-muted)',
-            'font-family': 'monospace',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'space-between',
+            gap: '8px',
           }}
         >
-          <Show
-            when={props.onOpen}
-            fallback={<span>{props.focused ? '≔ view' : 'query:'}</span>}
+          <span
+            style={{
+              'font-size': '11px',
+              'font-weight': 600,
+              color: 'var(--text-muted)',
+              'font-family': 'monospace',
+            }}
           >
-            {(open) => (
+            <Show
+              when={props.onOpen}
+              fallback={<span>{props.focused ? '≔ view' : 'query:'}</span>}
+            >
+              {(open) => (
+                <button
+                  type="button"
+                  data-testid="view-place-open"
+                  onClick={() => open()()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--color-text-strong)',
+                    cursor: 'pointer',
+                    padding: 0,
+                    'font-family': 'inherit',
+                    'font-size': 'inherit',
+                    'font-weight': 'inherit',
+                  }}
+                >
+                  ≔ {extractTextFromPmDoc(props.block.name ?? '') || 'Untitled view'}
+                </button>
+              )}
+            </Show>
+            <Show when={editable().size > 0}>
+              <span
+                data-testid="query-band-editable-badge"
+                title="Recognized updatable view — passthrough cells are editable"
+                style={{ 'margin-left': '6px', color: 'var(--accent)' }}
+              >
+                editable
+              </span>
+            </Show>
+            <Show when={canEnableWithId()}>
               <button
                 type="button"
-                data-testid="view-place-open"
-                onClick={() => open()()}
+                data-testid="query-band-enable-edit"
+                title="This view's columns become editable once the result set includes id"
+                onClick={() => enableEditing()}
+                style={{
+                  'margin-left': '6px',
+                  background: 'none',
+                  border: '1px solid var(--accent)',
+                  'border-radius': '3px',
+                  color: 'var(--accent)',
+                  cursor: 'pointer',
+                  'font-size': '10px',
+                  padding: '0 5px',
+                }}
+              >
+                + id to edit
+              </button>
+            </Show>
+          </span>
+          <Show when={props.onDelete}>
+            {(remove) => (
+              <button
+                type="button"
+                class="query-band-delete"
+                data-testid="query-band-delete"
+                aria-label="Delete view"
+                onClick={() => remove()()}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'var(--color-text-strong)',
                   cursor: 'pointer',
-                  padding: 0,
-                  'font-family': 'inherit',
-                  'font-size': 'inherit',
-                  'font-weight': 'inherit',
+                  color: 'var(--color-danger)',
+                  'font-size': '13px',
                 }}
               >
-                ≔ {extractTextFromPmDoc(props.block.name ?? '') || 'Untitled view'}
+                ×
               </button>
             )}
           </Show>
-          <Show when={editable().size > 0}>
-            <span
-              data-testid="query-band-editable-badge"
-              title="Recognized updatable view — passthrough cells are editable"
-              style={{ 'margin-left': '6px', color: 'var(--accent)' }}
-            >
-              editable
-            </span>
-          </Show>
-          <Show when={canEnableWithId()}>
-            <button
-              type="button"
-              data-testid="query-band-enable-edit"
-              title="This view's columns become editable once the result set includes id"
-              onClick={() => enableEditing()}
-              style={{
-                'margin-left': '6px',
-                background: 'none',
-                border: '1px solid var(--accent)',
-                'border-radius': '3px',
-                color: 'var(--accent)',
-                cursor: 'pointer',
-                'font-size': '10px',
-                padding: '0 5px',
-              }}
-            >
-              + id to edit
-            </button>
-          </Show>
-        </span>
-        <Show when={props.onDelete}>
-          {(remove) => (
-            <button
-              type="button"
-              class="query-band-delete"
-              data-testid="query-band-delete"
-              aria-label="Delete view"
-              onClick={() => remove()()}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--color-danger)',
-                'font-size': '13px',
-              }}
-            >
-              ×
-            </button>
-          )}
-        </Show>
-      </div>
+        </div>
+      </Show>
 
-      <Show when={props.focused}>
+      <Show when={props.focused && !props.interiorOnly}>
         <code
           data-testid="view-place-sql"
           style={{
@@ -353,6 +357,23 @@ export const ViewCollection: Component<{
       </Show>
     </div>
   )
+}
+
+const ViewCollectionRendering: Component<FaceRenderingProps> = (props) => (
+  <Show when={props.subject.mode === 'view'}>
+    <ViewCollection
+      block={{
+        marker_matrix_id: props.subject.matrixId,
+        marker_row_id: props.subject.rowId,
+        sql: props.subject.mode === 'view' ? props.subject.sql : '',
+      }}
+      interiorOnly
+    />
+  </Show>
+)
+
+export const registerViewCollectionRendering = (faceTypeId: string): void => {
+  registerFaceRenderings(faceTypeId, { collection: ViewCollectionRendering })
 }
 
 /**

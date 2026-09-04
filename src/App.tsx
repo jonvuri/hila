@@ -10,7 +10,9 @@ import {
 } from 'solid-js'
 
 import type { FaceConfig } from './core/face-types'
-import { registerFaceComponent } from './core/FaceRenderer'
+import TemporaryLegacyFaceAdapter, {
+  registerTemporaryLegacyFaceComponent,
+} from './core/TemporaryLegacyFaceAdapter'
 import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { resolveComponentVariant, type ComponentVariantConfig } from './design/tokens'
@@ -24,7 +26,6 @@ import TagPropertyPanel from './tags/TagPropertyPanel'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
-const TableFace = lazy(() => import('./table/TableFace'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
 const StreamView = lazy(() => import('./workspace/StreamView'))
@@ -78,7 +79,7 @@ const App: Component = () => {
 
     await registerTableFaceType()
     const TableFaceComponent = (await import('./table/TableFace')).default
-    registerFaceComponent('hila.table', TableFaceComponent)
+    registerTemporaryLegacyFaceComponent('hila.table', TableFaceComponent)
 
     await registerPlugin(inlineReferencesPlugin)
     await registerPlugin(tagsPlugin)
@@ -223,12 +224,7 @@ const App: Component = () => {
                       />
                     }
                   >
-                    {(config) => (
-                      <TableFace
-                        config={config()}
-                        bindings={{ bindings: [], overflowColumns: [] }}
-                      />
-                    )}
+                    {(config) => <TemporaryLegacyFaceAdapter config={config()} columns={[]} />}
                   </Show>
                 }
               >

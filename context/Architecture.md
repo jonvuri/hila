@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Architecture
@@ -177,9 +177,10 @@ The resolution ladder is:
 2. subject or matrix preferred recipe;
 3. substrate floor.
 
-The current runtime still stores SQL in `FaceConfig` and dispatches whole face components. Phase 11
-begins the subject/host migration for focusable views. Phase 13 completes it and removes the legacy
-contract before new product faces land. See [Plugins.md](Plugins.md).
+The shipped first slice keeps SQL on view subjects and lets the focus-panel host request a
+registered `collection` interior. Unmigrated table consumers remain behind an explicitly temporary
+whole-component adapter. Phase 13 completes host dispatch and removes that adapter before new
+product faces land. See [Plugins.md](Plugins.md).
 
 ## Fidelity and design axes
 
@@ -210,9 +211,9 @@ Every table and column must declare one of:
 - derived/rebuildable state;
 - deliberately device-local state.
 
-Current tracking predates parts of the ownership/view schema and is incomplete. Phase 11 repairs
-coverage, proves current-schema two-replica round trips, and installs a schema-policy test so future
-changes cannot silently bypass replication. See [Sync.md](Sync.md).
+The schema-complete durability policy drives tracking and remote apply. Current-schema
+two-replica tests cover user-visible state, and contract tests prevent new tables or columns from
+silently bypassing replication. Remote transport remains deferred. See [Sync.md](Sync.md).
 
 ## Operations and external interfaces
 

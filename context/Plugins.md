@@ -2,7 +2,7 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-08-29
+updated: 2026-09-03
 ---
 
 # Plugins and face composition
@@ -66,8 +66,8 @@ The current runtime has:
 - `FaceTypeDefinition` with named slots and overflow behavior;
 - stable-ID slot bindings;
 - normalized sort/filter configuration;
-- `FaceConfig` with matrix, query, face type, bindings, and settings;
-- whole-component dispatch through `FaceRenderer`.
+- query-free `FaceConfig` recipes with matrix affinity, face type, bindings, and settings;
+- temporary whole-component dispatch through `TemporaryLegacyFaceAdapter`.
 
 Normalized slot bindings are authoritative; the JSON copy on `face_configs` is derived
 compatibility state. Filter rows use stable UUID identity and an explicit order field.
@@ -79,8 +79,8 @@ Slot resolution is:
 3. preferred type and position;
 4. fallback.
 
-This runtime remains supported only while Phase 11 and Phase 13 migrate it. Its query ownership and
-whole-component dispatch do not match the approved model below.
+This runtime remains supported only while Phase 13 migrates its consumers. Its whole-component
+dispatch does not match the approved model below.
 
 ## Forward composition model
 
@@ -156,17 +156,18 @@ The migration has mandatory boundaries:
 
 ### Phase 11
 
-- remove SQL from the forward recipe;
-- make the existing view subject own its SQL;
-- introduce the minimum host `collection` path for a focused view;
-- isolate any unmigrated whole-component runtime behind an explicit temporary adapter.
+- SQL is absent from the forward recipe and `face_configs` persistence;
+- the existing view subject owns its SQL through `block_sources`;
+- the focus-panel host requests the substrate `collection` registration;
+- unmigrated whole-component table behavior is isolated behind
+  `TemporaryLegacyFaceAdapter`.
 
 ### Phase 13
 
 - migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete host recursion, affinity, and fidelity behavior;
-- remove `FaceConfig.query`, legacy whole-component dispatch, and all compatibility adapters.
+- remove legacy whole-component dispatch and all compatibility adapters.
 
 Phase 14 cannot add task/review renderers until Phase 13 completes this contract.
 
