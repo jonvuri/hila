@@ -3,7 +3,7 @@
 import { describe, it, beforeAll, expect } from 'vitest'
 
 import { addObserver, removeObserver, execMutation } from '../core/client/sql-client'
-import type { SqlObserver } from '../core/sql-types'
+import type { SqlObserver, SqlRequest } from '../core/sql-types'
 import { awaitWorkerReady } from '../core/client/worker-client'
 
 import type { SqlResult } from './types'
@@ -12,7 +12,7 @@ import type { SqlResult } from './types'
  * Creates a subscription that collects results into an async queue.
  * Each call to nextResult() returns a promise resolving with the next emission.
  */
-const observeResults = (sql: string) => {
+const observeResults = (request: SqlRequest) => {
   const pending: ((result: SqlResult) => void)[] = []
   const buffered: SqlResult[] = []
 
@@ -27,7 +27,7 @@ const observeResults = (sql: string) => {
     }
   }
 
-  addObserver(sql, observer)
+  addObserver(request, observer)
 
   return {
     nextResult: () =>
@@ -39,7 +39,7 @@ const observeResults = (sql: string) => {
           pending.push(resolve)
         }
       }),
-    cleanup: () => removeObserver(sql, observer),
+    cleanup: () => removeObserver(request, observer),
   }
 }
 
@@ -66,33 +66,30 @@ describe('write execution invalidates subscriptions', () => {
     await execMutation(`DELETE FROM metadata`)
   })
 
-  it(
-    'should emit an updated result after a write execute',
-    async () => {
-      const sql = `SELECT COUNT(*) AS n FROM elements`
-      const { nextResult, cleanup } = observeResults(sql)
+  it('should emit an updated result after a write execute', { timeout: 3000 }, async () => {
+    const sql = `SELECT COUNT(*) AS n FROM elements`
+    const { nextResult, cleanup } = observeResults(sql)
 
-      try {
-        const first = await nextResult()
-        const initial = first[0]?.n as number
+    try {
+      const first = await nextResult()
+      const initial = first[0]?.n as number
 
-        await execMutation(
-          `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'00', 'test', '{}')`,
-        )
+      await execMutation(
+        `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'00', 'test', '{}')`,
+      )
 
-        const second = await nextResult()
-        const next = second[0]?.n as number
+      const second = await nextResult()
+      const next = second[0]?.n as number
 
-        expect(next).toBe(initial + 1)
-      } finally {
-        cleanup()
-      }
-    },
-    { timeout: 3000 },
-  )
+      expect(next).toBe(initial + 1)
+    } finally {
+      cleanup()
+    }
+  })
 
   it(
     'should not re-emit for queries unrelated to the written table',
+    { timeout: 3000 },
     async () => {
       const metaSql = `SELECT COUNT(*) AS c FROM metadata`
       const elemSql = `SELECT COUNT(*) AS e FROM elements`
@@ -130,6 +127,41 @@ describe('write execution invalidates subscriptions', () => {
         elem.cleanup()
       }
     },
+  )
+
+  it(
+    'keeps bound subscriptions isolated and reuses their values on invalidation',
     { timeout: 3000 },
+    async () => {
+      await execMutation(`DELETE FROM elements`)
+      await execMutation({
+        sql: `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'10', 'test', ?)`,
+        bindings: ['alpha'],
+      })
+      await execMutation({
+        sql: `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'11', 'test', ?)`,
+        bindings: ['beta'],
+      })
+
+      const sql = `SELECT payload FROM elements WHERE payload = ? ORDER BY id`
+      const alpha = observeResults({ sql, bindings: ['alpha'] })
+      const beta = observeResults({ sql, bindings: ['beta'] })
+
+      try {
+        expect(await alpha.nextResult()).toEqual([{ payload: 'alpha' }])
+        expect(await beta.nextResult()).toEqual([{ payload: 'beta' }])
+
+        await execMutation({
+          sql: `INSERT INTO elements (parent_id, key, type, payload) VALUES (NULL, X'12', 'test', ?)`,
+          bindings: ['alpha'],
+        })
+
+        expect(await alpha.nextResult()).toEqual([{ payload: 'alpha' }, { payload: 'alpha' }])
+        expect(await beta.nextResult()).toEqual([{ payload: 'beta' }])
+      } finally {
+        alpha.cleanup()
+        beta.cleanup()
+      }
+    },
   )
 })

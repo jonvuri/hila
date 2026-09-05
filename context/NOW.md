@@ -4,15 +4,13 @@ kind: status
 state: ready
 updated: 2026-09-05
 phase: 12
-session: query-spec-and-query-runtime
+session: place-discovery-navigation-and-ranking
 ---
 
 # Now
 
-Phase 11 is complete. Current durable state is schema-classified, tracked, and covered by a full
-two-replica fixture. Saved views are named places with one replicated SQL source and a host-owned
-collection region. Deterministic performance guards, exact churn checks, and the bounded
-20×-throttled Chromium backstop pass.
+Phase 11 is complete. Saved views are durable named places with one replicated SQL source and a
+host-owned collection region.
 
 The unreleased app remains at reset-only schema version 0. The first
 dogfood build whose data should survive upgrades activates the durable dogfooding gate and
@@ -22,18 +20,15 @@ The dormant migration runner already proves ordered schema/data evolution and fu
 gate requires explicit reset or reviewed adoption of version-0 databases, removal of reset-era
 compatibility migrations, and a backup path before the first `1 → 2` migration.
 
-Phase 12 Session 1 is complete. One ordered main-thread command registry now owns discovery,
-availability, matching, invocation, plugin replacement, and teardown. The workspace contributes the
-existing `hila.table` and `hila.attach` commands; the slash adapter preserves both follow-up flows.
-Callable contributions stay out of the worker payload. Immutable snapshots, pre-effect command
-reservations, and generation checks keep replacement and teardown atomic.
+Phase 12 Sessions 1 and 2 are complete. The main thread has authoritative command and shortcut
+registries. The executable query-spec dialect now has a matched compiler and recognizer, transient
+bound plans, persistent self-contained SQL, exact subscription identities, stale-result guards, and
+read-only user query edges. Concrete-matrix output remains updatable and ownership-safe.
 
-Global shortcuts are self-describing and enumerable. Editor-local ProseMirror handlers remain in
-their keymap with parallel metadata for the future help projection. Key normalization and platform
-display are independently tested.
-
-Session 2 now owns the query-spec compiler/recognizer, safe bound runtime, deterministic paging, and
-durable round trip. It must freeze the executable grammar in `Query-Spec.md` before implementation.
+Saved views page deterministically through semantic limits. Structured views survive create,
+reload, edit, and column rename. Rename healing recompiles recognized terms in the rename
+transaction, preserves opaque fragments, reports stranded opaque references, and converges across
+two replicas. No schema change occurred.
 
 Durable gesture-authored views require a concrete matrix/type in v1. Cross-matrix `everything` and
 `containers` remain transient launcher lenses until a dynamic global-search substrate exists.
@@ -42,16 +37,16 @@ Phase 13 still owns the embedded legacy face/runtime and remaining style migrati
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 2 — query spec and query runtime](phases/Phase-12/Session-2-query-spec-and-query-runtime.md).
-3. [Query Spec](Query-Spec.md), then [Sync](Sync.md) for the rename-healing durability boundary.
+2. [Session 3 — place discovery, navigation, and ranking](phases/Phase-12/Session-3-place-discovery-navigation-and-ranking.md).
+3. [Architecture](Architecture.md) and [Launcher](Launcher.md).
 
 ## Boundary
 
-Keep Session 2 behind the shipped view-place and replication contracts. Stored SQL remains the only
-query truth, gesture-authored durable views require a concrete matrix, and every schema change must
-update the durability policy and two-replica coverage.
+Do not build launcher presentation, session-memory signals, FTS, fuzzy matching, or a durable global
+index in Session 3. Preserve appearance provenance; identity-only navigation uses ownership home,
+then deterministic membership fallback, never an arbitrary portal.
 
 ## Next action
 
-Freeze Session 2's executable v1 grammar in `Query-Spec.md`, then implement its compiler and
-recognizer before changing the runtime.
+Define Session 3's discovery catalog and result types, then build the bounded worker-backed catalog
+query before changing launcher presentation.

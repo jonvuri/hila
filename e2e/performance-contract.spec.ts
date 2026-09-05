@@ -341,6 +341,10 @@ test.describe('canonical performance contract', () => {
     const beforeCollapse = await pmCounts(page)
     await collapse.click()
     await expect(parentRow.getByRole('button', { name: 'Expand Churn parent' })).toBeVisible()
+    await expect(async () => {
+      const currentRows = await rootPanel.locator('.outline-row').count()
+      expect(beforeCollapseRows - currentRows).toBe(CHURN_DESCENDANT_COUNT + 1)
+    }).toPass({ timeout: 10_000 })
     const afterCollapseRows = await rootPanel.locator('.outline-row').count()
     const rowsLeaving = beforeCollapseRows - afterCollapseRows
     expect(rowsLeaving).toBe(CHURN_DESCENDANT_COUNT + 1)

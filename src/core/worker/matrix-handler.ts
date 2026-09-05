@@ -594,10 +594,11 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
       const { id, matrixId, oldName, newName, force } = message
       try {
         const { db } = await sqliteWasm
-        renameColumnImpl(db, matrixId, oldName, newName, { force })
+        const result = renameColumnImpl(db, matrixId, oldName, newName, { force })
         triggerSubscribedQueries(`mx_${matrixId}_data`)
         triggerSubscribedQueries('matrix_columns')
-        postMessage({ type: 'renameColumnSuccess', id, result: undefined })
+        triggerSubscribedQueries('block_sources')
+        postMessage({ type: 'renameColumnSuccess', id, result })
       } catch (err: unknown) {
         postMessage({ type: 'renameColumnError', id, error: toError(err) })
       }

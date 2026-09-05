@@ -2,6 +2,17 @@ import type { SqlValue } from '@sqlite.org/sqlite-wasm'
 
 export type Sql = string
 
+/** Positional values bound to a reusable SQL template. */
+export type SqlBindings = readonly SqlValue[]
+
+export type SqlQuery = {
+  sql: string
+  bindings?: SqlBindings
+}
+
+/** Existing callers may keep passing an unbound SQL string. */
+export type SqlRequest = Sql | SqlQuery
+
 export type SqlResult = {
   [column: string]: SqlValue
 }[]
@@ -59,18 +70,23 @@ export type GatherObserver = (result: GatherResult | null, error: Error | null) 
 // SQL Client Messages (from client to worker)
 export type SubscribeMessage = {
   type: 'subscribe'
+  subscriptionId: string
   sql: string
+  bindings: SqlBindings
 }
 
 export type UnsubscribeMessage = {
   type: 'unsubscribe'
-  sql: string
+  subscriptionId: string
 }
 
 export type ExecuteMessage = {
   type: 'execute'
   id: string
   sql: string
+  bindings: SqlBindings
+  /** Mutations are allowed only through the explicit `execMutation` path. */
+  mode: 'query' | 'mutation'
 }
 
 export type SubscribeGatherMessage = {
@@ -94,13 +110,13 @@ export type SqlClientMessage =
 // SQL Worker Messages (from worker to client)
 export type SubscribeResultMessage = {
   type: 'subscribeResult'
-  sql: string
+  subscriptionId: string
   result: SqlResult
 }
 
 export type SubscribeErrorMessage = {
   type: 'subscribeError'
-  sql: string
+  subscriptionId: string
   error: Error
 }
 

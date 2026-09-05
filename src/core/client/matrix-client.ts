@@ -1,5 +1,6 @@
 import type { FaceConfig, FaceTypeDefinition } from '../face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from '../matrix'
+import type { RenameHealingReport } from '../../sql/query-spec/durable'
 import type {
   MatrixOperationType,
   MatrixOperationMap,
@@ -189,7 +190,8 @@ export const renameColumn = (
   oldName: string,
   newName: string,
   force?: boolean,
-): Promise<void> => workerCall('renameColumn', { matrixId, oldName, newName, force })
+): Promise<RenameHealingReport> =>
+  workerCall('renameColumn', { matrixId, oldName, newName, force })
 
 export const getColumns = (matrixId: number): Promise<ColumnDefinition[]> =>
   workerCall('getColumns', { matrixId })

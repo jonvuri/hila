@@ -169,4 +169,60 @@ describe('Phase 9.7 Stage C2 — gather flatten (production filters)', () => {
     expect(h.rawDb.selectValue('SELECT COUNT(*) FROM joins')).toBe(joinsBefore)
     expect(h.rawDb.selectValue('SELECT COUNT(*) FROM scroll_index')).toBe(positionsBefore)
   })
+
+  test('a 120-row semantic cap pages stably without duplicates or rows above the cap', () => {
+    const wsId = createMatrix(h.rawDb, 'Workspace', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+    ])
+    appendLooseRows(h.rawDb, wsId, 5, 'Before')
+    const markerRowId = insertDataRow(h.rawDb, wsId, { label: 'limited marker' })
+    createTreePosition(h.rawDb, wsId, markerRowId)
+    const markerKey = getGlobalKey(h.rawDb, wsId, markerRowId)!
+    appendLooseRows(h.rawDb, wsId, 5, 'After')
+
+    const tId = createMatrix(h.rawDb, 'Tasks', [{ name: 'label', type: 'TEXT', role: 'label' }])
+    withTransaction(h.rawDb, () => {
+      for (let i = 0; i < 140; i++) insertDataRow(h.rawDb, tId, { label: `Task ${i}` })
+    })
+    const sql = `SELECT id, label FROM "mx_${tId}_data" ORDER BY id LIMIT 120`
+    const spec: GatherSpec = {
+      focusRootHex: null,
+      collapsedKeyHexes: [],
+      afterKeyHex: null,
+      minPage: 0,
+      maxPage: 12,
+      rowsPerWindow: RPW,
+      blocks: [
+        {
+          keyHex: bytesToHex(markerKey),
+          kind: 'view',
+          sourceMatrixId: tId,
+          markerDepth: 0,
+          sql,
+        },
+      ],
+    }
+
+    const { rows, totalVirtual } = computeGather(h.rawDb, spec)
+    expect(totalVirtual).toBe(130)
+    expect(rows).toHaveLength(130)
+
+    const folded = rows.filter((row) => row.is_block_row === 1)
+    const ids = folded.map((row) => (row.block_data as { id: number }).id)
+    const first120 = (
+      h.rawDb.selectObjects(
+        `SELECT id FROM "mx_${tId}_data" ORDER BY id LIMIT 120`,
+      ) as unknown as {
+        id: number
+      }[]
+    ).map((row) => row.id)
+    const excluded = h.rawDb.selectValue(
+      `SELECT id FROM "mx_${tId}_data" ORDER BY id LIMIT 1 OFFSET 120`,
+    )
+
+    expect(ids).toEqual(first120)
+    expect(new Set(ids).size).toBe(120)
+    expect(ids).not.toContain(excluded)
+    expect(rows.filter((row) => row.is_block_row === 0)).toHaveLength(10)
+  })
 })

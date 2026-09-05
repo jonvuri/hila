@@ -2,7 +2,8 @@
 
 import type { PreparedStatement } from '@sqlite.org/sqlite-wasm'
 
-import type { SqlClientMessage, SqlWorkerMessage } from '../sql-types'
+import type { SqlBindings, SqlClientMessage, SqlWorkerMessage } from '../sql-types'
+import { isReadOnlySelect, parseSingleStatement } from '../../sql/sql-statement'
 
 import {
   consumePendingDirtySet,
@@ -23,14 +24,31 @@ const trimSql = (sql: string) => {
   return sql.trim().replace(/\s+/g, ' ')
 }
 
-// Keep track of subscriber queries and their tables, to run queries again when
-// tables update.
-type Sql = string
+type SubscriptionId = string
 
-const preparedStatementsBySql: Map<Sql, PreparedStatement> = new Map()
-const tablesBySql: Map<Sql, Set<string>> = new Map()
-const subscribersByTable: Map<string, Set<Sql>> = new Map()
-const scopesBySql: Map<Sql, SubscriptionScope> = new Map()
+type PreparedTemplate = {
+  statement: PreparedStatement
+  tables: Set<string>
+  scope: SubscriptionScope
+  subscriptionIds: Set<SubscriptionId>
+}
+
+type Subscription = {
+  id: SubscriptionId
+  sql: string
+  bindings: SqlBindings
+  template: PreparedTemplate
+}
+
+// A subscription's opaque identity is distinct from the reusable prepared SQL
+// template. Multiple bound executions can therefore share one statement shape
+// without sharing results or bindings.
+const preparedTemplatesBySql = new Map<string, PreparedTemplate>()
+const subscriptionsById = new Map<SubscriptionId, Subscription>()
+const subscribersByTable = new Map<string, Set<SubscriptionId>>()
+const preparingSubscriptionIds = new Set<SubscriptionId>()
+const cancelledSubscriptionIds = new Set<SubscriptionId>()
+const pendingTemplateUsersBySql = new Map<string, number>()
 
 // Phase 9.7 Stage C2 — gather subscriptions (inline block folding). A gather is
 // not a single prepared statement (it's the count+slice flattener over
@@ -48,96 +66,178 @@ export const unregisterGatherRunner = (key: string) => {
   gatherRunners.delete(key)
 }
 
-const subscribe = async (sql: Sql) => {
-  const existing = preparedStatementsBySql.get(sql)
+const parseSelectStatement = (
+  sql: string,
+): { root: unknown; error: null } | { root: null; error: string } => {
+  const parsed = parseSingleStatement(sql)
+  if (!parsed.ok) return { root: null, error: parsed.message }
+  if (!isReadOnlySelect(parsed.statement.root)) {
+    return { root: null, error: 'query SQL must be a read-only SELECT' }
+  }
+  return { root: parsed.statement.root, error: null }
+}
 
-  if (existing) {
-    console.error(`Tried to subscribe, but SQL was already subscribed: ${trimSql(sql)}`)
-    return
+const postSubscriptionError = (subscriptionId: string, sql: string, detail: string): void => {
+  postMessage({
+    type: 'subscribeError',
+    subscriptionId,
+    error: new Error(`Error preparing SQL: ${trimSql(sql)} (${detail})`),
+  })
+}
+
+const finalizeUnusedTemplate = (sql: string, template: PreparedTemplate): void => {
+  if (
+    preparedTemplatesBySql.get(sql) === template &&
+    template.subscriptionIds.size === 0 &&
+    (pendingTemplateUsersBySql.get(sql) ?? 0) === 0
+  ) {
+    template.statement.finalize()
+    preparedTemplatesBySql.delete(sql)
+  }
+}
+
+const prepareTemplate = async (
+  subscriptionId: string,
+  sql: string,
+): Promise<PreparedTemplate | null> => {
+  const existing = preparedTemplatesBySql.get(sql)
+  if (existing) return existing
+
+  const parsed = parseSelectStatement(sql)
+  if (parsed.error) {
+    postSubscriptionError(subscriptionId, sql, parsed.error)
+    return null
   }
 
-  const { db } = await sqliteWasm
+  const { db, sqlite3 } = await sqliteWasm
+  // Concurrent worker message handlers can both cross the await above. Recheck
+  // before preparing so equal templates still converge on one statement.
+  const preparedWhileWaiting = preparedTemplatesBySql.get(sql)
+  if (preparedWhileWaiting) return preparedWhileWaiting
 
   try {
-    const preparedStatement = db.prepare(sql)
-
-    preparedStatementsBySql.set(sql, preparedStatement)
-
-    // Track tables read by this SQL for selective invalidation
-    const visited = tablesVisitedBySql(sql)
-    tablesBySql.set(sql, visited)
-    for (const table of visited) {
-      const set = subscribersByTable.get(table)
-      if (set) {
-        set.add(sql)
-      } else {
-        subscribersByTable.set(table, new Set([sql]))
-      }
+    const statement = db.prepare(sql)
+    if (!sqlite3.capi.sqlite3_stmt_readonly(statement)) {
+      statement.finalize()
+      postSubscriptionError(subscriptionId, sql, 'statement is not read-only')
+      return null
     }
-
-    // Infer structural scope for range-aware invalidation.
-    const scope = inferScope(sql, visited)
-    scopesBySql.set(sql, scope)
+    const visited = tablesVisitedBySql(sql, parsed.root)
+    const template: PreparedTemplate = {
+      statement,
+      tables: visited,
+      scope: inferScope(sql, visited, parsed.root),
+      subscriptionIds: new Set(),
+    }
+    preparedTemplatesBySql.set(sql, template)
 
     console.log(`Prepared SQL for subscription: ${trimSql(sql)}`)
+    return template
   } catch (err: unknown) {
     const error = new Error(`Error preparing SQL: ${trimSql(sql)}`, { cause: err })
-    postMessage({ type: 'subscribeError', sql, error })
-    throw error
+    postMessage({ type: 'subscribeError', subscriptionId, error })
+    return null
   }
 }
 
-const unsubscribe = (sql: Sql) => {
-  const preparedStatement = preparedStatementsBySql.get(sql)
+const subscribe = async (
+  subscriptionId: SubscriptionId,
+  sql: string,
+  bindings: SqlBindings,
+): Promise<boolean> => {
+  if (subscriptionsById.has(subscriptionId)) {
+    postSubscriptionError(subscriptionId, sql, 'subscription identity is already active')
+    return false
+  }
+  // Attaching to a live template is synchronous. This matters because worker
+  // message handlers overlap: a following unsubscribe must not finalize the
+  // template between this subscription's lookup and registration.
+  let template = preparedTemplatesBySql.get(sql) ?? null
+  if (!template) {
+    preparingSubscriptionIds.add(subscriptionId)
+    pendingTemplateUsersBySql.set(sql, (pendingTemplateUsersBySql.get(sql) ?? 0) + 1)
+    template = await prepareTemplate(subscriptionId, sql)
+    preparingSubscriptionIds.delete(subscriptionId)
+    const pendingUsers = (pendingTemplateUsersBySql.get(sql) ?? 1) - 1
+    if (pendingUsers === 0) pendingTemplateUsersBySql.delete(sql)
+    else pendingTemplateUsersBySql.set(sql, pendingUsers)
+  }
+  if (!template) {
+    cancelledSubscriptionIds.delete(subscriptionId)
+    return false
+  }
+  // The matching unsubscribe may have arrived while preparation awaited the
+  // database. Do not resurrect a subscription that the client already ended.
+  if (cancelledSubscriptionIds.delete(subscriptionId)) {
+    finalizeUnusedTemplate(sql, template)
+    return false
+  }
 
-  if (!preparedStatement) {
-    console.error(
-      `Tried to unsubscribe, but no prepared statement was found for SQL: ${trimSql(sql)}`,
-    )
+  const subscription: Subscription = { id: subscriptionId, sql, bindings, template }
+  subscriptionsById.set(subscriptionId, subscription)
+  template.subscriptionIds.add(subscriptionId)
+  for (const table of template.tables) {
+    const subscribers = subscribersByTable.get(table)
+    if (subscribers) subscribers.add(subscriptionId)
+    else subscribersByTable.set(table, new Set([subscriptionId]))
+  }
+  return true
+}
+
+const unsubscribe = (subscriptionId: SubscriptionId) => {
+  const subscription = subscriptionsById.get(subscriptionId)
+  if (!subscription) {
+    if (preparingSubscriptionIds.has(subscriptionId)) {
+      cancelledSubscriptionIds.add(subscriptionId)
+    }
     return
   }
 
-  preparedStatement.finalize()
-  preparedStatementsBySql.delete(sql)
-  scopesBySql.delete(sql)
-
-  // Remove from table indexes
-  const tables = tablesBySql.get(sql)
-  if (tables) {
-    for (const table of tables) {
-      const set = subscribersByTable.get(table)
-      if (set) {
-        set.delete(sql)
-        if (set.size === 0) {
-          subscribersByTable.delete(table)
-        }
+  subscriptionsById.delete(subscriptionId)
+  subscription.template.subscriptionIds.delete(subscriptionId)
+  for (const table of subscription.template.tables) {
+    const subscribers = subscribersByTable.get(table)
+    if (subscribers) {
+      subscribers.delete(subscriptionId)
+      if (subscribers.size === 0) {
+        subscribersByTable.delete(table)
       }
     }
-    tablesBySql.delete(sql)
   }
 
-  console.log(`Unsubscribed from SQL: ${trimSql(sql)}`)
+  finalizeUnusedTemplate(subscription.sql, subscription.template)
+
+  console.log(`Unsubscribed from SQL: ${trimSql(subscription.sql)}`)
 }
 
-const runSubscribedSql = async (sql: Sql) => {
-  const statement = preparedStatementsBySql.get(sql)
-
-  if (!statement) {
-    console.error(`Tried to run, but no prepared statement was found for SQL: ${trimSql(sql)}`)
+const runSubscribedSql = (subscriptionId: SubscriptionId) => {
+  const subscription = subscriptionsById.get(subscriptionId)
+  if (!subscription) {
+    console.error(`Tried to run inactive SQL subscription: ${subscriptionId}`)
     return
   }
 
+  const { statement } = subscription.template
   try {
+    if (subscription.bindings.length > 0) statement.bind(subscription.bindings)
     const result = []
     while (statement.step()) {
       result.push(statement.get({}))
     }
-    statement.reset()
 
-    postMessage({ type: 'subscribeResult', sql, result })
+    postMessage({ type: 'subscribeResult', subscriptionId, result })
   } catch (err: unknown) {
-    const error = new Error(`Error running subscribed SQL: ${trimSql(sql)}`, { cause: err })
-    postMessage({ type: 'subscribeError', sql, error })
+    const error = new Error(`Error running subscribed SQL: ${trimSql(subscription.sql)}`, {
+      cause: err,
+    })
+    postMessage({ type: 'subscribeError', subscriptionId, error })
+  } finally {
+    try {
+      statement.reset(true)
+    } catch {
+      // Preserve the original execution error. A broken statement will fail
+      // again on invalidation and is finalized when its last subscriber leaves.
+    }
   }
 }
 
@@ -156,26 +256,29 @@ const flushPendingTriggers = () => {
   // Consume any structural dirty set emitted during this batch.
   const dirty = consumePendingDirtySet()
 
-  const firedSqls = new Set<Sql>()
+  const firedSubscriptions = new Set<SubscriptionId>()
 
   // If a dirty set was emitted, use range-aware matching for all subscriptions.
   // Otherwise, fall back to pure table-grained (the pre-8b behavior for
   // non-structural ops like ref-join creation).
   if (dirty) {
-    for (const [sql, scope] of scopesBySql) {
-      if (!firedSqls.has(sql) && shouldRecompute(scope, tables, dirty)) {
-        firedSqls.add(sql)
-        runSubscribedSql(sql)
+    for (const [subscriptionId, subscription] of subscriptionsById) {
+      if (
+        !firedSubscriptions.has(subscriptionId) &&
+        shouldRecompute(subscription.template.scope, tables, dirty)
+      ) {
+        firedSubscriptions.add(subscriptionId)
+        runSubscribedSql(subscriptionId)
       }
     }
   } else {
     for (const table of tables) {
-      const sqls = subscribersByTable.get(table)
-      if (sqls) {
-        for (const sql of sqls) {
-          if (!firedSqls.has(sql)) {
-            firedSqls.add(sql)
-            runSubscribedSql(sql)
+      const subscriptionIds = subscribersByTable.get(table)
+      if (subscriptionIds) {
+        for (const subscriptionId of subscriptionIds) {
+          if (!firedSubscriptions.has(subscriptionId)) {
+            firedSubscriptions.add(subscriptionId)
+            runSubscribedSql(subscriptionId)
           }
         }
       }
@@ -227,25 +330,30 @@ export const initSqlHandler = (db: SqliteWasm['db'], sqlite3: SqliteWasm['sqlite
 export const handleSqlClientMessage = async (message: SqlClientMessage) => {
   switch (message.type) {
     case 'subscribe': {
-      const { sql } = message
-      await subscribe(sql)
-      await runSubscribedSql(sql)
+      const { subscriptionId, sql, bindings } = message
+      if (await subscribe(subscriptionId, sql, bindings)) runSubscribedSql(subscriptionId)
       break
     }
 
     case 'unsubscribe': {
-      const { sql } = message
-      unsubscribe(sql)
+      unsubscribe(message.subscriptionId)
       break
     }
 
     case 'execute': {
-      const { sql, id } = message
+      const { sql, id, bindings, mode } = message
       try {
-        const { db } = await sqliteWasm
+        const syntaxError = mode === 'query' ? parseSelectStatement(sql).error : null
+        if (syntaxError) throw new Error(syntaxError)
+
+        const { db, sqlite3 } = await sqliteWasm
         const stmt = db.prepare(sql)
         const result = []
         try {
+          if (mode === 'query' && !sqlite3.capi.sqlite3_stmt_readonly(stmt)) {
+            throw new Error('query execution requires a read-only statement')
+          }
+          if (bindings.length > 0) stmt.bind(bindings)
           while (stmt.step()) {
             result.push(stmt.get({}))
           }

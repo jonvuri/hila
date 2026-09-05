@@ -12,9 +12,11 @@
 // passthrough bindings out. SQL stays canonical (no IR); the recognizer
 // *annotates* a query, it never rewrites it.
 
-import { parseStmt, traverse } from 'sqlite3-parser'
+import { traverse } from 'sqlite3-parser'
 
 import type { ColumnDefinition } from '../core/matrix'
+
+import { parseSingleStatement } from './sql-statement'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AstNode = any
@@ -80,10 +82,10 @@ const containsAggregate = (expr: AstNode): boolean => {
  * `resolveEditableColumns` against the real catalog.
  */
 export const recognizeUpdatableQuery = (sql: string): UpdatableRecognition => {
-  const parsed = parseStmt(sql, { allowTrailing: true })
-  if (parsed.status !== 'ok') return reject('parse-error')
+  const parsed = parseSingleStatement(sql)
+  if (!parsed.ok) return reject('parse-error')
 
-  const root = parsed.root as AstNode
+  const root = parsed.statement.root as AstNode
   if (root?.type !== 'SelectStmt') return reject('not-a-select')
 
   const body = root.body as AstNode
@@ -219,10 +221,10 @@ export const resolveEditableColumns = (
  * located by the AST span so a `WHERE`-subquery `FROM` can't mislead it.
  */
 export const addIdToProjection = (sql: string): string | null => {
-  const parsed = parseStmt(sql, { allowTrailing: true })
-  if (parsed.status !== 'ok') return null
+  const parsed = parseSingleStatement(sql)
+  if (!parsed.ok) return null
 
-  const sel = (parsed.root as AstNode)?.body?.select as AstNode
+  const sel = (parsed.statement.root as AstNode)?.body?.select as AstNode
   if (sel?.type !== 'SelectFrom') return null
 
   const fromOffset: number | undefined = sel.from?.span?.offset

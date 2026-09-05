@@ -3,11 +3,20 @@ import type {
   GatherResult,
   GatherSpec,
   Sql,
+  SqlQuery,
   SqlObserver,
   SqlResult,
 } from '../sql-types'
 
-export const subscribedObservers: Map<Sql, Set<SqlObserver>> = new Map()
+export type SqlObserverPool = {
+  subscriptionId: string
+  query: SqlQuery
+  observers: Set<SqlObserver>
+}
+
+/** Exact-request key to its observer pool. Worker responses use the opaque ID. */
+export const subscribedObservers: Map<Sql, SqlObserverPool> = new Map()
+export const subscriptionKeysById: Map<string, Sql> = new Map()
 
 // Last outcome (result or error) delivered per subscribed SQL. An observer that
 // joins an already-subscribed pool no longer triggers a worker re-run, so its

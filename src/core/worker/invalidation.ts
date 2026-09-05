@@ -11,7 +11,9 @@
 
 // -- Scope inference from SQL (AST-based via sqlite3-parser) ------------------
 
-import { parseStmt, traverse } from 'sqlite3-parser'
+import { traverse } from 'sqlite3-parser'
+
+import { parseSingleStatement } from '../../sql/sql-statement'
 
 export const STRUCTURAL_TABLES = new Set(['scroll_index', 'closure', 'joins'])
 
@@ -24,14 +26,16 @@ type AstNode = any
  * all `TableSelectTable` nodes (the sqlite3-parser AST node for table
  * references in FROM/JOIN clauses), then excluding CTE-defined names.
  */
-export const tablesVisitedBySql = (sql: string): Set<string> => {
-  const result = parseStmt(sql, { allowTrailing: true })
-  if (result.status !== 'ok') return new Set()
+export const tablesVisitedBySql = (sql: string, parsedRoot?: AstNode): Set<string> => {
+  const result = parsedRoot ? null : parseSingleStatement(sql)
+  if (result && !result.ok) return new Set()
+  const root = parsedRoot ?? (result?.ok ? result.statement.root : undefined)
+  if (!root) return new Set()
 
   const cteNames = new Set<string>()
   const tables = new Set<string>()
 
-  traverse(result.root as AstNode, {
+  traverse(root, {
     nodes: {
       CommonTableExpr(node: AstNode) {
         const name: string | undefined = node.tblName?.text
@@ -94,7 +98,11 @@ export type SubscriptionScope = {
  * (matrix filter, key range, closure nodes) robustly — handles aliases,
  * blob literals, and expression nesting correctly regardless of formatting.
  */
-export const inferScope = (sql: string, tables: Set<string>): SubscriptionScope => {
+export const inferScope = (
+  sql: string,
+  tables: Set<string>,
+  parsedRoot?: AstNode,
+): SubscriptionScope => {
   const dataTables = new Set<string>()
   const structuralTables = new Set<string>()
 
@@ -109,7 +117,7 @@ export const inferScope = (sql: string, tables: Set<string>): SubscriptionScope 
   let structural: StructuralScope | undefined
 
   if (structuralTables.has('scroll_index') || structuralTables.has('closure')) {
-    structural = extractStructuralScope(sql, structuralTables)
+    structural = extractStructuralScope(sql, structuralTables, parsedRoot)
   }
 
   return { dataTables, structuralTables, structural }
@@ -123,13 +131,16 @@ export const inferScope = (sql: string, tables: Set<string>): SubscriptionScope 
 const extractStructuralScope = (
   sql: string,
   structuralTables: Set<string>,
+  parsedRoot?: AstNode,
 ): StructuralScope | undefined => {
-  const result = parseStmt(sql, { allowTrailing: true })
-  if (result.status !== 'ok') return undefined
+  const result = parsedRoot ? null : parseSingleStatement(sql)
+  if (result && !result.ok) return undefined
+  const root = parsedRoot ?? (result?.ok ? result.statement.root : undefined)
+  if (!root) return undefined
 
   // Build alias → table mapping from the FROM/JOIN clauses.
   const aliasToTable = new Map<string, string>()
-  traverse(result.root as AstNode, {
+  traverse(root, {
     nodes: {
       TableSelectTable(node: AstNode) {
         const tableName: string | undefined = node.tblName?.objName?.text
@@ -164,7 +175,7 @@ const extractStructuralScope = (
     return table !== undefined && STRUCTURAL_TABLES.has(table)
   }
 
-  traverse(result.root as AstNode, {
+  traverse(root, {
     nodes: {
       BinaryExpr(node: AstNode) {
         const op: string = node.op

@@ -1,8 +1,8 @@
 # Query spec and SQL-analog gestures
 
-> **Status: designed, not implemented.** The current code has view-block SQL and an updatability
-> recognizer, but it does not have the query-spec compiler/recognizer or chip authoring surfaces
-> described here. Proposed Phase 12 owns implementation after the durable `view` place contract.
+> **Status: executable v1 runtime shipped.** Phase 12 Session 2 delivered the compiler,
+> recognizer, bound runtime, deterministic paging, and rename healing. Later Phase 12 sessions own
+> the chip and launcher surfaces.
 
 > Decided in [Phase 10 §3b](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (session 3b-i; visual companion + round-by-round reasoning: [Phase-10-Session-3b-visuals.html](./archive/visuals/Phase-10-Session-3b-visuals.html), determinations D1–D19). This is the shared model behind the `⌘K` launcher's filtered search, persisted `view` nodes/blocks, and result-surface gestures — the higher-level authoring layer above raw SQL anticipated by [Phase 9 §9.3](./archive/phases/Phase-9.md#93-embedded-collections--live-views), designed once and spoken by every surface.
 
@@ -27,7 +27,7 @@ Derived state, one per gesture surface. Six dimensions; each is one gesture, one
 ```
 type QuerySpec = {
   kind:  { matrixId } | 'containers' | 'everything'   // which extent(s) — the FROM
-  scope: { node } | 'all'                             // subtree fence — EXISTS over the position index
+  scope: { node: { matrixId, rowId } } | 'all'         // subtree fence — EXISTS over the position index
   text:  string                                       // label/content-role LIKE now; FTS later, spec unchanged
   where: Predicate[]                                  // flat AND list (v1); col · op · value,
                                                       //   or an opaque SQL fragment leaf
@@ -35,6 +35,136 @@ type QuerySpec = {
   limit: number                                       // always present (result caps)
 }
 ```
+
+## Executable v1 contract
+
+This section is normative for Phase 12. The descriptive sections below explain the interaction
+model; this section fixes what the first compiler and recognizer accept.
+
+### Input and normalized forms
+
+The executable input is a discriminated, structured-clone-safe structure. Stable IDs occur only at
+this boundary; emitted SQL contains resolved table and column names.
+
+```ts
+type QueryScalar = string | number | bigint | Uint8Array | null
+
+type QueryPredicate =
+  | {
+      type: 'predicate'
+      columnId: number
+      op: 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'contains'
+      value: QueryScalar
+    }
+  | { type: 'predicate'; columnId: number; op: 'empty' | 'notEmpty' }
+  | { type: 'opaque'; sql: string }
+
+type QuerySpec = {
+  kind: { type: 'matrix'; matrixId: number } | { type: 'containers' } | { type: 'everything' }
+  scope: { type: 'node'; matrixId: number; rowId: number } | { type: 'all' }
+  text: string
+  where: QueryPredicate[]
+  order: { type: 'column'; columnId: number; direction: 'asc' | 'desc' } | { type: 'natural' }
+  limit: number
+}
+```
+
+Normalization is deterministic:
+
+- IDs and `limit` must be positive safe integers. `limit` is always present.
+- Text is preserved exactly. An empty string emits no text term.
+- Predicate order and opaque-leaf bytes are preserved. Opaque leaves must be one valid,
+  parameter-free expression; blank or malformed leaves are invalid.
+- `-0` becomes `0`. Non-finite numbers are invalid. Scalar kinds must match the selected column's
+  SQLite affinity; `null` is valid only for `eq` and `neq` and compiles as `IS NULL` or
+  `IS NOT NULL`. Boolean authoring values normalize to SQLite integers `0` and `1` before entering
+  `QueryScalar`.
+- `empty` means `IS NULL OR value = ''`; `notEmpty` is its negation. They are available only for
+  text-affinity columns. `contains` is also text-only and escapes `%`, `_`, and the escape
+  character before compiling to `LIKE`.
+- Formula columns are invalid predicate and order candidates in v1.
+- Natural date tokens are resolved before this normalized form is compiled. The authoring adapter
+  expands a relative token into fixed ISO boundary values and `gte`/`lte` predicates. SQL never
+  stores `now`, `today`, or another live-relative expression. Session 2 exposes
+  `freezeRelativeDateRange`; the later surface owns natural-language token parsing.
+- Duplicate structured predicates are retained. Gesture operations may replace a term by index;
+  normalization does not reorder or deduplicate user intent.
+
+`containers` and `everything` are valid transient discovery modes, but the v1 SQL compiler rejects
+them. They need Session 3's dynamic discovery plan and cannot be materialized or saved. Every
+compiled or durable spec therefore has one concrete matrix.
+
+### Catalog boundary and invalid states
+
+Compilation and recognition receive a catalog containing matrix IDs, current physical table
+names, ordered column definitions, semantic roles, and any node identities needed by scope. They
+fail with a typed reason when:
+
+- the matrix, scope node, column, or physical name no longer exists;
+- a column belongs to another matrix, is a formula, or does not support the requested operator;
+- a value has the wrong affinity, an opaque term is blank, or a limit/ID is invalid;
+- the SQL is not one read-only statement; or
+- stored SQL has a non-dialect projection, source, grouping, compound, window, order, offset, or
+  limit shape.
+
+A trailing semicolon and SQL whitespace/comments are harmless. A second statement or any trailing
+token that is not part of the parsed statement is rejected. Development mutation SQL stays on its
+existing separate system-edge path.
+
+### Canonical SQL
+
+One normalized concrete-matrix spec has two renderings:
+
+1. A transient plan: `{ template, bindings }`. Values, scope-node IDs, text, and the limit are bound.
+   Resolved table and column identifiers are the only interpolated parts.
+2. Persistent SQL: the same clauses with SQLite literals materialized in place. It is
+   self-contained and is the only stored truth.
+
+Both renderings use this clause spine:
+
+```sql
+SELECT d.*
+FROM "mx_<matrixId>_data" AS d
+WHERE <scope> AND <text> AND <predicate-or-opaque terms in spec order>
+ORDER BY <selected column> <ASC|DESC>, d.id ASC
+LIMIT <positive integer>
+```
+
+`WHERE` is omitted when empty. Natural order is `ORDER BY d.id ASC`; ordering by `id` does not add a
+duplicate tie-breaker. Every other order adds `d.id ASC`, which makes offset paging deterministic
+when selected values tie. Text is one parenthesized `OR` across all current label- and content-role
+columns, in catalog order, using `CAST(d.<column> AS TEXT) LIKE <value> ESCAPE '\'`. A matrix with
+no label/content role rejects non-empty text.
+
+Node scope is the existing correlated single-base-table form: an `own` edge must host the result
+row directly under the selected node or under one of its closure descendants. This keeps the outer
+`FROM` updatable. The result matrix identity and scope identity are distinct.
+
+Structured predicates use `d.<resolved column>` with `=`, `!=`, `<`, `<=`, `>`, `>=`, `LIKE`,
+`IS NULL`, or `IS NOT NULL`. Parentheses belong only to canonical multi-expression terms such as
+text and `empty`; opaque leaves keep their original bytes and receive one surrounding pair of
+parentheses during compilation so a top-level `OR` cannot escape the flat `AND` list. Recognition
+removes exactly that compiler-owned pair, preserving the leaf payload rather than accumulating
+parentheses across round trips.
+
+### Recognition and equivalence
+
+The recognizer accepts the canonical clause spine semantically, not by formatting. It resolves the
+base matrix and columns through the same catalog, splits only top-level `AND` nodes, and classifies
+each term independently:
+
+- canonical scope, text, and typed predicate terms become structured dimensions;
+- any other valid boolean term becomes `{ type: 'opaque', sql }`, using its exact source span;
+- a structural mismatch returns `custom SQL` with one stated reason instead of a partial spec.
+
+Canonical order and limit are required for `chips` or `chips + leaf`. The recognizer accepts either
+qualified or unqualified identifiers and ordinary SQLite whitespace/quoting, then recompilation
+canonicalizes those owned clauses. Opaque leaves remain byte-for-byte equal. The normalized
+equivalence relation compares stable IDs, scalar values, term order, direction, and semantic
+scope/text/limit; it treats harmless SQL formatting and identifier quoting as equal.
+
+Recognition has three results: `chips`, `chips-with-leaves`, or `custom-sql`. Invalid SQL is still
+a valid named place: execution may show its error, but recognition never deletes or rewrites it.
 
 - **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so hydration and write-back editability hold by construction. Column _visibility_ is the face recipe's business ([Plugins.md — composition model](Plugins.md#forward-composition-model)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
 - **Text is the residue; chips are the commitments.** The launcher's bare typed words are the

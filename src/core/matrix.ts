@@ -1,5 +1,9 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import {
+  healDialectViewsForColumnRename,
+  type RenameHealingReport,
+} from '../sql/query-spec/durable'
 import { compileFormula, parseFormulaRefs } from '../table/formula'
 
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
@@ -1521,7 +1525,7 @@ export const renameColumn = (
   oldName: string,
   newName: string,
   options?: { force?: boolean },
-): void => {
+): RenameHealingReport =>
   withTransaction(db, () => {
     const current = getColumns(db, matrixId)
     const col = current.find((c) => c.name === oldName)
@@ -1551,11 +1555,13 @@ export const renameColumn = (
       bind: [newName, matrixId, oldName],
     })
 
+    const healing = healDialectViewsForColumnRename(db, matrixId, current, oldName)
+
     const deviceId = getOrCreateDeviceId(db)
     const updated = current.map((c) => (c.name === oldName ? { ...c, name: newName } : c))
     installDataTableTriggers(db, matrixId, deviceId, getPhysicalTrackedColumns(updated))
+    return healing
   })
-}
 
 /** Update the display type of a column. */
 export const updateColumnDisplayType = (

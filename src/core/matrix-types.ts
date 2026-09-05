@@ -1,4 +1,5 @@
 import type { TagType } from '../tags/tag-types'
+import type { RenameHealingReport } from '../sql/query-spec/durable'
 
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
@@ -118,7 +119,7 @@ export type MatrixOperationMap = {
   }
   renameColumn: {
     params: { matrixId: number; oldName: string; newName: string; force?: boolean }
-    result: void
+    result: RenameHealingReport
   }
   getColumns: {
     params: { matrixId: number }

@@ -7,13 +7,17 @@ import { gatherKey } from '../sql-types'
 // real Worker. All other modules under test are pure.
 vi.mock('./worker-client', () => ({ postMessage: vi.fn() }))
 
-const { addObserver, removeObserver, addGatherObserver, removeGatherObserver } = await import(
-  './sql-client'
-)
+const { addObserver, removeObserver, addGatherObserver, removeGatherObserver, sqlRequestKey } =
+  await import('./sql-client')
 const { handleSqlWorkerMessage } = await import('./sql-client-handler')
 const { postMessage } = await import('./worker-client')
-const { subscribedObservers, lastOutcomeBySql, gatherObservers, lastGatherOutcomeByKey } =
-  await import('./sql-client-promises')
+const {
+  subscribedObservers,
+  subscriptionKeysById,
+  lastOutcomeBySql,
+  gatherObservers,
+  lastGatherOutcomeByKey,
+} = await import('./sql-client-promises')
 
 const mockPost = postMessage as Mock
 
@@ -22,6 +26,11 @@ const unsubscribeCalls = () =>
   mockPost.mock.calls.filter(([m]) => m.type === 'unsubscribe').length
 const subscribeGatherCalls = () =>
   mockPost.mock.calls.filter(([m]) => m.type === 'subscribeGather').length
+const lastSubscriptionId = (): string => {
+  const call = mockPost.mock.calls.filter(([m]) => m.type === 'subscribe').at(-1)
+  if (!call) throw new Error('expected a subscription message')
+  return call[0].subscriptionId as string
+}
 
 const makeSpec = (focusRootHex: string): GatherSpec => ({
   focusRootHex,
@@ -37,6 +46,7 @@ describe('SQL subscription observer pool (late-joiner replay)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     subscribedObservers.clear()
+    subscriptionKeysById.clear()
     lastOutcomeBySql.clear()
   })
 
@@ -52,10 +62,11 @@ describe('SQL subscription observer pool (late-joiner replay)', () => {
   it('replays the last result synchronously to a late joiner', () => {
     const o1 = vi.fn()
     addObserver('SELECT 1', o1)
+    const subscriptionId = lastSubscriptionId()
 
     // Worker delivers the initial result to the live pool.
     const result: SqlResult = [{ id: 1, label: 'a' }]
-    handleSqlWorkerMessage({ type: 'subscribeResult', sql: 'SELECT 1', result })
+    handleSqlWorkerMessage({ type: 'subscribeResult', subscriptionId, result })
     expect(o1).toHaveBeenCalledWith(result, null)
 
     // A late joiner (e.g. a remount before the previous cleanup) must receive
@@ -69,9 +80,10 @@ describe('SQL subscription observer pool (late-joiner replay)', () => {
   it('replays the last error synchronously to a late joiner', () => {
     const o1 = vi.fn()
     addObserver('SELECT bad', o1)
+    const subscriptionId = lastSubscriptionId()
 
     const error = new Error('boom')
-    handleSqlWorkerMessage({ type: 'subscribeError', sql: 'SELECT bad', error })
+    handleSqlWorkerMessage({ type: 'subscribeError', subscriptionId, error })
     expect(o1).toHaveBeenCalledWith(null, error)
 
     const o2 = vi.fn()
@@ -90,16 +102,17 @@ describe('SQL subscription observer pool (late-joiner replay)', () => {
   it('clears the replay cache and re-subscribes after the pool empties', () => {
     const o1 = vi.fn()
     addObserver('SELECT 1', o1)
+    const subscriptionId = lastSubscriptionId()
     handleSqlWorkerMessage({
       type: 'subscribeResult',
-      sql: 'SELECT 1',
+      subscriptionId,
       result: [{ id: 1 }],
     })
-    expect(lastOutcomeBySql.has('SELECT 1')).toBe(true)
+    expect(lastOutcomeBySql.has(sqlRequestKey('SELECT 1'))).toBe(true)
 
     removeObserver('SELECT 1', o1)
     expect(unsubscribeCalls()).toBe(1)
-    expect(lastOutcomeBySql.has('SELECT 1')).toBe(false)
+    expect(lastOutcomeBySql.has(sqlRequestKey('SELECT 1'))).toBe(false)
 
     // A brand-new pool for the same SQL subscribes again and has nothing stale
     // to replay.
@@ -112,16 +125,65 @@ describe('SQL subscription observer pool (late-joiner replay)', () => {
   it('does not cache a result that arrives after the pool was torn down', () => {
     const o1 = vi.fn()
     addObserver('SELECT 1', o1)
+    const subscriptionId = lastSubscriptionId()
     removeObserver('SELECT 1', o1)
 
     // A result in flight past the unsubscribe finds no pool: it must not
     // resurrect a cache entry that would then outlive any subscription.
     handleSqlWorkerMessage({
       type: 'subscribeResult',
-      sql: 'SELECT 1',
+      subscriptionId,
       result: [{ id: 1 }],
     })
-    expect(lastOutcomeBySql.has('SELECT 1')).toBe(false)
+    expect(lastOutcomeBySql.has(sqlRequestKey('SELECT 1'))).toBe(false)
+  })
+
+  it('pools only exact bound requests', () => {
+    const sql = 'SELECT * FROM items WHERE label = ?'
+    addObserver({ sql, bindings: ['a'] }, vi.fn())
+    addObserver({ sql, bindings: ['a'] }, vi.fn())
+    addObserver({ sql, bindings: ['b'] }, vi.fn())
+
+    expect(subscribeCalls()).toBe(2)
+    const messages = mockPost.mock.calls
+      .map(([message]) => message)
+      .filter((message) => message.type === 'subscribe')
+    expect(messages.map((message) => message.bindings)).toEqual([['a'], ['b']])
+    expect(messages[0].subscriptionId).not.toBe(messages[1].subscriptionId)
+  })
+
+  it('cannot collide an unbound SQL string with a bound request key', () => {
+    const bound = { sql: 'SELECT ?', bindings: ['value'] }
+    addObserver(bound, vi.fn())
+    addObserver(sqlRequestKey(bound), vi.fn())
+
+    expect(subscribeCalls()).toBe(2)
+  })
+
+  it('does not deliver an old result to a fresh identical request', () => {
+    const first = vi.fn()
+    addObserver('SELECT 1', first)
+    const oldId = lastSubscriptionId()
+    removeObserver('SELECT 1', first)
+
+    const fresh = vi.fn()
+    addObserver('SELECT 1', fresh)
+    const freshId = lastSubscriptionId()
+    expect(freshId).not.toBe(oldId)
+
+    handleSqlWorkerMessage({
+      type: 'subscribeResult',
+      subscriptionId: oldId,
+      result: [{ id: 1 }],
+    })
+    expect(fresh).not.toHaveBeenCalled()
+
+    handleSqlWorkerMessage({
+      type: 'subscribeResult',
+      subscriptionId: freshId,
+      result: [{ id: 2 }],
+    })
+    expect(fresh).toHaveBeenCalledWith([{ id: 2 }], null)
   })
 })
 

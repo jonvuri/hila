@@ -9,6 +9,7 @@ import {
   gatherObservers,
   lastOutcomeBySql,
   lastGatherOutcomeByKey,
+  subscriptionKeysById,
 } from './sql-client-promises'
 
 export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
@@ -17,23 +18,23 @@ export const handleSqlWorkerMessage = (message: SqlWorkerMessage) => {
   switch (type) {
     // Subscribed queries, that repeat and return new results when the underlying data changes
     case 'subscribeResult': {
-      const { sql } = message
-      const observers = subscribedObservers.get(sql)
+      const key = subscriptionKeysById.get(message.subscriptionId)
+      const pool = key ? subscribedObservers.get(key) : undefined
       // Only cache while a pool is live, so the entry can't outlive its
       // subscription (a result in flight past an unsubscribe finds no pool).
-      if (!observers) break
-      lastOutcomeBySql.set(sql, { result: message.result, error: null })
-      for (const observer of observers) {
+      if (!pool || pool.subscriptionId !== message.subscriptionId) break
+      lastOutcomeBySql.set(key!, { result: message.result, error: null })
+      for (const observer of pool.observers) {
         observer(message.result, null)
       }
       break
     }
     case 'subscribeError': {
-      const { sql } = message
-      const observers = subscribedObservers.get(sql)
-      if (!observers) break
-      lastOutcomeBySql.set(sql, { result: null, error: message.error })
-      for (const observer of observers) {
+      const key = subscriptionKeysById.get(message.subscriptionId)
+      const pool = key ? subscribedObservers.get(key) : undefined
+      if (!pool || pool.subscriptionId !== message.subscriptionId) break
+      lastOutcomeBySql.set(key!, { result: null, error: message.error })
+      for (const observer of pool.observers) {
         observer(null, message.error)
       }
       break

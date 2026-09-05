@@ -1,6 +1,6 @@
 import { createSignal, type Component } from 'solid-js'
 
-import { execQuery } from './core/client/sql-client'
+import { execDevelopmentSql } from './core/client/sql-client'
 import type { SqlResult } from './sql/types'
 
 const SqlRunner: Component = () => {
@@ -10,7 +10,7 @@ const SqlRunner: Component = () => {
 
   const runSql = async () => {
     try {
-      const result = await execQuery(sql())
+      const result = await execDevelopmentSql(sql())
 
       setResults([...results(), result])
     } catch (error: unknown) {

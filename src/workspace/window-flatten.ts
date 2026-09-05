@@ -28,6 +28,8 @@
 
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
+import { isReadOnlySelect, parseSingleStatement, topLevelLimitNode } from '../sql/sql-statement'
+
 // -- Block descriptor -----------------------------------------------------------
 
 /**
@@ -292,20 +294,33 @@ export const materializedSliceSql = (): string =>
 // matrix's extent, derived — `matrix.owner` + membership, persists nothing new).
 // Both expose the same COUNT + ordered-slice shape.
 
+const parsedViewSql = (sql: string) => {
+  const parsed = parseSingleStatement(sql)
+  if (!parsed.ok || !isReadOnlySelect(parsed.statement.root)) {
+    throw new Error('A saved view must contain one read-only SELECT statement')
+  }
+  return parsed.statement
+}
+
 /** The COUNT query for a `view` block (wrap the persisted SQL). */
-export const viewBlockCountSql = (sql: string): string => `SELECT COUNT(*) AS n FROM (${sql})`
+export const viewBlockCountSql = (sql: string): string => {
+  const statement = parsedViewSql(sql)
+  return `SELECT COUNT(*) AS n FROM (${statement.sql})`
+}
 
 /**
- * The slice query for a `view` block: `LIMIT`/`OFFSET` *appended* to the view
- * SQL, not wrapped in a subquery. A subquery wrapper (`SELECT * FROM (sql) LIMIT
- * ? OFFSET ?`) does NOT preserve the inner `ORDER BY` under SQLite's flattening,
- * so consecutive offset slices would cover the set but in scrambled order.
- * Appending keeps the view's own order (its trailing `ORDER BY`, or the stable
- * rowid scan order when it has none), which the count+slice model requires for
- * consistent slices across windows. (The recognized single-base-table views this
- * folds carry no trailing `LIMIT`; arbitrary trailing clauses are out of scope.)
+ * Legacy no-limit views append the paging clause so SQLite cannot flatten away
+ * their order. A view with its own semantic LIMIT is wrapped: the inner limit
+ * prevents flattening and caps the outer page slices without producing a second
+ * top-level LIMIT.
  */
-export const viewBlockSliceSql = (sql: string): string => `${sql} LIMIT ? OFFSET ?`
+export const viewBlockSliceSql = (sql: string): string => {
+  const statement = parsedViewSql(sql)
+  if (topLevelLimitNode(statement.root)) {
+    return `SELECT * FROM (${statement.sql}) LIMIT ? OFFSET ?`
+  }
+  return `${statement.sql} LIMIT ? OFFSET ?`
+}
 
 /**
  * A `view` block: its rows are the persisted SQL's result set, in the SQL's own

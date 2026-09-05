@@ -16,10 +16,12 @@ import {
   createOwnedMatrix,
   createRefJoin,
   demoteNode,
+  getColumns,
   getOrCreateDeviceId,
   initMatrixSchema,
   insertRow,
   promoteNode,
+  renameColumn,
   resetDeviceIdCache,
   updateRow,
 } from './matrix'
@@ -249,7 +251,11 @@ const createSourceFixture = (db: Database): FixtureIds => {
       bind: [
         marker.matrixId,
         marker.rowId,
-        `SELECT * FROM "mx_${ownedMatrixId}_data" WHERE status = 'open'`,
+        `SELECT d.*
+FROM "mx_${ownedMatrixId}_data" AS d
+WHERE d."status" = 'open'
+ORDER BY d.id ASC
+LIMIT 120`,
       ],
     },
   )
@@ -397,6 +403,38 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
     expect(positionsOf(b, ids.project)).toHaveLength(1)
     expect(logicalSnapshot(b)).toEqual(logicalSnapshot(a))
     expect(derivedSnapshot(b)).toEqual(derivedSnapshot(a))
+  })
+
+  test('replicates a column rename and its healed dialect view SQL', () => {
+    const { a, b, ids, initialChanges } = fixture
+
+    expect(renameColumn(a, ids.ownedMatrixId, 'status', 'state')).toMatchObject({
+      healedViewCount: 1,
+      strandedOpaqueLeaves: [],
+    })
+    const delta = getLocalChanges(a, initialChanges.toSeq)
+    expect(delta.entries.map((entry) => entry.table)).toEqual([
+      'matrix_columns',
+      'block_sources',
+    ])
+
+    const result = applyRemoteChanges(b, delta)
+    expect(result.conflicts).toEqual([])
+    expect(getLocalChanges(b, 0).entries).toEqual([])
+    expect(getColumns(b, ids.ownedMatrixId).map((column) => column.name)).toContain('state')
+    const sourceSql = a.selectValue(
+      'SELECT sql FROM block_sources WHERE marker_matrix_id = ? AND marker_row_id = ?',
+      [ids.marker.matrixId, ids.marker.rowId],
+    )
+    expect(sourceSql).toContain('d."state"')
+    expect(sourceSql).not.toContain('d."status"')
+    expect(
+      b.selectValue(
+        'SELECT sql FROM block_sources WHERE marker_matrix_id = ? AND marker_row_id = ?',
+        [ids.marker.matrixId, ids.marker.rowId],
+      ),
+    ).toBe(sourceSql)
+    expect(logicalSnapshot(b)).toEqual(logicalSnapshot(a))
   })
 })
 

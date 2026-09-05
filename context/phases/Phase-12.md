@@ -2,7 +2,7 @@
 title: Phase 12 — Launcher and shell convergence
 kind: phase-plan
 state: active
-updated: 2026-09-03
+updated: 2026-09-05
 ---
 
 # Phase 12 — Launcher and shell convergence
@@ -53,8 +53,8 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | Session                                                                                                                | Outcome                                                                      | Depends on | State    |
 | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | -------- |
 | [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                    | One authoritative, introspectable command and shortcut source                | Phase 11   | Complete |
-| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Ready    |
-| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Planned  |
+| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Complete |
+| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Ready    |
 | [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Planned  |
 | [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4    | Planned  |
 | [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Planned  |

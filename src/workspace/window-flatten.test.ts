@@ -34,6 +34,7 @@ import {
   materializedSliceSql,
   sliceWindow,
   viewBlock,
+  viewBlockCountSql,
   viewBlockSliceSql,
   type Block,
   type Segment,
@@ -259,5 +260,38 @@ describe('Phase 9.7 Stage B — count + slice window flattening (production)', (
       noAutoIndex: true,
       noTempBTree: true,
     })
+  })
+
+  test('view paging keeps a stored semantic limit and strips harmless trailing syntax', () => {
+    const matrixId = createMatrix(h.db, 'Limited', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+    ])
+    withTransaction(h.db, () => {
+      for (let i = 0; i < 8; i++) insertDataRow(h.db, matrixId, { label: `Row ${i}` })
+    })
+
+    const limited = `SELECT id, label FROM "mx_${matrixId}_data" ORDER BY id LIMIT 5; -- saved`
+    expect(viewBlockCountSql(limited)).toBe(
+      `SELECT COUNT(*) AS n FROM (SELECT id, label FROM "mx_${matrixId}_data" ORDER BY id LIMIT 5)`,
+    )
+    expect(viewBlockSliceSql(limited)).toBe(
+      `SELECT * FROM (SELECT id, label FROM "mx_${matrixId}_data" ORDER BY id LIMIT 5) LIMIT ? OFFSET ?`,
+    )
+
+    const block = viewBlock(new Uint8Array([1]), limited, 5)
+    const orderedIds = (
+      h.rawDb.selectObjects(
+        `SELECT id FROM "mx_${matrixId}_data" ORDER BY id LIMIT 5`,
+      ) as unknown as {
+        id: number
+      }[]
+    ).map((row) => row.id)
+    expect(block.slice(h.rawDb, 0, 3).map((row) => row.id)).toEqual(orderedIds.slice(0, 3))
+    expect(block.slice(h.rawDb, 3, 3).map((row) => row.id)).toEqual(orderedIds.slice(3))
+  })
+
+  test('view paging rejects mutation and multiple-statement SQL', () => {
+    expect(() => viewBlockSliceSql('DELETE FROM matrix')).toThrow(/read-only SELECT/)
+    expect(() => viewBlockSliceSql('SELECT 1; SELECT 2')).toThrow(/read-only SELECT/)
   })
 })

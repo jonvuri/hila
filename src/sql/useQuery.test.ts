@@ -218,4 +218,47 @@ describe('useQuery', () => {
 
     dispose()
   })
+
+  it('ignores a retired observer after the request changes', () => {
+    let result!: Accessor<SqlResult | null>
+    let setSql!: (v: string) => void
+
+    const dispose = createRoot((dispose) => {
+      const [sql, _setSql] = createSignal('SELECT 1')
+      setSql = _setSql
+      result = useQuery(sql).result
+      return dispose
+    })
+
+    const oldObserver = getLastObserver()
+    oldObserver([{ id: 1 }], null)
+    setSql('SELECT 2')
+    const newObserver = getLastObserver()
+    newObserver([{ id: 2 }], null)
+
+    oldObserver([{ id: 999 }], null)
+    expect(result()).toEqual([{ id: 2 }])
+
+    dispose()
+  })
+
+  it('subscribes before unsubscribing when only bindings change', () => {
+    let setValue!: (v: string) => void
+    const events: string[] = []
+    mockAddObserver.mockImplementation(() => events.push('add'))
+    mockRemoveObserver.mockImplementation(() => events.push('remove'))
+
+    const dispose = createRoot((dispose) => {
+      const [value, _setValue] = createSignal('a')
+      setValue = _setValue
+      useQuery(() => ({ sql: 'SELECT ? AS value', bindings: [value()] }))
+      return dispose
+    })
+
+    events.length = 0
+    setValue('b')
+    expect(events).toEqual(['add', 'remove'])
+
+    dispose()
+  })
 })
