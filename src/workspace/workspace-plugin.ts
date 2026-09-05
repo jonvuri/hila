@@ -5,6 +5,7 @@ import {
   registerFaceType as registerFaceTypeWorker,
   seedRow,
 } from '../core/client/matrix-client'
+import { structuralCommands } from '../editor/structural-commands'
 
 const WELCOME_LABEL_JSON = JSON.stringify({
   type: 'doc',
@@ -226,6 +227,7 @@ export const workspacePlugin: PluginDefinition = {
       matrixKey: 'root',
     },
   ],
+  commands: structuralCommands,
   init: async (ctx) => {
     const matrixId = ctx.matrixIds['root']
     if (matrixId !== undefined) {

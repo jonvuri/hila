@@ -8,7 +8,52 @@ import {
   createParagraphNear,
 } from 'prosemirror-commands'
 
+import type { ShortcutDescriptor } from '../shortcuts'
+
 import { schema as defaultSchema } from './schema'
+
+// ProseMirror retains these handlers. The shared descriptor shape lets a help
+// surface combine this metadata with `shortcuts.getDescriptors()`.
+export const outlineShortcutDescriptors = [
+  { id: 'editor.new-row', title: 'New row', key: 'Enter', context: 'editor' },
+  {
+    id: 'editor.backspace-at-start',
+    title: 'Backspace at start',
+    key: 'Backspace',
+    context: 'editor',
+  },
+  { id: 'editor.indent', title: 'Indent', key: 'Tab', context: 'editor' },
+  { id: 'editor.outdent', title: 'Outdent', key: 'Shift-Tab', context: 'editor' },
+  {
+    id: 'editor.previous-row',
+    title: 'Previous row',
+    key: 'ArrowUp',
+    context: 'editor',
+  },
+  {
+    id: 'editor.next-row',
+    title: 'Next row',
+    key: 'ArrowDown',
+    context: 'editor',
+  },
+  { id: 'editor.bold', title: 'Bold', key: 'Mod-b', context: 'editor' },
+  { id: 'editor.italic', title: 'Italic', key: 'Mod-i', context: 'editor' },
+  { id: 'editor.code', title: 'Inline code', key: 'Mod-e', context: 'editor' },
+  { id: 'editor.insert-link', title: 'Insert link', key: 'Mod-k', context: 'editor' },
+  {
+    id: 'editor.toggle-collapse',
+    title: 'Toggle collapse',
+    key: 'Mod-Enter',
+    context: 'editor',
+  },
+  {
+    id: 'editor.soft-break',
+    title: 'Soft line break',
+    key: 'Shift-Enter',
+    context: 'editor',
+  },
+  { id: 'editor.open-focus', title: 'Open focus', key: 'Mod-l', context: 'editor' },
+] as const satisfies readonly ShortcutDescriptor[]
 
 export type OutlineCallbacks = {
   onEnter: (view: EditorView) => void

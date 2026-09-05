@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 2 — Query spec and query runtime
 kind: phase-session
-state: planned
+state: ready
 updated: 2026-09-03
 ---
 

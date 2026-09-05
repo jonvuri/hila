@@ -1,6 +1,6 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import type { PluginContext, PluginDefinition, PluginRow } from './plugin-types'
+import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 import { applyFaceToMatrix } from './face-config'
 import { getFaceType, registerFaceType as registerFaceTypeLocal } from './face-registry'
 import { createMatrix } from './matrix'
@@ -18,7 +18,7 @@ const TABLE_FACE_TYPE_ID = 'hila.table'
  */
 export const registerPlugin = async (
   db: Database,
-  definition: PluginDefinition,
+  definition: PluginRegistration,
 ): Promise<PluginContext> => {
   const matrixIds: Record<string, number> = {}
 
@@ -104,10 +104,6 @@ export const registerPlugin = async (
   })
 
   const ctx: PluginContext = { matrixIds }
-
-  if (definition.init) {
-    await definition.init(ctx)
-  }
 
   return ctx
 }

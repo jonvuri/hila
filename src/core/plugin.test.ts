@@ -5,7 +5,7 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 import { initMatrixSchema, createMatrix } from './matrix'
 import { registerPlugin, unregisterPlugin, getPlugin, getAllPlugins } from './plugin'
 import { getFaceType, clearFaceTypeRegistry } from './face-registry'
-import type { PluginDefinition } from './plugin-types'
+import { toPluginRegistration, type PluginDefinition } from './plugin-types'
 import type { FaceTypeDefinition } from './face-types'
 
 const makeDefinition = (overrides: Partial<PluginDefinition> = {}): PluginDefinition => ({
@@ -135,17 +135,35 @@ describe('Plugin system', () => {
     expect(row!.version).toBe('2.0.0')
   })
 
-  test('init lifecycle hook is called with PluginContext', async () => {
+  test('worker registration payload excludes callable main-thread contributions', async () => {
     const initFn = vi.fn()
+    const destroyFn = vi.fn()
     const def = makeDefinition({
       matrixes: [{ key: 'data', title: 'Data', columns: [{ name: 'val', type: 'TEXT' }] }],
       init: initFn,
+      destroy: destroyFn,
+      commands: [
+        {
+          id: 'test.command',
+          label: 'Test command',
+          keywords: [],
+          surfaces: ['launcher'],
+          subject: 'none',
+          run: vi.fn(),
+        },
+      ],
     })
 
-    const ctx = await registerPlugin(db, def)
+    const registration = toPluginRegistration(def)
+    const cloned = structuredClone(registration)
+    const ctx = await registerPlugin(db, cloned)
 
-    expect(initFn).toHaveBeenCalledOnce()
-    expect(initFn).toHaveBeenCalledWith(ctx)
+    expect(ctx.matrixIds['data']).toBeTypeOf('number')
+    expect(initFn).not.toHaveBeenCalled()
+    expect(destroyFn).not.toHaveBeenCalled()
+    expect('commands' in registration).toBe(false)
+    expect('init' in registration).toBe(false)
+    expect('destroy' in registration).toBe(false)
   })
 
   // -- unregisterPlugin -------------------------------------------------------

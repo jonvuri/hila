@@ -1,46 +1,120 @@
 type ShortcutHandler = () => boolean | void
 
-type ShortcutBinding = {
+type ShortcutPlatform = 'mac' | 'other'
+
+type ShortcutDescriptor = {
+  id: string
+  title: string
   key: string
-  handler: ShortcutHandler
   context?: string
 }
 
-const isMac =
-  typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+type ShortcutBinding = ShortcutDescriptor & {
+  handler: ShortcutHandler
+}
 
-const normalizeKeyEvent = (e: KeyboardEvent): string => {
-  const parts: string[] = []
-  const mod = isMac ? e.metaKey : e.ctrlKey
-  if (mod) parts.push('Mod')
-  if (e.shiftKey) parts.push('Shift')
-  if (e.altKey) parts.push('Alt')
+const getShortcutPlatform = (platform?: string): ShortcutPlatform => {
+  const value = platform ?? (typeof navigator === 'undefined' ? '' : navigator.platform)
+  return /Mac|iPod|iPhone|iPad/.test(value) ? 'mac' : 'other'
+}
 
-  let key = e.key
-  if (key.length === 1) key = key.toUpperCase()
-  parts.push(key)
+const normalizeShortcutKey = (key: string): string => {
+  const parts = key.split('-')
+  const finalPart = parts.at(-1)!
+  if (finalPart.length === 1) parts[parts.length - 1] = finalPart.toUpperCase()
   return parts.join('-')
 }
 
-const createShortcutManager = () => {
+const normalizeKeyEvent = (
+  event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey'>,
+  platform: ShortcutPlatform = getShortcutPlatform(),
+): string => {
+  const parts: string[] = []
+  const mod = platform === 'mac' ? event.metaKey : event.ctrlKey
+  if (mod) parts.push('Mod')
+  if (event.shiftKey) parts.push('Shift')
+  if (event.altKey) parts.push('Alt')
+  parts.push(event.key)
+  return normalizeShortcutKey(parts.join('-'))
+}
+
+const displayShortcutKey = (key: string, platform: ShortcutPlatform): string => {
+  const labels =
+    platform === 'mac' ?
+      {
+        Mod: '⌘',
+        Shift: '⇧',
+        Alt: '⌥',
+        Ctrl: '⌃',
+        Enter: '↵',
+        Backspace: '⌫',
+        ArrowUp: '↑',
+        ArrowDown: '↓',
+        ArrowLeft: '←',
+        ArrowRight: '→',
+      }
+    : {
+        Mod: 'Ctrl',
+        Shift: 'Shift',
+        Alt: 'Alt',
+        Ctrl: 'Ctrl',
+        Enter: 'Enter',
+        Backspace: 'Backspace',
+        ArrowUp: '↑',
+        ArrowDown: '↓',
+        ArrowLeft: '←',
+        ArrowRight: '→',
+      }
+  const separator = platform === 'mac' ? '' : '+'
+
+  return normalizeShortcutKey(key)
+    .split('-')
+    .map((part) => labels[part as keyof typeof labels] ?? part)
+    .join(separator)
+}
+
+const collectShortcutDescriptors = (
+  ...groups: readonly (readonly ShortcutDescriptor[])[]
+): readonly ShortcutDescriptor[] =>
+  groups.flatMap((group) => group.map((descriptor) => ({ ...descriptor })))
+
+const createShortcutManager = (platform: ShortcutPlatform = getShortcutPlatform()) => {
   const bindings = new Map<string, ShortcutBinding[]>()
+  const registrations: ShortcutBinding[] = []
+  const registeredIds = new Set<string>()
   let activeContext = 'global'
   let installed = false
 
   const register = (binding: ShortcutBinding): (() => void) => {
-    const list = bindings.get(binding.key) ?? []
-    list.push(binding)
-    bindings.set(binding.key, list)
+    if (registeredIds.has(binding.id)) {
+      throw new Error(`Shortcut already registered: ${binding.id}`)
+    }
+
+    const registeredBinding = { ...binding }
+    const normalizedKey = normalizeShortcutKey(registeredBinding.key)
+    const list = bindings.get(normalizedKey) ?? []
+    list.push(registeredBinding)
+    bindings.set(normalizedKey, list)
+    registrations.push(registeredBinding)
+    registeredIds.add(registeredBinding.id)
 
     return () => {
-      const list = bindings.get(binding.key)
+      if (!registeredIds.delete(registeredBinding.id)) return
+
+      const list = bindings.get(normalizedKey)
       if (list) {
-        const idx = list.indexOf(binding)
-        if (idx !== -1) list.splice(idx, 1)
-        if (list.length === 0) bindings.delete(binding.key)
+        const index = list.indexOf(registeredBinding)
+        if (index !== -1) list.splice(index, 1)
+        if (list.length === 0) bindings.delete(normalizedKey)
       }
+
+      const registrationIndex = registrations.indexOf(registeredBinding)
+      if (registrationIndex !== -1) registrations.splice(registrationIndex, 1)
     }
   }
+
+  const getDescriptors = (): readonly ShortcutDescriptor[] =>
+    registrations.map(({ handler: _handler, ...descriptor }) => ({ ...descriptor }))
 
   const setContext = (context: string) => {
     activeContext = context
@@ -48,19 +122,19 @@ const createShortcutManager = () => {
 
   const getContext = () => activeContext
 
-  const handleKeydown = (e: KeyboardEvent) => {
-    if (e.defaultPrevented) return
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return
 
-    const key = normalizeKeyEvent(e)
+    const key = normalizeKeyEvent(event, platform)
     const list = bindings.get(key)
     if (!list) return
 
     for (const binding of list) {
-      const ctx = binding.context ?? 'global'
-      if (ctx === 'global' || ctx === activeContext) {
+      const context = binding.context ?? 'global'
+      if (context === 'global' || context === activeContext) {
         const result = binding.handler()
         if (result !== false) {
-          e.preventDefault()
+          event.preventDefault()
           return
         }
       }
@@ -79,8 +153,16 @@ const createShortcutManager = () => {
     installed = false
   }
 
-  return { register, setContext, getContext, install, uninstall }
+  return { register, getDescriptors, setContext, getContext, install, uninstall }
 }
 
 export const shortcuts = createShortcutManager()
-export type { ShortcutBinding }
+export {
+  collectShortcutDescriptors,
+  createShortcutManager,
+  displayShortcutKey,
+  getShortcutPlatform,
+  normalizeKeyEvent,
+  normalizeShortcutKey,
+}
+export type { ShortcutBinding, ShortcutDescriptor, ShortcutPlatform }

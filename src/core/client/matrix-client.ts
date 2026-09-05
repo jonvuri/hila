@@ -6,7 +6,9 @@ import type {
   MatrixClientMessage,
 } from '../matrix-types'
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
+import { toPluginRegistration } from '../plugin-types'
 import type { TagType } from '../../tags/tag-types'
+import { commandRegistry } from '../../command-registry'
 import {
   registerFaceType as registerFaceTypeLocal,
   getFaceType as getFaceTypeLocal,
@@ -14,6 +16,22 @@ import {
 
 import { postMessage } from './worker-client'
 import { pendingRequests } from './matrix-client-promises'
+
+const pluginDestroyers = new Map<string, PluginDefinition['destroy']>()
+const pluginGenerations = new Map<string, number>()
+
+export class PluginRegistrationSupersededError extends Error {
+  constructor(readonly pluginId: string) {
+    super(`Plugin registration for "${pluginId}" was superseded`)
+    this.name = 'PluginRegistrationSupersededError'
+  }
+}
+
+const nextPluginGeneration = (pluginId: string): number => {
+  const generation = (pluginGenerations.get(pluginId) ?? 0) + 1
+  pluginGenerations.set(pluginId, generation)
+  return generation
+}
 
 export const workerCall = <K extends MatrixOperationType>(
   type: K,
@@ -64,23 +82,61 @@ export const deleteSubtree = (matrixId: number, key: Uint8Array) =>
   workerCall('deleteSubtree', { matrixId, key })
 
 export const registerPlugin = async (definition: PluginDefinition): Promise<PluginContext> => {
-  const { init, destroy: _destroy, ...registration } = definition
+  const generation = nextPluginGeneration(definition.id)
+  const preparedCommands = commandRegistry.prepareOwner(
+    definition.id,
+    definition.commands ?? [],
+  )
+  let initialized = false
 
-  // Register face types on the main thread before sending to the worker.
-  // The worker-side registerPlugin also registers them in its own registry.
-  if (definition.faceTypes) {
-    for (const ft of definition.faceTypes) {
-      if (!getFaceTypeLocal(ft.id)) {
-        registerFaceTypeLocal(ft)
-      }
+  const assertCurrentGeneration = (): void => {
+    if (pluginGenerations.get(definition.id) !== generation) {
+      throw new PluginRegistrationSupersededError(definition.id)
     }
   }
 
-  const ctx = await workerCall('registerPlugin', { definition: registration })
-  if (init) {
-    await init(ctx)
+  try {
+    // Register face types on the main thread before sending to the worker.
+    // The worker-side registerPlugin also registers them in its own registry.
+    if (definition.faceTypes) {
+      for (const ft of definition.faceTypes) {
+        if (!getFaceTypeLocal(ft.id)) {
+          registerFaceTypeLocal(ft)
+        }
+      }
+    }
+
+    const ctx = await workerCall('registerPlugin', {
+      definition: toPluginRegistration(definition),
+    })
+    assertCurrentGeneration()
+
+    if (definition.init) {
+      await definition.init(ctx)
+      initialized = true
+      assertCurrentGeneration()
+    }
+
+    if (!preparedCommands.commit()) {
+      throw new PluginRegistrationSupersededError(definition.id)
+    }
+    pluginDestroyers.set(definition.id, definition.destroy)
+    return ctx
+  } catch (error) {
+    preparedCommands.cancel()
+    if (initialized && error instanceof PluginRegistrationSupersededError) {
+      await definition.destroy?.()
+    }
+    throw error
   }
-  return ctx
+}
+
+export const disposePlugin = async (pluginId: string): Promise<void> => {
+  nextPluginGeneration(pluginId)
+  commandRegistry.unregisterOwner(pluginId)
+  const destroy = pluginDestroyers.get(pluginId)
+  pluginDestroyers.delete(pluginId)
+  await destroy?.()
 }
 
 export const getPlugins = (): Promise<PluginRow[]> => workerCall('getPlugins', {})

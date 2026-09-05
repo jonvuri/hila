@@ -1,7 +1,7 @@
 ---
 title: Phase 12 — Launcher and shell convergence
 kind: phase-plan
-state: ready
+state: active
 updated: 2026-09-03
 ---
 
@@ -50,17 +50,17 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 
 ## Sessions
 
-| Session                                                                                                                | Outcome                                                                      | Depends on | State   |
-| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | ------- |
-| [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                    | One authoritative, introspectable command and shortcut source                | Phase 11   | Ready   |
-| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Planned |
-| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Planned |
-| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Planned |
-| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4    | Planned |
-| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Planned |
-| [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Planned |
-| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Planned |
-| [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned |
+| Session                                                                                                                | Outcome                                                                      | Depends on | State    |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | -------- |
+| [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                    | One authoritative, introspectable command and shortcut source                | Phase 11   | Complete |
+| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Ready    |
+| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Planned  |
+| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Planned  |
+| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4    | Planned  |
+| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Planned  |
+| [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Planned  |
+| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Planned  |
+| [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned  |
 
 Sessions 1–4 have independent implementation seams and may be researched separately. Execute and
 merge all sessions in number order; do not build later-session code early. The dependency column

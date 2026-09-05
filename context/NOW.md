@@ -2,9 +2,9 @@
 title: Current state
 kind: status
 state: ready
-updated: 2026-09-03
+updated: 2026-09-05
 phase: 12
-session: shared-command-and-shortcut-registries
+session: query-spec-and-query-runtime
 ---
 
 # Now
@@ -22,9 +22,18 @@ The dormant migration runner already proves ordered schema/data evolution and fu
 gate requires explicit reset or reviewed adoption of version-0 databases, removal of reset-era
 compatibility migrations, and a backup path before the first `1 → 2` migration.
 
-Phase 12 is planned as nine focused sessions. It owns the shared command and shortcut registries,
-query-spec compiler/recognizer and bound runtime, global place discovery, shared overlays, quick and
-deep launcher tempos, saved-view authoring, session memory, and temporary tab retirement.
+Phase 12 Session 1 is complete. One ordered main-thread command registry now owns discovery,
+availability, matching, invocation, plugin replacement, and teardown. The workspace contributes the
+existing `hila.table` and `hila.attach` commands; the slash adapter preserves both follow-up flows.
+Callable contributions stay out of the worker payload. Immutable snapshots, pre-effect command
+reservations, and generation checks keep replacement and teardown atomic.
+
+Global shortcuts are self-describing and enumerable. Editor-local ProseMirror handlers remain in
+their keymap with parallel metadata for the future help projection. Key normalization and platform
+display are independently tested.
+
+Session 2 now owns the query-spec compiler/recognizer, safe bound runtime, deterministic paging, and
+durable round trip. It must freeze the executable grammar in `Query-Spec.md` before implementation.
 
 Durable gesture-authored views require a concrete matrix/type in v1. Cross-matrix `everything` and
 `containers` remain transient launcher lenses until a dynamic global-search substrate exists.
@@ -33,15 +42,16 @@ Phase 13 still owns the embedded legacy face/runtime and remaining style migrati
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 1 — shared command and shortcut registries](phases/Phase-12/Session-1-command-and-shortcut-registries.md).
-3. [Plugins — Commands](Plugins.md#commands) for the canonical contribution contract.
+2. [Session 2 — query spec and query runtime](phases/Phase-12/Session-2-query-spec-and-query-runtime.md).
+3. [Query Spec](Query-Spec.md), then [Sync](Sync.md) for the rename-healing durability boundary.
 
 ## Boundary
 
-Keep Phase 12 behind the shipped view-place and replication contracts. Retire only the top-level
-Table/Tags roots after launcher parity; do not complete the embedded face/design migration assigned
-to Phase 13.
+Keep Session 2 behind the shipped view-place and replication contracts. Stored SQL remains the only
+query truth, gesture-authored durable views require a concrete matrix, and every schema change must
+update the durability policy and two-replica coverage.
 
 ## Next action
 
-Execute Session 1's registry contract and preserve current `/table` and `/attach` behavior.
+Freeze Session 2's executable v1 grammar in `Query-Spec.md`, then implement its compiler and
+recognizer before changing the runtime.

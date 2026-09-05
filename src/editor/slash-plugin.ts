@@ -1,7 +1,12 @@
 import { Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 
-import { type SlashCommand, type SlashNode, matchCommands } from './slash-commands'
+import {
+  type SlashCommand,
+  type SlashNode,
+  matchCommands,
+  runSlashCommand,
+} from './slash-commands'
 
 /**
  * Slash-command ProseMirror plugin (Phase 9 §9.6 — the unified creation gesture).
@@ -12,7 +17,7 @@ import { type SlashCommand, type SlashNode, matchCommands } from './slash-comman
  * `slash-commands.ts` for the command registry and dispatch; this file is the
  * editor glue.
  *
- * The flow is **single-stage**: trigger `/`, filter `SLASH_COMMANDS` by the typed
+ * The flow is **single-stage**: trigger `/`, filter shared commands by the typed
  * text, and on select run the command immediately (an argument-free launcher).
  * Any follow-up interaction lives elsewhere — a second menu (`/attach`) or an
  * input on the created object (`/table`) — never as text typed after the command.
@@ -121,13 +126,15 @@ export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState>
     // before the command runs (so a launcher that hands focus elsewhere starts
     // from a known state).
     view.focus()
-    cmd.run(target, view)
+    void runSlashCommand(cmd.id, target, view).catch((error) =>
+      console.error(`slash /${cmd.id.slice(cmd.id.lastIndexOf('.') + 1)} failed`, error),
+    )
   }
 
   const refresh = (view: EditorView) => {
     const state = getSlashState(view)
     if (!state.active) return
-    items = matchCommands(state.query).map((c) => ({
+    items = matchCommands(state.query, node(), view).map((c) => ({
       label: c.label,
       activate: () => commit(view, c),
     }))

@@ -176,25 +176,43 @@ Phase 14 cannot add task/review renderers until Phase 13 completes this contract
 
 ## Commands
 
-The approved command contribution is:
+Phase 12 ships a main-thread command registry. A descriptor contains serializable discovery
+metadata plus its callable implementation:
 
 ```ts
-type Command = {
-  id: string
+type CommandDescriptor = {
+  id: `${string}.${string}`
   label: string
-  keywords: string[]
-  surfaces: ('slash' | 'launcher')[]
-  context: 'node' | 'none'
-  run: (subject?: NodeRef) => Promise<void> | void
+  keywords: readonly string[]
+  surfaces: readonly ('slash' | 'launcher')[]
+  subject: 'required' | 'none'
+  unavailableReason?: (context: CommandInvocationContext) => string | null
+  run: (context: CommandInvocationContext) => Promise<void> | void
 }
 ```
 
-The current `slash-commands.ts` list is the seed, not the registry. Phase 12 extracts one registry:
+The invocation context carries the surface, an optional `NodeRef`, and explicit capability
+callbacks. It never exposes `EditorView`. Enumeration and matching preserve registration order,
+filter by surface, and return immutable registry-owned snapshots. Subject-required commands remain
+discoverable without a subject and report a concrete disabled reason. Invocation rejects
+unavailable commands and preserves asynchronous failures.
 
-- `/` shows local make/structural commands with a subject;
-- `⌘K` ranks global actions and passes the provenance subject when one exists;
-- unavailable context-sensitive commands remain visible but disabled with a reason;
-- command implementations delegate to typed operations.
+Plugin command functions stay on the main thread. `PluginRegistration` omits commands and lifecycle
+hooks from the structured-clone-safe worker payload. Contributions are owned by plugin ID. A
+registration reserves its complete command set before worker or initialization effects, so
+cross-owner duplicate IDs fail without partially installing the plugin. Replacing an owner's set
+preserves its order, and generation checks prevent stale or disposed registrations from committing.
+Teardown removes the owner's commands before its `destroy` hook.
+
+The workspace plugin currently contributes `hila.table` and `hila.attach` in that order. The slash
+adapter supplies the table-name focus and type-picker capabilities, so `/table` and `/attach` retain
+their existing typed-operation and follow-up behavior. The same registry APIs are ready for the
+launcher; launcher commands are not part of Session 1.
+
+Global shortcuts now use self-describing registrations with stable IDs, titles, keys, and optional
+contexts. Their handlers remain in the global manager. Editor-local ProseMirror handlers remain in
+their keymap and expose parallel handler-free descriptors. A help surface can combine both
+descriptor collections and format normalized keys for the active platform without copying prose.
 
 ## Inline references and tags
 

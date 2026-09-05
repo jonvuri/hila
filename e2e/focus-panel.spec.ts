@@ -39,9 +39,7 @@ const openFocusPanel = async (page: Page) => {
   const focusBtn = firstRow.locator('.nav-row-open-focus')
   await firstRow.hover()
   await expect(async () => {
-    const opacity = await focusBtn.evaluate(
-      (el) => window.getComputedStyle(el).opacity,
-    )
+    const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
     expect(Number(opacity)).toBeGreaterThan(0)
   }).toPass({ timeout: 3000 })
   await focusBtn.click()
@@ -98,9 +96,7 @@ test.describe('Focus panel', () => {
     const focusBtn = secondRow.locator('.nav-row-open-focus')
     await secondRow.hover()
     await expect(async () => {
-      const opacity = await focusBtn.evaluate(
-        (el) => window.getComputedStyle(el).opacity,
-      )
+      const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
       expect(Number(opacity)).toBeGreaterThan(0)
     }).toPass({ timeout: 3000 })
     await focusBtn.click()
@@ -310,9 +306,24 @@ test.describe('Focus panel', () => {
  * node). `cmdLabel` is the dropdown item to select (e.g. 'New table').
  */
 const runSlashOnFirstRow = async (page: Page, cmd: string, cmdLabel: string) => {
+  await expect(async () => {
+    const registered = await page.evaluate(
+      async (id) => {
+        // @ts-expect-error -- resolved by the Vite dev server at runtime
+        const { commandRegistry } = await import('/src/command-registry.ts')
+        return commandRegistry.list().some((command) => command.id === id)
+      },
+      `hila.${cmd.slice(1)}`,
+    )
+    expect(registered).toBe(true)
+  }).toPass({ timeout: 5000 })
+
   const firstEditor = page.locator('.nav-label-editor .ProseMirror').first()
   await firstEditor.click()
-  await firstEditor.press('Home')
+  await firstEditor.press(process.platform === 'darwin' ? 'Meta+ArrowLeft' : 'Home')
+  await firstEditor.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  )
   await page.keyboard.type(cmd)
   // Every editor mounts its own (hidden) dropdown div, so target the active one by
   // the command's menu label.
@@ -495,7 +506,9 @@ test.describe('Focus panel — boundary hop (Phase 9.5)', () => {
       const sql = await import('/src/core/client/sql-client.ts')
       const ms = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
       const wsId = (ms[0] as { id: number }).id
-      const r = await sql.execQuery(`SELECT id FROM matrix WHERE owner_matrix_id = ${wsId} LIMIT 1`)
+      const r = await sql.execQuery(
+        `SELECT id FROM matrix WHERE owner_matrix_id = ${wsId} LIMIT 1`,
+      )
       return (r[0] as { id: number }).id
     })
 

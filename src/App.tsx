@@ -13,7 +13,12 @@ import type { FaceConfig } from './core/face-types'
 import TemporaryLegacyFaceAdapter, {
   registerTemporaryLegacyFaceComponent,
 } from './core/TemporaryLegacyFaceAdapter'
-import { getFaceConfigs, registerPlugin } from './core/client/matrix-client'
+import {
+  PluginRegistrationSupersededError,
+  disposePlugin,
+  getFaceConfigs,
+  registerPlugin,
+} from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
 import { resolveComponentVariant, type ComponentVariantConfig } from './design/tokens'
 import { useQuery } from './sql/useQuery'
@@ -33,6 +38,7 @@ const StreamView = lazy(() => import('./workspace/StreamView'))
 type ActiveView = 'workspace' | 'table' | 'tags'
 
 const App: Component = () => {
+  let disposed = false
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
   const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
@@ -72,23 +78,29 @@ const App: Component = () => {
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
 
-  const initPlugins = async () => {
+  const initPlugins = async (isDisposed: () => boolean = () => disposed) => {
     setWorkspaceMatrixId(null)
     setTableFaceConfig(null)
     setWorkspaceFaceConfig(null)
 
     await registerTableFaceType()
+    if (isDisposed()) return
     const TableFaceComponent = (await import('./table/TableFace')).default
+    if (isDisposed()) return
     registerTemporaryLegacyFaceComponent('hila.table', TableFaceComponent)
 
     await registerPlugin(inlineReferencesPlugin)
+    if (isDisposed()) return
     await registerPlugin(tagsPlugin)
+    if (isDisposed()) return
 
     const workspaceCtx = await registerPlugin(workspacePlugin)
+    if (isDisposed()) return
     const wsId = workspaceCtx.matrixIds['root']!
     setWorkspaceMatrixId(wsId)
 
     const configs = await getFaceConfigs(wsId)
+    if (isDisposed()) return
     const workspaceConfig = configs.find((c) => c.faceTypeId === 'hila.workspace')
     const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
     if (workspaceConfig) setWorkspaceFaceConfig(workspaceConfig)
@@ -125,9 +137,12 @@ const App: Component = () => {
   }
 
   onMount(() => {
+    disposed = false
     shortcuts.install()
 
     const unregisterToggle = shortcuts.register({
+      id: 'app.toggle-sidebar',
+      title: 'Toggle sidebar',
       key: 'Mod-\\',
       handler: () => {
         toggleSidebar()
@@ -136,11 +151,26 @@ const App: Component = () => {
 
     document.addEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
 
-    void awaitWorkerReady().then(initPlugins)
+    const initializePlugins = async () => {
+      try {
+        await awaitWorkerReady()
+        if (!disposed) await initPlugins(() => disposed)
+      } catch (error) {
+        if (!(disposed && error instanceof PluginRegistrationSupersededError)) {
+          console.error('plugin initialization failed', error)
+        }
+      }
+    }
+
+    void initializePlugins()
 
     onCleanup(() => {
+      disposed = true
       unregisterToggle()
       shortcuts.uninstall()
+      void Promise.all(
+        [inlineReferencesPlugin.id, tagsPlugin.id, workspacePlugin.id].map(disposePlugin),
+      )
       document.removeEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
     })
   })
