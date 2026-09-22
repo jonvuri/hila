@@ -97,7 +97,7 @@ const portalEdgeKey = (db: Database, host: NodeRef, target: NodeRef): Uint8Array
  * own-edges (no portal segment). Resolved by walking the own-edge chain up to
  * the sentinel, collecting edge_keys, then concatenating them root→node.
  */
-const homeKeyOf = (db: Database, node: NodeRef): Uint8Array | null => {
+export const homeKeyOf = (db: Database, node: NodeRef): Uint8Array | null => {
   const segs: Uint8Array[] = []
   let cur = node
   for (let guard = 0; guard < MAX_POSITION_DEPTH; guard++) {
@@ -344,19 +344,9 @@ const isGhostAt = (db: Database, key: Uint8Array): boolean => {
 }
 
 /**
- * Resolve the real position a render-only, identity-only row (e.g. a folded
- * block row's synthetic key — Stage C2) should scope a drill-in to: prefer the
- * home appearance if it's live, else the lowest-keyed live portal appearance,
- * else `null` (no live position at all — the row may be a bare data row never
- * given a tree position, or all its positions are ghosted).
- *
- * INTERMEDIATE CHOICE: deep-portal materialization already fans a node's owned
- * children out to every live appearance (`materializeSubtreeAtPrefix`), so home
- * vs. portal resolves to equivalent children — this tiebreak only affects which
- * ancestry/breadcrumb the drilled-in panel shows, not which children appear.
- * Revisit with a real tiebreak or a chooser if a node with no home and several
- * portals ever makes "lowest key" a surprising pick — not built now as
- * unnecessary for v1.
+ * Resolve the ownership-home position for legacy sticky-row callers. Phase 12 place navigation
+ * uses `resolvePlaceNavigation`, which additionally accepts explicit provenance and reconstructs
+ * a deterministic membership fallback. A portal is never selected from identity alone.
  */
 export const resolveDrillInPosition = (
   db: Database,
@@ -364,11 +354,7 @@ export const resolveDrillInPosition = (
 ): ResolvedPosition | null => {
   const home = homeKeyOf(db, node)
   if (home && !isGhostAt(db, home)) return { key: home, isHome: true }
-
-  const livePositions = positionsOf(db, node).filter((p) => !isGhostAt(db, p.key))
-  if (livePositions.length === 0) return null
-  livePositions.sort((a, b) => compareBytes(a.key, b.key))
-  return { key: livePositions[0]!.key, isHome: false }
+  return null
 }
 
 // -- Closure-per-location (free, from the lexkey prefix) ----------------------

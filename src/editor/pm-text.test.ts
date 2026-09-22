@@ -73,4 +73,14 @@ describe('extractTextFromPmDoc', () => {
     }
     expect(extractTextFromPmDoc(doc)).toBe('before  after')
   })
+
+  test('walks nested content and ignores cycles safely', () => {
+    const nested = {
+      type: 'bullet_list',
+      content: [{ type: 'list_item', content: [{ type: 'text', text: 'nested' }] }],
+    }
+    const doc: { type: string; content: unknown[] } = { type: 'doc', content: [nested] }
+    doc.content.push(doc)
+    expect(extractTextFromPmDoc(doc)).toBe('nested')
+  })
 })

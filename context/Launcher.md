@@ -1,8 +1,9 @@
 # The launcher surface
 
-> **Status: designed, not implemented.** The production app still uses Workspace, Table, and Tags
-> tabs. `Mod-k` still invokes the editor's insert-link path. Proposed Phase 12 owns launcher and
-> tab-retirement implementation after durable `view` places land.
+> **Status: foundation implemented; surface not implemented.** The worker-backed discovery,
+> deterministic base ranking, family data filters, and rooted navigation contract ship. The
+> production app still uses Workspace, Table, and Tags tabs, and `Mod-k` still invokes the editor's
+> insert-link path. Later Phase 12 sessions own overlay, launcher, session signals, and tab retirement.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
 
@@ -31,6 +32,11 @@ A centered floating palette over the dimmed stream — anchored to no panel, doc
 - **structural tiebreaks** — shallower home depth, shorter label, rank order.
 
 Relevance weights are expected to be **tuned during implementation and use**; the settled part is the structure (flat list, blended weights, the signal set, determinism), not the coefficients. Default result count in quick tempo: **12** (expandable); deep tempo fills its expanded frame.
+
+The shipped base scorer uses additive quality and target weights, followed by home depth, label
+length, structural order, and stable identity. This lets an exact content match outrank a prefix
+label while preferring labels at equal quality. Session 8 adds the reserved on-screen and recency
+inputs without changing this ordering contract.
 
 ## Family narrowing: sigil filter tokens (D31)
 

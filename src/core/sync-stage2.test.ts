@@ -4,7 +4,9 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { getFaceConfig } from './face-config'
 import {
+  addFormulaColumn,
   createMatrix,
+  getColumns,
   getOrCreateDeviceId,
   initMatrixSchema,
   insertDataRow,
@@ -529,4 +531,34 @@ describe('Phase 11 Stage 2 sync repair', () => {
     expect(rowChange?.data).toHaveProperty('heading', 'Renamed remotely')
     expect(rowChange?.data).not.toHaveProperty('title')
   })
+
+  test.each(['label', 'content'] as const)(
+    'remote apply rejects a formula-backed %s role',
+    (role) => {
+      const matrixId = createMatrix(db, 'Remote role validation', [
+        { name: 'source', type: 'TEXT' },
+      ])
+      const columnId = addFormulaColumn(db, matrixId, 'computed', 'upper(source)')
+      db.exec('DELETE FROM _sync_changelog')
+
+      expect(() =>
+        applyRemoteChanges(
+          db,
+          makeChangeset([
+            {
+              table: 'matrix_columns',
+              rowId: columnId,
+              operation: 'UPDATE',
+              timestamp: '2026-01-01 00:00:00',
+              data: {
+                ...matrixColumnData(columnId, matrixId, 'computed', 1, 'upper(source)'),
+                role,
+              },
+            },
+          ]),
+        ),
+      ).toThrow(`Formula column "computed" cannot have semantic role '${role}'`)
+      expect(getColumns(db, matrixId).find(({ id }) => id === columnId)?.role).toBeNull()
+    },
+  )
 })

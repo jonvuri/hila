@@ -10,6 +10,7 @@ import {
   getTableDurabilityPolicy,
 } from './durability-policy'
 import { rebuildScrollIndex } from './scroll-index'
+import { assertSemanticRoleEligible, type SemanticColumnRole } from './semantic-role'
 import { withTransaction } from './transaction'
 
 type TrackedColumn = {
@@ -568,6 +569,21 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
         entry.table === 'matrix_columns' ?
           getMatrixColumnSnapshot(db, identityData.id as number)
         : null
+
+      if (
+        entry.table === 'matrix_columns' &&
+        entry.operation !== 'DELETE' &&
+        preparedData?.role != null
+      ) {
+        assertSemanticRoleEligible(
+          {
+            name: String(preparedData.name),
+            type: String(preparedData.type),
+            formula: preparedData.formula == null ? null : String(preparedData.formula),
+          },
+          preparedData.role as SemanticColumnRole,
+        )
+      }
 
       if (entry.table === 'matrix' && entry.operation === 'DELETE') {
         const matrixId = identityData.id as number

@@ -101,9 +101,8 @@ type NavigationPanelProps = {
   // Boundary-hop aware (Phase 9.5): carries the row's matrix so a meshed cross-matrix
   // aspect row can drill into a focus panel keyed by `(matrix_id, row_id)`.
   onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
-  // Phase 9.7 Stage C3: a folded block row's `key` is synthetic (positions
-  // nothing — the firewall), so drill-in must resolve its real position by
-  // identity instead of trusting the key. See resolveDrillInPosition.
+  // A folded block row's `key` is synthetic (positions nothing — the firewall), so drill-in must
+  // resolve through the place-navigation ladder instead of trusting the key.
   onOpenFoldedFocus: (matrixId: number, rowId: number) => void
   focusedRowId?: number
 }

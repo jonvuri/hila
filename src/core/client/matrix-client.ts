@@ -9,6 +9,9 @@ import type {
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
 import { toPluginRegistration } from '../plugin-types'
 import type { TagType } from '../../tags/tag-types'
+import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../../discovery/types'
+import type { AppearanceProvenance, ResolvedPlaceNavigation } from '../place-navigation'
+import type { NodeRef } from '../tree'
 import { commandRegistry } from '../../command-registry'
 import {
   registerFaceType as registerFaceTypeLocal,
@@ -42,6 +45,25 @@ export const workerCall = <K extends MatrixOperationType>(
     const id = crypto.randomUUID()
     pendingRequests.set(id, { resolve, reject })
     postMessage({ type, id, ...params } as MatrixClientMessage)
+  })
+
+export const queryDiscoveryCatalog = (input: {
+  rootMatrixId: number
+  query: string
+  filter: DiscoveryFilter
+  limit: number
+}): Promise<DiscoveryCatalogEntry[]> => workerCall('queryDiscoveryCatalog', input)
+
+export const resolvePlaceNavigation = (
+  rootMatrixId: number,
+  node: NodeRef,
+  provenance?: AppearanceProvenance,
+): Promise<ResolvedPlaceNavigation | null> =>
+  workerCall('resolvePlaceNavigation', {
+    rootMatrixId,
+    matrixId: node.matrixId,
+    rowId: node.rowId,
+    provenanceKey: provenance?.key,
   })
 
 export const createMatrix = (title: string) => workerCall('createMatrix', { title })
@@ -360,9 +382,8 @@ export const hardDeleteIncludingRefs = (matrixId: number, rowId: number): Promis
   workerCall('hardDeleteIncludingRefs', { matrixId, rowId })
 
 /**
- * Resolve a render-only row's real position (Stage C3 — e.g. a folded block
- * row's synthetic key) for drill-in: home if live, else the lowest-keyed live
- * portal, else `null` (no live position at all).
+ * Resolve a render-only row's live ownership home for sticky-row compatibility. Place navigation
+ * uses `resolvePlaceNavigation`; identity alone never selects a portal.
  */
 export const resolveDrillInPosition = (
   matrixId: number,

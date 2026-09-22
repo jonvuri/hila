@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 3 — Place discovery, navigation, and ranking
 kind: phase-session
-state: ready
+state: complete
 updated: 2026-09-05
 ---
 
@@ -30,24 +30,46 @@ navigate every result through the existing place contract.
 
 ## Plan
 
-- [ ] Define catalog/result types for row identity, family, match target, display text, provenance,
+- [x] Define catalog/result types for row identity, family, match target, display text, provenance,
       home/fallback facts, ancestry breadcrumb, and command identity.
-- [ ] Build batched worker-backed discovery over current matrix catalogs and label/content roles.
+- [x] Build batched worker-backed discovery over current matrix catalogs and label/content roles.
       Avoid one unbounded reactive subscription per matrix or result.
-- [ ] Extract ProseMirror text safely for matching and display.
-- [ ] Include ordinary rows, view markers, promoted type-nodes, owned container/matrix subjects, and
+- [x] Extract ProseMirror text safely for matching and display.
+- [x] Include ordinary rows, view markers, promoted type-nodes, owned container/matrix subjects, and
       commands without duplicating a marker as a loose row.
-- [ ] Define root workspace/matrix behavior explicitly so `[` can browse it without inventing a
+- [x] Define root workspace/matrix behavior explicitly so `[` can browse it without inventing a
       second root.
-- [ ] Implement exact, prefix, word-prefix, and substring match quality. Add the label/name target
+- [x] Implement exact, prefix, word-prefix, and substring match quality. Add the label/name target
       weight, then deterministic structural tie-breaks. Reserve on-screen and recency inputs for
       Session 8.
-- [ ] Make result ordering deterministic for equal inputs and catalog state.
-- [ ] Generalize external navigation to `NodeRef` plus optional appearance provenance. Reuse the
+- [x] Make result ordering deterministic for equal inputs and catalog state.
+- [x] Generalize external navigation to `NodeRef` plus optional appearance provenance. Reuse the
       existing focus reconstruction and ancestry ladder.
-- [ ] Cancel or sequence asynchronous requests so older search results cannot replace newer input.
-- [ ] Expose family-filter data operations for `@`, `#`, `>`, and `[`; do not implement them as
+- [x] Cancel or sequence asynchronous requests so older search results cannot replace newer input.
+- [x] Expose family-filter data operations for `@`, `#`, `>`, and `[`; do not implement them as
       string-prefix hacks.
+
+## Shipped boundary
+
+- One typed worker request scans the current semantic-role catalog without creating reactive
+  subscriptions. Scanning remains linear in searchable cells until FTS. Label-only filters omit
+  content columns from row projections, while retained candidates, text excerpts, breadcrumb depth
+  and label length, and returned results are capped.
+- Candidate reduction uses exact lightweight home or membership anchors. Full appearance and
+  breadcrumb hydration remains limited to the retained candidate pool.
+- One active search and one replaceable latest pending search bound rapid input. Superseded callers
+  receive an explicit stale outcome.
+- Results classify rows, views, promoted types, per-matrix container subjects, the existing
+  workspace root, and main-thread commands. `@`, `#`, `>`, and `[` map to typed data filters.
+- Ranking uses exact, prefix, word-prefix, and substring quality, then target weight and stable
+  structural tie-breaks. Session 8 still owns on-screen and recency signals.
+- External navigation now carries a `NodeRef` and optional appearance key. Resolution validates
+  provenance, falls back to the ownership home, then reconstructs matrix-owner membership context.
+  Surviving portals are returned for a future chooser and never selected from identity alone.
+- Recursive ProseMirror text extraction handles nested content, malformed stored strings, and
+  cyclic object input without inspecting attrs.
+- No schema or durability-classification change occurred. The durability manifest descriptions now
+  record semantic-role eligibility.
 
 ## Acceptance
 
@@ -57,7 +79,8 @@ navigate every result through the existing place contract.
 - Navigation reconstructs the correct rooted focus state across matrixes and never picks an
   arbitrary portal.
 - Discovery work and subscriptions remain bounded as matrix and result counts grow.
-- No schema or durability-policy change occurs.
+- No schema or durability-classification change occurs; descriptive durability metadata may record
+  the shipped invariant.
 
 ## Verification
 

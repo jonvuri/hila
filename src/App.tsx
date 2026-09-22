@@ -10,6 +10,7 @@ import {
 } from 'solid-js'
 
 import type { FaceConfig } from './core/face-types'
+import type { PlaceNavigationTarget } from './core/place-navigation'
 import TemporaryLegacyFaceAdapter, {
   registerTemporaryLegacyFaceComponent,
 } from './core/TemporaryLegacyFaceAdapter'
@@ -45,9 +46,8 @@ const App: Component = () => {
   const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceFaceConfig, setWorkspaceFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
-  const [workspaceNavigateToRowId, setWorkspaceNavigateToRowId] = createSignal<number | null>(
-    null,
-  )
+  const [workspaceNavigateToPlace, setWorkspaceNavigateToPlace] =
+    createSignal<PlaceNavigationTarget | null>(null)
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -249,8 +249,8 @@ const App: Component = () => {
                       <StreamView
                         matrixId={wsId()}
                         componentConfig={workspaceComponentConfig()}
-                        navigateToRowId={workspaceNavigateToRowId()}
-                        onNavigated={() => setWorkspaceNavigateToRowId(null)}
+                        navigateToPlace={workspaceNavigateToPlace()}
+                        onNavigated={() => setWorkspaceNavigateToPlace(null)}
                       />
                     }
                   >
@@ -260,8 +260,11 @@ const App: Component = () => {
               >
                 <TagBrowserFace
                   workspaceMatrixId={workspaceMatrixId() ?? undefined}
-                  onNavigateToWorkspaceRow={(_matrixId, rowId) => {
-                    setWorkspaceNavigateToRowId(rowId)
+                  onNavigateToWorkspaceRow={(matrixId, rowId) => {
+                    setWorkspaceNavigateToPlace({
+                      type: 'node',
+                      node: { matrixId, rowId },
+                    })
                     setActiveView('workspace')
                   }}
                   onOpenTableFace={(targetMatrixId) => {

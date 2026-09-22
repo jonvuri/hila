@@ -2671,6 +2671,27 @@ describe('addColumn with role', () => {
     const extraCol = cols.find((c) => c.name === 'extra')!
     expect(extraCol.role).toBeNull()
   })
+
+  test.each(['label', 'content'] as const)(
+    'createMatrix rejects a non-TEXT %s role column',
+    (role) => {
+      expect(() => createMatrix(db, 'M', [{ name: 'count', type: 'INTEGER', role }])).toThrow(
+        `Column "count" must use TEXT storage to have semantic role '${role}'`,
+      )
+    },
+  )
+
+  test.each(['label', 'content'] as const)(
+    'addColumn rejects a non-TEXT %s role column before changing the schema',
+    (role) => {
+      const id = createMatrix(db, 'M')
+
+      expect(() => addColumn(db, id, { name: 'count', type: 'INTEGER', role })).toThrow(
+        `Column "count" must use TEXT storage to have semantic role '${role}'`,
+      )
+      expect(getColumns(db, id).some(({ name }) => name === 'count')).toBe(false)
+    },
+  )
 })
 
 // ---------------------------------------------------------------------------
@@ -2752,6 +2773,29 @@ describe('updateColumnRole', () => {
       /Column "nonexistent" not found/,
     )
   })
+
+  test.each(['label', 'content'] as const)(
+    'rejects assigning the %s role to a non-TEXT column',
+    (role) => {
+      const id = createMatrix(db, 'M', [{ name: 'count', type: 'INTEGER' }])
+
+      expect(() => updateColumnRole(db, id, 'count', role)).toThrow(
+        `Column "count" must use TEXT storage to have semantic role '${role}'`,
+      )
+    },
+  )
+
+  test.each(['label', 'content'] as const)(
+    'rejects assigning the %s role to a formula column',
+    (role) => {
+      const id = createMatrix(db, 'M', [{ name: 'source', type: 'TEXT' }])
+      addFormulaColumn(db, id, 'computed', 'upper(source)')
+
+      expect(() => updateColumnRole(db, id, 'computed', role)).toThrow(
+        `Formula column "computed" cannot have semantic role '${role}'`,
+      )
+    },
+  )
 })
 
 // ---------------------------------------------------------------------------

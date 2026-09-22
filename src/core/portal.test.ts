@@ -456,7 +456,7 @@ describe('Phase 9.7a — deep portals + multi-location scroll_index (production 
       expect(resolveDrillInPosition(h.db, x)).toBeNull()
     })
 
-    test('with no home, resolves to the lowest-keyed live portal among several', () => {
+    test('with no home, does not choose among live portals', () => {
       const bareRowId = insertDataRow(h.db, mx, { label: 'bare' })
       const bareRow: NodeRef = { matrixId: mx, rowId: bareRowId }
       const hostA = mkRow()
@@ -464,25 +464,8 @@ describe('Phase 9.7a — deep portals + multi-location scroll_index (production 
       addPortal(h.db, hostA, bareRow)
       addPortal(h.db, hostB, bareRow)
 
-      // Ownership is single but position is plural (§5) — a portal-only row
-      // (no own-edge, e.g. inserted directly into its matrix) can still carry
-      // multiple live positions. No home exists to prefer, so the resolver
-      // deterministically picks the lowest-keyed one (Q2's intermediate
-      // tiebreak — revisit if a real need for a smarter choice arises).
-      const positions = positionsOf(h.db, bareRow)
-      expect(positions.length).toBe(2)
-      const expectedLowest = [...positions].sort((a, b) => {
-        const n = Math.min(a.key.length, b.key.length)
-        for (let i = 0; i < n; i++) {
-          if (a.key[i]! !== b.key[i]!) return a.key[i]! - b.key[i]!
-        }
-        return a.key.length - b.key.length
-      })[0]!.key
-
-      const resolved = resolveDrillInPosition(h.db, bareRow)
-      expect(resolved).not.toBeNull()
-      expect(resolved!.isHome).toBe(false)
-      expect(resolved!.key).toEqual(expectedLowest)
+      expect(positionsOf(h.db, bareRow)).toHaveLength(2)
+      expect(resolveDrillInPosition(h.db, bareRow)).toBeNull()
     })
 
     test('resolves to null for a bare data row never given a tree position', () => {

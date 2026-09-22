@@ -5,3 +5,5 @@ dist
 
 test-results/
 storybook-static/
+
+tmp/

@@ -73,6 +73,8 @@ import {
   getAllPlugins as getAllPluginsImpl,
 } from '../plugin'
 import { installCoreTableTriggers, compactChangelog } from '../sync'
+import { queryDiscoveryCatalog as queryDiscoveryCatalogImpl } from '../discovery'
+import { resolvePlaceNavigation as resolvePlaceNavigationImpl } from '../place-navigation'
 
 import { emitStructuralDirty, type DirtySet, type NodeId } from './invalidation'
 import { triggerSubscribedQueries } from './sql-handler'
@@ -167,6 +169,35 @@ export const initMatrixHandler = (db: Database) => {
 
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
   switch (message.type) {
+    case 'queryDiscoveryCatalog': {
+      const { id, rootMatrixId, query, filter, limit } = message
+      try {
+        const { db } = await sqliteWasm
+        const result = queryDiscoveryCatalogImpl(db, { rootMatrixId, query, filter, limit })
+        postMessage({ type: 'queryDiscoveryCatalogSuccess', id, result })
+      } catch (err: unknown) {
+        postMessage({ type: 'queryDiscoveryCatalogError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'resolvePlaceNavigation': {
+      const { id, rootMatrixId, matrixId, rowId, provenanceKey } = message
+      try {
+        const { db } = await sqliteWasm
+        const result = resolvePlaceNavigationImpl(
+          db,
+          rootMatrixId,
+          { matrixId, rowId },
+          provenanceKey ? { key: provenanceKey } : undefined,
+        )
+        postMessage({ type: 'resolvePlaceNavigationSuccess', id, result })
+      } catch (err: unknown) {
+        postMessage({ type: 'resolvePlaceNavigationError', id, error: toError(err) })
+      }
+      break
+    }
+
     case 'createMatrix': {
       const { title, id } = message
       try {

@@ -2,7 +2,7 @@
 title: Data model
 kind: canonical
 state: active
-updated: 2026-09-03
+updated: 2026-09-05
 ---
 
 # Data model
@@ -46,7 +46,10 @@ Column roles are:
 - `label` — short identifying content used by navigation, references, and search;
 - `content` — long-form rich content.
 
-At most one column per role exists in a matrix.
+At most one column per role exists in a matrix. Roles may be assigned only to physical `TEXT`
+columns. Formula columns are derived, read-only values and cannot carry either semantic role.
+Role values may remain plain text or serialized ProseMirror JSON; the durable representation is not
+yet narrower than `TEXT`.
 
 ## The ownership forest
 
@@ -153,9 +156,10 @@ occupies that position. Inline and focused presentations use the same marker ide
 
 The marker's inbound `own` edge is its home and records the provenance under which it was created.
 Navigation from a concrete appearance preserves that appearance's ancestry; identity-only
-navigation chooses the ownership home. Ordinary deletion removes the marker data and SQL and
-ghosts surviving portal appearances. Hard deletion removes every appearance. A ghost is not an
-executable view.
+navigation chooses the ownership home, then the marker matrix's deterministic membership context
+if no home exists. It never chooses a portal without explicit appearance provenance. Ordinary
+deletion removes the marker data and SQL and ghosts surviving portal appearances. Hard deletion
+removes every appearance. A ghost is not an executable view.
 
 Empty results and invalid SQL do not invalidate the place. The focused collection shows an empty
 or stated error state while preserving the marker identity and name. Inline folding degrades an

@@ -2,7 +2,7 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-09-03
+updated: 2026-09-22
 ---
 
 # Plugins and face composition
@@ -208,6 +208,13 @@ The workspace plugin currently contributes `hila.table` and `hila.attach` in tha
 adapter supplies the table-name focus and type-picker capabilities, so `/table` and `/attach` retain
 their existing typed-operation and follow-up behavior. The same registry APIs are ready for the
 launcher; launcher commands are not part of Session 1.
+
+The shipped discovery service merges launcher-surface registry entries on the main thread after its
+worker catalog scan without sending callable implementations through the worker boundary. Visible
+labels match at the command-label weight; stable IDs and keywords match at the lower
+command-keyword weight. Registration order is a deterministic structural-order tie-break. Disabled
+reasons travel with results for presentation but do not affect matching or score. Concrete launcher
+command contributions remain part of launcher-shell integration.
 
 Global shortcuts now use self-describing registrations with stable IDs, titles, keys, and optional
 contexts. Their handlers remain in the global manager. Editor-local ProseMirror handlers remain in

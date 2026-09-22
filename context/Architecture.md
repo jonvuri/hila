@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-03
+updated: 2026-09-05
 ---
 
 # Architecture
@@ -158,8 +158,17 @@ An arbitrary portal is never silently selected. Placeless creation homes under t
 when the gesture began.
 
 The shipped stream preserves a traversed appearance key when one is available and derives ancestry
-from that position. Identity-only navigation resolves the ownership home first. A deleted home can
-leave ghost portal positions, but those ghosts are not focusable subjects.
+from that position. The typed place resolver validates explicit provenance, then tries the ownership
+home. If neither is live, it reconstructs a positionless focus through the row's matrix-owner chain
+or the existing workspace root. It reports surviving portal appearances for a future chooser but
+never selects one from identity alone. A deleted home can leave ghost portal positions, but those
+ghosts are not focusable subjects.
+
+Global discovery now runs as one typed worker request over current matrix and semantic-role
+metadata. It classifies ordinary rows, view markers, promoted types, per-matrix container subjects,
+and the existing workspace root before merging main-thread commands. The scan remains linear until
+FTS; subscriptions, retained candidates, excerpts, and breadcrumbs are bounded. Ranking is pure and
+deterministic, with session-only on-screen and recency signals still deferred.
 
 ## Subjects, recipes, faces, and hosts
 

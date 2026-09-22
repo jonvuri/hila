@@ -84,10 +84,16 @@ export const CORE_DURABILITY_POLICY = {
       display_type: source('TEXT', 'User-visible editor and renderer type.'),
       order: source('INTEGER', 'User-visible column order.'),
       options: source('TEXT', 'Display-type options.'),
-      formula: source('TEXT', 'Stable-ID-based formula expression, when computed.'),
+      formula: source(
+        'TEXT',
+        'Stable-ID-based formula expression, when computed; formula columns cannot carry semantic roles.',
+      ),
       constraints: source('TEXT', 'Declared schema constraints.'),
       managed_by: source('TEXT', 'Plugin that owns the column contract, when any.'),
-      role: source('TEXT', 'Optional label or content semantic role.'),
+      role: source(
+        'TEXT',
+        'Optional label or content semantic role, restricted to physical TEXT columns.',
+      ),
     },
   },
   closure: {

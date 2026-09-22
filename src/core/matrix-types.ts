@@ -1,14 +1,34 @@
 import type { TagType } from '../tags/tag-types'
 import type { RenameHealingReport } from '../sql/query-spec/durable'
+import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../discovery/types'
 
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
+import type { ResolvedPlaceNavigation } from './place-navigation'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
 
 // Matrix operation registry: maps operation names to request params and response results.
 // All message types and the protocol shape are derived from this single declaration.
 
 export type MatrixOperationMap = {
+  queryDiscoveryCatalog: {
+    params: {
+      rootMatrixId: number
+      query: string
+      filter: DiscoveryFilter
+      limit: number
+    }
+    result: DiscoveryCatalogEntry[]
+  }
+  resolvePlaceNavigation: {
+    params: {
+      rootMatrixId: number
+      matrixId: number
+      rowId: number
+      provenanceKey?: Uint8Array
+    }
+    result: ResolvedPlaceNavigation | null
+  }
   createMatrix: {
     params: { title: string }
     result: number
@@ -253,8 +273,7 @@ export type MatrixOperationMap = {
     params: { matrixId: number; rowId: number }
     result: void
   }
-  // Phase 9.7 Stage C3 — resolve a render-only row's real position (e.g. a
-  // folded block row's synthetic key) for drill-in. See resolveDrillInPosition.
+  // Legacy sticky-row home resolution. Place navigation uses the richer operation above.
   resolveDrillInPosition: {
     params: { matrixId: number; rowId: number }
     result: { key: Uint8Array; isHome: boolean } | null

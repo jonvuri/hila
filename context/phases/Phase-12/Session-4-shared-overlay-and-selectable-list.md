@@ -1,8 +1,8 @@
 ---
 title: Phase 12 Session 4 — Shared overlay and selectable list
 kind: phase-session
-state: planned
-updated: 2026-09-03
+state: ready
+updated: 2026-09-05
 ---
 
 # Phase 12 Session 4 — Shared overlay and selectable list

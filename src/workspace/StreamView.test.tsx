@@ -3,11 +3,12 @@ import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 
 import type { ComponentVariantConfig, VisualTheme } from '../design/tokens'
+import type { PlaceNavigationTarget, ResolvedPlaceNavigation } from '../core/place-navigation'
 
 const mocks = vi.hoisted(() => ({
   execQuery: vi.fn(),
   nextFocusInstance: 0,
-  resolveDrillInPosition: vi.fn(),
+  resolvePlaceNavigation: vi.fn(),
 }))
 
 vi.mock('../core/client/sql-client', () => ({
@@ -15,7 +16,7 @@ vi.mock('../core/client/sql-client', () => ({
 }))
 
 vi.mock('../core/client/matrix-client', () => ({
-  resolveDrillInPosition: mocks.resolveDrillInPosition,
+  resolvePlaceNavigation: mocks.resolvePlaceNavigation,
 }))
 
 vi.mock('../sql/useQuery', () => ({
@@ -118,6 +119,28 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+const positionResolution = (
+  matrixId: number,
+  rowId: number,
+  key: Uint8Array,
+  source: 'provenance' | 'home' = 'home',
+): ResolvedPlaceNavigation => ({
+  type: 'position',
+  node: { matrixId, rowId },
+  source,
+  appearance: { key, depth: 0 },
+  alternativeAppearances: [],
+  liveAppearanceCount: 1,
+})
+
 describe('StreamView controller contract', () => {
   let container: HTMLDivElement
   let dispose: (() => void) | undefined
@@ -134,12 +157,15 @@ describe('StreamView controller contract', () => {
     container.remove()
   })
 
-  const mount = (props?: { navigateToRowId?: number | null; onNavigated?: () => void }) => {
+  const mount = (props?: {
+    navigateToPlace?: PlaceNavigationTarget | null
+    onNavigated?: () => void
+  }) => {
     dispose = render(
       () => (
         <StreamView
           matrixId={10}
-          navigateToRowId={props?.navigateToRowId}
+          navigateToPlace={props?.navigateToPlace}
           onNavigated={props?.onNavigated}
         />
       ),
@@ -257,38 +283,203 @@ describe('StreamView controller contract', () => {
     expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
   })
 
-  test('external row navigation resolves a key and replaces panels after root', async () => {
-    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(30), isHome: true })
+  test('external position navigation replaces panels from a fresh root', async () => {
+    mocks.resolvePlaceNavigation.mockResolvedValue(
+      positionResolution(20, 300, Uint8Array.of(30)),
+    )
     const onNavigated = vi.fn()
-    let setNavigateToRowId!: (rowId: number | null) => void
+    let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
 
     dispose = render(() => {
-      const [navigateToRowId, setRowId] = createSignal<number | null>(null)
-      setNavigateToRowId = setRowId
+      const [navigateToPlace, setTarget] = createSignal<PlaceNavigationTarget | null>(null)
+      setNavigateToPlace = setTarget
       return (
         <StreamView
           matrixId={10}
-          navigateToRowId={navigateToRowId()}
+          navigateToPlace={navigateToPlace()}
           onNavigated={onNavigated}
         />
       )
     }, container)
     click(container, 'Append focus')
     click(container, 'Append child')
+    click(container, 'Append child', 1)
+    click(container, 'Append child', 2)
+    expect(panelIdentity(container)).toEqual(['10:101', '10:102', '10:103', '10:104'])
 
-    setNavigateToRowId(300)
+    setNavigateToPlace({ type: 'node', node: { matrixId: 20, rowId: 300 } })
     await flushPromises()
 
     expect(onNavigated).toHaveBeenCalledOnce()
-    expect(mocks.resolveDrillInPosition).toHaveBeenCalledWith(10, 300)
-    expect(panelIdentity(container)).toEqual(['navigation', '10:300'])
+    expect(mocks.resolvePlaceNavigation).toHaveBeenCalledWith(
+      10,
+      { matrixId: 20, rowId: 300 },
+      undefined,
+    )
+    expect(panelIdentity(container)).toEqual(['navigation', '20:300'])
+  })
+
+  test('external membership navigation rebuilds context from a fresh root', async () => {
+    mocks.resolvePlaceNavigation.mockResolvedValue({
+      type: 'membership',
+      node: { matrixId: 30, rowId: 500 },
+      matrixId: 30,
+      containers: [
+        { node: { matrixId: 10, rowId: 201 }, key: Uint8Array.of(21) },
+        { node: { matrixId: 20, rowId: 301 }, key: null },
+      ],
+      alternativeAppearances: [],
+      liveAppearanceCount: 0,
+    })
+    let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
+
+    dispose = render(() => {
+      const [navigateToPlace, setTarget] = createSignal<PlaceNavigationTarget | null>(null)
+      setNavigateToPlace = setTarget
+      return <StreamView matrixId={10} navigateToPlace={navigateToPlace()} />
+    }, container)
+    click(container, 'Append focus')
+    click(container, 'Append child')
+    click(container, 'Append child', 1)
+    click(container, 'Append child', 2)
+    expect(panelIdentity(container)).toEqual(['10:101', '10:102', '10:103', '10:104'])
+
+    setNavigateToPlace({ type: 'node', node: { matrixId: 30, rowId: 500 } })
+    await flushPromises()
+
+    expect(panelIdentity(container)).toEqual(['navigation', '10:201', '20:301', '30:500'])
+  })
+
+  test('preserves explicit appearance provenance for external navigation', async () => {
+    const provenance = { key: Uint8Array.of(9, 0) }
+    mocks.resolvePlaceNavigation.mockResolvedValue(
+      positionResolution(20, 300, provenance.key, 'provenance'),
+    )
+    mount({
+      navigateToPlace: {
+        type: 'node',
+        node: { matrixId: 20, rowId: 300 },
+        provenance,
+      },
+    })
+    await flushPromises()
+
+    expect(mocks.resolvePlaceNavigation).toHaveBeenCalledWith(
+      10,
+      { matrixId: 20, rowId: 300 },
+      provenance,
+    )
+    expect(panelIdentity(container)).toEqual(['navigation', '20:300'])
+  })
+
+  test('ignores an older external navigation completion', async () => {
+    const first = deferred<ResolvedPlaceNavigation | null>()
+    const second = deferred<ResolvedPlaceNavigation | null>()
+    mocks.resolvePlaceNavigation
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const onNavigated = vi.fn()
+    let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
+
+    dispose = render(() => {
+      const [navigateToPlace, setTarget] = createSignal<PlaceNavigationTarget | null>(null)
+      setNavigateToPlace = setTarget
+      return (
+        <StreamView
+          matrixId={10}
+          navigateToPlace={navigateToPlace()}
+          onNavigated={onNavigated}
+        />
+      )
+    }, container)
+
+    setNavigateToPlace({ type: 'node', node: { matrixId: 20, rowId: 1 } })
+    await flushPromises()
+    setNavigateToPlace({ type: 'node', node: { matrixId: 20, rowId: 2 } })
+    second.resolve(positionResolution(20, 2, Uint8Array.of(2)))
+    await flushPromises()
+    expect(panelIdentity(container)).toEqual(['navigation', '20:2'])
+    expect(onNavigated).toHaveBeenCalledOnce()
+
+    first.resolve(positionResolution(20, 1, Uint8Array.of(1)))
+    await flushPromises()
+    expect(panelIdentity(container)).toEqual(['navigation', '20:2'])
+    expect(onNavigated).toHaveBeenCalledOnce()
+  })
+
+  test('cancels pending external navigation when the target is cleared', async () => {
+    const pending = deferred<ResolvedPlaceNavigation | null>()
+    mocks.resolvePlaceNavigation.mockReturnValueOnce(pending.promise)
+    const onNavigated = vi.fn()
+    let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
+
+    dispose = render(() => {
+      const [navigateToPlace, setTarget] = createSignal<PlaceNavigationTarget | null>(null)
+      setNavigateToPlace = setTarget
+      return (
+        <StreamView
+          matrixId={10}
+          navigateToPlace={navigateToPlace()}
+          onNavigated={onNavigated}
+        />
+      )
+    }, container)
+
+    setNavigateToPlace({ type: 'node', node: { matrixId: 20, rowId: 1 } })
+    await flushPromises()
+    setNavigateToPlace(null)
+    click(container, 'Append focus')
+
+    pending.resolve(positionResolution(20, 1, Uint8Array.of(1)))
+    await flushPromises()
+
+    expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
+    expect(onNavigated).not.toHaveBeenCalled()
+  })
+
+  test('cancels pending external navigation when the view is disposed', async () => {
+    const pending = deferred<ResolvedPlaceNavigation | null>()
+    mocks.resolvePlaceNavigation.mockReturnValueOnce(pending.promise)
+    const onNavigated = vi.fn()
+
+    mount({
+      navigateToPlace: { type: 'node', node: { matrixId: 20, rowId: 1 } },
+      onNavigated,
+    })
+    await flushPromises()
+    dispose?.()
+    dispose = undefined
+
+    pending.resolve(positionResolution(20, 1, Uint8Array.of(1)))
+    await flushPromises()
+
+    expect(onNavigated).not.toHaveBeenCalled()
+  })
+
+  test('opens the workspace root without resolving a row identity', async () => {
+    let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
+    dispose = render(() => {
+      const [navigateToPlace, setTarget] = createSignal<PlaceNavigationTarget | null>(null)
+      setNavigateToPlace = setTarget
+      return <StreamView matrixId={10} navigateToPlace={navigateToPlace()} />
+    }, container)
+    click(container, 'Append focus')
+    setNavigateToPlace({ type: 'root', matrixId: 10 })
+    await flushPromises()
+    expect(panelIdentity(container)).toEqual(['navigation'])
+    expect(mocks.resolvePlaceNavigation).not.toHaveBeenCalled()
   })
 
   test('inline-reference navigation uses the root navigation path', async () => {
-    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(40), isHome: true })
+    mocks.resolvePlaceNavigation.mockResolvedValue(
+      positionResolution(20, 400, Uint8Array.of(40)),
+    )
     mount()
     click(container, 'Append focus')
     click(container, 'Append child')
+    click(container, 'Append child', 1)
+    click(container, 'Append child', 2)
+    expect(panelIdentity(container)).toEqual(['10:101', '10:102', '10:103', '10:104'])
 
     const source = document.createElement('span')
     container.appendChild(source)
@@ -300,12 +491,18 @@ describe('StreamView controller contract', () => {
     )
     await flushPromises()
 
-    expect(mocks.resolveDrillInPosition).toHaveBeenCalledWith(20, 400)
+    expect(mocks.resolvePlaceNavigation).toHaveBeenCalledWith(
+      10,
+      { matrixId: 20, rowId: 400 },
+      undefined,
+    )
     expect(panelIdentity(container)).toEqual(['navigation', '20:400'])
   })
 
   test('folded focus preserves resolved and unresolved position states', async () => {
-    mocks.resolveDrillInPosition.mockResolvedValueOnce({ key: Uint8Array.of(50) })
+    mocks.resolvePlaceNavigation.mockResolvedValueOnce(
+      positionResolution(10, 102, Uint8Array.of(50)),
+    )
     mount()
 
     click(container, 'Open folded focus')
@@ -316,7 +513,14 @@ describe('StreamView controller contract', () => {
     expect(focus.dataset.unresolvedPosition).toBeUndefined()
 
     click(container, 'Close focus')
-    mocks.resolveDrillInPosition.mockResolvedValueOnce(null)
+    mocks.resolvePlaceNavigation.mockResolvedValueOnce({
+      type: 'membership',
+      node: { matrixId: 10, rowId: 102 },
+      matrixId: 10,
+      containers: [],
+      alternativeAppearances: [],
+      liveAppearanceCount: 0,
+    })
     click(container, 'Open folded focus')
     await flushPromises()
 
@@ -326,7 +530,9 @@ describe('StreamView controller contract', () => {
   })
 
   test('cross-matrix boundary hops keep the target matrix identity', async () => {
-    mocks.resolveDrillInPosition.mockResolvedValue({ key: Uint8Array.of(60), isHome: true })
+    mocks.resolvePlaceNavigation.mockResolvedValue(
+      positionResolution(20, 301, Uint8Array.of(60)),
+    )
     mount()
     click(container, 'Append focus')
 

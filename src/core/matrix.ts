@@ -9,6 +9,7 @@ import { compileFormula, parseFormulaRefs } from '../table/formula'
 import { ROOT_MATRIX_ID, ROOT_ROW_ID } from './ids'
 import { extractTextFromPmDoc } from './pm-text'
 import { getSchemaVersion, migrateSchema } from './schema-migrations'
+import { assertSemanticRoleEligible } from './semantic-role'
 import {
   dropChangeTrackingTriggers,
   installDataTableTriggers,
@@ -542,6 +543,10 @@ export const createMatrix = (
   }[] = [{ name: 'title', type: 'TEXT' }],
   options?: { managedBy?: string },
 ): number => {
+  for (const column of columns) {
+    assertSemanticRoleEligible({ ...column, formula: null }, column.role)
+  }
+
   return withTransaction(db, () => {
     const insertStmt = db.prepare(
       `INSERT INTO matrix (id, title) VALUES (${SQL_RANDOM_ID}, ?) RETURNING id`,
@@ -1399,6 +1404,8 @@ export const addColumn = (
     role?: 'label' | 'content'
   },
 ): number => {
+  assertSemanticRoleEligible({ ...column, formula: null }, column.role)
+
   return withTransaction(db, () => {
     const current = getColumns(db, matrixId)
 
@@ -1607,6 +1614,7 @@ export const updateColumnRole = (
   if (!col) {
     throw new Error(`Column "${columnName}" not found in matrix ${matrixId}`)
   }
+  assertSemanticRoleEligible(col, role)
 
   try {
     db.exec('UPDATE matrix_columns SET role = ? WHERE matrix_id = ? AND name = ?', {

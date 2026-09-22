@@ -8,7 +8,8 @@ import {
   type Accessor,
 } from 'solid-js'
 
-import { resolveDrillInPosition } from '../core/client/matrix-client'
+import { resolvePlaceNavigation } from '../core/client/matrix-client'
+import type { PlaceNavigationTarget, ResolvedPlaceNavigation } from '../core/place-navigation'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { useQuery } from '../sql/useQuery'
 
@@ -36,7 +37,7 @@ export type StreamAncestor = {
 
 export type StreamControllerInput = {
   matrixId: number
-  navigateToRowId?: number | null
+  navigateToPlace?: PlaceNavigationTarget | null
   onNavigated?: () => void
 }
 
@@ -49,6 +50,7 @@ export type StreamController = {
   replaceFocus: (fromIndex: number, matrixId: number, rowId: number, rowKey: Uint8Array) => void
   closeFrom: (fromIndex: number) => void
   selectAncestor: (panelIndex: number, ancestor: StreamAncestor) => void
+  openPlace: (fromIndex: number, target: PlaceNavigationTarget) => Promise<void>
   openRowReference: (fromIndex: number, matrixId: number, rowId: number) => Promise<void>
   openFoldedFocus: (fromIndex: number, matrixId: number, rowId: number) => Promise<void>
 }
@@ -68,11 +70,14 @@ const ROOT_PANEL_ID = 'stream-root'
 
 const panelCompositeKey = (matrixId: number, rowId: number): string => `${matrixId}:${rowId}`
 
+const createNavigationRootPanel = (): StreamPanel => ({
+  id: ROOT_PANEL_ID,
+  type: 'navigation',
+})
+
 export const createStreamController = (input: StreamControllerInput): StreamController => {
   let nextPanelId = 0
-  const [panels, setPanels] = createSignal<StreamPanel[]>([
-    { id: ROOT_PANEL_ID, type: 'navigation' },
-  ])
+  const [panels, setPanels] = createSignal<StreamPanel[]>([createNavigationRootPanel()])
 
   const createFocusPanel = (
     matrixId: number,
@@ -111,6 +116,63 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     rowId: number,
     rowKey: Uint8Array,
   ) => appendFocusWithOptions(fromIndex, matrixId, rowId, rowKey)
+
+  const resolvePanels = (
+    base: StreamPanel[],
+    resolved: ResolvedPlaceNavigation,
+    options?: { foldedOrigin?: boolean },
+  ): StreamPanel[] => {
+    if (resolved.type === 'position') {
+      return enforceColumnLimit([
+        ...base,
+        createFocusPanel(
+          resolved.node.matrixId,
+          resolved.node.rowId,
+          new Uint8Array(resolved.appearance.key),
+          options,
+        ),
+      ])
+    }
+
+    const additions: StreamPanel[] = []
+    for (const container of resolved.containers) {
+      const prior = additions.at(-1) ?? base.at(-1)
+      if (
+        prior?.type === 'focus' &&
+        prior.matrixId === container.node.matrixId &&
+        prior.rowId === container.node.rowId
+      ) {
+        continue
+      }
+      additions.push(
+        createFocusPanel(
+          container.node.matrixId,
+          container.node.rowId,
+          container.key ? new Uint8Array(container.key) : new Uint8Array(0),
+          container.key ? undefined : { unresolvedPosition: true },
+        ),
+      )
+    }
+    additions.push(
+      createFocusPanel(resolved.node.matrixId, resolved.node.rowId, new Uint8Array(0), {
+        ...options,
+        unresolvedPosition: true,
+      }),
+    )
+    return enforceColumnLimit([...base, ...additions])
+  }
+
+  const appendResolvedPlace = (
+    fromIndex: number,
+    resolved: ResolvedPlaceNavigation,
+    options?: { foldedOrigin?: boolean },
+  ): void => {
+    setPanels((previous) => resolvePanels(previous.slice(0, fromIndex + 1), resolved, options))
+  }
+
+  const replaceWithResolvedPlaceFromRoot = (resolved: ResolvedPlaceNavigation): void => {
+    setPanels(resolvePanels([createNavigationRootPanel()], resolved))
+  }
 
   const replaceFocus = (
     fromIndex: number,
@@ -228,7 +290,7 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
 
   const selectAncestor = (panelIndex: number, ancestor: StreamAncestor) => {
     if (ancestor.rowId == null || ancestor.matrixId == null) {
-      setPanels([{ id: ROOT_PANEL_ID, type: 'navigation' }])
+      setPanels([createNavigationRootPanel()])
       return
     }
     const key =
@@ -239,36 +301,64 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     }
   }
 
-  const openRowReference = async (fromIndex: number, matrixId: number, rowId: number) => {
-    // Identity navigation chooses the ownership home. A traversed appearance
-    // already carries its provenance key and uses appendFocus directly.
-    const resolved = await resolveDrillInPosition(matrixId, rowId)
-    if (resolved) appendFocus(fromIndex, matrixId, rowId, new Uint8Array(resolved.key))
-  }
-
-  const openFoldedFocus = async (fromIndex: number, matrixId: number, rowId: number) => {
-    const resolved = await resolveDrillInPosition(matrixId, rowId)
-    if (resolved) {
-      appendFocusWithOptions(fromIndex, matrixId, rowId, new Uint8Array(resolved.key), {
-        foldedOrigin: true,
-      })
+  const openPlace = async (fromIndex: number, target: PlaceNavigationTarget): Promise<void> => {
+    if (target.type === 'root') {
+      if (target.matrixId === input.matrixId) {
+        setPanels([createNavigationRootPanel()])
+      }
       return
     }
-    appendFocusWithOptions(fromIndex, matrixId, rowId, new Uint8Array(0), {
-      foldedOrigin: true,
-      unresolvedPosition: true,
-    })
+    const resolved = await resolvePlaceNavigation(
+      input.matrixId,
+      target.node,
+      target.provenance,
+    )
+    if (resolved) appendResolvedPlace(fromIndex, resolved)
   }
 
-  const navigateToRow = (rowId: number) => void openRowReference(0, input.matrixId, rowId)
+  const openRowReference = (fromIndex: number, matrixId: number, rowId: number) =>
+    openPlace(fromIndex, { type: 'node', node: { matrixId, rowId } })
+
+  const openFoldedFocus = async (fromIndex: number, matrixId: number, rowId: number) => {
+    const resolved = await resolvePlaceNavigation(input.matrixId, { matrixId, rowId })
+    if (resolved) appendResolvedPlace(fromIndex, resolved, { foldedOrigin: true })
+  }
+
+  let externalNavigationGeneration = 0
 
   createEffect(
     on(
-      () => input.navigateToRowId,
-      (rowId) => {
-        if (rowId == null) return
-        navigateToRow(rowId)
-        input.onNavigated?.()
+      () => input.navigateToPlace,
+      (target) => {
+        const generation = ++externalNavigationGeneration
+        if (!target) return
+        const navigate = async (): Promise<void> => {
+          try {
+            if (target.type === 'root') {
+              if (
+                target.matrixId === input.matrixId &&
+                generation === externalNavigationGeneration
+              ) {
+                setPanels([createNavigationRootPanel()])
+              }
+            } else {
+              const resolved = await resolvePlaceNavigation(
+                input.matrixId,
+                target.node,
+                target.provenance,
+              )
+              if (resolved && generation === externalNavigationGeneration) {
+                replaceWithResolvedPlaceFromRoot(resolved)
+              }
+            }
+          } catch {
+            // A failed lookup leaves the current stream unchanged. The acknowledgement below lets
+            // the caller clear the consumed target and try again.
+          } finally {
+            if (generation === externalNavigationGeneration) input.onNavigated?.()
+          }
+        }
+        void navigate()
       },
     ),
   )
@@ -284,7 +374,18 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     const detail = (event as CustomEvent<{ matrixId?: number; rowId: number }>).detail
     if (detail?.rowId == null) return
     event.stopPropagation()
-    void openRowReference(0, detail.matrixId ?? input.matrixId, detail.rowId)
+    const navigate = async (): Promise<void> => {
+      const resolved = await resolvePlaceNavigation(
+        input.matrixId,
+        {
+          matrixId: detail.matrixId ?? input.matrixId,
+          rowId: detail.rowId,
+        },
+        undefined,
+      )
+      if (resolved) replaceWithResolvedPlaceFromRoot(resolved)
+    }
+    void navigate()
   }
 
   onMount(() => {
@@ -293,6 +394,7 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
   })
 
   onCleanup(() => {
+    externalNavigationGeneration++
     document.removeEventListener('keydown', handleKeyDown, { capture: true })
     document.removeEventListener('inlineref-navigate', handleInlineReferenceNavigate)
   })
@@ -306,6 +408,7 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     replaceFocus,
     closeFrom,
     selectAncestor,
+    openPlace,
     openRowReference,
     openFoldedFocus,
   }
