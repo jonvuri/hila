@@ -36,6 +36,9 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 - A view still owns no query results and exposes no insert, reparent, or drag affordance.
 - The launcher is a gesture, never a place. Identity navigation follows provenance, then ownership
   home, then deterministic membership fallback.
+- Launcher state, content, interaction, focus, and accessibility remain shared across themes.
+  Ghost and Null use centered floating shells; Wipeout may select its approved anchored/full-screen
+  presentation without forking launcher behavior.
 - Commands that require a node and saves that require a home remain visible but disabled with a
   stated reason when provenance is absent.
 - Formula columns are not predicate/order candidates in v1. Relative dates freeze to closed literal
@@ -55,16 +58,18 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                    | One authoritative, introspectable command and shortcut source                | Phase 11   | Complete |
 | [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Complete |
 | [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Complete |
-| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Active   |
-| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4    | Planned  |
+| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Complete |
+| [4A — Quick/deep overlay prototypes](Phase-12/Session-4a-quick-deep-overlay-prototypes.md)                             | Storybook evidence for theme-specific Quick and Deep relationships           | 4          | Complete |
+| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4A   | Active   |
 | [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Planned  |
 | [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Planned  |
 | [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Planned  |
 | [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned  |
 
-Sessions 1–4 have independent implementation seams and may be researched separately. Execute and
-merge all sessions in number order; do not build later-session code early. The dependency column
-explains architectural coupling, not permission to skip the incremental sequence.
+Sessions 1–4 and 4A are complete. Session 4A approved a provisional theme-specific presentation
+contract for implementation and continued dogfooding. Session 5 owns Quick production adoption;
+Session 6 owns Deep production adoption. Execute and merge the remaining sessions in order. The
+dependency column explains architectural coupling, not permission to skip the incremental sequence.
 
 ## Phase acceptance
 

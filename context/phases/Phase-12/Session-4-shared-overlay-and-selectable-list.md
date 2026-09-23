@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 4 — Shared overlay and selectable list
 kind: phase-session
-state: in-progress
+state: complete
 updated: 2026-09-23
 ---
 
@@ -63,7 +63,15 @@ then prove their behavior and visual language in Storybook.
       selection, deletion, or command dispatch.
 - [x] Add Storybook states for quick/deep geometry, long labels, empty/disabled/invalid lists,
       narrow viewports, all themes and polarities, and reduced motion.
-- [ ] Get user visual/interaction review before live launcher adoption.
+- [x] Get user visual/interaction review before live launcher adoption.
+
+## Review outcome
+
+The user approved the interaction and visual foundation on 2026-09-23. Review moved the keyboard
+focus ring from the whole listbox to its selected active-descendant row. Quick and anchored
+presentation were accepted. Deep was accepted as geometry and interaction infrastructure, not as
+a final composition: its empty frame and inline hint do not yet demonstrate a distinct deep tempo.
+[Session 4A](Session-4a-quick-deep-overlay-prototypes.md) owns the follow-up Storybook exploration.
 
 ## Acceptance
 

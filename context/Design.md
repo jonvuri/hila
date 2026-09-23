@@ -9,8 +9,9 @@ The hila design system provides a set of design tokens, structural primitives, a
 
 ## Design principles
 
-- **One structure.** Ghost defines shared markup, behavior, targets, and visibility. Null and Wipeout
-  change values and optional decoration only.
+- **One interface, multiple expressions.** Themes share state, content, behavior, targets,
+  accessibility, and semantic meaning. A documented presentation adapter may vary geometry and
+  chrome without forking product capability or interaction logic.
 - **Explicit semantic states.** Hover, keyboard focus, selection, disabled, invalid, and armed danger
   stay distinct. Accent identifies focus, selection, and live paths. Red identifies risk only.
 - **Readable density.** Long-form copy keeps the shared body face. Display and data faces can identify
@@ -117,9 +118,11 @@ Visual theme, polarity, component variant, and rendering fidelity are separate a
 | Null         | Conventional extension | Moderate radius, familiar blue state signals, filled controls, and soft elevation                                                      |
 | Wipeout      | Instrument extension   | Hard brightness steps, instrument type, disciplined violet signals, one-cut geometry, aligned ticks and notches, and unlit VFD texture |
 
-Null and Wipeout preserve Ghost's structure, content behavior, state meaning, and target sizes. A
-theme switch changes fundamental values, semantic references, and optional decorative primitives
-only.
+Null and Wipeout preserve Ghost's interface contract, content behavior, state meaning, and target
+sizes. Themes normally vary through fundamental values, semantic references, and optional
+decoration. A component may also expose an explicit theme-selected presentation adapter when its
+canonical contract documents the allowed geometry and all behavior remains shared. The launcher is
+the first approved use of this seam.
 
 ### Attributes and inheritance
 
@@ -140,7 +143,8 @@ type Density = 'narrow' | 'wide'
 
 Each resolved polarity and visual-theme pair assigns the fundamental palette, type, geometry,
 motion, elevation, and decoration values. The semantic declarations then reference those values.
-Components do not select a palette or branch on a visual-theme name.
+Components do not select a palette. Theme-name branching belongs only at a documented presentation
+adapter boundary; it must not spread into data, state, or interaction logic.
 
 Storybook exposes separate `polarity` and `visualTheme` toolbar values through one decorator.
 The focused theme preview can keep its local `visualTheme` control. The forward navigation
@@ -201,7 +205,9 @@ The approved roadmap owns their future order.
    navigation-outline configuration.
 5. Session 4q removed the executable overlaid-card implementation and its legacy styles after live
    review.
-6. Ship the shared overlay/selectable-list primitives, then migrate the launcher onto them.
+6. The shared overlay/selectable-list primitives shipped in Phase 12 Session 4. Session 4A approved
+   provisional theme-specific launcher shells over one interface contract. Migrate Quick in Session
+   5 and Deep in Session 6, then keep evaluating the Wipeout expression through dogfooding.
 7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis.

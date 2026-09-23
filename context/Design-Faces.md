@@ -10,11 +10,12 @@ outline face without changing either host's behavior.
 
 ## Theme axes
 
-Ghost, Null, and Wipeout are the approved global visual themes. They share one structure and
-semantic state contract. The outline and table treatments in this document are component variants
-beneath that global theme layer. They can change local rendering, but not app-level theme identity,
-interaction meaning, or data contracts. An explicit component variant stays unchanged when the
-visual theme changes.
+Ghost, Null, and Wipeout are the approved global visual themes. They share one interface and
+semantic state contract. A documented presentation adapter may vary geometry and chrome while
+state, content, behavior, accessibility, and target sizes remain shared. The outline and table
+treatments in this document are component variants beneath that global theme layer. They can change
+local rendering, but not app-level theme identity, interaction meaning, or data contracts. An
+explicit component variant stays unchanged when the visual theme changes.
 
 Dark and light polarity is independent of both layers. Composed or substrate fidelity and the
 x-ray inspection state are also orthogonal. Do not multiply face renderers across the Cartesian
@@ -183,8 +184,9 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
 5. Migrate the live shell and stream without behavior changes.
 6. Session 4q removed the executable overlaid-card implementation after the live cutover passed
    review.
-7. Phase 12 Session 4 shipped the shared overlays. Migrate the launcher onto them before top-level
-   tabs are removed.
+7. Phase 12 Session 4 shipped the shared overlays, and Session 4A approved provisional
+   theme-specific launcher shells. Sessions 5 and 6 migrate Quick and Deep before top-level tabs are
+   removed.
 8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),

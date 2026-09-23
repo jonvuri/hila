@@ -3,9 +3,10 @@
 > **Status: foundation and shared presentation primitives implemented; launcher surface not
 > implemented.** The worker-backed discovery, deterministic base ranking, family data filters,
 > rooted navigation contract, shared modal/anchored overlays, and selectable-list interaction ship.
-> The production app still uses Workspace, Table, and Tags tabs, and `Mod-k` still invokes the
-> editor's insert-link path. Later Phase 12 sessions own launcher state, session signals, and tab
-> retirement.
+> Session 4A approved the theme-specific presentation below for provisional implementation and
+> continued dogfooding. The production app still uses Workspace, Table, and Tags tabs, and `Mod-k`
+> still invokes the editor's insert-link path. Later Phase 12 sessions own launcher state, session
+> signals, and tab retirement.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
 
@@ -17,13 +18,33 @@ The launcher is a **gesture, never a place** (session 2). Depth changes what it 
 
 ## Anatomy and geometry (D20)
 
-A centered floating palette over the dimmed stream — anchored to no panel, docked nowhere. Opening never disturbs the stream; dismissal restores it exactly. Quick tempo is a fixed ~640px column growing downward; **deep tempo expands to a viewport-proportional frame** — still floating with clear margin on all sides, never full-bleed — showing as many preview rows as comfortably fit (windowed past that). Exact proportions, scrim, and elevation are [§4 token-pass](./archive/phases/Phase-10.md#4-cohesive-design-token-and-theming-system) treatments.
+Phase 12 Session 4A revised this presentation contract.
+
+One launcher contract supports multiple theme expressions. Search state, content, selection,
+commands, focus containment, dismissal, keyboard and pointer behavior, target sizing, and
+accessibility semantics remain shared. A theme-selected presentation shell may vary geometry and
+chrome without creating theme-specific product behavior. This deliberate variation tests the
+modularity of the interface.
+
+Ghost and Null use a centered floating modal over the dimmed stream. Quick is a fixed ~640px column
+growing downward. Deep expands to a viewport-proportional frame with clear margin on every side.
+
+Wipeout makes the launcher latent in the workspace. A thin accent mark beside the workspace title
+shares its viewport origin with the empty launcher's block cursor. Quick appears at the top-left on
+wide screens and fills the top half at narrow widths. Deep fills the viewport. Black surfaces and
+neutral borders carry hierarchy. Opening Quick and expanding to Deep realize the new state
+immediately, then measured decoration-grey border echoes trace the change post-facto. Reduced motion
+removes the echoes without delaying or changing state.
+
+The direction is designed, not shipped, and remains provisional while dogfooding continues. A
+future review may revise Wipeout's geometry without changing the shared launcher contract.
 
 The shipped presentation foundation uses a native modal dialog for centered palettes and a
-nonmodal, viewport-clamped shell for cursor-anchored lists. Both consume one controlled,
-stable-ID listbox contract. A centered palette owns modal focus and restores its invoker. An
-anchored list leaves focus on its editor or input and exposes selection through
-`aria-activedescendant`. Overlay layers dismiss one at a time from the top.
+nonmodal, viewport-clamped shell for cursor-anchored editor lists. Both consume one controlled,
+stable-ID listbox contract. Sessions 5 and 6 add the theme-selecting modal launcher shell. Every
+launcher expression owns modal focus and restores its invoker; editor-anchored lists leave focus on
+their editor or input and expose selection through `aria-activedescendant`. Overlay layers dismiss
+one at a time from the top.
 
 ## One list, one ranking (D21 · D23)
 

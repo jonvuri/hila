@@ -34,7 +34,8 @@ index when a task needs wider product or architecture context.
 - [Query-Spec.md](Query-Spec.md) — shipped compiler, recognizer, query runtime, and durable SQL
   round-trip; gesture authoring remains planned.
 - [Launcher.md](Launcher.md) — shipped discovery, base ranking, family filters, and rooted navigation;
-  the overlay, launcher surface, query authoring, session signals, and tab retirement remain planned.
+  shared overlay presentation also ships, while the launcher surface, query authoring, session
+  signals, and tab retirement remain planned.
 - [Sync.md](Sync.md) — shipped readiness, Phase 11 repair contract, and future replica boundary.
 - [Virtualization.md](Virtualization.md) — paged data and rendering residency contract.
 - [Performance.md](Performance.md) — deterministic guards and calibrated browser budgets.

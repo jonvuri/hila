@@ -2,7 +2,7 @@
 title: Phase 12 Session 6 — Chips and deep preview
 kind: phase-session
 state: planned
-updated: 2026-09-03
+updated: 2026-09-23
 ---
 
 # Phase 12 Session 6 — Chips and deep preview
@@ -30,7 +30,9 @@ Sessions 2, 4, and 5 must be complete.
       removed. Preserve uncommitted text as the spec text dimension.
 - [ ] Execute the parameterized transient plan per input change through Session 2's reusable query
       runtime.
-- [ ] Expand to a viewport-proportional floating frame and render a windowed read-only preview.
+- [ ] Preserve one Deep state and preview contract behind theme-selected presentation shells. Expand
+      Ghost and Null to viewport-proportional centered floating frames. Expand Wipeout to the full
+      viewport and play its measured Quick-to-Deep echoes after the completed state appears.
 - [ ] Show the normal line identity plus label and spec-touched predicate/order columns in chip
       order. Keep widths capped.
 - [ ] Keep preview host-owned: no face mount, cell edit, add row, drag, or ownership gesture.
@@ -39,6 +41,10 @@ Sessions 2, 4, and 5 must be complete.
 ## Acceptance
 
 - The same `QuerySpec` fully determines quick versus deep tempo.
+- All themes expose identical Deep content, interaction, focus, and preview semantics. Ghost and
+  Null remain centered and floating; Wipeout fills the viewport without adding mode state.
+- Wipeout's expansion echoes fit the responsive Quick and viewport boxes, never delay interaction,
+  and disappear under reduced motion.
 - Menu, typeahead, typed operator, keyboard, and pointer paths converge on identical chips.
 - Invalid values use the canonical invalid state and a stated reason.
 - Per-keystroke values rebind without stale results or repeated prepare churn.
@@ -48,6 +54,7 @@ Sessions 2, 4, and 5 must be complete.
 ## Verification
 
 - Add reducer, parsing, keyboard, focus, invalid-state, tempo, projection, and window-bound tests.
-- Add deep-launcher real-Chrome E2E and a bounded multi-matrix performance fixture.
+- Add deep-launcher real-Chrome E2E across all themes and widths, including Wipeout expansion and
+  reduced motion, plus a bounded multi-matrix performance fixture.
 - Record prepared-statement reuse, mounted-row bound, and editor churn. Run standard checks and
   `git diff --check`.

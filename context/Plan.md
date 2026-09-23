@@ -2,7 +2,7 @@
 title: Roadmap
 kind: roadmap
 state: active
-updated: 2026-09-03
+updated: 2026-09-23
 ---
 
 # Roadmap
@@ -196,8 +196,9 @@ can move earlier independently of remote sync.
 8. Plugins contribute faces and commands. Hosts own chrome and recursion; subjects own data;
    rendering recipes own presentation.
 9. Query gestures compile to canonical SQL. SQL remains the only stored/executed query form.
-10. Ghost, Null, and Wipeout share one structure. Visual theme, polarity, component variant,
-    density, and fidelity are independent axes.
+10. Ghost, Null, and Wipeout share one interface and semantic state contract. Documented
+    presentation adapters may vary geometry and chrome without forking behavior. Visual theme,
+    polarity, component variant, density, and fidelity are independent axes.
 11. Every source-of-truth schema field must declare replicated, derived, or device-local status.
 12. Performance uses deterministic complexity/fan-out guards plus bounded browser stress tests at a
     target-equivalent Chrome CPU slowdown.

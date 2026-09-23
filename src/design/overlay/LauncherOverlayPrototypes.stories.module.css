@@ -1,0 +1,372 @@
+.prototype {
+  --launcher-anchor-left: 16px;
+  --launcher-anchor-top: 16px;
+
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-canvas);
+}
+
+/* Candidate only: Ghost and Wipeout collapse neutral fills to black. */
+:global([data-theme='dark']) .prototype[data-visual-theme='ghost'],
+:global([data-theme='dark']) .prototype[data-visual-theme='wipeout'] {
+  --color-canvas: #000;
+  --color-surface: #000;
+  --color-overlay: #000;
+  --color-state-hover: #0a0a0a;
+  --color-state-selected: #121212;
+}
+
+.workspaceLayer {
+  position: absolute;
+  inset: 0;
+}
+
+.prototype[data-visual-theme='wipeout'] :global(.ws-workspace-title) {
+  padding-top: calc(var(--launcher-anchor-top) + 2 * var(--width-line));
+  padding-left: calc(var(--launcher-anchor-left) + var(--space-16));
+}
+
+.prototype[data-visual-theme='wipeout'] :global(.ws-workspace-title)::before {
+  position: absolute;
+  top: calc(var(--launcher-anchor-top) + var(--width-line));
+  left: var(--launcher-anchor-left);
+  z-index: 1;
+  width: 1px;
+  height: var(--size-16);
+  background: var(--color-accent);
+  content: '';
+}
+
+.storyControls {
+  position: fixed;
+  z-index: 20;
+  right: var(--space-16);
+  bottom: var(--space-16);
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  color: var(--color-text);
+  background: var(--color-overlay);
+  border: var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--elevation-overlay);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+}
+
+.storyControlsHidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.storyControls span {
+  padding: 0 var(--space-8);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+.storyControls button,
+.tempoButton,
+.dismissButton {
+  min-height: var(--size-control);
+  padding: var(--space-4) var(--space-8);
+  color: var(--color-text);
+  background: transparent;
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  font: inherit;
+  cursor: pointer;
+}
+
+.storyControls button:hover,
+.tempoButton:hover,
+.dismissButton:hover {
+  color: var(--color-text-strong);
+  border-color: var(--color-line-strong);
+}
+
+.storyControls button:focus-visible,
+.tempoButton:focus-visible,
+.dismissButton:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.storyControls button[aria-current='page'] {
+  color: var(--color-text-strong);
+  border-color: var(--color-accent);
+}
+
+.centeredOverlay {
+  padding: 0;
+}
+
+.launcherSurface {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  color: var(--color-text);
+  background: var(--color-overlay);
+}
+
+.queryRow {
+  position: relative;
+  display: flex;
+  flex: none;
+  min-height: 48px;
+  align-items: center;
+  background: var(--color-overlay);
+  border-bottom: var(--border-subtle);
+}
+
+.queryInput {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-8) var(--space-16);
+  color: var(--color-text-strong);
+  caret-color: var(--color-accent);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-family: var(--type-data-family);
+  font-size: var(--type-body-large-size);
+}
+
+.queryInput::placeholder {
+  color: var(--color-text-faint);
+}
+
+.wipeoutQueryInput {
+  padding-right: var(--launcher-anchor-left);
+  padding-left: var(--launcher-anchor-left);
+  caret-color: transparent;
+}
+
+.blockCursor {
+  position: absolute;
+  top: var(--launcher-anchor-top);
+  left: calc(var(--launcher-anchor-left) + var(--cursor-index) * 1ch);
+  width: 0.72ch;
+  height: var(--size-16);
+  background: var(--color-accent);
+  font-family: var(--type-data-family);
+  font-size: var(--type-body-large-size);
+  animation: cursor-blink 1s step-end infinite;
+  pointer-events: none;
+}
+
+.launcherList {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  background: var(--color-overlay);
+}
+
+.launcherList :global([role='listbox']) {
+  max-height: 100%;
+}
+
+.launcherFooter {
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 40px;
+  padding: var(--space-4) var(--space-8);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-top: var(--border-subtle);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+}
+
+.origin,
+.feedback,
+.keyboardHint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback {
+  color: var(--color-text);
+}
+
+.keyboardHint {
+  color: var(--color-text-faint);
+}
+
+.tempoButton,
+.dismissButton {
+  min-height: 28px;
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+}
+
+.wipeoutDialog {
+  position: fixed;
+  z-index: 100;
+  inset: auto;
+  top: 0;
+  left: 0;
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-overlay);
+  border: var(--border-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.wipeoutDialog::backdrop {
+  background: color-mix(in srgb, var(--color-canvas) 76%, transparent);
+}
+
+.wipeoutQuick {
+  width: min(640px, 60vw);
+  height: min(440px, 56vh);
+}
+
+.wipeoutDeep {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+}
+
+.wipeoutDeep .wipeoutQueryInput {
+  padding-right: calc(var(--launcher-anchor-left) + var(--width-line));
+  padding-left: calc(var(--launcher-anchor-left) + var(--width-line));
+}
+
+.wipeoutDeep .blockCursor {
+  top: calc(var(--launcher-anchor-top) + var(--width-line));
+  left: calc(var(--launcher-anchor-left) + var(--width-line) + var(--cursor-index) * 1ch);
+}
+
+.quickGeometryProbe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: min(640px, 60vw);
+  height: min(440px, 56vh);
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.echoes {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.echoFrame {
+  position: absolute;
+  box-sizing: border-box;
+  border: var(--width-line) solid var(--color-decoration);
+  opacity: 0;
+  animation-name: echo-decay;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+.echoFrame:nth-child(1) {
+  animation-duration: 340ms;
+  animation-delay: 0ms;
+}
+
+.echoFrame:nth-child(2) {
+  animation-duration: 310ms;
+  animation-delay: 30ms;
+}
+
+.echoFrame:nth-child(3) {
+  animation-duration: 280ms;
+  animation-delay: 60ms;
+}
+
+.echoFrame:nth-child(4) {
+  animation-duration: 250ms;
+  animation-delay: 90ms;
+}
+
+.echoFrame:nth-child(5) {
+  animation-duration: 220ms;
+  animation-delay: 120ms;
+}
+
+@keyframes cursor-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+
+  46%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes echo-decay {
+  from {
+    opacity: 0.65;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .wipeoutQuick {
+    width: 100vw;
+    height: 50dvh;
+  }
+
+  .quickGeometryProbe {
+    width: 100vw;
+    height: 50dvh;
+  }
+
+  .launcherFooter {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .feedback,
+  .keyboardHint {
+    display: none;
+  }
+
+  .storyControls {
+    right: var(--space-8);
+    bottom: var(--space-8);
+    left: var(--space-8);
+  }
+
+  .storyControls span {
+    margin-right: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .echoes {
+    display: none;
+  }
+
+  .blockCursor {
+    animation: none;
+  }
+}
