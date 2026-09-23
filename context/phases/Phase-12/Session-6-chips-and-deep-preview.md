@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 6 — Chips and deep preview
 kind: phase-session
-state: in-progress
+state: complete
 updated: 2026-09-23
 ---
 
@@ -18,25 +18,25 @@ Sessions 2, 4, and 5 must be complete.
 
 ## Plan
 
-- [ ] Add a query-spec state/reducer that uses only Session 2 operations and normalized values.
-- [ ] Implement object-first Tab commit, operator menu, operator name/synonym typeahead, and typed
+- [x] Add a query-spec state/reducer that uses only Session 2 operations and normalized values.
+- [x] Implement object-first Tab commit, operator menu, operator name/synonym typeahead, and typed
       glyph/ASCII operators.
-- [ ] Implement chip focus, edit, delete, backspace-pop, and left/right traversal without splitting
+- [x] Implement chip focus, edit, delete, backspace-pop, and left/right traversal without splitting
       one logical list into hidden focus regions.
-- [ ] Add typed values for text, number, closed literal date ranges, distinct-value text, and
+- [x] Add typed values for text, number, closed literal date ranges, distinct-value text, and
       booleans. Disable formula fields with a reason.
-- [ ] Show relative-date freeze information before save; do not add runtime date parameters.
-- [ ] Enter deep tempo when the first chip commits and return to quick tempo when the last chip is
+- [x] Show relative-date freeze information before save; do not add runtime date parameters.
+- [x] Enter deep tempo when the first chip commits and return to quick tempo when the last chip is
       removed. Preserve uncommitted text as the spec text dimension.
-- [ ] Execute the parameterized transient plan per input change through Session 2's reusable query
+- [x] Execute the parameterized transient plan per input change through Session 2's reusable query
       runtime.
-- [ ] Preserve one Deep state and preview contract behind theme-selected presentation shells. Expand
+- [x] Preserve one Deep state and preview contract behind theme-selected presentation shells. Expand
       Ghost and Null to viewport-proportional centered floating frames. Expand Wipeout to the full
       viewport and play its measured Quick-to-Deep echoes after the completed state appears.
-- [ ] Show the normal line identity plus label and spec-touched predicate/order columns in chip
+- [x] Show the normal line identity plus label and spec-touched predicate/order columns in chip
       order. Keep widths capped.
-- [ ] Keep preview host-owned: no face mount, cell edit, add row, drag, or ownership gesture.
-- [ ] Keep Enter as go on a preview row. Define stable loading, empty, invalid, and error states.
+- [x] Keep preview host-owned: no face mount, cell edit, add row, drag, or ownership gesture.
+- [x] Keep Enter as go on a preview row. Define stable loading, empty, invalid, and error states.
 
 ## Acceptance
 
@@ -58,3 +58,31 @@ Sessions 2, 4, and 5 must be complete.
   reduced motion, plus a bounded multi-matrix performance fixture.
 - Record prepared-statement reuse, mounted-row bound, and editor churn. Run standard checks and
   `git diff --check`.
+
+## Result
+
+The launcher now derives Quick or Deep solely from the transient `QuerySpec`. Tab commits types,
+containers, roots, and any navigable node; column menus, typed operators, pointer choices, and
+validated values converge on the same chips. Relative dates freeze to local-calendar boundaries
+and state the exact stored interpretation. Kind changes clear matrix-bound predicates and order.
+
+Deep uses one read-only preview across all themes. It compiles on each input change, preserves
+prepared SQL shapes while values rebind, caps meaning at 1,000 rows, pages in 100-row windows, and
+retains at most the virtualizer's six-window budget. Unloaded windows keep estimated height, and
+fast observer races reconcile to the two-window latch. The preview mounts no faces or editors.
+
+Verification on 2026-09-23:
+
+- Focused and full unit coverage passed after review fixes: 92 files and 1,164 tests.
+- `e2e/quick-launcher.spec.ts`: 13 tests passed in system Chrome, covering all themes at wide and
+  narrow widths, Wipeout motion behavior, a 1,200-row target plus distractor matrix, the 1,000-row
+  cap, at most 600 mounted preview rows, two reusable bound templates, and zero ProseMirror churn.
+- The two canonical performance-contract E2Es passed, including the 20x-throttled backstop with
+  zero long tasks, forced layouts, or editor churn.
+- The repository-wide E2E run passed 168 of 171 tests. One pre-existing folded-row drill-in test
+  failed because discovery commit `d5bfc71` removed its unresolved-position fallback; its two
+  dependent performance tests did not run in that pass and passed separately with `--no-deps`.
+- A post-review Wipeout rerun reached the rendered workspace but timed out waiting for the browser
+  load event before test setup, so the strengthened computed-animation assertion did not execute.
+- Formatter, linter, typecheck, the full unit suite, and `git diff --check` passed. Lint reported 14
+  existing warnings and no errors. No schema change occurred.

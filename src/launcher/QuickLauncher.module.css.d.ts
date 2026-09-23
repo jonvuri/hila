@@ -8,44 +8,58 @@
 
 const overlay: string;
 const centeredOverlay: string;
+const deepOverlay: string;
 const wipeoutOverlay: string;
 const surface: string;
 const queryRow: string;
 const queryInput: string;
+const queryChip: string;
+const invalidInput: string;
 const filterToken: string;
 const helpButton: string;
 const blockCursor: string;
 const cursorBlink: string;
 const body: string;
+const deepBody: string;
+const authoringList: string;
 const emptyState: string;
 const guide: string;
 const footer: string;
 const origin: string;
 const keyboardHint: string;
+const footerNotice: string;
 const status: string;
 const echoes: string;
+const quickGeometryProbe: string;
 const echoFrame: string;
 const echoDecay: string;
 
 export {
 	overlay,
 	centeredOverlay,
+	deepOverlay,
 	wipeoutOverlay,
 	surface,
 	queryRow,
 	queryInput,
+	queryChip,
+	invalidInput,
 	filterToken,
 	helpButton,
 	blockCursor,
 	cursorBlink as "cursor-blink",
 	body,
+	deepBody,
+	authoringList,
 	emptyState,
 	guide,
 	footer,
 	origin,
 	keyboardHint,
+	footerNotice,
 	status,
 	echoes,
+	quickGeometryProbe,
 	echoFrame,
 	echoDecay as "echo-decay"
 };
@@ -53,22 +67,29 @@ export {
 export default {
 	overlay,
 	centeredOverlay,
+	deepOverlay,
 	wipeoutOverlay,
 	surface,
 	queryRow,
 	queryInput,
+	queryChip,
+	invalidInput,
 	filterToken,
 	helpButton,
 	blockCursor,
 	"cursor-blink": cursorBlink,
 	body,
+	deepBody,
+	authoringList,
 	emptyState,
 	guide,
 	footer,
 	origin,
 	keyboardHint,
+	footerNotice,
 	status,
 	echoes,
+	quickGeometryProbe,
 	echoFrame,
 	"echo-decay": echoDecay
 };

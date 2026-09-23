@@ -103,6 +103,39 @@ export type LauncherResultItem = SelectableListItem & {
 
 export type LauncherListItem = LauncherFamilyItem | LauncherResultItem
 
+export type LauncherObjectCommit =
+  | {
+      readonly type: 'kind'
+      readonly matrixId: number
+      readonly label: string
+      readonly mark: '#' | '[]'
+    }
+  | {
+      readonly type: 'scope'
+      readonly node: { readonly matrixId: number; readonly rowId: number }
+      readonly label: string
+    }
+
+export const authoringCommitForLauncherItem = (
+  item: LauncherListItem,
+): LauncherObjectCommit | null => {
+  if (item.kind !== 'result' || item.result.family === 'command') return null
+  if (
+    (item.result.family === 'type' || item.result.family === 'container') &&
+    item.result.subjectMatrixId != null
+  ) {
+    return {
+      type: 'kind',
+      matrixId: item.result.subjectMatrixId,
+      label: item.result.label,
+      mark: item.result.family === 'type' ? '#' : '[]',
+    }
+  }
+  return item.result.node ?
+      { type: 'scope', node: item.result.node, label: item.result.label }
+    : null
+}
+
 const familySuggestions = (query: string): readonly LauncherFamilyItem[] => {
   if (!query.trim()) return []
   return launcherFamilies

@@ -114,6 +114,10 @@ The Playwright suite remains the regression source of truth.
 - Test every Quick presentation through the same semantic locators. Add geometry assertions only at
   the presentation boundary: centered Ghost/Null, wide and narrow Wipeout mark/cursor alignment,
   post-facto echoes, and the reduced-motion state without echoes.
+- Test Deep through the same semantic preview locators in every theme and width. Large fixtures must
+  assert the 1,000-row semantic cap indirectly through the last reachable row, no more than six
+  100-row windows in the DOM, reusable prepared templates during input changes, and zero editor
+  churn. Keep unloaded virtual windows at estimated height so a far scroll cannot collapse paging.
 
 ## Performance and churn
 

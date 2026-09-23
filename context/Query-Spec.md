@@ -1,8 +1,8 @@
 # Query spec and SQL-analog gestures
 
-> **Status: executable v1 runtime shipped.** Phase 12 Session 2 delivered the compiler,
-> recognizer, bound runtime, deterministic paging, and rename healing. Later Phase 12 sessions own
-> the chip and launcher surfaces.
+> **Status: executable v1 runtime and transient chip surface shipped.** Session 2 delivered the
+> compiler, recognizer, bound runtime, deterministic paging, and rename healing. Session 6 added the
+> launcher reducer, value grammar, and bounded read-only preview. Session 7 owns durable chip editing.
 
 > Decided in [Phase 10 §3b](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (session 3b-i; visual companion + round-by-round reasoning: [Phase-10-Session-3b-visuals.html](./archive/visuals/Phase-10-Session-3b-visuals.html), determinations D1–D19). This is the shared model behind the `⌘K` launcher's filtered search, persisted `view` nodes/blocks, and result-surface gestures — the higher-level authoring layer above raw SQL anticipated by [Phase 9 §9.3](./archive/phases/Phase-9.md#93-embedded-collections--live-views), designed once and spoken by every surface.
 
@@ -83,10 +83,11 @@ Normalization is deterministic:
   text-affinity columns. `contains` is also text-only and escapes `%`, `_`, and the escape
   character before compiling to `LIKE`.
 - Formula columns are invalid predicate and order candidates in v1.
-- Natural date tokens are resolved before this normalized form is compiled. The authoring adapter
+- Natural date tokens are resolved before this normalized form is compiled. The launcher adapter
   expands a relative token into fixed ISO boundary values and `gte`/`lte` predicates. SQL never
-  stores `now`, `today`, or another live-relative expression. Session 2 exposes
-  `freezeRelativeDateRange`; the later surface owns natural-language token parsing.
+  stores `now`, `today`, or another live-relative expression. `on` uses the closed start/end pair;
+  `before` uses the start boundary and `after` the end boundary. The chip remains one logical unit
+  and states the frozen local-calendar interpretation before save.
 - Duplicate structured predicates are retained. Gesture operations may replace a term by index;
   normalization does not reorder or deduplicate user intent.
 

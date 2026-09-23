@@ -1,10 +1,8 @@
 # The launcher surface
 
-> **Status: Quick launcher implemented; Deep and later exits remain planned.** The production app
-> owns global `Mod-k`, invocation provenance, bounded discovery, commands, family filters, help,
-> focus restoration, and the approved Quick presentations over one shared behavior contract.
-> Chips, Deep preview, saving, insert-ref, session signals, and tab retirement remain later Phase 12
-> work. Workspace, Table, and Tags tabs therefore remain temporary roots.
+> **Status: Quick, chips, and bounded Deep preview implemented.** Saving, insert-ref, session
+> signals, and tab retirement remain later Phase 12 work. Workspace, Table, and Tags tabs therefore
+> remain temporary roots.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
 
@@ -34,9 +32,9 @@ neutral borders carry hierarchy. Opening Quick and expanding to Deep realize the
 immediately, then measured decoration-grey border echoes trace the change post-facto. Reduced motion
 removes the echoes without delaying or changing state.
 
-Quick now ships in this direction. Deep remains designed for Session 6. Both presentations remain
-provisional while dogfooding continues; a future review may revise Wipeout's geometry without
-changing the shared launcher contract.
+Quick and Deep now ship in this direction. Both presentations remain provisional while dogfooding
+continues; a future review may revise Wipeout's geometry without changing the shared launcher
+contract.
 
 The shared presentation foundation uses a native modal dialog for centered palettes and a nonmodal,
 viewport-clamped shell for cursor-anchored editor lists. Both consume one controlled, stable-ID
@@ -85,8 +83,8 @@ Passive sectioning is replaced by an active, one-keystroke gesture. A sigil at t
 - Sigils are recognized at input start only; elsewhere they are literal text. No dedicated view sigil (views ride `@`, identified by `≔`) until proven need. Family-filter hotkeys — local or global — are deferred: inside the launcher the sigil already _is_ a single-keystroke hotkey, and globally `⌘`-digit is the browser's tab-switching range.
 
 Quick ships browse-on-sigil, family-name suggestion rows, pointer activation through result marks,
-and backspace removal. Tokens remain launcher state outside query text and `QuerySpec`; Session 6
-adds the chip-authoring consumption path.
+and backspace removal. Tokens remain launcher state outside query text and `QuerySpec`; Tab consumes
+types, containers, roots, or navigable nodes into kind or scope chips.
 
 ## Commands in the list (D22)
 
@@ -109,14 +107,19 @@ reserved empty structure until Session 8 supplies bounded in-memory signals.
 
 ## Two tempos, one ceiling (D25 · D26)
 
-Quick tempo is the shipped ranked go-list above. Deep tempo — entered the moment a chip commits —
-is Session 6 work. It shows the compiled query's results as a **read-only preview**: each row's line
+Quick tempo is the shipped ranked go-list above. Deep tempo begins when the first chip commits and
+shows the compiled query's results as a **read-only preview**: each row's line
 rendering plus **spec-touched columns** (label role + every column referenced by a committed
 `where`/`order` chip, in chip order, width-capped). This projection is a rendering choice by the
 surface — a host concern, like fetch-narrowing — not a projection dimension in the spec (D2 stands:
 compiled SQL is always `SELECT d.*`).
 
 **The ceiling:** the preview never mounts a face, never edits a cell, never offers add-row (the `view` firewall applies even to a preview), and `⏎` on a row still means _go_. Everything past the ceiling — editing, a real grid, a recipe — is one `⌘S` away.
+
+The transient preview has a semantic limit of 1,000 rows. It uses 100-row virtual pages and retains
+at most six contiguous pages. Loading, empty, invalid, and execution-error states share the same
+host-owned surface. Bound values replace subscriptions add-before-remove so unchanged SQL templates
+remain prepared while stale count or range results are ignored.
 
 ## Keyboard map (D27 · D28)
 
@@ -157,7 +160,7 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 1. **Command registry extraction — shipped.** `slash-commands.ts` → core registry with `surfaces`; the `/` menu consumes it unchanged (session 3 D6).
 2. **Query-spec compiler + recognizer — shipped.** `src/sql/query-spec/` beside `recognize-updatable.ts`, round-trip conformance suite (3b-i; shared with view blocks).
 3. **Launcher shell — shipped.** Overlay, input, flat ranked results, sigil filter tokens + family rows, ranking blend, reserved jump-back + recents, and generated help; name/content match over places + commands. `Mod-k` has left `keymap.ts` (I1).
-4. **Chips + deep tempo** — chip authoring (menu/typeahead/typed), per-keystroke compiled runs, viewport expansion, spec-touched preview.
+4. **Chips + deep tempo — shipped.** Chip authoring (menu/typeahead/typed), per-keystroke compiled runs, viewport expansion, and spec-touched bounded preview.
 5. **Save-as-node + `⌘⏎` insert-ref** — the two exits; retires insert-link's job for good.
 6. **Session memory wiring** — in-memory focus history, recent deep searches, on-screen boost; isolated so frecency later only persists it.
 7. **Tab retirement** — Table/Tags tabs captured as Storybook components, then removed (gated on 3–5; the §4 sequencing constraint).

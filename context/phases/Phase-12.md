@@ -61,15 +61,15 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Complete |
 | [4A — Quick/deep overlay prototypes](Phase-12/Session-4a-quick-deep-overlay-prototypes.md)                             | Storybook evidence for theme-specific Quick and Deep relationships           | 4          | Complete |
 | [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4A   | Complete |
-| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Active   |
+| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Complete |
 | [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Planned  |
 | [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Planned  |
 | [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned  |
 
-Sessions 1–5 and 4A are complete. Quick now implements the approved theme-specific presentation
-contract over one behavior and interaction model. Session 6 owns Deep production adoption. Execute
-and merge the remaining sessions in order. The dependency column explains architectural coupling,
-not permission to skip the incremental sequence.
+Sessions 1–6 and 4A are complete. Quick and Deep now implement the approved theme-specific
+presentation contract over one behavior and interaction model. Session 7 owns durable saved-view
+authoring and editor exits. Execute the remaining sessions in order. The dependency column explains
+architectural coupling, not permission to skip the incremental sequence.
 
 ## Phase acceptance
 

@@ -211,7 +211,7 @@ The approved roadmap owns their future order.
    review.
 6. The shared overlay/selectable-list primitives shipped in Phase 12 Session 4. Session 4A approved
    provisional theme-specific launcher shells over one interface contract. Quick shipped in Session
-   5; migrate Deep in Session 6, then keep evaluating the Wipeout expression through dogfooding.
+   5 and Deep in Session 6. Keep evaluating the Wipeout expression through dogfooding.
 7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis.

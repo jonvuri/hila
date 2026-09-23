@@ -5,13 +5,42 @@ import ScrollVirtualizer from './ScrollVirtualizer'
 import type { ScrollVirtualizerHandle, VirtualizerGeometryState } from './ScrollVirtualizer'
 
 class TestIntersectionObserver {
+  static instances: TestIntersectionObserver[] = []
+
+  connected = true
   observe = vi.fn()
-  disconnect = vi.fn()
+  disconnect = vi.fn(() => {
+    this.connected = false
+  })
   unobserve = vi.fn()
   takeRecords = vi.fn(() => [])
   root = null
   rootMargin = ''
   thresholds = []
+
+  constructor(readonly callback: IntersectionObserverCallback) {
+    TestIntersectionObserver.instances.push(this)
+  }
+
+  static intersect = (windowIndex: number, isIntersecting: boolean) => {
+    const instance = [...TestIntersectionObserver.instances]
+      .reverse()
+      .find(
+        ({ connected, observe }) =>
+          connected &&
+          observe.mock.calls.some(
+            ([target]) => (target as HTMLElement).dataset.windowIndex === String(windowIndex),
+          ),
+      )
+    const target = instance?.observe.mock.calls.find(
+      ([candidate]) => (candidate as HTMLElement).dataset.windowIndex === String(windowIndex),
+    )?.[0] as Element | undefined
+    if (!instance || !target) throw new Error(`Window ${windowIndex} is not observed`)
+    instance.callback(
+      [{ target, isIntersecting } as IntersectionObserverEntry],
+      instance as unknown as IntersectionObserver,
+    )
+  }
 }
 
 class TestResizeObserver {
@@ -42,6 +71,7 @@ describe('ScrollVirtualizer contract', () => {
   let clientHeightDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    TestIntersectionObserver.instances = []
     TestResizeObserver.instances = []
     vi.stubGlobal('IntersectionObserver', TestIntersectionObserver)
     vi.stubGlobal('ResizeObserver', TestResizeObserver)
@@ -231,5 +261,51 @@ describe('ScrollVirtualizer contract', () => {
 
     expect(handle?.getGeometry()?.visibleRange).toEqual({ start: 8, end: 9 })
     expect([...handle!.getGeometry()!.renderedRange]).toEqual([6, 7, 8, 9])
+  })
+
+  test('prunes stale intersections across far jumps and reconciles repeated enters', () => {
+    const scrollport = document.createElement('div')
+    container.appendChild(scrollport)
+    let handle: ScrollVirtualizerHandle | undefined
+    const retainedRanges: number[][] = []
+
+    dispose = render(
+      () => (
+        <ScrollVirtualizer
+          minWindowHeight={64}
+          totalWindows={10}
+          scrollport={() => scrollport}
+          renderWindow={() => <div>Window</div>}
+          virtualizerRef={(next) => (handle = next)}
+          onVisibleRangeChange={(range) => retainedRanges.push([...range])}
+        />
+      ),
+      scrollport,
+    )
+
+    const scrollTo = (scrollTop: number) => {
+      scrollport.scrollTop = scrollTop
+      scrollport.dispatchEvent(new Event('scroll'))
+    }
+
+    TestIntersectionObserver.intersect(0, true)
+    TestIntersectionObserver.intersect(1, true)
+    scrollTo(128)
+    TestIntersectionObserver.intersect(2, true)
+    TestIntersectionObserver.intersect(3, true)
+    scrollTo(512)
+    TestIntersectionObserver.intersect(8, true)
+    TestIntersectionObserver.intersect(9, true)
+    scrollTo(128)
+
+    expect([...handle!.getGeometry()!.renderedRange]).toEqual([0, 1, 2, 3, 4, 5])
+
+    // Simulate a delayed duplicate enter after geometry changes but before a
+    // scroll event. It must reconcile instead of returning on the stale record.
+    scrollport.scrollTop = 0
+    TestIntersectionObserver.intersect(2, true)
+
+    expect([...handle!.getGeometry()!.renderedRange]).toEqual([0, 1, 2, 3])
+    expect(retainedRanges.every((range) => range.length <= 6)).toBe(true)
   })
 })

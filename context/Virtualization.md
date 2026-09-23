@@ -69,6 +69,12 @@ cross-matrix rows, a portal, and a 120-row folded view; its current 1280×720 re
 rows. Any change to page size or retention distance must update the bound and its rationale
 together.
 
+The launcher Deep preview reuses the same latch and retention policy with 100-row pages and a
+1,000-row semantic cap. Its contiguous query range is therefore at most six pages or 600 rows.
+Unloaded preview windows retain their estimated row height until data arrives. Fast-scroll
+IntersectionObserver records reconcile against numeric scroll geometry, so stale enter/exit order
+cannot widen the two-window latch.
+
 ## Query and invalidation rules
 
 - Hot page and count queries use indexed `scroll_index` ranges and SQL-side collapse.

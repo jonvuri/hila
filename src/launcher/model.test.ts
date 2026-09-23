@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import type { DiscoveryNodeResult } from '../discovery/types'
 
 import {
+  authoringCommitForLauncherItem,
   buildLauncherItems,
   familyFilterForResult,
   familyMarkForResult,
@@ -70,5 +71,46 @@ describe('launcher model', () => {
     expect(familyMarkForResult('container')).toBe('[]')
     expect(familyMarkForResult('command')).toBe('>')
     expect(familyFilterForResult('view')).toBe('named')
+  })
+
+  test('maps Tab-authorable objects to kind or scope without changing Enter navigation', () => {
+    const typeItem = buildLauncherItems({
+      results: [{ ...result('3', 'type'), subjectMatrixId: 30 }],
+      query: 'result',
+      filter: null,
+    })[0]!
+    const containerItem = buildLauncherItems({
+      results: [{ ...result('4', 'container'), subjectMatrixId: 40 }],
+      query: 'result',
+      filter: null,
+    })[0]!
+    const rowItem = buildLauncherItems({
+      results: [result('5')],
+      query: 'result',
+      filter: null,
+    })[0]!
+
+    expect(authoringCommitForLauncherItem(typeItem)).toEqual({
+      type: 'kind',
+      matrixId: 30,
+      label: 'Result 3',
+      mark: '#',
+    })
+    expect(authoringCommitForLauncherItem(containerItem)).toEqual({
+      type: 'kind',
+      matrixId: 40,
+      label: 'Result 4',
+      mark: '[]',
+    })
+    expect(authoringCommitForLauncherItem(rowItem)).toEqual({
+      type: 'scope',
+      node: { matrixId: 2, rowId: 5 },
+      label: 'Result 5',
+    })
+    expect(navigationTargetForLauncherItem(rowItem)).toEqual({
+      type: 'node',
+      node: { matrixId: 2, rowId: 5 },
+      provenance: { key: Uint8Array.of(1, 5) },
+    })
   })
 })

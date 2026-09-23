@@ -35,6 +35,11 @@
   height: fit-content;
 }
 
+.centeredOverlay.deepOverlay {
+  width: min(960px, calc(100vw - 2 * var(--space-content-inset)));
+  height: min(720px, calc(100dvh - 2 * var(--space-content-inset)));
+}
+
 :global(dialog).wipeoutOverlay {
   position: fixed;
   inset: auto;
@@ -47,6 +52,12 @@
   margin: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+:global(dialog).wipeoutOverlay.deepOverlay {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
 }
 
 .wipeoutOverlay::backdrop {
@@ -69,12 +80,18 @@
   max-height: none;
 }
 
+.centeredOverlay.deepOverlay .surface {
+  height: 100%;
+  max-height: none;
+}
+
 .queryRow {
   position: relative;
   z-index: 6;
   display: flex;
   min-height: 48px;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   background: inherit;
   border-bottom: var(--border-subtle);
@@ -86,9 +103,10 @@
 }
 
 .queryInput {
-  width: 100%;
-  min-width: 0;
+  width: auto;
+  min-width: 12rem;
   min-height: 48px;
+  flex: 1;
   padding: var(--space-8) var(--space-16);
   color: var(--color-text-strong);
   caret-color: var(--color-accent);
@@ -98,6 +116,32 @@
   font: inherit;
   font-family: var(--type-data-family);
   font-size: var(--type-body-large-size);
+}
+
+.queryChip {
+  min-height: var(--size-24);
+  margin-left: var(--space-8);
+  padding: 0 var(--space-8);
+  color: var(--color-text-strong);
+  background: var(--color-surface-raised);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  font-family: var(--type-data-family);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.queryChip:hover {
+  border-color: var(--color-line-strong);
+}
+
+.queryChip:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.invalidInput {
+  color: var(--color-state-invalid);
 }
 
 .queryInput::placeholder {
@@ -152,6 +196,30 @@
   flex: 1;
   overflow: auto;
   background: inherit;
+}
+
+.surface[data-launcher-tempo='deep'] .body {
+  overflow: hidden;
+}
+
+.deepBody {
+  display: flex;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.authoringList {
+  max-height: min(15rem, 42%);
+  flex: none;
+  overflow: auto;
+  border-bottom: var(--border-subtle);
+}
+
+.authoringList :global([role='listbox']) {
+  max-height: none;
 }
 
 .body :global([role='listbox']) {
@@ -242,7 +310,7 @@
   display: grid;
   min-height: 40px;
   flex: none;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-8);
   padding: var(--space-4) var(--space-8);
@@ -254,10 +322,20 @@
 }
 
 .origin,
-.keyboardHint {
+.keyboardHint,
+.footerNotice {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.footerNotice {
+  color: var(--color-state-invalid);
+  text-align: center;
+}
+
+.footerNotice:empty {
+  visibility: hidden;
 }
 
 .keyboardHint {
@@ -300,6 +378,16 @@
   pointer-events: none;
 }
 
+.quickGeometryProbe {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: min(640px, 60vw);
+  height: min(440px, 56vh);
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .echoFrame {
   position: absolute;
   box-sizing: border-box;
@@ -310,27 +398,27 @@
   animation-fill-mode: both;
 }
 
-.echoFrame:nth-child(1) {
+.echoFrame:nth-of-type(1) {
   animation-duration: 340ms;
   animation-delay: 0ms;
 }
 
-.echoFrame:nth-child(2) {
+.echoFrame:nth-of-type(2) {
   animation-duration: 310ms;
   animation-delay: 30ms;
 }
 
-.echoFrame:nth-child(3) {
+.echoFrame:nth-of-type(3) {
   animation-duration: 280ms;
   animation-delay: 60ms;
 }
 
-.echoFrame:nth-child(4) {
+.echoFrame:nth-of-type(4) {
   animation-duration: 250ms;
   animation-delay: 90ms;
 }
 
-.echoFrame:nth-child(5) {
+.echoFrame:nth-of-type(5) {
   animation-duration: 220ms;
   animation-delay: 120ms;
 }
@@ -358,7 +446,21 @@
 }
 
 @media (max-width: 639px) {
+  .centeredOverlay.deepOverlay {
+    width: calc(100vw - 2 * var(--space-8));
+    height: calc(100dvh - 2 * var(--space-8));
+  }
+
   :global(dialog).wipeoutOverlay {
+    width: 100vw;
+    height: 50dvh;
+  }
+
+  :global(dialog).wipeoutOverlay.deepOverlay {
+    height: 100dvh;
+  }
+
+  .quickGeometryProbe {
     width: 100vw;
     height: 50dvh;
   }
@@ -370,6 +472,15 @@
 
   .keyboardHint {
     display: none;
+  }
+
+  .footer {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .footerNotice {
+    grid-column: 1 / -1;
+    grid-row: 1;
   }
 }
 

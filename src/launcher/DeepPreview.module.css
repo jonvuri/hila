@@ -1,0 +1,89 @@
+.root {
+  position: relative;
+  display: flex;
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  outline: none;
+}
+
+.state {
+  display: grid;
+  min-height: 12rem;
+  place-items: center;
+  padding: var(--space-16);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-13);
+  text-align: center;
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--color-surface) 84%, transparent);
+}
+
+.root[data-preview-state='invalid'] .state,
+.root[data-preview-state='error'] .state {
+  color: var(--color-danger);
+}
+
+.window {
+  min-width: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1.35fr) repeat(auto-fit, minmax(7rem, 1fr));
+  align-items: center;
+  gap: var(--space-8);
+  box-sizing: border-box;
+  height: 40px;
+  padding: 0 var(--space-8);
+  border-bottom: var(--width-line) solid var(--color-line-subtle);
+  color: var(--color-text);
+  cursor: default;
+}
+
+.row[data-selected] {
+  background: var(--color-state-selected);
+  color: var(--color-text-strong);
+}
+
+.identity,
+.cell,
+.cellValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity {
+  font-size: var(--font-size-13);
+  font-weight: var(--font-weight-500);
+}
+
+.cell {
+  display: grid;
+  grid-template-columns: minmax(2.5rem, auto) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: baseline;
+  max-width: 18rem;
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-11);
+}
+
+.cellLabel {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cellValue {
+  color: inherit;
+}

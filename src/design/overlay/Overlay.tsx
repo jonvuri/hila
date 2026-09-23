@@ -160,6 +160,8 @@ export type CenteredOverlayProps = {
   initialFocus?: () => HTMLElement | undefined
   restoreFocusTo?: HTMLElement
   restoreFocus?: boolean
+  /** Return true when a launcher-owned layer handled Escape. */
+  onEscape?: () => boolean
   onDismiss: (reason: OverlayDismissReason) => void
   class?: string
   testId?: string
@@ -184,7 +186,9 @@ export const CenteredOverlay = (props: CenteredOverlayProps) => {
     )
     removeLayer = registerOverlayLayer({
       boundary: dialog,
-      onEscape: () => dismiss('escape'),
+      onEscape: () => {
+        if (!props.onEscape?.()) dismiss('escape')
+      },
     })
     if (typeof dialog.showModal === 'function') dialog.showModal()
     else dialog.setAttribute('open', '')

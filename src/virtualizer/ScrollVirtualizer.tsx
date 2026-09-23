@@ -24,6 +24,8 @@ const THRESHOLD_DISTANCE = 2
 const CONTAINER_HEIGHT = 500
 const BLOCK_SIZE = 4 + THRESHOLD_DISTANCE * 2 // Size of window blocks for repositioning
 
+export const SCROLL_VIRTUALIZER_MAX_RETAINED_WINDOWS = 2 + THRESHOLD_DISTANCE * 2
+
 type WindowState = 'GHOST' | 'VISIBLE'
 
 export type VirtualizerGeometryState = {
@@ -281,49 +283,75 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
     }
   }
 
+  const visiblePairAt = (scrollTop: number, height: number): [number, number] | undefined => {
+    const visible = findVisibleWindowRange(windowGeometry(), scrollTop, height)
+    if (!visible) return undefined
+    return clampPair([visible.start, Math.min(visible.end, visible.start + 1)])
+  }
+
+  const visiblePairForScrollport = (): [number, number] | undefined => {
+    const scrollport = getScrollport()
+    return visiblePairAt(
+      (scrollport?.scrollTop ?? physicalScrollTop()) + containerVirtualOffset(),
+      viewportHeight(),
+    )
+  }
+
+  const syncActuallyVisibleToPair = (pair: readonly [number, number]): void => {
+    setActuallyVisible((current) => {
+      const next = new Set(pair)
+      if (
+        current.size === next.size &&
+        [...next].every((windowIndex) => current.has(windowIndex))
+      ) {
+        return current
+      }
+      return next
+    })
+  }
+
   // Handle window intersection changes - update the actually visible set and latch pair
   const handleWindowIntersection = (windowIndex: number, isIntersecting: boolean) => {
     const currentActuallyVisible = new Set(actuallyVisible())
     const currentPair = latchPair()
+    let actuallyVisibleChanged = false
+    let reconcileFromGeometry = false
 
     if (isIntersecting) {
       // Window became actually visible
       if (!currentActuallyVisible.has(windowIndex)) {
         currentActuallyVisible.add(windowIndex)
+        actuallyVisibleChanged = true
       } else {
-        // Actually visible set didn't change, return early
-        return
+        // A repeated enter can be a delayed record after scroll or layout work.
+        // Reconcile it against current numeric geometry instead of suppressing it.
+        reconcileFromGeometry = true
       }
     } else {
       // Window left actual visibility
       if (currentActuallyVisible.has(windowIndex)) {
         currentActuallyVisible.delete(windowIndex)
+        actuallyVisibleChanged = true
       } else {
         // Actually visible set didn't change, return early
         return
       }
     }
 
-    setActuallyVisible(currentActuallyVisible)
-
     // Update latch pair based on new actually visible state
     let newPair = currentPair
 
     if (currentActuallyVisible.size > 2) {
-      console.error(
-        `LATCH_PAIR: ${currentActuallyVisible.size} windows visible, max 2 expected`,
-      )
-
-      // More than two windows visible - update pair to min/max of visible
-      const visibleArray = Array.from(currentActuallyVisible).sort((a, b) => a - b)
-      newPair = [visibleArray[0]!, visibleArray[visibleArray.length - 1]!]
+      // A fast jump can report entering windows before the old exit records arrive.
+      // Reconcile from numeric geometry so a transient observer set cannot widen
+      // the retained range beyond the two-window latch contract.
+      reconcileFromGeometry = true
     } else if (currentActuallyVisible.size === 2) {
-      // Two windows visible - set them as the latch pair
-      const visibleIter = currentActuallyVisible.values()
-      const window1 = visibleIter.next().value!
-      const window2 = visibleIter.next().value!
-
-      newPair = [Math.min(window1, window2), Math.max(window1, window2)]
+      const visibleArray = Array.from(currentActuallyVisible).sort((a, b) => a - b)
+      const first = visibleArray[0]!
+      const last = visibleArray[1]!
+      if (last - first <= 1) newPair = [first, last]
+      else reconcileFromGeometry = true
     } else if (currentActuallyVisible.size === 1) {
       // Only one window visible
       const visibleWindow = currentActuallyVisible.values().next().value!
@@ -344,6 +372,18 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
       }
     }
     // size === 0: transient during mount or fast scroll. Keep existing pair.
+
+    if (reconcileFromGeometry) {
+      const geometryPair = visiblePairForScrollport()
+      if (geometryPair) {
+        newPair = geometryPair
+        syncActuallyVisibleToPair(geometryPair)
+      } else if (actuallyVisibleChanged) {
+        setActuallyVisible(currentActuallyVisible)
+      }
+    } else if (actuallyVisibleChanged) {
+      setActuallyVisible(currentActuallyVisible)
+    }
 
     if (newPair[0] === currentPair[0] && newPair[1] === currentPair[1]) {
       // Pair didn't change, return early
@@ -414,10 +454,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
   })
 
   const reconcileVisibleRangeFromScroll = (scrollTop: number, height: number) => {
-    const visible = findVisibleWindowRange(windowGeometry(), scrollTop, height)
-    if (!visible) return
+    const nextPair = visiblePairAt(scrollTop, height)
+    if (!nextPair) return
+    syncActuallyVisibleToPair(nextPair)
     const currentPair = latchPair()
-    const nextPair = clampPair([visible.start, visible.end])
     if (nextPair[0] === currentPair[0] && nextPair[1] === currentPair[1]) return
     setLatchPair(nextPair)
     updateWindowStates(computeVisibleRange(nextPair))
@@ -552,6 +592,10 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
       const next = new Set([...prev].filter((windowIndex) => windowIndex < total))
       return next.size === prev.size ? prev : next
     })
+    setActuallyVisible((prev) => {
+      const next = new Set([...prev].filter((windowIndex) => windowIndex < total))
+      return next.size === prev.size ? prev : next
+    })
     setLatchPair((prev) => {
       const clamped = clampPair(prev)
       return clamped[0] !== prev[0] || clamped[1] !== prev[1] ? clamped : prev
@@ -569,6 +613,7 @@ const ScrollVirtualizer = (props: ScrollVirtualizerProps) => {
       <div
         ref={containerRef}
         class={styles.scrollContainer}
+        data-virtualizer-scrollport
         classList={{ [styles.externalScrollContent!]: props.scrollport != null }}
       >
         <div class={styles.content} style={{ height: `${totalContentHeight()}px` }}>

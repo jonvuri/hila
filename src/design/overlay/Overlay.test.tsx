@@ -76,6 +76,25 @@ describe('shared overlays', () => {
     invoker.remove()
   })
 
+  test('lets centered content consume Escape before dismissing', async () => {
+    const dismiss = vi.fn<(reason: OverlayDismissReason) => void>()
+    const consumeEscape = vi.fn(() => true)
+    dispose = render(
+      () => (
+        <CenteredOverlay ariaLabel="Launcher" onEscape={consumeEscape} onDismiss={dismiss}>
+          <input />
+        </CenteredOverlay>
+      ),
+      container,
+    )
+    await Promise.resolve()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+    expect(consumeEscape).toHaveBeenCalledOnce()
+    expect(dismiss).not.toHaveBeenCalled()
+  })
+
   test('restores a contenteditable selection after dismissal', async () => {
     const invoker = document.createElement('div')
     invoker.contentEditable = 'true'
