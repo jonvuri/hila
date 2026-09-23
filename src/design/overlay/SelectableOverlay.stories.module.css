@@ -1,0 +1,108 @@
+.storyFrame,
+.anchoredFrame {
+  min-height: 100vh;
+  padding: var(--space-content-inset);
+  color: var(--color-text);
+  background: var(--color-canvas);
+}
+
+.reopen,
+.invoker {
+  min-height: var(--size-control);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-strong);
+  border-radius: var(--radius-control);
+  font: inherit;
+}
+
+.anchoredFrame {
+  padding: var(--space-64) var(--space-64);
+}
+
+.quickContent,
+.deepContent {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.deepContent {
+  height: 100%;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-control-gap);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  border-bottom: var(--border-subtle);
+}
+
+.header span,
+.feedback {
+  color: var(--color-text-muted);
+  font-size: var(--type-body-small-size);
+}
+
+.listHarness {
+  min-height: 0;
+  background: var(--color-overlay);
+}
+
+.feedback {
+  padding: var(--space-compact-inset) var(--space-control-inset-inline);
+  border-top: var(--border-subtle);
+}
+
+.narrowFrame {
+  width: 280px;
+  max-width: 100%;
+  margin: var(--space-32) auto;
+  overflow: hidden;
+  background: var(--color-overlay);
+  border: var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--elevation-overlay);
+}
+
+.themeMatrix {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: var(--space-16);
+  min-height: 100vh;
+  padding: var(--space-16);
+  background: var(--color-canvas);
+}
+
+.themeCell {
+  overflow: hidden;
+  color: var(--color-text);
+  background: var(--color-overlay);
+  border: var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--elevation-overlay);
+}
+
+.themeCell > header {
+  padding: var(--space-compact-inset) var(--space-control-inset-inline);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border-bottom: var(--border-subtle);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  text-transform: uppercase;
+}
+
+.reducedMotion {
+  --duration-feedback: 0ms;
+}
+
+@media (max-width: 639px) {
+  .themeMatrix {
+    grid-template-columns: 1fr;
+    padding: var(--space-8);
+  }
+}

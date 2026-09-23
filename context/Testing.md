@@ -97,6 +97,17 @@ The Playwright suite remains the regression source of truth.
   actions can still be useful for clicking and inspection, but their synthetic keyboard
   events may not reach the editor.
 
+### Overlay interaction checks
+
+- Test selection helpers and focus restoration as components, then use real Chrome for native
+  dialog focus, backdrop dismissal, contenteditable `aria-activedescendant`, and caret anchoring.
+- Assert selection by stable option ID. Disabled rows stay selectable so their stated reason can be
+  announced, but activation must remain blocked.
+- For editor-anchored lists, verify the editor keeps DOM focus while arrows move list selection.
+  One Escape must dismiss only the top overlay before any enclosing panel handles it.
+- Exercise pointer activation and outside pointer-down separately. The inside path must fire once;
+  the outside path must let a clicked focusable target receive focus.
+
 ## Performance and churn
 
 [Performance.md](Performance.md) owns performance budgets and test design. Keep two layers:

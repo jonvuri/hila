@@ -1,24 +1,13 @@
 ---
 title: Current state
 kind: status
-state: ready
-updated: 2026-09-05
+state: active
+updated: 2026-09-23
 phase: 12
 session: shared-overlay-and-selectable-list
 ---
 
 # Now
-
-Phase 11 is complete. Saved views are durable named places with one replicated SQL source and a
-host-owned collection region.
-
-The unreleased app remains at reset-only schema version 0. The first
-dogfood build whose data should survive upgrades activates the durable dogfooding gate and
-establishes version 1; the gate may follow all currently planned phases.
-
-The dormant migration runner already proves ordered schema/data evolution and full rollback. The
-gate requires explicit reset or reviewed adoption of version-0 databases, removal of reset-era
-compatibility migrations, and a backup path before the first `1 → 2` migration.
 
 Phase 12 Sessions 1–3 are complete. The main thread has authoritative command and shortcut
 registries. The query-spec dialect has matched compilation and recognition, bounded execution,
@@ -30,6 +19,16 @@ filters back `@`, `#`, `>`, and `[`. External navigation carries cross-matrix id
 appearance provenance, then resolves through provenance, ownership home, or deterministic
 membership context without choosing an arbitrary portal. No schema change occurred.
 
+Session 4 is implemented and verified, pending user visual and interaction review. A controlled
+selectable list now backs centered modal and cursor-anchored overlays with shared keyboard,
+pointer, focus, dismissal, and accessibility behavior. The first-level slash menu uses the
+anchored primitive without changing its command semantics. Storybook covers geometry, semantic
+states, themes, polarity, narrow layouts, and reduced motion. Nested theme scopes now re-resolve
+semantic color roles, including the new scrim role. No schema change occurred.
+
+The unreleased app remains at reset-only schema version 0. The durable dogfooding gate may follow
+all currently planned phases.
+
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
@@ -38,11 +37,10 @@ membership context without choosing an arbitrary portal. No schema change occurr
 
 ## Boundary
 
-Do not build launcher search state, chips, or deep preview in Session 4. Preserve slash trigger,
-query, deletion, and command behavior while replacing only its presentation and shared interaction
-physics.
+Do not build launcher search state, chips, or deep preview before Session 4 review closes. Preserve
+the verified slash behavior and shared overlay contract.
 
 ## Next action
 
-Specify the shared controlled-selection and focus contract, then implement the centered and
-cursor-anchored variants over one selectable-list model.
+Review `Design/Selectable overlay` in Storybook. Address findings, close Session 4, then route the
+next handoff to Session 5.

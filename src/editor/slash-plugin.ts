@@ -2,11 +2,17 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 
 import {
+  getInitialSelectableListId,
+  getSelectableListAction,
+} from '../design/overlay/SelectableList'
+
+import {
   type SlashCommand,
   type SlashNode,
   matchCommands,
   runSlashCommand,
 } from './slash-commands'
+import { createSlashMenu, type SlashMenu } from './slash-menu'
 
 /**
  * Slash-command ProseMirror plugin (Phase 9 §9.6 — the unified creation gesture).
@@ -35,8 +41,6 @@ type SlashState = {
   query: string
 }
 
-type MenuItem = { label: string; activate: () => void }
-
 const slashPluginKey = new PluginKey<SlashState>('slash')
 
 const INACTIVE: SlashState = { active: false, from: 0, query: '' }
@@ -44,70 +48,52 @@ const INACTIVE: SlashState = { active: false, from: 0, query: '' }
 const getSlashState = (view: EditorView): SlashState =>
   slashPluginKey.getState(view.state) ?? INACTIVE
 
-const createDropdownElement = (): HTMLDivElement => {
-  const el = document.createElement('div')
-  el.className = 'inlineref-autocomplete slash-autocomplete'
-  el.setAttribute('data-testid', 'slash-autocomplete')
-  el.style.display = 'none'
-  document.body.appendChild(el)
-  return el
-}
-
-const positionDropdown = (view: EditorView, dropdown: HTMLDivElement, pos: number) => {
-  try {
-    const coords = view.coordsAtPos(pos)
-    dropdown.style.left = `${coords.left}px`
-    dropdown.style.top = `${coords.bottom + 4}px`
-  } catch {
-    dropdown.style.display = 'none'
-  }
-}
-
-const renderDropdown = (dropdown: HTMLDivElement, items: MenuItem[], selectedIndex: number) => {
-  dropdown.innerHTML = ''
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]!
-    const el = document.createElement('div')
-    el.className =
-      'inlineref-autocomplete-item' +
-      (i === selectedIndex ? ' inlineref-autocomplete-selected' : '')
-    el.textContent = item.label
-    el.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      // Stop the event reaching the document-level outside-click handler: this
-      // mousedown's own dispatch re-renders the dropdown and detaches `e.target`,
-      // which would otherwise read as a click "outside" and close the menu mid-flow.
-      e.stopPropagation()
-      item.activate()
-    })
-    dropdown.appendChild(el)
-  }
-  dropdown.style.display = items.length > 0 ? '' : 'none'
-}
-
 export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState> => {
   const { matrixId, rowIdAccessor } = config
-  let dropdown: HTMLDivElement | null = null
-  let items: MenuItem[] = []
-  let selectedIndex = 0
+  let menu: SlashMenu | null = null
+  let items: readonly SlashCommand[] = []
+  let selectedId: string | null = null
 
   const node = (): SlashNode => ({ matrixId, rowId: rowIdAccessor() })
 
   const renderIfOpen = (view: EditorView) => {
-    if (!dropdown) return
+    if (!menu) return
     const state = getSlashState(view)
-    if (!state.active) {
-      dropdown.style.display = 'none'
+    if (!state.active || items.length === 0) {
+      menu.update({
+        open: false,
+        anchor: { left: 0, right: 0, top: 0, bottom: 0 },
+        items,
+        selectedId,
+      })
       return
     }
-    positionDropdown(view, dropdown, state.from)
-    renderDropdown(dropdown, items, selectedIndex)
+    try {
+      const coords = view.coordsAtPos(state.from)
+      menu.update({
+        open: true,
+        anchor: {
+          left: coords.left,
+          right: coords.right,
+          top: coords.top,
+          bottom: coords.bottom,
+        },
+        items,
+        selectedId,
+      })
+    } catch {
+      menu.update({
+        open: false,
+        anchor: { left: 0, right: 0, top: 0, bottom: 0 },
+        items,
+        selectedId,
+      })
+    }
   }
 
   const close = (view: EditorView) => {
-    if (dropdown) dropdown.style.display = 'none'
     items = []
-    selectedIndex = 0
+    selectedId = null
     view.dispatch(view.state.tr.setMeta(slashPluginKey, INACTIVE))
   }
 
@@ -121,7 +107,6 @@ export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState>
     const tr = view.state.tr.delete(deleteFrom, deleteTo)
     tr.setMeta(slashPluginKey, INACTIVE)
     view.dispatch(tr)
-    if (dropdown) dropdown.style.display = 'none'
     // Selecting via a dropdown click leaves focus off the editor; restore it
     // before the command runs (so a launcher that hands focus elsewhere starts
     // from a known state).
@@ -134,11 +119,8 @@ export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState>
   const refresh = (view: EditorView) => {
     const state = getSlashState(view)
     if (!state.active) return
-    items = matchCommands(state.query, node(), view).map((c) => ({
-      label: c.label,
-      activate: () => commit(view, c),
-    }))
-    selectedIndex = 0
+    items = matchCommands(state.query, node(), view)
+    selectedId = getInitialSelectableListId(items)
     renderIfOpen(view)
   }
 
@@ -192,21 +174,21 @@ export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState>
         switch (event.key) {
           case 'ArrowDown':
             event.preventDefault()
-            selectedIndex = (selectedIndex + 1) % Math.max(items.length, 1)
+            selectedId =
+              getSelectableListAction(items, selectedId, 'ArrowDown')?.id ?? selectedId
             renderIfOpen(view)
             return true
 
           case 'ArrowUp':
             event.preventDefault()
-            selectedIndex =
-              (selectedIndex - 1 + Math.max(items.length, 1)) % Math.max(items.length, 1)
+            selectedId = getSelectableListAction(items, selectedId, 'ArrowUp')?.id ?? selectedId
             renderIfOpen(view)
             return true
 
           case 'Enter': {
             event.preventDefault()
-            const item = items[selectedIndex]
-            if (item) item.activate()
+            const item = items.find((candidate) => candidate.id === selectedId)
+            if (item) commit(view, item)
             return true
           }
 
@@ -237,25 +219,28 @@ export const createSlashPlugin = (config: SlashPluginConfig): Plugin<SlashState>
     },
 
     view(view) {
-      dropdown = createDropdownElement()
-
-      const handleClickOutside = (e: MouseEvent) => {
-        if (dropdown && !dropdown.contains(e.target as HTMLElement)) {
+      menu = createSlashMenu({
+        focusOwner: () => view.dom,
+        onSelectedIdChange: (id) => {
+          selectedId = id
+          renderIfOpen(view)
+        },
+        onActivate: (id) => {
+          const item = items.find((candidate) => candidate.id === id)
+          if (item) commit(view, item)
+        },
+        onDismiss: () => {
           if (getSlashState(view).active) close(view)
-        }
-      }
-      document.addEventListener('mousedown', handleClickOutside)
+        },
+      })
 
       return {
         update(view) {
           renderIfOpen(view)
         },
         destroy() {
-          document.removeEventListener('mousedown', handleClickOutside)
-          if (dropdown) {
-            dropdown.remove()
-            dropdown = null
-          }
+          menu?.destroy()
+          menu = null
         },
       }
     },

@@ -10,6 +10,7 @@ const colorGroups: readonly { label: string; tokens: readonly SemanticTokenName[
       'color-canvas',
       'color-surface',
       'color-overlay',
+      'color-scrim',
       'color-text-strong',
       'color-text',
       'color-text-muted',

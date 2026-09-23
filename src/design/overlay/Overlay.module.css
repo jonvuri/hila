@@ -1,0 +1,60 @@
+.dialog,
+.anchored {
+  color: var(--color-text);
+  background: var(--color-overlay);
+  border: var(--border-strong);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--elevation-overlay);
+}
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  max-width: calc(100vw - 2 * var(--space-content-inset));
+  max-height: calc(100vh - 2 * var(--space-content-inset));
+  margin: auto;
+  overflow: hidden;
+  padding: 0;
+}
+
+.dialog::backdrop {
+  background: var(--color-scrim);
+}
+
+.dialog:focus {
+  outline: none;
+}
+
+.quick {
+  width: min(640px, calc(100vw - 2 * var(--space-content-inset)));
+  height: fit-content;
+}
+
+.deep {
+  width: min(960px, calc(100vw - 2 * var(--space-content-inset)));
+  height: min(720px, calc(100vh - 2 * var(--space-content-inset)));
+}
+
+.anchored {
+  position: fixed;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 2 * var(--space-8)));
+  min-width: min(200px, calc(100vw - 2 * var(--space-8)));
+  overflow: hidden auto;
+}
+
+@media (max-width: 511px) {
+  .dialog {
+    max-width: calc(100vw - 2 * var(--space-8));
+    max-height: calc(100vh - 2 * var(--space-8));
+  }
+
+  .quick,
+  .deep {
+    width: calc(100vw - 2 * var(--space-8));
+  }
+
+  .deep {
+    height: calc(100vh - 2 * var(--space-8));
+  }
+}

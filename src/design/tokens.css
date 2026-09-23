@@ -87,6 +87,7 @@
   --color-canvas: var(--palette-neutral-950);
   --color-surface: var(--palette-neutral-850);
   --color-overlay: var(--palette-neutral-800);
+  --color-scrim: var(--palette-shadow-raised);
   --color-text-strong: var(--palette-neutral-0);
   --color-text: var(--palette-neutral-50);
   --color-text-muted: var(--palette-neutral-200);
@@ -199,6 +200,26 @@
   --palette-state-hover: #f5f5f5;
   --palette-state-selected: #eee;
   --palette-state-danger-surface: #f7e4e6;
+}
+
+/* Re-resolve palette-derived roles for nested preview and application scopes. */
+[data-theme] {
+  --color-canvas: var(--palette-neutral-950);
+  --color-surface: var(--palette-neutral-850);
+  --color-overlay: var(--palette-neutral-800);
+  --color-scrim: var(--palette-shadow-raised);
+  --color-text-strong: var(--palette-neutral-0);
+  --color-text: var(--palette-neutral-50);
+  --color-text-muted: var(--palette-neutral-200);
+  --color-text-faint: var(--palette-neutral-400);
+  --color-inverse-surface: var(--palette-neutral-50);
+  --color-inverse-text: var(--palette-neutral-950);
+  --color-danger: var(--palette-red-500);
+  --border-subtle: var(--width-line) solid var(--color-line-subtle);
+  --border-strong: var(--width-line) solid var(--color-line-strong);
+  --color-state-focus: var(--color-accent);
+  --color-state-invalid: var(--color-danger);
+  --color-decoration: var(--color-text-faint);
 }
 
 [data-visual-theme='ghost'] {

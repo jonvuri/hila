@@ -625,6 +625,65 @@ test.describe('Focus panel — creation gesture (Phase 9.6)', () => {
     return contentPm
   }
 
+  test('keeps editor focus and dismisses only the slash layer', async ({ page }) => {
+    await openFocusPanel(page)
+    const contentPm = page.getByTestId('focus-content-editor').locator('.ProseMirror')
+    await contentPm.click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' /')
+    const contentWithSlash = await contentPm.textContent()
+
+    const menu = page.getByTestId('slash-autocomplete')
+    const options = menu.getByRole('option')
+    await expect(menu).toBeVisible({ timeout: 3000 })
+    await expect(options).toHaveCount(2)
+    await expect(contentPm).toBeFocused()
+    await expect(options.first()).toHaveAttribute('aria-selected', 'true')
+    await expect(contentPm).toHaveAttribute('aria-controls', /slash-command-list-/)
+
+    await page.keyboard.press('ArrowDown')
+    await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true')
+    await expect(contentPm).toBeFocused()
+    await expect(contentPm).toHaveAttribute(
+      'aria-activedescendant',
+      await options.nth(1).getAttribute('id'),
+    )
+
+    await page.keyboard.press('Escape')
+    await expect(menu).toBeHidden()
+    await expect(page.getByTestId('focus-panel')).toBeVisible()
+    await expect(contentPm).toBeFocused()
+    await expect(contentPm).toHaveText(contentWithSlash ?? '')
+
+    // Reopen at the same boundary. Empty-query Backspace closes the list, then
+    // falls through so ProseMirror deletes the slash itself.
+    await page.keyboard.press('Backspace')
+    const contentWithoutSlash = await contentPm.textContent()
+    await page.keyboard.type('/')
+    await expect(menu).toBeVisible()
+    await page.keyboard.press('Backspace')
+    await expect(menu).toBeHidden()
+    await expect(contentPm).toHaveText(contentWithoutSlash ?? '')
+
+    // Outside pointer-down closes the menu without stealing the clicked target's focus.
+    await page.keyboard.type('/')
+    const contentBeforeOutsideDismiss = await contentPm.textContent()
+    await expect(menu).toBeVisible()
+    await page.evaluate(() => {
+      const button = document.createElement('button')
+      button.id = 'slash-outside-target'
+      button.textContent = 'Outside target'
+      button.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2000'
+      document.body.appendChild(button)
+    })
+    const outsideTarget = page.locator('#slash-outside-target')
+    await outsideTarget.click()
+    await expect(menu).toBeHidden()
+    await expect(outsideTarget).toBeFocused()
+    await expect(contentPm).toHaveText(contentBeforeOutsideDismiss ?? '')
+    await outsideTarget.evaluate((element) => element.remove())
+  })
+
   test('click-driven /table in the content editor creates the table and clears the command text', async ({
     page,
   }) => {
@@ -633,7 +692,7 @@ test.describe('Focus panel — creation gesture (Phase 9.6)', () => {
 
     const cmd = page.locator('.slash-autocomplete', { hasText: 'New table' })
     await expect(cmd).toBeVisible({ timeout: 3000 })
-    await cmd.getByText('New table').click() // argument-free launcher → runs now
+    await cmd.getByRole('option', { name: /New table/ }).click() // argument-free launcher → runs now
 
     // The `/table` command text is gone, and the table renders + persists.
     await expect(contentPm).not.toContainText('/table')
@@ -663,7 +722,7 @@ test.describe('Focus panel — creation gesture (Phase 9.6)', () => {
 
     const cmd = page.locator('.slash-autocomplete', { hasText: 'Attach a typed row' })
     await expect(cmd).toBeVisible({ timeout: 3000 })
-    await cmd.getByText('Attach a typed row').click() // argument-free launcher → opens picker
+    await cmd.getByRole('option', { name: /Attach a typed row/ }).click() // → opens picker
 
     // The standalone type picker opens; pick the type there (not in the prose).
     const picker = page.getByTestId('slash-type-picker')

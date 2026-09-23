@@ -183,7 +183,8 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
 5. Migrate the live shell and stream without behavior changes.
 6. Session 4q removed the executable overlaid-card implementation after the live cutover passed
    review.
-7. Migrate the launcher and shared overlays before top-level tabs are removed.
+7. Phase 12 Session 4 shipped the shared overlays. Migrate the launcher onto them before top-level
+   tabs are removed.
 8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
