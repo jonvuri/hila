@@ -1129,8 +1129,6 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       requestFocus(nextRow.rk, 'start')
     },
 
-    onInsertLink: () => {},
-
     onToggleCollapse: () => {
       const vRows = visibleRows()
       const index = findRowIndex(vRows, ck)
@@ -1431,6 +1429,13 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                   class="outline-row"
                   data-row-id={rowId}
                   data-row-ck={rowCk}
+                  data-launcher-subject
+                  data-launcher-matrix-id={rowMatrixId}
+                  data-launcher-row-id={rowId}
+                  data-launcher-provenance={row.pk}
+                  data-launcher-subject-label={
+                    extractTextFromPmDoc(row.label ?? '') || 'Untitled'
+                  }
                   data-block-row={isBlockRow ? 'true' : 'false'}
                   data-depth={row.depth - depthOffset()}
                   style={{

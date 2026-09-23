@@ -39,7 +39,6 @@ export const outlineShortcutDescriptors = [
   { id: 'editor.bold', title: 'Bold', key: 'Mod-b', context: 'editor' },
   { id: 'editor.italic', title: 'Italic', key: 'Mod-i', context: 'editor' },
   { id: 'editor.code', title: 'Inline code', key: 'Mod-e', context: 'editor' },
-  { id: 'editor.insert-link', title: 'Insert link', key: 'Mod-k', context: 'editor' },
   {
     id: 'editor.toggle-collapse',
     title: 'Toggle collapse',
@@ -62,7 +61,6 @@ export type OutlineCallbacks = {
   onOutdent: () => void
   onArrowUp: () => void
   onArrowDown: () => void
-  onInsertLink: () => void
   onToggleCollapse: () => void
   onShiftEnter?: () => void
   onOpenFocus?: () => void
@@ -130,13 +128,6 @@ const arrowDownToOutline = (callback: () => void): Command => {
   }
 }
 
-const modKToOutline = (callback: () => void): Command => {
-  return (_state, _dispatch) => {
-    callback()
-    return true
-  }
-}
-
 export const createOutlineKeymap = (
   callbacks: OutlineCallbacks,
   s: Schema = defaultSchema,
@@ -151,7 +142,6 @@ export const createOutlineKeymap = (
     'Mod-b': toggleMark(s.marks.bold!),
     'Mod-i': toggleMark(s.marks.italic!),
     'Mod-e': toggleMark(s.marks.code!),
-    'Mod-k': modKToOutline(callbacks.onInsertLink),
     'Mod-Enter': tabToOutline(callbacks.onToggleCollapse),
   }
 

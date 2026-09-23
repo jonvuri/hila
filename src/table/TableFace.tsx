@@ -31,6 +31,7 @@ import { useQuery } from '../sql/useQuery'
 import type { SqlResult } from '../sql/types'
 import type { ColumnDefinition, JoinKind } from '../core/matrix'
 import type { NodeRef } from '../core/tree'
+import { extractTextFromPmDoc } from '../editor/pm-text'
 
 import {
   buildTableQuery,
@@ -39,6 +40,7 @@ import {
   type FilterOperator,
   FILTER_OPERATORS,
 } from './table-query'
+import { clearTableFaceFocusRequest, pendingTableFaceFocusMatrixId } from './focus-handoff'
 import FormulaInput from './FormulaInput'
 import styles from './TableFace.module.css'
 
@@ -151,6 +153,14 @@ type TableFaceProps = TemporaryLegacyFaceComponentProps & {
   onOpenRow?: (rowId: number) => void
 }
 
+export const getTableRowLauncherSubjectLabel = (
+  row: Record<string, unknown>,
+  columns: ColumnDefinition[],
+  rowIndex: number,
+): string =>
+  extractTextFromPmDoc(row[columns.find((column) => column.role === 'label')?.name ?? '']) ||
+  `Row ${rowIndex + 1}`
+
 const TableFace: Component<TableFaceProps> = (props) => {
   const matrixId = () => props.config.matrixId
 
@@ -170,7 +180,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
 
   // -- Reactive queries -------
   const columnsQuery = () =>
-    `SELECT id, name, type, display_type AS displayType, "order", options, formula FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
+    `SELECT id, name, type, display_type AS displayType, "order", options, formula, role FROM matrix_columns WHERE matrix_id = ${matrixId()} ORDER BY "order"`
   const { result: columnsResult } = useQuery(columnsQuery)
 
   const columns = createMemo<ColumnDefinition[]>(() => {
@@ -560,6 +570,14 @@ const TableFace: Component<TableFaceProps> = (props) => {
   let tableRef: HTMLDivElement | undefined
 
   createEffect(() => {
+    const requestedMatrixId = pendingTableFaceFocusMatrixId()
+    if (requestedMatrixId !== matrixId()) return
+
+    clearTableFaceFocusRequest(requestedMatrixId)
+    queueMicrotask(() => tableRef?.focus({ preventScroll: true }))
+  })
+
+  createEffect(() => {
     const el = tableRef
     if (!el) return
     el.addEventListener('keydown', handleKeyDown)
@@ -617,7 +635,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
   }
 
   return (
-    <div class={styles.tableFace} ref={tableRef} tabindex="-1">
+    <div class={styles.tableFace} ref={tableRef} tabindex="-1" data-testid="table-face">
       {/* Toolbar / filter bar */}
       <div class={styles.toolbar}>
         <For each={filters()}>
@@ -776,7 +794,16 @@ const TableFace: Component<TableFaceProps> = (props) => {
           <tbody>
             <For each={rows()}>
               {(row, rowIdx) => (
-                <tr>
+                <tr
+                  data-launcher-subject
+                  data-launcher-matrix-id={matrixId()}
+                  data-launcher-row-id={row['id'] as number}
+                  data-launcher-subject-label={getTableRowLauncherSubjectLabel(
+                    row,
+                    columns(),
+                    rowIdx(),
+                  )}
+                >
                   <td class={styles.rowIdCell}>
                     <Show when={props.onOpenRow} fallback={rowIdx() + 1}>
                       <button

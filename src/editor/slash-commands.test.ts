@@ -43,6 +43,16 @@ describe('slash command adapter', () => {
     ])
   })
 
+  test('exposes the surface-neutral table command to the launcher only', () => {
+    const entries = commandRegistry.entries({
+      surface: 'launcher',
+      subject: node,
+      capabilities: { focusCreatedTable: vi.fn() },
+    })
+
+    expect(entries.map(({ command }) => command.id)).toEqual(['hila.table'])
+  })
+
   test('matches IDs, keyword prefixes, and no-result queries', () => {
     expect(matchCommands('tab', node, fakeView).map(({ id }) => id)).toEqual(['hila.table'])
     expect(matchCommands('task', node, fakeView).map(({ id }) => id)).toEqual(['hila.attach'])

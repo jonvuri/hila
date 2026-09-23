@@ -28,6 +28,7 @@ describe('canonical token contract', () => {
     }
     expect(tokenStyles).toContain('[data-theme] {')
     expect(tokenStyles).toContain('--color-overlay: var(--palette-neutral-800)')
+    expect(tokenStyles).toContain('--color-overlay-strong: var(--palette-neutral-1000)')
   })
 
   test('resolves missing and unknown theme axes to their independent fallbacks', () => {
@@ -72,6 +73,7 @@ describe('canonical token contract', () => {
     expect(fundamentalTokenNames).toEqual(
       expect.arrayContaining([
         'palette-neutral-950',
+        'palette-neutral-1000',
         'font-family-sans',
         'space-8',
         'radius-6',
@@ -84,6 +86,7 @@ describe('canonical token contract', () => {
     expect(semanticTokenNames).toEqual(
       expect.arrayContaining([
         'color-canvas',
+        'color-overlay-strong',
         'color-scrim',
         'type-body-family',
         'space-control-gap',

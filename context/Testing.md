@@ -2,7 +2,7 @@
 title: Browser and E2E testing
 kind: canonical
 state: active
-updated: 2026-09-03
+updated: 2026-09-23
 ---
 
 # Browser and E2E testing guide
@@ -106,7 +106,14 @@ The Playwright suite remains the regression source of truth.
 - For editor-anchored lists, verify the editor keeps DOM focus while arrows move list selection.
   One Escape must dismiss only the top overlay before any enclosing panel handles it.
 - Exercise pointer activation and outside pointer-down separately. The inside path must fire once;
-  the outside path must let a clicked focusable target receive focus.
+  anchored lists let a clicked focusable target receive focus, while modal launcher dismissal
+  restores the captured invoker.
+- Launcher open/dismiss checks must begin in real navigation and focus-panel ProseMirror instances.
+  Assert the same editor DOM node, document text, DOM selection, and zero mount/unmount delta after
+  both Escape and shortcut-toggle dismissal.
+- Test every Quick presentation through the same semantic locators. Add geometry assertions only at
+  the presentation boundary: centered Ghost/Null, wide and narrow Wipeout mark/cursor alignment,
+  post-facto echoes, and the reduced-motion state without echoes.
 
 ## Performance and churn
 

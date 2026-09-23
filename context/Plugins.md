@@ -2,7 +2,7 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-09-22
+updated: 2026-09-23
 ---
 
 # Plugins and face composition
@@ -204,22 +204,25 @@ cross-owner duplicate IDs fail without partially installing the plugin. Replacin
 preserves its order, and generation checks prevent stale or disposed registrations from committing.
 Teardown removes the owner's commands before its `destroy` hook.
 
-The workspace plugin currently contributes `hila.table` and `hila.attach` in that order. The slash
-adapter supplies the table-name focus and type-picker capabilities, so `/table` and `/attach` retain
-their existing typed-operation and follow-up behavior. The same registry APIs are ready for the
-launcher; launcher commands are not part of Session 1.
+The workspace plugin contributes `hila.table` to slash and launcher, followed by slash-only
+`hila.attach`. The slash adapter supplies the table-name focus and type-picker capabilities, so
+`/table` and `/attach` retain their typed-operation and follow-up behavior. The launcher freezes its
+node subject and capabilities when it opens. `hila.table` creates the owned matrix, applies the table
+face, and selects the existing Table root; without a node it stays visible with a disabled reason.
+Attachment remains slash-only until an app-wide picker capability exists.
 
 The shipped discovery service merges launcher-surface registry entries on the main thread after its
 worker catalog scan without sending callable implementations through the worker boundary. Visible
 labels match at the command-label weight; stable IDs and keywords match at the lower
 command-keyword weight. Registration order is a deterministic structural-order tie-break. Disabled
-reasons travel with results for presentation but do not affect matching or score. Concrete launcher
-command contributions remain part of launcher-shell integration.
+reasons travel with results for presentation but do not affect matching or score.
 
-Global shortcuts now use self-describing registrations with stable IDs, titles, keys, and optional
-contexts. Their handlers remain in the global manager. Editor-local ProseMirror handlers remain in
-their keymap and expose parallel handler-free descriptors. A help surface can combine both
-descriptor collections and format normalized keys for the active platform without copying prose.
+Global shortcuts use self-describing registrations with stable IDs, titles, keys, and optional
+contexts. The manager listens during capture so a registered global gesture wins before an editor
+can stop propagation. `Mod-k` now belongs to the application launcher and no longer appears in the
+ProseMirror keymap. Other editor-local handlers expose parallel handler-free descriptors. The Quick
+guide combines both descriptor collections and formats normalized keys for the active platform
+without copying prose.
 
 ## Inline references and tags
 

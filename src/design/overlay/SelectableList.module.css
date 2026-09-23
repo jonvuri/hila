@@ -85,6 +85,23 @@
   gap: var(--space-label-inset);
 }
 
+.mark {
+  display: inline-flex;
+  min-width: var(--size-icon);
+  min-height: var(--size-icon);
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  font-family: var(--type-data-family);
+  font-size: var(--type-data-size);
+  cursor: pointer;
+}
+
+.mark:hover {
+  color: var(--color-text-strong);
+}
+
 .label,
 .description,
 .reason,

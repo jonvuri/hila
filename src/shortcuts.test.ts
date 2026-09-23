@@ -58,7 +58,6 @@ describe('shortcut descriptors', () => {
       onOutdent: callback,
       onArrowUp: callback,
       onArrowDown: callback,
-      onInsertLink: callback,
       onToggleCollapse: callback,
       onShiftEnter: callback,
       onOpenFocus: callback,
@@ -124,7 +123,7 @@ describe('shortcut descriptors', () => {
     )
 
     expect(projection[0]?.id).toBe('app.toggle-sidebar')
-    expect(projection.some((descriptor) => descriptor.id === 'editor.insert-link')).toBe(true)
+    expect(projection.some((descriptor) => descriptor.id === 'editor.insert-link')).toBe(false)
   })
 
   test('matches normalized registrations while preserving context routing', () => {
@@ -153,6 +152,34 @@ describe('shortcut descriptors', () => {
 
     expect(globalHandler).toHaveBeenCalledOnce()
     expect(editorHandler).toHaveBeenCalledOnce()
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  test('captures a global shortcut before an editor stops bubbling', () => {
+    const manager = createShortcutManager('mac')
+    const handler = vi.fn()
+    manager.register({
+      id: 'app.open-launcher',
+      title: 'Open launcher',
+      key: 'Mod-k',
+      handler,
+    })
+    manager.install()
+    const editor = document.createElement('div')
+    editor.addEventListener('keydown', (event) => event.stopPropagation())
+    document.body.appendChild(editor)
+
+    const event = new KeyboardEvent('keydown', {
+      key: 'k',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    editor.dispatchEvent(event)
+    manager.uninstall()
+    editor.remove()
+
+    expect(handler).toHaveBeenCalledOnce()
     expect(event.defaultPrevented).toBe(true)
   })
 })

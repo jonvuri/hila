@@ -31,6 +31,7 @@ import {
 } from './table-query'
 import {
   getColumnTypeInfo,
+  getTableRowLauncherSubjectLabel,
   type ReferenceCellValue,
   type ReferenceColumnConfig,
 } from './TableFace'
@@ -166,6 +167,23 @@ describe('getColumnTypeInfo', () => {
   test('falls back to text for unknown type', () => {
     const info = getColumnTypeInfo('unknown')
     expect(info.value).toBe('text')
+  })
+})
+
+describe('table row launcher subjects', () => {
+  test('uses the semantic label column for launcher invocation', () => {
+    const columns = [
+      { ...makeCol(1, 'content'), role: 'content' as const },
+      { ...makeCol(2, 'title'), role: 'label' as const },
+    ]
+
+    expect(
+      getTableRowLauncherSubjectLabel(
+        { id: 7, title: 'Planning', content: 'Details' },
+        columns,
+        0,
+      ),
+    ).toBe('Planning')
   })
 })
 

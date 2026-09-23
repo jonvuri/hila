@@ -101,6 +101,31 @@ describe('SelectableList', () => {
     expect(activate).toHaveBeenCalledWith(items[2])
   })
 
+  test('routes pointer activation on an identity mark without activating the row', () => {
+    const markedItems = [{ id: 'one', label: 'One', mark: '@', markLabel: 'Named things' }]
+    const activate = vi.fn()
+    const activateMark = vi.fn()
+    dispose = render(
+      () => (
+        <SelectableList
+          items={markedItems}
+          selectedId="one"
+          ariaLabel="Places"
+          onSelectedIdChange={() => {}}
+          onActivate={activate}
+          onMarkActivate={activateMark}
+        />
+      ),
+      container,
+    )
+
+    container
+      .querySelector<HTMLElement>('[title="Named things"]')!
+      .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }))
+    expect(activateMark).toHaveBeenCalledWith(markedItems[0])
+    expect(activate).not.toHaveBeenCalled()
+  })
+
   test('connects an external focus owner and restores its previous ARIA contract', async () => {
     const owner = document.createElement('div')
     owner.setAttribute('aria-controls', 'previous-list')

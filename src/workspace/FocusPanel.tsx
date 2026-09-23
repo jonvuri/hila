@@ -576,6 +576,13 @@ const FocusPanel = (props: FocusPanelProps) => {
     <div
       class="focus-panel"
       data-testid="focus-panel"
+      data-launcher-subject
+      data-launcher-matrix-id={props.matrixId}
+      data-launcher-row-id={props.rowId}
+      data-launcher-provenance={Array.from(props.rowKey)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('')}
+      data-launcher-subject-label={extractTextFromPmDoc(labelValue()) || 'Untitled'}
       style={{
         display: 'flex',
         'flex-direction': 'column',

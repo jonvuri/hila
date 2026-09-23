@@ -9,6 +9,8 @@ export type SelectableListItem = {
   label: string
   description?: string
   meta?: string
+  mark?: string
+  markLabel?: string
   unavailableReason?: string
   appearance?: SelectableListItemAppearance
 }
@@ -24,6 +26,7 @@ export type SelectableListProps<Item extends SelectableListItem = SelectableList
   selectedId: string | null
   onSelectedIdChange: (id: string, source: SelectableListSelectionSource) => void
   onActivate: (item: Item) => void
+  onMarkActivate?: (item: Item) => void
   ariaLabel: string
   id?: string
   emptyMessage?: string
@@ -190,6 +193,21 @@ export const SelectableList = <Item extends SelectableListItem>(
                   if (!item.unavailableReason) props.onActivate(item)
                 }}
               >
+                <Show when={item.mark}>
+                  <span
+                    class={styles.mark}
+                    title={item.markLabel}
+                    aria-hidden="true"
+                    onPointerDown={(event) => {
+                      if (!props.onMarkActivate) return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      props.onMarkActivate(item)
+                    }}
+                  >
+                    {item.mark}
+                  </span>
+                </Show>
                 <span class={styles.copy}>
                   <span class={styles.label}>{item.label}</span>
                   <Show when={item.description}>

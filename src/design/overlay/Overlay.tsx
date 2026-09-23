@@ -24,6 +24,16 @@ type OverlayLayer = {
   onPointerOutside?: (event: PointerEvent) => void
 }
 
+type FocusSnapshot = {
+  element: HTMLElement
+  inputSelection?: {
+    start: number
+    end: number
+    direction: 'forward' | 'backward' | 'none'
+  }
+  ranges?: Range[]
+}
+
 const overlayLayers: OverlayLayer[] = []
 const handledPointerEvents = new WeakSet<Event>()
 
@@ -63,8 +73,59 @@ const registerOverlayLayer = (layer: OverlayLayer): (() => void) => {
   }
 }
 
-const restoreFocus = (element: HTMLElement | null) => {
-  if (element?.isConnected) element.focus({ preventScroll: true })
+const captureFocus = (element: HTMLElement | null): FocusSnapshot | null => {
+  if (!element) return null
+  const input =
+    element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ?
+      element
+    : null
+  const start = input?.selectionStart
+  const end = input?.selectionEnd
+  const selection = document.getSelection()
+  const ranges =
+    (
+      selection &&
+      selection.rangeCount > 0 &&
+      selection.anchorNode &&
+      element.contains(selection.anchorNode)
+    ) ?
+      Array.from({ length: selection.rangeCount }, (_, index) =>
+        selection.getRangeAt(index).cloneRange(),
+      )
+    : undefined
+
+  return {
+    element,
+    inputSelection:
+      input && start != null && end != null ?
+        { start, end, direction: input.selectionDirection ?? 'none' }
+      : undefined,
+    ranges,
+  }
+}
+
+const restoreFocus = (snapshot: FocusSnapshot | null, focusAtCleanup?: Element | null) => {
+  queueMicrotask(() => {
+    if (!snapshot?.element.isConnected) return
+    // Let native pointer focus and synchronous overlay handoffs win.
+    if (focusAtCleanup?.isConnected && document.activeElement !== focusAtCleanup) {
+      return
+    }
+    snapshot.element.focus({ preventScroll: true })
+    if (snapshot.inputSelection) {
+      const input = snapshot.element as HTMLInputElement | HTMLTextAreaElement
+      input.setSelectionRange(
+        snapshot.inputSelection.start,
+        snapshot.inputSelection.end,
+        snapshot.inputSelection.direction,
+      )
+      return
+    }
+    if (!snapshot.ranges?.every((range) => range.commonAncestorContainer.isConnected)) return
+    const selection = document.getSelection()
+    selection?.removeAllRanges()
+    for (const range of snapshot.ranges) selection?.addRange(range)
+  })
 }
 
 export const calculateAnchoredPosition = (
@@ -108,7 +169,7 @@ export const CenteredOverlay = (props: CenteredOverlayProps) => {
   let dialog: HTMLDialogElement | undefined
   let dismissed = false
   let removeLayer: (() => void) | undefined
-  let previousFocus: HTMLElement | null = null
+  let previousFocus: FocusSnapshot | null = null
 
   const dismiss = (reason: OverlayDismissReason) => {
     if (dismissed) return
@@ -118,7 +179,9 @@ export const CenteredOverlay = (props: CenteredOverlayProps) => {
 
   onMount(() => {
     if (!dialog) return
-    previousFocus = props.restoreFocusTo ?? (document.activeElement as HTMLElement | null)
+    previousFocus = captureFocus(
+      props.restoreFocusTo ?? (document.activeElement as HTMLElement | null),
+    )
     removeLayer = registerOverlayLayer({
       boundary: dialog,
       onEscape: () => dismiss('escape'),
@@ -148,7 +211,10 @@ export const CenteredOverlay = (props: CenteredOverlayProps) => {
       event.clientX <= rect.right &&
       event.clientY >= rect.top &&
       event.clientY <= rect.bottom
-    if (!inside) dismiss('outside')
+    if (!inside) {
+      event.preventDefault()
+      dismiss('outside')
+    }
   }
 
   return (
@@ -182,7 +248,7 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
   let surface: HTMLDivElement | undefined
   let removeLayer: (() => void) | undefined
   let dismissed = false
-  let previousFocus: HTMLElement | null = null
+  let previousFocus: FocusSnapshot | null = null
   const [position, setPosition] = createSignal<AnchoredPosition>({
     left: 0,
     top: 0,
@@ -222,7 +288,9 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
 
   onMount(() => {
     if (!surface) return
-    previousFocus = props.restoreFocusTo ?? (document.activeElement as HTMLElement | null)
+    previousFocus = captureFocus(
+      props.restoreFocusTo ?? (document.activeElement as HTMLElement | null),
+    )
     removeLayer = registerOverlayLayer({
       boundary: surface,
       onEscape: () => dismiss('escape'),
@@ -236,12 +304,13 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
   })
 
   onCleanup(() => {
+    const focusAtCleanup = document.activeElement
     removeLayer?.()
     window.removeEventListener('resize', updatePosition)
     window.removeEventListener('scroll', updatePosition, true)
     window.visualViewport?.removeEventListener('resize', updatePosition)
     window.visualViewport?.removeEventListener('scroll', updatePosition)
-    if (props.restoreFocus !== false) restoreFocus(previousFocus)
+    if (props.restoreFocus !== false) restoreFocus(previousFocus, focusAtCleanup)
   })
 
   return (

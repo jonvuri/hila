@@ -1,9 +1,10 @@
 # Design System
 
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
-> production workspace/sticky slice, and the shared overlay/selectable-list primitives ship.
-> App-wide fidelity behavior and remaining face, browser, launcher, and system-edge migrations do
-> not. Future sequencing belongs in [Plan.md](Plan.md), not this topic contract.
+> production workspace/sticky slice, shared overlay/selectable-list primitives, and production
+> Quick launcher ship. App-wide fidelity behavior and remaining face, browser, Deep launcher, and
+> system-edge migrations do not. Future sequencing belongs in [Plan.md](Plan.md), not this topic
+> contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
 
@@ -51,19 +52,22 @@ change semantic token names. General-purpose tokens must not contain a component
 component variant can define private variables inside its own stylesheet, but those variables are
 not part of the canonical token API.
 
+`--color-overlay-strong` is the deepest border-defined overlay layer. Ghost and Wipeout Quick use
+it for their reviewed dark launcher surface instead of a component-local black literal.
+
 ### Canonical atom groups
 
-| Group               | Fundamental token families                                                                               | Semantic roles                                                                                                                                                                                                                                    |
-| ------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Color               | `--palette-neutral-*`, `--palette-blue-*`, `--palette-violet-*`, `--palette-red-*`, `--palette-shadow-*` | `--color-canvas`, `--color-surface`, `--color-overlay`, `--color-scrim`, `--color-text-strong`, `--color-text`, `--color-text-muted`, `--color-text-faint`, `--color-inverse-surface`, `--color-inverse-text`, `--color-accent`, `--color-danger` |
-| Type                | `--font-family-*`, `--font-size-*`, `--font-weight-*`, `--line-height-*`, `--letter-spacing-*`           | `--type-body-*`, `--type-label-*`, `--type-data-*`, `--type-display-*`                                                                                                                                                                            |
-| Space               | `--space-1`, `--space-2`, `--space-4`, `--space-8`, `--space-16`, `--space-32`, `--space-64`             | `--space-control-gap`, `--space-section-gap`, `--space-panel-gap`, `--space-content-inset`                                                                                                                                                        |
-| Geometry            | `--size-*`, `--radius-*`, `--cut-*`                                                                      | `--size-control`, `--size-row`, `--size-icon`, `--radius-control`, `--radius-surface`, `--cut-surface`                                                                                                                                            |
-| Lines               | `--line-width-*`, `--line-style-*`                                                                       | `--color-line-subtle`, `--color-line-strong`, `--width-line`, `--width-icon-stroke`                                                                                                                                                               |
-| Motion              | `--duration-*`, `--easing-*`                                                                             | `--duration-feedback`, `--easing-feedback`                                                                                                                                                                                                        |
-| Elevation           | `--shadow-none`, `--shadow-soft`, `--shadow-raised`                                                      | `--elevation-none`, `--elevation-surface`, `--elevation-sticky`, `--elevation-overlay`                                                                                                                                                            |
-| Semantic states     | Fundamental color, opacity, line, and motion values                                                      | `--color-state-hover`, `--color-state-selected`, `--color-state-focus`, `--opacity-state-disabled`, `--color-state-invalid`, `--color-state-danger-surface`, `--width-focus-ring`, `--offset-focus-ring`                                          |
-| Optional decoration | `--decoration-size-*`, `--decoration-opacity-*`                                                          | `--color-decoration`, `--size-decoration-cut`, `--opacity-decoration-texture`                                                                                                                                                                     |
+| Group               | Fundamental token families                                                                               | Semantic roles                                                                                                                                                                                                                                                              |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Color               | `--palette-neutral-*`, `--palette-blue-*`, `--palette-violet-*`, `--palette-red-*`, `--palette-shadow-*` | `--color-canvas`, `--color-surface`, `--color-overlay`, `--color-overlay-strong`, `--color-scrim`, `--color-text-strong`, `--color-text`, `--color-text-muted`, `--color-text-faint`, `--color-inverse-surface`, `--color-inverse-text`, `--color-accent`, `--color-danger` |
+| Type                | `--font-family-*`, `--font-size-*`, `--font-weight-*`, `--line-height-*`, `--letter-spacing-*`           | `--type-body-*`, `--type-label-*`, `--type-data-*`, `--type-display-*`                                                                                                                                                                                                      |
+| Space               | `--space-1`, `--space-2`, `--space-4`, `--space-8`, `--space-16`, `--space-32`, `--space-64`             | `--space-control-gap`, `--space-section-gap`, `--space-panel-gap`, `--space-content-inset`                                                                                                                                                                                  |
+| Geometry            | `--size-*`, `--radius-*`, `--cut-*`                                                                      | `--size-control`, `--size-row`, `--size-icon`, `--radius-control`, `--radius-surface`, `--cut-surface`                                                                                                                                                                      |
+| Lines               | `--line-width-*`, `--line-style-*`                                                                       | `--color-line-subtle`, `--color-line-strong`, `--width-line`, `--width-icon-stroke`                                                                                                                                                                                         |
+| Motion              | `--duration-*`, `--easing-*`                                                                             | `--duration-feedback`, `--easing-feedback`                                                                                                                                                                                                                                  |
+| Elevation           | `--shadow-none`, `--shadow-soft`, `--shadow-raised`                                                      | `--elevation-none`, `--elevation-surface`, `--elevation-sticky`, `--elevation-overlay`                                                                                                                                                                                      |
+| Semantic states     | Fundamental color, opacity, line, and motion values                                                      | `--color-state-hover`, `--color-state-selected`, `--color-state-focus`, `--opacity-state-disabled`, `--color-state-invalid`, `--color-state-danger-surface`, `--width-focus-ring`, `--offset-focus-ring`                                                                    |
+| Optional decoration | `--decoration-size-*`, `--decoration-opacity-*`                                                          | `--color-decoration`, `--size-decoration-cut`, `--opacity-decoration-texture`                                                                                                                                                                                               |
 
 The approved spacing scale remains `1, 2, 4, 8, 16, 32, 64` pixels. The default control and row
 target is 32 pixels. A larger control can use a larger fundamental size. It must not mint a
@@ -206,8 +210,8 @@ The approved roadmap owns their future order.
 5. Session 4q removed the executable overlaid-card implementation and its legacy styles after live
    review.
 6. The shared overlay/selectable-list primitives shipped in Phase 12 Session 4. Session 4A approved
-   provisional theme-specific launcher shells over one interface contract. Migrate Quick in Session
-   5 and Deep in Session 6, then keep evaluating the Wipeout expression through dogfooding.
+   provisional theme-specific launcher shells over one interface contract. Quick shipped in Session
+   5; migrate Deep in Session 6, then keep evaluating the Wipeout expression through dogfooding.
 7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis.

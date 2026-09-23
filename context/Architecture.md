@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-05
+updated: 2026-09-23
 ---
 
 # Architecture
@@ -83,10 +83,9 @@ SQLite is both persistence and the primary relational computation engine.
    manages UI state. It should not reimplement relational work in application loops.
 
 Operations that maintain invariants are exposed through typed core functions and the worker/client
-boundary. Arbitrary query SQL must be read-only and sandboxed. The current general worker execution
-path does not yet enforce that boundary; Phase 12 must do so before exposing new custom-query
-authoring. A future batch executor composes typed operations in one transaction; it does not bypass
-their validation.
+boundary. User query SQL runs through the read-only bounded query edge; writes remain typed. A
+future batch executor composes typed operations in one transaction; it does not bypass their
+validation.
 
 The unreleased app remains at reset-only schema version 0. The
 [durable dogfooding gate](Plan.md#durable-dogfooding-gate) establishes version 1 when development
@@ -108,9 +107,10 @@ position. They are independent axes.
 Stored SQL is the canonical query representation. The current runtime recognizes simple
 updatable-query shapes so hydrated cells can write back to their source.
 
-The approved higher-level authoring contract is [Query-Spec.md](Query-Spec.md): gestures edit a
-derived spec, the spec compiles to canonical SQL, and a recognizer lifts supported SQL back into
-gesture state. The compiler and gesture surfaces are Phase 12 work.
+The higher-level authoring contract is [Query-Spec.md](Query-Spec.md): gestures edit a derived spec,
+the spec compiles to canonical SQL, and a recognizer lifts supported SQL back into gesture state.
+The compiler, recognizer, bounded transient runtime, and durable SQL round trip ship. Gesture
+authoring begins with Phase 12 Session 6.
 
 Write-back is per cell:
 
@@ -128,6 +128,11 @@ The target view layer has three kinds:
 
 The stream is the primary surface. Local navigation uses focus panels and rooted ancestry. Global
 identity navigation reconstructs a rooted focus state rather than creating a second root.
+
+The shell owns one transient Quick launcher. It captures the focused node and optional appearance
+provenance when global `Mod-k` opens, then freezes that command context until dismissal. Search,
+selection, focus, keyboard, pointer, and accessibility state stay shared while the presentation
+boundary selects centered Ghost/Null or anchored Wipeout geometry. Deep remains Session 6 work.
 
 Saved views now participate in this contract. Their marker label is discoverable like another
 named row, their inline block opens the marker identity, and their focus panel renders the marker's
@@ -169,6 +174,11 @@ metadata. It classifies ordinary rows, view markers, promoted types, per-matrix 
 and the existing workspace root before merging main-thread commands. The scan remains linear until
 FTS; subscriptions, retained candidates, excerpts, and breadcrumbs are bounded. Ranking is pure and
 deterministic, with session-only on-screen and recency signals still deferred.
+
+Quick publishes at most 12 place, command, and family-suggestion rows. Go results use the typed
+place resolver above. Commands run with the captured subject; unavailable subject-required commands
+remain visible with a reason. Family tokens narrow discovery only and do not enter query specs or
+stored state.
 
 ## Subjects, recipes, faces, and hosts
 
@@ -217,8 +227,9 @@ Plugins currently register metadata, matrixes, face types, face bindings, and li
 Named queries/mutations are declared but not yet persisted. The target contribution surface is
 faces plus commands; the shell remains fixed infrastructure.
 
-Commands use one future registry with explicit `/` and launcher surfaces plus subject requirements.
-Phase 12 extracts it from the current slash-only command list. See [Plugins.md](Plugins.md).
+Commands use one shipped main-thread registry with explicit slash and launcher surfaces, subject
+requirements, immutable discovery entries, and callable implementations that never cross the
+worker boundary. Slash and Quick consume the same entries. See [Plugins.md](Plugins.md).
 
 ## Replication boundary
 

@@ -10,6 +10,7 @@ const root: string;
 const list: string;
 const option: string;
 const copy: string;
+const mark: string;
 const label: string;
 const description: string;
 const reason: string;
@@ -22,6 +23,7 @@ export {
 	list,
 	option,
 	copy,
+	mark,
 	label,
 	description,
 	reason,
@@ -35,6 +37,7 @@ export default {
 	list,
 	option,
 	copy,
+	mark,
 	label,
 	description,
 	reason,

@@ -76,6 +76,45 @@ describe('shared overlays', () => {
     invoker.remove()
   })
 
+  test('restores a contenteditable selection after dismissal', async () => {
+    const invoker = document.createElement('div')
+    invoker.contentEditable = 'true'
+    invoker.tabIndex = 0
+    invoker.textContent = 'Editable label'
+    document.body.appendChild(invoker)
+    invoker.focus()
+    const range = document.createRange()
+    range.setStart(invoker.firstChild!, 8)
+    range.collapse(true)
+    document.getSelection()?.removeAllRanges()
+    document.getSelection()?.addRange(range)
+    const [open, setOpen] = createSignal(true)
+    let input: HTMLInputElement | undefined
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <CenteredOverlay
+            ariaLabel="Launcher"
+            initialFocus={() => input}
+            onDismiss={() => setOpen(false)}
+          >
+            <input ref={input} />
+          </CenteredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(invoker)
+    expect(document.getSelection()?.anchorNode).toBe(invoker.firstChild)
+    expect(document.getSelection()?.anchorOffset).toBe(8)
+    invoker.remove()
+  })
+
   test('dismisses only the top overlay layer for each Escape', async () => {
     const events: string[] = []
     const [parentOpen, setParentOpen] = createSignal(true)
@@ -189,5 +228,144 @@ describe('shared overlays', () => {
 
     document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
     expect(dismiss).toHaveBeenCalledWith('outside')
+  })
+
+  test('lets an outside pointer target take focus when dismissing an anchored overlay', async () => {
+    const invoker = document.createElement('input')
+    const target = document.createElement('button')
+    document.body.append(invoker, target)
+    invoker.focus()
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <AnchoredOverlay
+            anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            onDismiss={() => setOpen(false)}
+          >
+            Menu
+          </AnchoredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    target.addEventListener('pointerdown', () => target.focus())
+    await Promise.resolve()
+
+    target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(target)
+    invoker.remove()
+    target.remove()
+  })
+
+  test('keeps a synchronous focus handoff after an anchored overlay closes', async () => {
+    const invoker = document.createElement('input')
+    const handoff = document.createElement('input')
+    document.body.append(invoker, handoff)
+    invoker.focus()
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <AnchoredOverlay
+            anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            onDismiss={() => setOpen(false)}
+          >
+            <button
+              onPointerDown={() => {
+                setOpen(false)
+                handoff.focus()
+              }}
+            >
+              Open picker
+            </button>
+          </AnchoredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+
+    container
+      .querySelector('button')!
+      .dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(handoff)
+    invoker.remove()
+    handoff.remove()
+  })
+
+  test('restores an input selection after anchored Escape dismissal', async () => {
+    const invoker = document.createElement('input')
+    invoker.value = 'Editable label'
+    document.body.appendChild(invoker)
+    invoker.focus()
+    invoker.setSelectionRange(2, 8, 'backward')
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <AnchoredOverlay
+            anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            onDismiss={() => setOpen(false)}
+          >
+            Menu
+          </AnchoredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+    invoker.setSelectionRange(0, 0)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(invoker)
+    expect(invoker.selectionStart).toBe(2)
+    expect(invoker.selectionEnd).toBe(8)
+    expect(invoker.selectionDirection).toBe('backward')
+    invoker.remove()
+  })
+
+  test('restores a contenteditable selection after an anchored programmatic dismissal', async () => {
+    const invoker = document.createElement('div')
+    invoker.contentEditable = 'true'
+    invoker.tabIndex = 0
+    invoker.textContent = 'Editable label'
+    document.body.appendChild(invoker)
+    invoker.focus()
+    const range = document.createRange()
+    range.setStart(invoker.firstChild!, 8)
+    range.collapse(true)
+    document.getSelection()?.removeAllRanges()
+    document.getSelection()?.addRange(range)
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <AnchoredOverlay
+            anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            onDismiss={() => setOpen(false)}
+          >
+            <button>Menu action</button>
+          </AnchoredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+    container.querySelector<HTMLButtonElement>('button')!.focus()
+
+    setOpen(false)
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(invoker)
+    expect(document.getSelection()?.anchorNode).toBe(invoker.firstChild)
+    expect(document.getSelection()?.anchorOffset).toBe(8)
+    invoker.remove()
   })
 })

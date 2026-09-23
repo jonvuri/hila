@@ -8,7 +8,7 @@ export const structuralCommands: readonly CommandDescriptor[] = [
     id: 'hila.table',
     label: 'New table',
     keywords: ['collection', 'database', 'subtable'],
-    surfaces: ['slash'],
+    surfaces: ['slash', 'launcher'],
     subject: 'required',
     unavailableReason: ({ capabilities }) =>
       capabilities.focusCreatedTable ? null : 'This surface cannot focus a new table.',

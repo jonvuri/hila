@@ -143,13 +143,13 @@ const createShortcutManager = (platform: ShortcutPlatform = getShortcutPlatform(
 
   const install = () => {
     if (installed) return
-    document.addEventListener('keydown', handleKeydown)
+    document.addEventListener('keydown', handleKeydown, true)
     installed = true
   }
 
   const uninstall = () => {
     if (!installed) return
-    document.removeEventListener('keydown', handleKeydown)
+    document.removeEventListener('keydown', handleKeydown, true)
     installed = false
   }
 

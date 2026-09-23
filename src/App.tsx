@@ -16,18 +16,26 @@ import TemporaryLegacyFaceAdapter, {
 } from './core/TemporaryLegacyFaceAdapter'
 import {
   PluginRegistrationSupersededError,
+  applyFaceToMatrix,
   disposePlugin,
   getFaceConfigs,
   registerPlugin,
 } from './core/client/matrix-client'
 import { awaitWorkerReady } from './core/client/worker-client'
-import { resolveComponentVariant, type ComponentVariantConfig } from './design/tokens'
+import {
+  resolveComponentVariant,
+  resolveVisualTheme,
+  type ComponentVariantConfig,
+} from './design/tokens'
+import QuickLauncher from './launcher/QuickLauncher'
+import { captureLauncherInvocation, type LauncherInvocation } from './launcher/invocation'
 import { useQuery } from './sql/useQuery'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
 import { tagsPlugin } from './tags/tags-plugin'
 import { workspacePlugin, buildMatrixTitleQuery } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
+import { requestTableFaceFocus } from './table/focus-handoff'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
@@ -48,6 +56,9 @@ const App: Component = () => {
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
   const [workspaceNavigateToPlace, setWorkspaceNavigateToPlace] =
     createSignal<PlaceNavigationTarget | null>(null)
+  const [launcherInvocation, setLauncherInvocation] = createSignal<LauncherInvocation | null>(
+    null,
+  )
   const [faceConfigTarget, setFaceConfigTarget] = createSignal<{
     matrixId: number
     initialFaceTypeId?: string
@@ -77,6 +88,20 @@ const App: Component = () => {
   }))
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev)
+
+  const toggleLauncher = () => {
+    setLauncherInvocation((current) =>
+      current ? null : captureLauncherInvocation(document.activeElement),
+    )
+  }
+
+  const focusCreatedTable = (matrixId: number) => {
+    void applyFaceToMatrix('hila.table', matrixId).then((config) => {
+      requestTableFaceFocus(matrixId)
+      setTableFaceConfig(config)
+      setActiveView('table')
+    })
+  }
 
   const initPlugins = async (isDisposed: () => boolean = () => disposed) => {
     setWorkspaceMatrixId(null)
@@ -148,6 +173,12 @@ const App: Component = () => {
         toggleSidebar()
       },
     })
+    const unregisterLauncher = shortcuts.register({
+      id: 'app.open-launcher',
+      title: 'Open launcher',
+      key: 'Mod-k',
+      handler: toggleLauncher,
+    })
 
     document.addEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
 
@@ -167,6 +198,7 @@ const App: Component = () => {
     onCleanup(() => {
       disposed = true
       unregisterToggle()
+      unregisterLauncher()
       shortcuts.uninstall()
       void Promise.all(
         [inlineReferencesPlugin.id, tagsPlugin.id, workspacePlugin.id].map(disposePlugin),
@@ -180,10 +212,12 @@ const App: Component = () => {
       <div class="app-main">
         <Show when={workspaceMatrixId()}>
           <div class="view-switcher">
+            <span data-launcher-workspace-mark aria-hidden="true" />
             <button
               class="view-tab"
               data-active={activeView() === 'workspace'}
               data-testid="workspace-tab"
+              data-launcher-workspace-title
               onClick={() => setActiveView('workspace')}
             >
               {workspaceTabLabel()}
@@ -344,6 +378,22 @@ const App: Component = () => {
             tagTypeName={panel().tagTypeName}
             anchorRect={panel().anchorRect}
             onClose={() => setTagPanel(null)}
+          />
+        )}
+      </Show>
+
+      <Show when={launcherInvocation()}>
+        {(invocation) => (
+          <QuickLauncher
+            rootMatrixId={workspaceMatrixId()}
+            visualTheme={resolveVisualTheme(document.documentElement.dataset.visualTheme)}
+            invocation={invocation()}
+            commandCapabilities={{ focusCreatedTable }}
+            onNavigate={(target) => {
+              setWorkspaceNavigateToPlace(target)
+              setActiveView('workspace')
+            }}
+            onDismiss={() => setLauncherInvocation(null)}
           />
         )}
       </Show>

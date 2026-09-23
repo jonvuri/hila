@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 6 — Chips and deep preview
 kind: phase-session
-state: planned
+state: in-progress
 updated: 2026-09-23
 ---
 
