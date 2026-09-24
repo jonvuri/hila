@@ -19,15 +19,25 @@ const Workspace = (props: WorkspaceProps): JSX.Element => (
   >
     <For each={props.panels}>
       {(panel, index) => {
-        const active = () => index() === props.panels.length - 1
-        const showBreadcrumb = () =>
-          index() === 0 && shouldShowWorkspaceBreadcrumb(props.panels)
+        const active = () =>
+          props.activePanelId ?
+            panel.id === props.activePanelId
+          : index() === props.panels.length - 1
+        const visible = () => props.visiblePanelIds?.has(panel.id) ?? true
+        const firstVisible = () =>
+          props.panels.findIndex(
+            (candidate) => props.visiblePanelIds?.has(candidate.id) ?? true,
+          ) === index()
+        const showBreadcrumb = () => firstVisible() && panel.kind === 'focus'
 
         return (
           <article
             class="ws-column"
             classList={{ 'ws-column-active': active() }}
+            aria-hidden={visible() ? undefined : 'true'}
+            data-panel-id={panel.id}
             data-panel-kind={panel.kind}
+            data-visible={visible() ? 'true' : 'false'}
             data-testid="workspace-column"
           >
             <Show when={panel.kind === 'focus' && panel.focus}>
@@ -39,22 +49,27 @@ const Workspace = (props: WorkspaceProps): JSX.Element => (
                   ancestry={showBreadcrumb() ? panel.ancestry : undefined}
                   landmarkLabelPrefix={props.ariaLabel}
                   onAncestrySelect={props.onAncestrySelect}
+                  state={panel.state}
                 />
               )}
             </Show>
-            <StickyNavigation
-              ariaLabel={[props.ariaLabel, panel.title, 'children'].filter(Boolean).join(': ')}
-              title={panel.kind === 'navigation' ? props.workspaceTitle : undefined}
-              items={panel.items}
-              initialCollapsed={panel.initialCollapsed}
-              drillId={panel.drillId}
-              drillLabel={props.panels[index() + 1]?.title}
-              selectedId={panel.selectedId}
-              disabledIds={panel.disabledIds}
-              navigationOutline={props.navigationOutline}
-              showLeafBullets={props.showLeafBullets}
-              onDrill={(rowId) => props.onDrill?.(panel, rowId)}
-            />
+            <Show when={!panel.state}>
+              <StickyNavigation
+                ariaLabel={[props.ariaLabel, panel.title, 'children']
+                  .filter(Boolean)
+                  .join(': ')}
+                title={panel.kind === 'navigation' ? props.workspaceTitle : undefined}
+                items={panel.items}
+                initialCollapsed={panel.initialCollapsed}
+                drillId={panel.drillId}
+                drillLabel={props.panels[index() + 1]?.title}
+                selectedId={panel.selectedId}
+                disabledIds={panel.disabledIds}
+                navigationOutline={props.navigationOutline}
+                showLeafBullets={props.showLeafBullets}
+                onDrill={(rowId) => props.onDrill?.(panel, rowId)}
+              />
+            </Show>
           </article>
         )
       }}

@@ -20,6 +20,11 @@ export type WorkspaceFocusContent = {
   backlinks: readonly string[]
 }
 
+export type WorkspaceContentState = {
+  kind: 'empty' | 'error' | 'loading'
+  message: string
+}
+
 export type WorkspacePanel = {
   id: string
   kind: 'navigation' | 'focus'
@@ -31,12 +36,15 @@ export type WorkspacePanel = {
   disabledIds?: ReadonlySet<string>
   focus?: WorkspaceFocusContent
   ancestry?: WorkspaceAncestry
+  state?: WorkspaceContentState
 }
 
 export type WorkspaceProps = {
+  activePanelId?: string
   as?: 'main' | 'section'
   ariaLabel?: string
   panels: readonly WorkspacePanel[]
+  visiblePanelIds?: ReadonlySet<string>
   workspaceTitle: string
   navigationOutline?: NavigationOutlineVariant
   showLeafBullets?: boolean

@@ -4,12 +4,12 @@ kind: status
 state: active
 updated: 2026-09-24
 phase: 12
-session: narrow-and-focused-workspace-shell-exploration
+session: responsive-workspace-shell-implementation
 ---
 
 # Now
 
-Phase 12 Sessions 1–8 and 4A are complete. The main thread has authoritative command and shortcut
+Phase 12 Sessions 1–9 and 4A are complete. The main thread has authoritative command and shortcut
 registries. The query-spec dialect has matched compilation and recognition, bounded execution,
 durable round trips, paging, rename healing, and read-only user query edges.
 
@@ -65,18 +65,19 @@ all currently planned phases.
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 9 — narrow and focused workspace shell exploration](phases/Phase-12/Session-9-narrow-and-focused-workspace-shell.md).
+2. [Session 9A — responsive workspace shell implementation](phases/Phase-12/Session-9a-responsive-workspace-shell-implementation.md).
 3. [Launcher](Launcher.md), [Architecture](Architecture.md), [Design](Design.md), and
    [Design Faces](Design-Faces.md).
 
 ## Boundary
 
-Session 9 is a design-only Storybook exploration. Start with space-efficient analogs of the current
-focus stack, then test less literal single-panel multitasking and jumping workflows over the same
-rooted stream state. Make explicit decisions, but defer production implementation to later focused
-sessions. Preserve the one-root, ancestry, provenance, and shared-theme contracts.
+Session 9 completed the design-only Storybook exploration. It selected one runtime-only shell
+presentation axis: retain the current four-panel window at 720px or above and show only its active
+existing panel at 719px or below. Every retained panel stays mounted. Narrow mode reuses ancestry,
+root recovery, Back, Jump back, and the launcher without new chrome. No explicit wide focused mode
+was selected. No schema change occurred.
 
 ## Next action
 
-Read Session 9 and build the baseline plus direct one-column analogs in Storybook. Do not begin tab
-retirement or production shell changes.
+Implement Session 9A in production, including resize continuity, hidden-panel semantics, ancestry,
+focus transfer, and real-browser coverage. Do not begin tab retirement.

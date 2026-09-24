@@ -1,12 +1,18 @@
 import { createSignal, createUniqueId, For, type JSX, Show } from 'solid-js'
 
-import type { WorkspaceAncestry, WorkspaceAncestryItem, WorkspaceFocusContent } from './types'
+import type {
+  WorkspaceAncestry,
+  WorkspaceAncestryItem,
+  WorkspaceContentState,
+  WorkspaceFocusContent,
+} from './types'
 
 type FocusPanelProps = {
   title: string
   content: WorkspaceFocusContent
   active: boolean
   ancestry?: WorkspaceAncestry
+  state?: WorkspaceContentState
   landmarkLabelPrefix?: string
   onAncestrySelect?: (item: WorkspaceAncestryItem) => void
 }
@@ -63,56 +69,70 @@ const FocusPanel = (props: FocusPanelProps): JSX.Element => {
         {props.title}
       </h2>
 
-      <div class="ws-focus-content" aria-label="Content">
-        <For each={props.content.content}>
-          {(paragraph) => <p contentEditable>{paragraph}</p>}
-        </For>
-      </div>
-
-      <Show when={props.content.properties.length > 0}>
-        <section class="ws-focus-section" aria-label={landmarkLabel('properties')}>
-          <h3>Properties</h3>
-          <div class="ws-focus-properties">
-            <For each={props.content.properties}>
-              {([key, value]) => {
-                const inputId = `${propertyIdPrefix}-${key.toLowerCase().replaceAll(' ', '-')}`
-
-                return (
-                  <label for={inputId}>
-                    <span>{key}</span>
-                    <input id={inputId} name={inputId} type="text" value={value} />
-                  </label>
-                )
-              }}
-            </For>
-          </div>
-        </section>
-      </Show>
-
-      <Show when={props.content.backlinks.length > 0}>
-        <section class="ws-focus-section">
-          <button
-            type="button"
-            class="ws-section-toggle"
-            aria-expanded={backlinksOpen()}
-            data-testid="focus-backlinks-toggle"
-            onClick={() => setBacklinksOpen((open) => !open)}
+      <Show
+        when={!props.state}
+        fallback={
+          <div
+            class="ws-panel-state"
+            data-state={props.state?.kind}
+            role={props.state?.kind === 'error' ? 'alert' : 'status'}
           >
-            <span aria-hidden="true">{backlinksOpen() ? '−' : '+'}</span>
-            Backlinks ({props.content.backlinks.length})
-          </button>
-          <Show when={backlinksOpen()}>
-            <ul class="ws-backlinks">
-              <For each={props.content.backlinks}>
-                {(label) => (
-                  <li>
-                    <button type="button">{label}</button>
-                  </li>
-                )}
+            <strong>{props.state?.kind}</strong>
+            <span>{props.state?.message}</span>
+          </div>
+        }
+      >
+        <div class="ws-focus-content" aria-label="Content">
+          <For each={props.content.content}>
+            {(paragraph) => <p contentEditable>{paragraph}</p>}
+          </For>
+        </div>
+
+        <Show when={props.content.properties.length > 0}>
+          <section class="ws-focus-section" aria-label={landmarkLabel('properties')}>
+            <h3>Properties</h3>
+            <div class="ws-focus-properties">
+              <For each={props.content.properties}>
+                {([key, value]) => {
+                  const inputId = `${propertyIdPrefix}-${key.toLowerCase().replaceAll(' ', '-')}`
+
+                  return (
+                    <label for={inputId}>
+                      <span>{key}</span>
+                      <input id={inputId} name={inputId} type="text" value={value} />
+                    </label>
+                  )
+                }}
               </For>
-            </ul>
-          </Show>
-        </section>
+            </div>
+          </section>
+        </Show>
+
+        <Show when={props.content.backlinks.length > 0}>
+          <section class="ws-focus-section">
+            <button
+              type="button"
+              class="ws-section-toggle"
+              aria-expanded={backlinksOpen()}
+              data-testid="focus-backlinks-toggle"
+              onClick={() => setBacklinksOpen((open) => !open)}
+            >
+              <span aria-hidden="true">{backlinksOpen() ? '−' : '+'}</span>
+              Backlinks ({props.content.backlinks.length})
+            </button>
+            <Show when={backlinksOpen()}>
+              <ul class="ws-backlinks">
+                <For each={props.content.backlinks}>
+                  {(label) => (
+                    <li>
+                      <button type="button">{label}</button>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </section>
+        </Show>
       </Show>
     </section>
   )

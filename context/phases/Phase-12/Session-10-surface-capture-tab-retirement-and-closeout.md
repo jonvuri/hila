@@ -14,8 +14,7 @@ useful visual evidence in Storybook, remove the roots, and close Phase 12 canoni
 
 ## Dependencies
 
-Sessions 5–9 must be complete. Complete any focused shell implementation session required by
-Session 9's decisions before tab retirement. Storybook capture must land before runtime removal.
+Sessions 5–9A must be complete. Storybook capture must land before runtime removal.
 
 ## Navigation-role parity gate
 

@@ -91,6 +91,20 @@ Density is a host-computed `wide` or `narrow` input. It is not stored as a visua
 32-pixel interaction target stays fixed in both tiers. Density can change text scale, content
 inset, and gaps. It must not change state meaning or hide data.
 
+### Designed responsive workspace presentation
+
+Phase 12 Session 9 selected an unshipped shell-presentation axis separate from density, theme,
+polarity, and fidelity. At a 719px-or-narrower workspace host, the shell shows only the active
+existing panel at full width. At 720px or wider, it keeps the current bounded rail. The controller's
+retained panels stay mounted across presentation changes so editor selection, pending saves, focus,
+scroll, virtualizer, and outline state can survive. Hidden panels leave layout, hit testing, tab
+order, and the accessibility tree.
+
+Narrow mode reuses the active panel's ancestry and root recovery plus existing Back, Jump back, and
+launcher gestures. It adds no persistent toolbar, path rail, switcher, history, or durable state.
+No explicit focused workflow is designed for wide viewports. Session 9A owns implementation and
+promotion of this contract from designed to shipped.
+
 The reduced-motion media query sets nonessential duration roles to `0ms`. It keeps scroll-linked
 position continuity and final states. No component can use motion to carry information that is
 otherwise absent.

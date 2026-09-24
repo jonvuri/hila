@@ -122,9 +122,12 @@ export const rootVisiblePanels: readonly WorkspacePanel[] = [
 
 export const fourColumnPanels: readonly WorkspacePanel[] = [...rootVisiblePanels, sectionPanel]
 
-const fiveColumnPath: readonly WorkspacePanel[] = [...fourColumnPanels, comparisonPanel]
+export const fiveColumnPanels: readonly WorkspacePanel[] = [
+  ...fourColumnPanels,
+  comparisonPanel,
+]
 
-export const rootShiftedPanels: readonly WorkspacePanel[] = fiveColumnPath.slice(1)
+export const rootShiftedPanels: readonly WorkspacePanel[] = fiveColumnPanels.slice(1)
 
 export const longWorkspaceTitle =
   'hila — a deliberately long workspace title that must remain usable at narrow column widths'
@@ -183,6 +186,76 @@ export const crossMatrixPanels: readonly WorkspacePanel[] = [
     },
   },
 ]
+
+export const ancestrySourcePanels: Readonly<
+  Record<WorkspaceAncestry['source'], WorkspacePanel>
+> = {
+  provenance: comparisonPanel,
+  home: {
+    ...comparisonPanel,
+    id: 'home-ancestry',
+    title: 'Recovered through ownership home',
+    ancestry: {
+      ...comparisonPanel.ancestry!,
+      source: 'home',
+    },
+  },
+  membership: {
+    ...comparisonPanel,
+    id: 'membership-ancestry',
+    title: 'Recovered through deterministic membership',
+    ancestry: {
+      source: 'membership',
+      items: [
+        ancestryItem('root', workspaceTitle),
+        ancestryItem('research-container', 'Research matrix', 12),
+      ],
+    },
+  },
+}
+
+export const denseFocusPanels: readonly WorkspacePanel[] = [
+  ...fourColumnPanels,
+  {
+    ...comparisonPanel,
+    id: 'dense-comparison',
+    title: 'Dense storage-engine review',
+    items: [
+      {
+        id: 'dense-branch',
+        content: 'Grouped evidence',
+        children: denseLeaves('Nested evidence', 4),
+      },
+      ...denseLeaves('Evidence', 48),
+    ],
+    focus: {
+      content: Array.from(
+        { length: 8 },
+        (_, index) =>
+          `Review paragraph ${index + 1}. This keeps the focused subject dense enough to stress independent focus and outline scrolling.`,
+      ),
+      properties: Array.from(
+        { length: 10 },
+        (_, index) => [`property ${index + 1}`, `value ${index + 1}`] as const,
+      ),
+      backlinks: Array.from({ length: 12 }, (_, index) => `Related note ${index + 1}`),
+    },
+  },
+]
+
+export const contentStatePanels: readonly WorkspacePanel[] = (
+  [
+    ['loading', 'Loading the focused subject…'],
+    ['empty', 'This subject has no content or children yet.'],
+    ['error', 'The focused subject could not be loaded.'],
+  ] as const
+).map(([kind, message]) => ({
+  ...comparisonPanel,
+  id: `${kind}-state`,
+  title: `${kind[0]!.toUpperCase()}${kind.slice(1)} state`,
+  items: [],
+  state: { kind, message },
+}))
 
 export const stickyThresholdPanels: readonly WorkspacePanel[] = [
   {
