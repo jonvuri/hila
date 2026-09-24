@@ -4,7 +4,7 @@ kind: status
 state: active
 updated: 2026-09-24
 phase: 12
-session: surface-capture-tab-retirement-and-closeout
+session: narrow-and-focused-workspace-shell-exploration
 ---
 
 # Now
@@ -65,18 +65,18 @@ all currently planned phases.
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 9 — surface capture, tab retirement, and closeout](phases/Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md).
+2. [Session 9 — narrow and focused workspace shell exploration](phases/Phase-12/Session-9-narrow-and-focused-workspace-shell.md).
 3. [Launcher](Launcher.md), [Architecture](Architecture.md), [Design](Design.md), and
    [Design Faces](Design-Faces.md).
 
 ## Boundary
 
-Session 9 must capture the retiring Table and Tags surfaces in Storybook before removing their
-production roots. It must also decide whether narrow navigation needs a single-panel shell before
-tab retirement. Preserve embedded table and tag flows plus the Phase 13 face/runtime migration. Do
-not build Phase 13 early.
+Session 9 is a design-only Storybook exploration. Start with space-efficient analogs of the current
+focus stack, then test less literal single-panel multitasking and jumping workflows over the same
+rooted stream state. Make explicit decisions, but defer production implementation to later focused
+sessions. Preserve the one-root, ancestry, provenance, and shared-theme contracts.
 
 ## Next action
 
-Read Session 9, investigate the narrow shell, prove every navigation-role parity gate, then capture
-the retiring surfaces before removing the temporary roots.
+Read Session 9 and build the baseline plus direct one-column analogs in Storybook. Do not begin tab
+retirement or production shell changes.

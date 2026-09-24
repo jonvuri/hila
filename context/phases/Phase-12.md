@@ -53,25 +53,27 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 
 ## Sessions
 
-| Session                                                                                                                | Outcome                                                                      | Depends on | State    |
-| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- | -------- |
-| [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                    | One authoritative, introspectable command and shortcut source                | Phase 11   | Complete |
-| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                 | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Complete |
-| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)           | Bounded global discovery and correct rooted navigation                       | Phase 11   | Complete |
-| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                     | Canonical overlay/list interaction and presentation                          | Phase 11   | Complete |
-| [4A — Quick/deep overlay prototypes](Phase-12/Session-4a-quick-deep-overlay-prototypes.md)                             | Storybook evidence for theme-specific Quick and Deep relationships           | 4          | Complete |
-| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4A   | Complete |
-| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Complete |
-| [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Complete |
-| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Complete |
-| [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned  |
+| Session                                                                                                                  | Outcome                                                                      | Depends on | State    |
+| ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ---------- | -------- |
+| [1 — Shared command and shortcut registries](Phase-12/Session-1-command-and-shortcut-registries.md)                      | One authoritative, introspectable command and shortcut source                | Phase 11   | Complete |
+| [2 — Query spec and query runtime](Phase-12/Session-2-query-spec-and-query-runtime.md)                                   | Matched compiler/recognizer, bound execution, paging, and durable round trip | Phase 11   | Complete |
+| [3 — Place discovery, navigation, and ranking](Phase-12/Session-3-place-discovery-navigation-and-ranking.md)             | Bounded global discovery and correct rooted navigation                       | Phase 11   | Complete |
+| [4 — Shared overlay and selectable list](Phase-12/Session-4-shared-overlay-and-selectable-list.md)                       | Canonical overlay/list interaction and presentation                          | Phase 11   | Complete |
+| [4A — Quick/deep overlay prototypes](Phase-12/Session-4a-quick-deep-overlay-prototypes.md)                               | Storybook evidence for theme-specific Quick and Deep relationships           | 4          | Complete |
+| [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                   | Useful global switcher with commands, filters, and help                      | 1, 3, 4A   | Complete |
+| [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                               | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Complete |
+| [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)                 | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Complete |
+| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                   | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Complete |
+| [9 — Narrow and focused workspace shell exploration](Phase-12/Session-9-narrow-and-focused-workspace-shell.md)           | Storybook comparison and design decisions for one-column stream presentation | 5–8        | Planned  |
+| [10 — Surface capture, tab retirement, and closeout](Phase-12/Session-10-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–9        | Planned  |
 
 Sessions 1–8 and 4A are complete. Quick and Deep now implement the approved theme-specific
 presentation contract over one behavior and interaction model. Bounded session memory supplies
 successful-navigation Jump back, cancellation-only Deep recovery, and actual-viewport ranking
-signals without persistence. Session 9 owns surface capture, tab retirement, and phase closeout.
-The dependency column explains architectural coupling, not permission to skip the incremental
-sequence.
+signals without persistence. Session 9 explores narrow and intentionally focused workspace-shell
+presentation without production changes. Session 10 owns surface capture, tab retirement, and
+phase closeout after any accepted shell implementation sessions. The dependency column explains
+architectural coupling, not permission to skip the incremental sequence.
 
 ## Phase acceptance
 
@@ -91,6 +93,8 @@ sequence.
   selects its default name. Reopened dialect SQL renders editable chips and retains raw SQL x-ray.
 - `⌘⏎` inserts at the invoking live editor selection and cannot mutate a stale or unmounted editor.
 - Session signals reset on reload and never enter schema or replication state.
+- Narrow and intentionally focused stream presentations receive explicit Storybook-backed design
+  decisions and implementation routing before tab retirement.
 - Table and Tags Storybook references land before their production roots and tabs are removed.
 - Launcher open/dismiss and ranking updates cause no unrelated editor churn.
 
