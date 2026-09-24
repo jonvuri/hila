@@ -180,4 +180,38 @@ describe('SelectableList', () => {
     expect(list?.getAttribute('data-empty')).toBe('true')
     expect(container.textContent).toContain('Nothing matches')
   })
+
+  test('renders grouped empty states while keeping one flat option order', () => {
+    const groupedItems = [
+      { id: 'recent', label: 'Recent query', group: 'recent' },
+      { id: 'jump', label: 'Earlier place', group: 'jump' },
+    ]
+    dispose = render(
+      () => (
+        <SelectableList
+          items={groupedItems}
+          groups={[
+            { id: 'jump', label: 'Jump back' },
+            { id: 'recent', label: 'Recent searches' },
+            { id: 'empty', label: 'Empty group', emptyMessage: 'Nothing recorded' },
+          ]}
+          selectedId="recent"
+          ariaLabel="Session history"
+          onSelectedIdChange={() => {}}
+          onActivate={() => {}}
+        />
+      ),
+      container,
+    )
+
+    expect(container.querySelectorAll('[role="listbox"]')).toHaveLength(1)
+    expect(
+      [...container.querySelectorAll('[role="option"]')].map((option) => option.textContent),
+    ).toEqual(['Earlier place', 'Recent query'])
+    expect(container.textContent).toContain('Nothing recorded')
+    expect(getSelectableListAction(groupedItems, 'recent', 'ArrowDown')).toEqual({
+      type: 'select',
+      id: 'jump',
+    })
+  })
 })

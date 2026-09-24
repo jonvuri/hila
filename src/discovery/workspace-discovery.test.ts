@@ -79,4 +79,27 @@ describe('workspace discovery service', () => {
     ).resolves.toMatchObject({ status: 'current', results: [{ commandId: 'hila.settings' }] })
     expect(queryCatalog).not.toHaveBeenCalled()
   })
+
+  test('forwards the immutable ranking snapshot to worker retention and final ranking', async () => {
+    const queryCatalog = vi.fn().mockResolvedValue([
+      entry('row:1', 'Alpha'),
+      {
+        ...entry('row:2', 'Bravo'),
+        target: { type: 'node', node: { matrixId: 1, rowId: 2 } },
+      },
+    ])
+    const service = createWorkspaceDiscoveryService({ queryCatalog })
+    const rankingSignals = {
+      onScreenIdentities: new Set(['1:2']),
+      sessionRecency: ['1:1'],
+    }
+
+    await expect(
+      service.search({ rootMatrixId: 1, query: '', rankingSignals }),
+    ).resolves.toMatchObject({
+      status: 'current',
+      results: [{ id: 'row:2' }, { id: 'row:1' }],
+    })
+    expect(queryCatalog).toHaveBeenCalledWith(expect.objectContaining({ rankingSignals }))
+  })
 })

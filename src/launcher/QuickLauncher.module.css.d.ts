@@ -23,7 +23,7 @@ const cursorBlink: string;
 const body: string;
 const deepBody: string;
 const authoringList: string;
-const emptyState: string;
+const memoryState: string;
 const guide: string;
 const footer: string;
 const origin: string;
@@ -53,7 +53,7 @@ export {
 	body,
 	deepBody,
 	authoringList,
-	emptyState,
+	memoryState,
 	guide,
 	footer,
 	origin,
@@ -84,7 +84,7 @@ export default {
 	body,
 	deepBody,
 	authoringList,
-	emptyState,
+	memoryState,
 	guide,
 	footer,
 	origin,

@@ -2,7 +2,7 @@
 title: Phase 12 — Launcher and shell convergence
 kind: phase-plan
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Phase 12 — Launcher and shell convergence
@@ -63,13 +63,15 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | [5 — Quick launcher shell](Phase-12/Session-5-quick-launcher-shell.md)                                                 | Useful global switcher with commands, filters, and help                      | 1, 3, 4A   | Complete |
 | [6 — Chips and deep preview](Phase-12/Session-6-chips-and-deep-preview.md)                                             | Query gesture editing and bounded read-only preview                          | 2, 4, 5    | Complete |
 | [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)               | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Complete |
-| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Planned  |
+| [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                 | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Complete |
 | [9 — Surface capture, tab retirement, and closeout](Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–8        | Planned  |
 
-Sessions 1–7 and 4A are complete. Quick and Deep now implement the approved theme-specific
-presentation contract over one behavior and interaction model. Session 8 owns bounded session
-memory and on-screen ranking signals. Execute the remaining sessions in order. The dependency
-column explains architectural coupling, not permission to skip the incremental sequence.
+Sessions 1–8 and 4A are complete. Quick and Deep now implement the approved theme-specific
+presentation contract over one behavior and interaction model. Bounded session memory supplies
+successful-navigation Jump back, cancellation-only Deep recovery, and actual-viewport ranking
+signals without persistence. Session 9 owns surface capture, tab retirement, and phase closeout.
+The dependency column explains architectural coupling, not permission to skip the incremental
+sequence.
 
 ## Phase acceptance
 

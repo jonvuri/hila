@@ -2,7 +2,7 @@
 title: Phase 12 Session 9 — Surface capture, tab retirement, and closeout
 kind: phase-session
 state: planned
-updated: 2026-09-03
+updated: 2026-09-24
 ---
 
 # Phase 12 Session 9 — Surface capture, tab retirement, and closeout
@@ -33,6 +33,12 @@ Sessions 5–8 must be complete. Storybook capture must land before runtime remo
 
 ## Plan
 
+- [ ] Investigate narrow workspace-shell navigation before tab retirement. Compare the current
+      horizontal panel rail with a density-selected single-panel presentation at 500 × 844. Keep
+      the controller stack and panel state shared; evaluate explicit back/ancestry navigation,
+      keyboard and touch reachability, focus continuity, and root recovery. Implement it here only
+      if tab retirement would otherwise regress narrow navigation; otherwise record the decision
+      and assign the host presentation work to Phase 13.
 - [ ] Build fixture-driven Storybook references for the retiring top-level Table and Tags
       experiences without booting the SQLite worker.
 - [ ] Capture representative table schema/cell/sort/edit states and tag list/count/instance/create/

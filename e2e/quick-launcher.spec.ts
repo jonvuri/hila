@@ -196,6 +196,174 @@ test('Mod-k yields from navigation and focus editors without editor churn', asyn
   expect(await selectionState(focusEditor)).toEqual(focusSelection)
 })
 
+test('Jump back mirrors successful navigation while canceled Deep work restores in place', async ({
+  page,
+}) => {
+  await resetDatabase(page)
+  await setTheme(page, 'ghost')
+  const destination = await page.evaluate(async () => {
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const sql = await import('/src/core/client/sql-client.ts')
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const matrix = await import('/src/core/client/matrix-client.ts')
+    const [{ id: matrixId }] = (await sql.execQuery(
+      "SELECT id FROM matrix WHERE title = 'Workspace'",
+    )) as Array<{ id: number }>
+    const { rowId } = await matrix.insertRow(matrixId, {
+      values: {
+        label: JSON.stringify({
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Session destination' }] },
+          ],
+        }),
+      },
+    })
+    return { matrixId, rowId }
+  })
+
+  await openFirstFocus(page)
+  await page.keyboard.press(launcherShortcut)
+  let launcher = page.getByTestId('quick-launcher')
+  let input = launcher.locator('#quick-launcher-input')
+  await input.fill('Session destination')
+  await expect(launcher.getByRole('option', { name: /Session destination/ })).toBeVisible({
+    timeout: 10_000,
+  })
+  await input.press('Enter')
+  await expect(
+    page.locator(
+      `[data-testid="focus-panel"][data-launcher-matrix-id="${destination.matrixId}"][data-launcher-row-id="${destination.rowId}"]`,
+    ),
+  ).toBeVisible({ timeout: 10_000 })
+
+  await page.keyboard.press(launcherShortcut)
+  launcher = page.getByTestId('quick-launcher')
+  const jumpBack = launcher.getByRole('group', { name: 'Jump back' })
+  await expect(jumpBack.getByRole('option', { name: /Welcome to Hila/ })).toBeVisible()
+  await jumpBack.getByRole('option', { name: /Welcome to Hila/ }).click()
+  await expect(page.getByTestId('focus-panel')).toHaveAttribute(
+    'data-launcher-subject-label',
+    'Welcome to Hila',
+  )
+
+  await page.keyboard.press(launcherShortcut)
+  ;({ launcher, input } = await commitWorkspaceKind(page))
+  await input.fill('Welcome')
+  await page.keyboard.press('Escape')
+  await expect(launcher).toHaveCount(0)
+
+  await page.keyboard.press(launcherShortcut)
+  launcher = page.getByTestId('quick-launcher')
+  const recent = launcher.getByRole('group', { name: 'Recent deep searches' })
+  const canceled = recent.getByRole('option', { name: /Workspace.*Welcome/ })
+  await expect(canceled).toContainText('Restore without running')
+  await canceled.click()
+  await expect(launcher).toBeVisible()
+  await expect(launcher.locator('[data-launcher-tempo="deep"]')).toBeVisible()
+  await expect(launcher.locator('[data-chip-type="kind"]')).toContainText('Workspace')
+  await expect(launcher.locator('#quick-launcher-input')).toHaveValue('Welcome')
+
+  await launcher.locator('#quick-launcher-input').fill('Hila')
+  const preview = launcher.getByRole('listbox', { name: 'Query preview' })
+  await expect(preview.getByRole('option').first()).toBeVisible({ timeout: 10_000 })
+  await preview.getByRole('option').first().click()
+  await expect(launcher).toHaveCount(0)
+
+  await page.keyboard.press(launcherShortcut)
+  launcher = page.getByTestId('quick-launcher')
+  await expect(
+    launcher
+      .getByRole('group', { name: 'Recent deep searches' })
+      .getByRole('option', { name: /Workspace.*Welcome/ }),
+  ).toBeVisible()
+  await expect(
+    launcher
+      .getByRole('group', { name: 'Recent deep searches' })
+      .getByRole('option', { name: /Workspace.*Hila/ }),
+  ).toHaveCount(0)
+})
+
+test('Quick ranks actual viewport rows above retained off-screen rows', async ({ page }) => {
+  await page.setViewportSize({ width: 1_200, height: 700 })
+  await resetDatabase(page)
+  await setTheme(page, 'ghost')
+  await page.evaluate(async () => {
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const sql = await import('/src/core/client/sql-client.ts')
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const matrix = await import('/src/core/client/matrix-client.ts')
+    const [{ id: matrixId }] = (await sql.execQuery(
+      "SELECT id FROM matrix WHERE title = 'Workspace'",
+    )) as Array<{ id: number }>
+    for (let index = 0; index < 60; index += 1) {
+      await matrix.insertRow(matrixId, {
+        values: {
+          label: JSON.stringify({
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: `Signal match ${String(index).padStart(3, '0')}` },
+                ],
+              },
+            ],
+          }),
+        },
+      })
+    }
+  })
+
+  const scrollport = page.locator('.production-navigation-scrollport').first()
+  await expect
+    .poll(() => scrollport.evaluate((element) => element.scrollHeight - element.clientHeight))
+    .toBeGreaterThan(500)
+  await scrollport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect
+    .poll(() => scrollport.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0)
+  await expect
+    .poll(() =>
+      scrollport.evaluate((element) =>
+        [...element.querySelectorAll<HTMLElement>('.outline-row')]
+          .filter((row) => {
+            const rowBounds = row.getBoundingClientRect()
+            const viewportBounds = element.getBoundingClientRect()
+            return (
+              rowBounds.bottom > viewportBounds.top && rowBounds.top < viewportBounds.bottom
+            )
+          })
+          .map((row) => row.dataset.launcherSubjectLabel ?? ''),
+      ),
+    )
+    .toContain('Signal match 059')
+  const visibleLabels = await scrollport.evaluate((element) =>
+    [...element.querySelectorAll<HTMLElement>('.outline-row')]
+      .filter((row) => {
+        const rowBounds = row.getBoundingClientRect()
+        const viewportBounds = element.getBoundingClientRect()
+        return rowBounds.bottom > viewportBounds.top && rowBounds.top < viewportBounds.bottom
+      })
+      .map((row) => row.dataset.launcherSubjectLabel ?? ''),
+  )
+  expect(visibleLabels).toContain('Signal match 059')
+
+  await page.keyboard.press(launcherShortcut)
+  const launcher = page.getByTestId('quick-launcher')
+  const input = launcher.locator('#quick-launcher-input')
+  await input.fill('Signal match')
+  const first = launcher.getByRole('option').first()
+  await expect(first).toBeVisible({ timeout: 10_000 })
+  const firstText = (await first.textContent()) ?? ''
+  const firstLabel = visibleLabels.find((label) => firstText.includes(label)) ?? ''
+  expect(firstLabel).not.toBe('')
+  expect(firstLabel).not.toBe('Signal match 000')
+})
+
 test('Mod-Enter inserts a cross-matrix reference at the invoking editor cursor', async ({
   page,
 }) => {

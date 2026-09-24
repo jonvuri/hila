@@ -271,4 +271,33 @@ describe('worker discovery catalog', () => {
       ])
     },
   )
+
+  test('retains an on-screen identity through worker-side candidate capping', () => {
+    const parent = {
+      matrixId: workspaceId,
+      rowId: insertRow(db, workspaceId).rowId,
+    }
+    const nodes = Array.from({ length: 100 }, () => ({
+      matrixId: workspaceId,
+      rowId: insertRow(db, workspaceId, {
+        parent,
+        values: { label: 'equal match' },
+      }).rowId,
+    })).toSorted((left, right) => left.rowId - right.rowId)
+    const onScreen = nodes.at(-1)!
+
+    const results = queryDiscoveryCatalog(db, {
+      rootMatrixId: workspaceId,
+      query: 'equal match',
+      filter: 'all',
+      limit: 12,
+      rankingSignals: {
+        onScreenIdentities: new Set([`${onScreen.matrixId}:${onScreen.rowId}`]),
+        sessionRecency: [],
+      },
+    })
+
+    expect(results).toHaveLength(96)
+    expect(results[0]?.id).toBe(`row:${onScreen.matrixId}:${onScreen.rowId}`)
+  })
 })

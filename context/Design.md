@@ -261,7 +261,7 @@ and `workspace/` directories.
 | `TabBar` / `Tab`                      | `TabBar.tsx`                 | Underline tab navigation. `TabBar` wraps `Tab` children. `Tab` props: `active?`, `children`, `onClick?`.                                      |
 | `Badge`                               | `Badge.tsx`                  | Inline label with surface background. Props: `children`.                                                                                      |
 | `ContextMenu`                         | `ContextMenu.tsx`            | Floating menu container. `ContextMenuItem` props: `children`, `shortcut?`, `muted?`, `onClick?`. `ContextMenuSeparator` has no props.         |
-| `SelectableList`                      | `overlay/SelectableList.tsx` | Controlled stable-ID listbox with shared keyboard, pointer, unavailable-reason, and active-descendant behavior.                               |
+| `SelectableList`                      | `overlay/SelectableList.tsx` | Controlled stable-ID listbox with shared keyboard, pointer, unavailable-reason, active-descendant, and optional grouped empty-state behavior. |
 | `CenteredOverlay` / `AnchoredOverlay` | `overlay/Overlay.tsx`        | Native modal-palette and nonmodal cursor-anchored shells with stacked dismissal, focus restoration, and viewport-aware positioning.           |
 
 ### Grid system

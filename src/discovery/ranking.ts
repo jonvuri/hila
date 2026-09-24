@@ -7,6 +7,7 @@ import type {
   DiscoveryMatchQuality,
   DiscoveryNodeMatch,
   DiscoveryNodeResult,
+  DiscoveryRankingSignals,
   DiscoveryResult,
 } from './types'
 
@@ -24,6 +25,9 @@ const TARGET_WEIGHT = {
   'command-label': 40,
   'command-keyword': 20,
 } as const
+
+const ON_SCREEN_WEIGHT = 20
+const MAX_SESSION_RECENCY_WEIGHT = 6
 
 const normalize = (value: string): string => value.trim().toLocaleLowerCase()
 
@@ -156,6 +160,24 @@ const commandResult = (
   }
 }
 
+const resultIdentity = (result: DiscoveryResult): string | null => {
+  if (result.family === 'command' || !result.node) return null
+  return `${result.node.matrixId}:${result.node.rowId}`
+}
+
+const signalWeight = (
+  result: DiscoveryResult,
+  signals: DiscoveryRankingSignals | undefined,
+): number => {
+  if (!signals) return 0
+  const identity = resultIdentity(result)
+  if (!identity) return 0
+  const onScreen = signals.onScreenIdentities.has(identity) ? ON_SCREEN_WEIGHT : 0
+  const recencyIndex = signals.sessionRecency.indexOf(identity)
+  const recency = recencyIndex < 0 ? 0 : Math.max(1, MAX_SESSION_RECENCY_WEIGHT - recencyIndex)
+  return onScreen + recency
+}
+
 export const compareDiscoveryResults = (
   left: DiscoveryResult,
   right: DiscoveryResult,
@@ -172,6 +194,7 @@ export const rankDiscoveryResults = (
   query: string,
   filter: DiscoveryFilter,
   limit: number,
+  signals?: DiscoveryRankingSignals,
 ): readonly DiscoveryResult[] => {
   const nodes = catalog
     .map((entry) => nodeResult(entry, filter))
@@ -179,5 +202,8 @@ export const rankDiscoveryResults = (
   const commandResults = commands
     .map((entry, index) => commandResult(entry, query, filter, index))
     .filter((entry): entry is DiscoveryCommandResult => entry !== null)
-  return [...nodes, ...commandResults].sort(compareDiscoveryResults).slice(0, limit)
+  return [...nodes, ...commandResults]
+    .map((result) => ({ ...result, score: result.score + signalWeight(result, signals) }))
+    .sort(compareDiscoveryResults)
+    .slice(0, limit)
 }

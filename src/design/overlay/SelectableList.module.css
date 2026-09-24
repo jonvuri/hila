@@ -39,6 +39,26 @@
   transition: background-color var(--duration-feedback) var(--easing-feedback);
 }
 
+.group + .group {
+  border-top: var(--border-subtle);
+}
+
+.groupLabel {
+  padding: var(--space-8) var(--space-control-inset-inline) var(--space-4);
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  text-transform: uppercase;
+  letter-spacing: var(--type-label-letter-spacing);
+}
+
+.groupEmpty {
+  min-height: var(--size-row);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  color: var(--color-text-muted);
+  font-size: var(--type-body-small-size);
+}
+
 .option:hover {
   background: var(--color-state-hover);
 }

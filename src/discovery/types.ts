@@ -72,11 +72,17 @@ export type DiscoveryCommandResult = {
 
 export type DiscoveryResult = DiscoveryNodeResult | DiscoveryCommandResult
 
+export type DiscoveryRankingSignals = {
+  readonly onScreenIdentities: ReadonlySet<string>
+  readonly sessionRecency: readonly string[]
+}
+
 export type DiscoveryRequest = {
   readonly rootMatrixId: number
   readonly query: string
   readonly filter?: DiscoveryFilter
   readonly limit?: number
+  readonly rankingSignals?: DiscoveryRankingSignals
 }
 
 export type DiscoverySearchOutcome =

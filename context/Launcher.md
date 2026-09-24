@@ -1,7 +1,7 @@
 # The launcher surface
 
-> **Status: Quick, Deep, save-as-view, and insert-ref exits implemented.** Session signals and tab
-> retirement remain later Phase 12 work. Workspace, Table, and Tags tabs therefore remain temporary
+> **Status: Quick, Deep, save-as-view, insert-ref exits, and session signals implemented.** Tab
+> retirement remains later Phase 12 work. Workspace, Table, and Tags tabs therefore remain temporary
 > roots.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
@@ -61,10 +61,12 @@ dismiss one at a time from the top.
 
 Relevance weights are expected to be **tuned during implementation and use**; the settled part is the structure (flat list, blended weights, the signal set, determinism), not the coefficients. Quick publishes at most **12** results and family suggestions in one sequence; deep tempo fills its expanded frame.
 
-The shipped base scorer uses additive quality and target weights, followed by home depth, label
-length, structural order, and stable identity. This lets an exact content match outrank a prefix
-label while preferring labels at equal quality. Session 8 adds the reserved on-screen and recency
-inputs without changing this ordering contract.
+The shipped scorer uses additive quality and target weights, then an on-screen weight of 20 and
+session-recency weights of 6 through 1, newest first. Semantic match quality and the label/content
+preference therefore remain stronger than either session signal. Home depth, label length,
+structural order, and stable identity finish the deterministic order. On-screen identities come
+from numeric viewport intersections, not the virtualizer's retained buffer, and include visible
+focus-panel subjects.
 
 ## Family narrowing: sigil filter tokens (D31)
 
@@ -98,12 +100,21 @@ the existing Table root. `hila.attach` remains slash-only until an app-wide atta
 
 Three fixed parts; never a directory, never a home surface (session 2):
 
-- **Jump back** (≤6) — this-session focus history, most recent first, current stream panels excluded. In-memory; resets honestly per session.
-- **Recent deep searches** (≤6) — specs dismissed with ≥1 chip committed, deduped, in-memory. `⏎` **restores** the spec into the launcher (chips, text, deep tempo) — it does not execute-and-jump. Restore-not-run keeps this a recovery mechanism, not a shadow bookmark system; the durable form of a keeper is save-as-node. This list is what makes instant `Esc` dismissal safe.
+- **Jump back** (≤6) — successful this-session focus transitions, most recent first, with the
+  current stream focus-panel chain excluded. In-memory; resets honestly per session.
+- **Recent deep searches** (≤6) — canceled specs with ≥1 committed chip, normalized, deduped, and
+  kept in memory. Cancel means `Esc`, shortcut toggle, outside dismissal, or equivalent abandonment;
+  successful go, run, save, and insert-ref exits do not enter this list. Those exits already have an
+  outcome, and successful navigation is represented by Jump back. If cancellation happens during a
+  chip edit, recovery keeps the last committed spec and ordinary query text, not the transient
+  operator/value draft. `⏎` **restores** chips, text, and Deep tempo without executing or navigating.
+  This intentionally narrow recovery role keeps Recents from becoming a shadow bookmark or general
+  search-history system; the durable form of a keeper is save-as-node.
 - **Help footer** — one static line of the load-bearing gestures; `?` (on empty input only) opens a one-screen keyboard guide covering the launcher and the app's global gestures, sourced from the command/shortcut registries so it cannot drift. Rotating hints rejected.
 
-Quick ships the help footer and generated guide. Jump-back and recent-deep sections render their
-reserved empty structure until Session 8 supplies bounded in-memory signals.
+Quick ships the bounded Jump back and recent-Deep sections, help footer, and generated guide. The
+entire session store resets on reload and plugin/database reset and never enters schema,
+replication, or user-data classification.
 
 ## Two tempos, one ceiling (D25 · D26)
 
@@ -164,7 +175,9 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 5. **Save-as-node + `⌘⏎` insert-ref — shipped.** Concrete specs save through the existing view-block
    identity and focus/name handoff. Quick discovery and Deep preview insert through the invoking
    live editor selection; stale or absent editors state a reason.
-6. **Session memory wiring** — in-memory focus history, recent deep searches, on-screen boost; isolated so frecency later only persists it.
+6. **Session memory wiring — shipped.** Bounded in-memory focus history, canceled-Deep recovery,
+   and viewport-derived on-screen ranking share one isolated store. Persisted frecency remains a
+   separate deferred change.
 7. **Tab retirement** — Table/Tags tabs captured as Storybook components, then removed (gated on 3–5; the §4 sequencing constraint).
 
 ## Deferred

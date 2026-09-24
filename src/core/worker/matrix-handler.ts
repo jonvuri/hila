@@ -171,10 +171,16 @@ export const initMatrixHandler = (db: Database) => {
 export const handleMatrixClientMessage = async (message: MatrixClientMessage) => {
   switch (message.type) {
     case 'queryDiscoveryCatalog': {
-      const { id, rootMatrixId, query, filter, limit } = message
+      const { id, rootMatrixId, query, filter, limit, rankingSignals } = message
       try {
         const { db } = await sqliteWasm
-        const result = queryDiscoveryCatalogImpl(db, { rootMatrixId, query, filter, limit })
+        const result = queryDiscoveryCatalogImpl(db, {
+          rootMatrixId,
+          query,
+          filter,
+          limit,
+          rankingSignals,
+        })
         postMessage({ type: 'queryDiscoveryCatalogSuccess', id, result })
       } catch (err: unknown) {
         postMessage({ type: 'queryDiscoveryCatalogError', id, error: toError(err) })

@@ -1,6 +1,7 @@
-import { createMemo, Suspense } from 'solid-js'
+import { createEffect, createMemo, onCleanup, Suspense } from 'solid-js'
 
 import { resolveComponentVariant, type ComponentVariantConfig } from '../design/tokens'
+import type { SessionMemoryStore } from '../session/session-memory'
 
 import FocusPanel from './FocusPanel'
 import NavigationPanel from './NavigationPanel'
@@ -16,6 +17,7 @@ import WorkspaceShell, {
 
 type StreamViewProps = StreamControllerInput & {
   componentConfig?: ComponentVariantConfig
+  sessionMemory?: SessionMemoryStore
 }
 
 type StreamShellPanel = WorkspaceShellPanel & {
@@ -23,7 +25,19 @@ type StreamShellPanel = WorkspaceShellPanel & {
 }
 
 const StreamView = (props: StreamViewProps) => {
-  const controller = createStreamController(props)
+  const controller = createStreamController({
+    get matrixId() {
+      return props.matrixId
+    },
+    get navigateToPlace() {
+      return props.navigateToPlace
+    },
+    onNavigated: () => props.onNavigated?.(),
+    onFocusTransition: (entry) => {
+      props.onFocusTransition?.(entry)
+      props.sessionMemory?.recordFocus(entry)
+    },
+  })
   const navigationOutline = createMemo(() =>
     resolveComponentVariant('navigationOutline', props.componentConfig?.navigationOutline),
   )
@@ -45,7 +59,7 @@ const StreamView = (props: StreamViewProps) => {
         get title() {
           return source.type === 'navigation' ?
               controller.title()
-            : `Focused row ${source.rowId}`
+            : (source.label() ?? `Focused row ${source.rowId}`)
         },
         get ancestry() {
           const panelIndex = controller.panels().findIndex((panel) => panel.id === source.id)
@@ -62,6 +76,20 @@ const StreamView = (props: StreamViewProps) => {
     }),
   )
 
+  createEffect(() => {
+    const entries = controller.focusEntries()
+    props.sessionMemory?.setCurrentFocusChain(entries)
+    props.sessionMemory?.replaceOnScreen('stream:focus-panels', entries)
+  })
+
+  onCleanup(() => {
+    props.sessionMemory?.setCurrentFocusChain([])
+    props.sessionMemory?.clearOnScreen('stream:focus-panels')
+    for (const panel of controller.panels()) {
+      props.sessionMemory?.clearOnScreen(`stream:navigation:${panel.id}`)
+    }
+  })
+
   const renderPanel = (shellPanel: StreamShellPanel) => {
     const panel = shellPanel.source
     const panelIndex = () =>
@@ -72,13 +100,16 @@ const StreamView = (props: StreamViewProps) => {
           matrixId={props.matrixId}
           navigationOutline={navigationOutline()}
           rootKey={panel.rootKey}
-          onOpenFocus={(matrixId, rowId, key) =>
-            controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
+          onOpenFocus={(matrixId, rowId, key, label) =>
+            controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key), label)
           }
           onOpenFoldedFocus={(matrixId, rowId) =>
             void controller.openFoldedFocus(panelIndex(), matrixId, rowId)
           }
           focusedRowId={controller.focusedRowForNavigation(panelIndex())}
+          onVisibleIdentitiesChange={(identities) =>
+            props.sessionMemory?.replaceOnScreen(`stream:navigation:${panel.id}`, identities)
+          }
         />
       )
     }
@@ -93,11 +124,12 @@ const StreamView = (props: StreamViewProps) => {
         foldedOrigin={panel.foldedOrigin}
         unresolvedPosition={panel.unresolvedPosition}
         active={shellPanel.active}
-        onAppendFocus={(matrixId, rowId, key) =>
-          controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
+        onLabelResolved={(label) => controller.setFocusLabel(panel.id, label)}
+        onAppendFocus={(matrixId, rowId, key, label) =>
+          controller.appendFocus(panelIndex(), matrixId, rowId, new Uint8Array(key), label)
         }
-        onReplaceFocus={(matrixId, rowId, key) =>
-          controller.replaceFocus(panelIndex(), matrixId, rowId, new Uint8Array(key))
+        onReplaceFocus={(matrixId, rowId, key, label) =>
+          controller.replaceFocus(panelIndex(), matrixId, rowId, new Uint8Array(key), label)
         }
         onOpenRowRef={(matrixId, rowId) =>
           void controller.openRowReference(panelIndex(), matrixId, rowId)

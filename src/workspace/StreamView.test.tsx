@@ -4,12 +4,15 @@ import { render } from 'solid-js/web'
 
 import type { ComponentVariantConfig, VisualTheme } from '../design/tokens'
 import type { PlaceNavigationTarget, ResolvedPlaceNavigation } from '../core/place-navigation'
+import { createSessionMemoryStore, type SessionMemoryStore } from '../session/session-memory'
 
 const mocks = vi.hoisted(() => ({
   execQuery: vi.fn(),
   nextFocusInstance: 0,
   resolvePlaceNavigation: vi.fn(),
 }))
+
+const [ancestryResult, setAncestryResult] = createSignal<unknown[] | null>(null)
 
 vi.mock('../core/client/sql-client', () => ({
   execQuery: mocks.execQuery,
@@ -20,22 +23,29 @@ vi.mock('../core/client/matrix-client', () => ({
 }))
 
 vi.mock('../sql/useQuery', () => ({
-  useQuery: () => ({
-    result: () => null,
+  useQuery: (query: () => string) => ({
+    result: () => {
+      const sql = query()
+      return sql.includes('FROM requested') || sql.includes('FROM closure') ?
+          ancestryResult()
+        : null
+    },
     error: () => null,
   }),
 }))
 
 type MockNavigationPanelProps = {
   navigationOutline?: string
-  onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
   onOpenFoldedFocus: (matrixId: number, rowId: number) => void
 }
 
 vi.mock('./NavigationPanel', () => ({
   default: (props: MockNavigationPanelProps) => (
     <div data-navigation-outline={props.navigationOutline}>
-      <button onClick={() => props.onOpenFocus(10, 101, Uint8Array.of(1))}>Append focus</button>
+      <button onClick={() => props.onOpenFocus(10, 101, Uint8Array.of(1), 'First row')}>
+        Append focus
+      </button>
       <button onClick={() => props.onOpenFoldedFocus(10, 102)}>Open folded focus</button>
     </div>
   ),
@@ -47,9 +57,10 @@ type MockFocusPanelProps = {
   rowId: number
   foldedOrigin?: boolean
   unresolvedPosition?: boolean
-  onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
-  onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
+  onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
   onOpenRowRef: (matrixId: number, rowId: number) => void
+  onLabelResolved?: (label: string) => void
   onCollapse: () => void
   onClose: () => void
 }
@@ -69,20 +80,33 @@ vi.mock('./FocusPanel', () => ({
       >
         <button
           onClick={() =>
-            props.onAppendFocus(props.matrixId, props.rowId + 1, Uint8Array.of(props.rowId + 1))
+            props.onAppendFocus(
+              props.matrixId,
+              props.rowId + 1,
+              Uint8Array.of(props.rowId + 1),
+              `Child of ${props.rowId}`,
+            )
           }
         >
           Append child
         </button>
         <button
           onClick={() =>
-            props.onReplaceFocus(props.matrixId, props.rowId + 100, Uint8Array.of(props.rowId))
+            props.onReplaceFocus(
+              props.matrixId,
+              props.rowId + 100,
+              Uint8Array.of(props.rowId),
+              `Replacement for ${props.rowId}`,
+            )
           }
         >
           Replace focus
         </button>
         <button onClick={() => props.onOpenRowRef(20, props.rowId + 200)}>
           Open boundary row
+        </button>
+        <button onClick={() => props.onLabelResolved?.(`Resolved row ${props.rowId}`)}>
+          Resolve label
         </button>
         <button onClick={() => props.onCollapse()}>Collapse here</button>
         <button onClick={() => props.onClose()}>Close focus</button>
@@ -149,6 +173,7 @@ describe('StreamView controller contract', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    setAncestryResult(null)
     mocks.nextFocusInstance = 0
     container = document.createElement('div')
     document.body.appendChild(container)
@@ -162,6 +187,7 @@ describe('StreamView controller contract', () => {
   const mount = (props?: {
     navigateToPlace?: PlaceNavigationTarget | null
     onNavigated?: () => void
+    sessionMemory?: SessionMemoryStore
   }) => {
     dispose = render(
       () => (
@@ -169,6 +195,7 @@ describe('StreamView controller contract', () => {
           matrixId={10}
           navigateToPlace={props?.navigateToPlace}
           onNavigated={props?.onNavigated}
+          sessionMemory={props?.sessionMemory}
         />
       ),
       container,
@@ -211,6 +238,61 @@ describe('StreamView controller contract', () => {
 
     click(container, 'Close focus')
     expect(panelIdentity(container)).toEqual(['navigation'])
+  })
+
+  test('records successful focus destinations and filters the visible focus chain', () => {
+    const sessionMemory = createSessionMemoryStore()
+    mount({ sessionMemory })
+
+    click(container, 'Append focus')
+    expect(sessionMemory.focusHistory().map(({ rowId }) => rowId)).toEqual([101])
+    expect(sessionMemory.jumpBackEntries()).toEqual([])
+    expect([...sessionMemory.onScreenIdentities()]).toEqual(['10:101'])
+
+    click(container, 'Append child')
+    expect(sessionMemory.focusHistory().map(({ rowId }) => rowId)).toEqual([102, 101])
+    expect(sessionMemory.jumpBackEntries()).toEqual([])
+    expect([...sessionMemory.onScreenIdentities()]).toEqual(['10:101', '10:102'])
+
+    click(container, 'Replace focus', 1)
+    expect(sessionMemory.focusHistory().map(({ rowId }) => rowId)).toEqual([202, 102, 101])
+    expect(sessionMemory.jumpBackEntries().map(({ rowId }) => rowId)).toEqual([102])
+
+    click(container, 'Collapse here')
+    expect(sessionMemory.focusHistory().map(({ rowId }) => rowId)).toEqual([202, 102, 101])
+    expect(sessionMemory.jumpBackEntries().map(({ rowId }) => rowId)).toEqual([202, 102])
+  })
+
+  test('keeps nested focus labels when ancestry resolves asynchronously', () => {
+    const sessionMemory = createSessionMemoryStore()
+    mount({ sessionMemory })
+
+    click(container, 'Append focus')
+    click(container, 'Append child')
+    expect(sessionMemory.focusHistory().map(({ label }) => label)).toEqual([
+      'Child of 101',
+      'First row',
+    ])
+
+    setAncestryResult([
+      {
+        for_matrix_id: 10,
+        for_row_id: 102,
+        key: Uint8Array.of(1),
+        matrix_id: 10,
+        row_id: 101,
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Parent row' }] }],
+        }),
+        depth: 0,
+      },
+    ])
+
+    expect(sessionMemory.focusHistory().map(({ label }) => label)).toEqual([
+      'Child of 101',
+      'First row',
+    ])
   })
 
   test('resolves navigation outline configuration independently of theme and polarity', () => {
@@ -294,6 +376,7 @@ describe('StreamView controller contract', () => {
       positionResolution(20, 300, Uint8Array.of(30)),
     )
     const onNavigated = vi.fn()
+    const sessionMemory = createSessionMemoryStore()
     let setNavigateToPlace!: (target: PlaceNavigationTarget | null) => void
 
     dispose = render(() => {
@@ -304,6 +387,7 @@ describe('StreamView controller contract', () => {
           matrixId={10}
           navigateToPlace={navigateToPlace()}
           onNavigated={onNavigated}
+          sessionMemory={sessionMemory}
         />
       )
     }, container)
@@ -323,6 +407,29 @@ describe('StreamView controller contract', () => {
       undefined,
     )
     expect(panelIdentity(container)).toEqual(['navigation', '20:300'])
+    expect(sessionMemory.focusHistory()[0]).toMatchObject({
+      matrixId: 20,
+      rowId: 300,
+      label: 'Focused row 300',
+      labelResolved: false,
+    })
+    const focusInstance = container.querySelector<HTMLElement>(
+      '[data-testid="mock-focus-panel"]',
+    )?.dataset.instanceId
+    click(container, 'Resolve label')
+    expect(sessionMemory.focusHistory()[0]).toMatchObject({
+      matrixId: 20,
+      rowId: 300,
+      label: 'Resolved row 300',
+      labelResolved: true,
+    })
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')?.dataset
+        .instanceId,
+    ).toBe(focusInstance)
+    expect(sessionMemory.jumpBackEntries().map(({ rowId }) => rowId)).toEqual([
+      104, 103, 102, 101,
+    ])
   })
 
   test('external membership navigation rebuilds context from a fresh root', async () => {

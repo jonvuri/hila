@@ -9,6 +9,9 @@
 const root: string;
 const list: string;
 const option: string;
+const group: string;
+const groupLabel: string;
+const groupEmpty: string;
 const copy: string;
 const mark: string;
 const label: string;
@@ -22,6 +25,9 @@ export {
 	root,
 	list,
 	option,
+	group,
+	groupLabel,
+	groupEmpty,
 	copy,
 	mark,
 	label,
@@ -36,6 +42,9 @@ export default {
 	root,
 	list,
 	option,
+	group,
+	groupLabel,
+	groupEmpty,
 	copy,
 	mark,
 	label,

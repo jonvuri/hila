@@ -90,6 +90,45 @@ describe('discovery matching and ranking', () => {
     expect(second).toEqual(first)
   })
 
+  test('adds conservative on-screen and session-recency weights deterministically', () => {
+    const catalog = [
+      catalogEntry('node:1', 'Alpha', ''),
+      catalogEntry('node:2', 'Bravo', ''),
+      catalogEntry('node:3', 'Delta', ''),
+    ]
+    const signals = {
+      onScreenIdentities: new Set(['1:2']),
+      sessionRecency: ['1:3', '1:1'],
+    }
+
+    const first = rankDiscoveryResults(catalog, [], '', 'all', 12, signals).map(({ id }) => id)
+    const second = rankDiscoveryResults([...catalog].reverse(), [], '', 'all', 12, signals).map(
+      ({ id }) => id,
+    )
+
+    expect(first).toEqual(['node:2', 'node:3', 'node:1'])
+    expect(second).toEqual(first)
+  })
+
+  test('does not let session signals overturn match quality or target relevance', () => {
+    const results = rankDiscoveryResults(
+      [
+        catalogEntry('node:1', 'Task board', '', { query: 'task' }),
+        catalogEntry('node:2', 'Other', 'task', { query: 'task' }),
+      ],
+      [],
+      'task',
+      'all',
+      12,
+      {
+        onScreenIdentities: new Set(['1:1']),
+        sessionRecency: ['1:1'],
+      },
+    )
+
+    expect(results.map(({ id }) => id)).toEqual(['node:2', 'node:1'])
+  })
+
   test('uses typed family filters and merges command identity', () => {
     const browseCatalog = [
       catalogEntry('type:1', 'Task', '', {

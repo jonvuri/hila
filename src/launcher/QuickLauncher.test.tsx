@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import type { ColumnDefinition } from '../core/matrix'
 import type { DiscoveryNodeResult, DiscoverySearchOutcome } from '../discovery/types'
+import { createSessionMemoryStore } from '../session/session-memory'
 
 import QuickLauncher, { type LauncherDiscoveryService } from './QuickLauncher'
+import { createLauncherQueryState, reduceLauncherQuery } from './query-authoring'
 
 const sqlMocks = vi.hoisted(() => ({
   addObserver: vi.fn(),
@@ -52,6 +54,34 @@ const column = (
   managedBy: null,
   role,
 })
+
+const completeDeepState = () => {
+  const labelColumn = column(1, 'label', 'text', 'label')
+  const statusColumn = column(2, 'status')
+  let state = reduceLauncherQuery(createLauncherQueryState(), {
+    type: 'commit-kind',
+    matrixId: 7,
+    label: 'Projects',
+    mark: '#',
+  })
+  state = reduceLauncherQuery(state, {
+    type: 'commit-scope',
+    node: { matrixId: 2, rowId: 3 },
+    label: 'Alpha',
+  })
+  state = reduceLauncherQuery(state, {
+    type: 'commit-column',
+    column: statusColumn,
+    operator: 'eq',
+    valueText: 'open',
+  })
+  state = reduceLauncherQuery(state, {
+    type: 'commit-column',
+    column: labelColumn,
+    operator: 'desc',
+  })
+  return reduceLauncherQuery(state, { type: 'set-text', text: 'original text' })
+}
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void
@@ -1132,5 +1162,279 @@ describe('QuickLauncher', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await Promise.resolve()
     expect(document.activeElement).toBe(invoker)
+  })
+
+  test('records a canceled committed Deep query and restores it without navigating', async () => {
+    const sessionMemory = createSessionMemoryStore()
+    const deepState = reduceLauncherQuery(
+      reduceLauncherQuery(createLauncherQueryState(), {
+        type: 'commit-kind',
+        matrixId: 2,
+        label: 'Tasks',
+        mark: '#',
+      }),
+      { type: 'set-text', text: 'unfinished' },
+    )
+    sessionMemory.recordRecentDeepSearch(deepState)
+    const navigate = vi.fn()
+    const dismiss = vi.fn()
+
+    dispose = render(
+      () => (
+        <QuickLauncher
+          rootMatrixId={1}
+          visualTheme="ghost"
+          invocation={{}}
+          sessionMemory={sessionMemory}
+          discoveryService={{
+            search: async () => ({ status: 'current', results: [] }),
+            cancel: vi.fn(),
+          }}
+          loadColumns={() => Promise.resolve([])}
+          onNavigate={navigate}
+          onDismiss={dismiss}
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    expect(container.textContent).toContain('Restore without running')
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    )
+    await Promise.resolve()
+
+    expect(container.querySelector('[data-launcher-tempo="deep"]')).not.toBeNull()
+    expect(container.querySelector('[data-chip-type="kind"]')?.textContent).toContain('Tasks')
+    expect(input.value).toBe('unfinished')
+    expect(navigate).not.toHaveBeenCalled()
+    expect(dismiss).not.toHaveBeenCalled()
+  })
+
+  test('captures committed Deep state on cancel', async () => {
+    const sessionMemory = createSessionMemoryStore()
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <QuickLauncher
+            rootMatrixId={1}
+            visualTheme="ghost"
+            invocation={{}}
+            sessionMemory={sessionMemory}
+            discoveryService={{
+              search: async () => ({
+                status: 'current',
+                results: [
+                  result('2', 'Tasks', {
+                    family: 'type',
+                    subjectMatrixId: 2,
+                  }),
+                ],
+              }),
+              cancel: vi.fn(),
+            }}
+            loadColumns={() => Promise.resolve([])}
+            onNavigate={() => {}}
+            onDismiss={() => setOpen(false)}
+          />
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    input.value = 'Tasks'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    await Promise.resolve()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    )
+    await Promise.resolve()
+    input.value = 'unfinished'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await Promise.resolve()
+
+    expect(sessionMemory.recentDeepSearches()).toHaveLength(1)
+    expect(sessionMemory.recentDeepSearches()[0]?.state.spec.text).toBe('unfinished')
+    expect(sessionMemory.recentDeepSearches()[0]?.state.chips).toHaveLength(1)
+  })
+
+  test.each([
+    ['kind', 'outside'],
+    ['scope', 'outside'],
+    ['predicate', 'unmount'],
+    ['order', 'unmount'],
+  ] as const)(
+    'recovers the committed Deep state when a %s edit is canceled by %s',
+    async (chipType, cancellation) => {
+      const sessionMemory = createSessionMemoryStore()
+      sessionMemory.recordRecentDeepSearch(completeDeepState())
+      const [open, setOpen] = createSignal(true)
+      dispose = render(
+        () => (
+          <Show when={open()}>
+            <QuickLauncher
+              rootMatrixId={1}
+              visualTheme="ghost"
+              invocation={{}}
+              sessionMemory={sessionMemory}
+              discoveryService={{
+                search: async () => ({ status: 'current', results: [] }),
+                cancel: vi.fn(),
+              }}
+              loadColumns={() =>
+                Promise.resolve([column(1, 'label', 'text', 'label'), column(2, 'status')])
+              }
+              onNavigate={() => {}}
+              onDismiss={() => setOpen(false)}
+            />
+          </Show>
+        ),
+        container,
+      )
+      await Promise.resolve()
+      const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      )
+      await vi.waitFor(() =>
+        expect(container.querySelectorAll('[data-chip-type]')).toHaveLength(4),
+      )
+
+      input.value = 'committed ordinary text'
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+      container.querySelector<HTMLButtonElement>(`[data-chip-type="${chipType}"]`)!.click()
+      input.value = 'transient edit text'
+      input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+      if (cancellation === 'outside') {
+        container
+          .querySelector<HTMLDialogElement>('[data-testid="quick-launcher"]')!
+          .dispatchEvent(
+            new MouseEvent('pointerdown', {
+              bubbles: true,
+              cancelable: true,
+              clientX: 1,
+              clientY: 1,
+            }),
+          )
+      } else {
+        setOpen(false)
+      }
+      await Promise.resolve()
+
+      const recovered = sessionMemory.recentDeepSearches()[0]!.state
+      expect(recovered.spec.text).toBe('committed ordinary text')
+      expect(recovered.chips.map((chip) => chip.type)).toEqual([
+        'kind',
+        'scope',
+        'predicate',
+        'order',
+      ])
+      expect(recovered.invalid).toBeNull()
+    },
+  )
+
+  test('recovers ordinary text when a new column draft is canceled by unmount', async () => {
+    const sessionMemory = createSessionMemoryStore()
+    sessionMemory.recordRecentDeepSearch(completeDeepState())
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <QuickLauncher
+            rootMatrixId={1}
+            visualTheme="ghost"
+            invocation={{}}
+            sessionMemory={sessionMemory}
+            discoveryService={{
+              search: async () => ({ status: 'current', results: [] }),
+              cancel: vi.fn(),
+            }}
+            loadColumns={() =>
+              Promise.resolve([column(1, 'label', 'text', 'label'), column(2, 'status')])
+            }
+            onNavigate={() => {}}
+            onDismiss={() => setOpen(false)}
+          />
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    )
+    input.value = 'status'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="launcher-authoring-list"]')).not.toBeNull(),
+    )
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    )
+    expect(input.placeholder).toBe('Choose or type an operator…')
+    input.value = 'equals'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    setOpen(false)
+    await Promise.resolve()
+
+    const recovered = sessionMemory.recentDeepSearches()[0]!.state
+    expect(recovered.spec.text).toBe('status')
+    expect(recovered.chips.map((chip) => chip.type)).toEqual([
+      'kind',
+      'scope',
+      'predicate',
+      'order',
+    ])
+  })
+
+  test('opens a jump-back entry through navigation instead of restoring query state', async () => {
+    const sessionMemory = createSessionMemoryStore()
+    sessionMemory.recordFocus({
+      matrixId: 2,
+      rowId: 7,
+      label: 'Earlier place',
+      target: { type: 'node', node: { matrixId: 2, rowId: 7 } },
+    })
+    const navigate = vi.fn()
+    const dismiss = vi.fn()
+    dispose = render(
+      () => (
+        <QuickLauncher
+          rootMatrixId={1}
+          visualTheme="ghost"
+          invocation={{}}
+          sessionMemory={sessionMemory}
+          discoveryService={{
+            search: async () => ({ status: 'current', results: [] }),
+            cancel: vi.fn(),
+          }}
+          onNavigate={navigate}
+          onDismiss={dismiss}
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+    )
+
+    expect(navigate).toHaveBeenCalledWith({
+      type: 'node',
+      node: { matrixId: 2, rowId: 7 },
+    })
+    expect(dismiss).toHaveBeenCalledOnce()
+    expect(sessionMemory.recentDeepSearches()).toEqual([])
   })
 })

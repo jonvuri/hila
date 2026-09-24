@@ -39,6 +39,7 @@ import { registerTableFaceType } from './table/table-plugin'
 import { requestTableFaceFocus } from './table/focus-handoff'
 import { requestGeneratedViewNameFocus } from './workspace/pending-view-name-focus'
 import TagPropertyPanel from './tags/TagPropertyPanel'
+import { createSessionMemoryStore } from './session/session-memory'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
@@ -50,6 +51,7 @@ type ActiveView = 'workspace' | 'table' | 'tags'
 
 const App: Component = () => {
   let disposed = false
+  const sessionMemory = createSessionMemoryStore()
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
   const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
@@ -106,6 +108,8 @@ const App: Component = () => {
   }
 
   const initPlugins = async (isDisposed: () => boolean = () => disposed) => {
+    setLauncherInvocation(null)
+    sessionMemory.reset()
     setWorkspaceMatrixId(null)
     setTableFaceConfig(null)
     setWorkspaceFaceConfig(null)
@@ -287,6 +291,7 @@ const App: Component = () => {
                         componentConfig={workspaceComponentConfig()}
                         navigateToPlace={workspaceNavigateToPlace()}
                         onNavigated={() => setWorkspaceNavigateToPlace(null)}
+                        sessionMemory={sessionMemory}
                       />
                     }
                   >
@@ -390,6 +395,7 @@ const App: Component = () => {
             rootMatrixId={workspaceMatrixId()}
             visualTheme={resolveVisualTheme(document.documentElement.dataset.visualTheme)}
             invocation={invocation()}
+            sessionMemory={sessionMemory}
             commandCapabilities={{ focusCreatedTable }}
             insertRef={(target) => {
               const editor = invocation().editor

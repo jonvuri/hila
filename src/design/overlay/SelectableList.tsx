@@ -13,6 +13,13 @@ export type SelectableListItem = {
   markLabel?: string
   unavailableReason?: string
   appearance?: SelectableListItemAppearance
+  group?: string
+}
+
+export type SelectableListGroup = {
+  readonly id: string
+  readonly label: string
+  readonly emptyMessage?: string
 }
 
 export type SelectableListSelectionSource = 'keyboard' | 'pointer'
@@ -33,6 +40,7 @@ export type SelectableListProps<Item extends SelectableListItem = SelectableList
   invalid?: boolean
   focusable?: boolean
   focusOwner?: HTMLElement
+  groups?: readonly SelectableListGroup[]
 }
 
 const optionId = (listId: string, itemId: string): string =>
@@ -150,6 +158,66 @@ export const SelectableList = <Item extends SelectableListItem>(
     if (item && !item.unavailableReason) props.onActivate(item)
   }
 
+  const renderOption = (item: Item) => {
+    const reasonId = () => `${optionId(listId(), item.id)}-reason`
+    const selected = () => item.id === props.selectedId
+    return (
+      <div
+        id={optionId(listId(), item.id)}
+        class={styles.option}
+        role="option"
+        aria-selected={selected()}
+        aria-disabled={item.unavailableReason ? 'true' : undefined}
+        aria-describedby={item.unavailableReason ? reasonId() : undefined}
+        data-selected={selected() || undefined}
+        data-appearance={item.appearance ?? 'default'}
+        onPointerMove={(event) => {
+          if (event.pointerType === 'touch') return
+          if (!selected()) props.onSelectedIdChange(item.id, 'pointer')
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          if (!selected()) props.onSelectedIdChange(item.id, 'pointer')
+          if (!item.unavailableReason) props.onActivate(item)
+        }}
+      >
+        <Show when={item.mark}>
+          <span
+            class={styles.mark}
+            title={item.markLabel}
+            aria-hidden="true"
+            onPointerDown={(event) => {
+              if (!props.onMarkActivate) return
+              event.preventDefault()
+              event.stopPropagation()
+              props.onMarkActivate(item)
+            }}
+          >
+            {item.mark}
+          </span>
+        </Show>
+        <span class={styles.copy}>
+          <span class={styles.label}>{item.label}</span>
+          <Show when={item.description}>
+            <span class={styles.description}>{item.description}</span>
+          </Show>
+          <Show when={item.unavailableReason}>
+            <span id={reasonId()} class={styles.reason}>
+              {item.unavailableReason}
+            </span>
+          </Show>
+        </span>
+        <Show when={item.meta}>
+          <span class={styles.meta}>{item.meta}</span>
+        </Show>
+      </div>
+    )
+  }
+
+  const ungroupedItems = () =>
+    props.groups ? props.items.filter((item) => item.group == null) : []
+
   return (
     <div class={styles.root} data-invalid={props.invalid || undefined}>
       <div
@@ -168,65 +236,35 @@ export const SelectableList = <Item extends SelectableListItem>(
         tabindex={props.focusable === false ? -1 : 0}
         onKeyDown={handleKeyDown}
       >
-        <For each={props.items}>
-          {(item) => {
-            const reasonId = () => `${optionId(listId(), item.id)}-reason`
-            const selected = () => item.id === props.selectedId
-            return (
-              <div
-                id={optionId(listId(), item.id)}
-                class={styles.option}
-                role="option"
-                aria-selected={selected()}
-                aria-disabled={item.unavailableReason ? 'true' : undefined}
-                aria-describedby={item.unavailableReason ? reasonId() : undefined}
-                data-selected={selected() || undefined}
-                data-appearance={item.appearance ?? 'default'}
-                onPointerMove={(event) => {
-                  if (event.pointerType === 'touch') return
-                  if (!selected()) props.onSelectedIdChange(item.id, 'pointer')
-                }}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (!selected()) props.onSelectedIdChange(item.id, 'pointer')
-                  if (!item.unavailableReason) props.onActivate(item)
-                }}
-              >
-                <Show when={item.mark}>
-                  <span
-                    class={styles.mark}
-                    title={item.markLabel}
-                    aria-hidden="true"
-                    onPointerDown={(event) => {
-                      if (!props.onMarkActivate) return
-                      event.preventDefault()
-                      event.stopPropagation()
-                      props.onMarkActivate(item)
-                    }}
+        <Show when={props.groups} fallback={<For each={props.items}>{renderOption}</For>}>
+          {(groups) => (
+            <For each={groups()}>
+              {(group) => {
+                const items = () => props.items.filter((item) => item.group === group.id)
+                return (
+                  <div
+                    class={styles.group}
+                    role="group"
+                    aria-label={group.label}
+                    data-list-group={group.id}
                   >
-                    {item.mark}
-                  </span>
-                </Show>
-                <span class={styles.copy}>
-                  <span class={styles.label}>{item.label}</span>
-                  <Show when={item.description}>
-                    <span class={styles.description}>{item.description}</span>
-                  </Show>
-                  <Show when={item.unavailableReason}>
-                    <span id={reasonId()} class={styles.reason}>
-                      {item.unavailableReason}
-                    </span>
-                  </Show>
-                </span>
-                <Show when={item.meta}>
-                  <span class={styles.meta}>{item.meta}</span>
-                </Show>
-              </div>
-            )
-          }}
-        </For>
-        <Show when={props.items.length === 0}>
+                    <div class={styles.groupLabel} role="presentation">
+                      {group.label}
+                    </div>
+                    <For each={items()}>{renderOption}</For>
+                    <Show when={items().length === 0}>
+                      <div class={styles.groupEmpty} role="presentation">
+                        {group.emptyMessage ?? 'None yet'}
+                      </div>
+                    </Show>
+                  </div>
+                )
+              }}
+            </For>
+          )}
+        </Show>
+        <For each={ungroupedItems()}>{renderOption}</For>
+        <Show when={props.items.length === 0 && !props.groups}>
           <div class={styles.empty} role="presentation">
             {props.emptyMessage ?? 'No results'}
           </div>

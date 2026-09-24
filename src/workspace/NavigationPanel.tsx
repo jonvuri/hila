@@ -52,6 +52,7 @@ import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
 import { buildAspectPreview, partitionPropertyColumns } from '../shared/property-surface'
 import type { AspectPreview } from '../shared/property-surface'
 import { FieldEditor } from '../shared/FieldEditor'
+import { visibleSessionIdentities, type SessionIdentity } from '../session/session-memory'
 
 import { computeDropTarget, isNoOpDrop, type DropTargetVisual } from './drag-drop'
 import {
@@ -101,11 +102,12 @@ type NavigationPanelProps = {
   navigationOutline?: NavigationOutlineVariant
   // Boundary-hop aware (Phase 9.5): carries the row's matrix so a meshed cross-matrix
   // aspect row can drill into a focus panel keyed by `(matrix_id, row_id)`.
-  onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  onOpenFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
   // A folded block row's `key` is synthetic (positions nothing — the firewall), so drill-in must
   // resolve through the place-navigation ladder instead of trusting the key.
   onOpenFoldedFocus: (matrixId: number, rowId: number) => void
   focusedRowId?: number
+  onVisibleIdentitiesChange?: (identities: readonly SessionIdentity[]) => void
 }
 
 type DragState = {
@@ -1171,7 +1173,12 @@ const NavigationPanel = (props: NavigationPanelProps) => {
       }
       // Any rendered row can drill in, including meshed cross-matrix aspect rows
       // (the Phase 9.5 boundary hop) — the focus panel is keyed by its matrix.
-      props.onOpenFocus(row.matrix_id, row.row_id, new Uint8Array(row.key))
+      props.onOpenFocus(
+        row.matrix_id,
+        row.row_id,
+        new Uint8Array(row.key),
+        extractTextFromPmDoc(row.label ?? '') || 'Untitled',
+      )
     },
   })
 
@@ -1215,6 +1222,21 @@ const NavigationPanel = (props: NavigationPanelProps) => {
 
   const updateStickyGeometry = (geometry: VirtualizerGeometryState) => {
     setVirtualizerGeometry(geometry)
+    const identityByPk = new Map(
+      visibleRows().map((row) => [
+        row.pk,
+        { matrixId: row.matrix_id, rowId: row.row_id } satisfies SessionIdentity,
+      ]),
+    )
+    props.onVisibleIdentitiesChange?.(
+      visibleSessionIdentities({
+        rows: geometry.rows,
+        scrollTop: geometry.scrollTop,
+        viewportHeight: geometry.viewportHeight,
+        topInset: titleHeight(),
+        identityForPosition: (position) => identityByPk.get(String(position)),
+      }),
+    )
     const context = pageData.stickyContext()
     const geometryByPk = new Map(geometry.rows.map((row) => [`${row.position}`, row] as const))
     let activeHeading: ProductionStickyRow | undefined
@@ -1232,6 +1254,8 @@ const NavigationPanel = (props: NavigationPanelProps) => {
     const anchorPk = activeHeading?.identity.pk ?? `${firstVisible?.position ?? ''}`
     setStickyAnchorPk(anchorPk || null)
   }
+
+  onCleanup(() => props.onVisibleIdentitiesChange?.([]))
 
   const sourceScrollTop = (pk: string, stackIndex: number): number | undefined => {
     const geometry = virtualizerHandle?.getGeometry()
@@ -1274,7 +1298,12 @@ const NavigationPanel = (props: NavigationPanelProps) => {
   }
 
   const drillFromSticky = (row: ProductionStickyRow) => {
-    props.onOpenFocus(row.matrixId, row.rowId, hexToKey(row.identity.pk))
+    props.onOpenFocus(
+      row.matrixId,
+      row.rowId,
+      hexToKey(row.identity.pk),
+      extractTextFromPmDoc(row.label) || 'Untitled',
+    )
   }
 
   createEffect(() => {
@@ -1509,6 +1538,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                                 row.matrix_id,
                                 row.row_id,
                                 new Uint8Array(row.key),
+                                extractTextFromPmDoc(row.label ?? '') || 'Untitled',
                               )
                             }
                           }
@@ -1600,6 +1630,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                                       row.matrix_id,
                                       row.row_id,
                                       new Uint8Array(row.key),
+                                      extractTextFromPmDoc(row.label ?? '') || 'Untitled',
                                     )
                                   }}
                                 >

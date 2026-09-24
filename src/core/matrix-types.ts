@@ -1,6 +1,10 @@
 import type { TagType } from '../tags/tag-types'
 import type { RenameHealingReport } from '../sql/query-spec/durable'
-import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../discovery/types'
+import type {
+  DiscoveryCatalogEntry,
+  DiscoveryFilter,
+  DiscoveryRankingSignals,
+} from '../discovery/types'
 
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
@@ -18,6 +22,7 @@ export type MatrixOperationMap = {
       query: string
       filter: DiscoveryFilter
       limit: number
+      rankingSignals?: DiscoveryRankingSignals
     }
     result: DiscoveryCatalogEntry[]
   }

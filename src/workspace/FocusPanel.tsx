@@ -92,8 +92,8 @@ type FocusPanelProps = {
   // the nested outline to it.
   unresolvedPosition?: boolean
   // Boundary-hop aware (Phase 9.5): focus callbacks carry the target row's matrix.
-  onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
-  onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array) => void
+  onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
+  onReplaceFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
   // Drill into a row known only by `(matrixId, rowId)` (no rank key in hand yet):
   // the stack resolves the key and appends a focus panel. Used by the embedded
   // sub-table boundary-hop drill-in.
@@ -101,6 +101,7 @@ type FocusPanelProps = {
   // Same shape, but resolves via identity (Stage C3) for a folded child row of
   // this panel's own children section.
   onOpenFoldedFocus: (matrixId: number, rowId: number) => void
+  onLabelResolved?: (label: string) => void
   onClose: () => void
   // Every focus panel shows a prominent header. On the active (rightmost) panel
   // the header is an editable title; on non-active panels the whole header is a
@@ -523,10 +524,15 @@ const FocusPanel = (props: FocusPanelProps) => {
   // Columns: the full set (for role-adaptive label/content) and the intrinsic
   // overflow subset (the Properties strip).
   const [allColumns, setAllColumns] = createSignal<ColumnDefinition[]>([])
+  const [columnsLoaded, setColumnsLoaded] = createSignal(false)
   const [overflowValues, setOverflowValues] = createSignal<Record<string, string>>({})
 
   createEffect(() => {
-    void getColumns(props.matrixId).then((cols) => setAllColumns(cols))
+    setColumnsLoaded(false)
+    void getColumns(props.matrixId).then((cols) => {
+      setAllColumns(cols)
+      setColumnsLoaded(true)
+    })
   })
 
   const overflowColumns = createMemo(() => filterIntrinsicOverflowColumns(allColumns()))
@@ -554,6 +560,10 @@ const FocusPanel = (props: FocusPanelProps) => {
     const data = rowData()
     if (!col || !data) return ''
     return (data[col] as string | null) ?? ''
+  })
+  createEffect(() => {
+    if (!rowData() || !columnsLoaded()) return
+    props.onLabelResolved?.(extractTextFromPmDoc(labelValue()) || 'Untitled')
   })
   const contentValue = createMemo((): string | null => {
     const col = contentCol()
@@ -921,7 +931,12 @@ const FocusPanel = (props: FocusPanelProps) => {
                               width: '100%',
                             }}
                             onClick={() =>
-                              props.onReplaceFocus(props.matrixId, bl.id, new Uint8Array())
+                              props.onReplaceFocus(
+                                props.matrixId,
+                                bl.id,
+                                new Uint8Array(),
+                                extractTextFromPmDoc(bl.label) || 'Untitled',
+                              )
                             }
                           >
                             <span style={{ color: 'var(--text-muted)', 'margin-right': '4px' }}>

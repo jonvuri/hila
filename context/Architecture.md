@@ -68,7 +68,9 @@ Examples:
 - System truth: `own`/`ref`/`portal` relations, matrix ownership, promoted-node identity, view SQL,
   face recipes.
 - Derived system state: closure and scroll index.
-- Device-local state: device identity, sync cursors, transient session navigation.
+- Device-local state: device identity and sync cursors.
+- Runtime-only state: bounded focus history, canceled Deep recovery, current focus chain, and
+  on-screen identities. These reset on reload and plugin/database reset.
 
 The exact model and invariants live in [Data-Model.md](Data-Model.md).
 
@@ -132,7 +134,8 @@ identity navigation reconstructs a rooted focus state rather than creating a sec
 The shell owns one transient Quick launcher. It captures the focused node and optional appearance
 provenance when global `Mod-k` opens, then freezes that command context until dismissal. Search,
 selection, focus, keyboard, pointer, and accessibility state stay shared while the presentation
-boundary selects centered Ghost/Null or anchored Wipeout geometry. Deep remains Session 6 work.
+boundary selects centered Ghost/Null or anchored Wipeout geometry. Committed chips expand the same
+surface into Deep preview; save and insert-ref remain explicit exits.
 
 Saved views now participate in this contract. Their marker label is discoverable like another
 named row, their inline block opens the marker identity, and their focus panel renders the marker's
@@ -173,7 +176,16 @@ Global discovery now runs as one typed worker request over current matrix and se
 metadata. It classifies ordinary rows, view markers, promoted types, per-matrix container subjects,
 and the existing workspace root before merging main-thread commands. The scan remains linear until
 FTS; subscriptions, retained candidates, excerpts, and breadcrumbs are bounded. Ranking is pure and
-deterministic, with session-only on-screen and recency signals still deferred.
+deterministic. One app-scoped session store supplies bounded focus recency and actual viewport
+identities. The virtualizer reports numeric row intersections upward from its existing geometry;
+retained off-screen windows do not receive the on-screen boost, and no observer exists per row.
+
+The same store keeps at most six successful focus destinations and six deduplicated canceled Deep
+specs. Current focus panels are filtered from Jump back. Recent Deep restores committed chips and
+text without running or navigating. Successful exits do not enter Recents because focus history
+already represents successful navigation and the list is recovery, not durable history. All four
+store planes reset on reload and plugin/database reset and never cross the worker persistence,
+replication, or schema boundaries.
 
 Quick publishes at most 12 place, command, and family-suggestion rows. Go results use the typed
 place resolver above. Commands run with the captured subject; unavailable subject-required commands

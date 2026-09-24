@@ -2,14 +2,14 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 phase: 12
-session: session-memory-and-on-screen-signals
+session: surface-capture-tab-retirement-and-closeout
 ---
 
 # Now
 
-Phase 12 Sessions 1–7 and 4A are complete. The main thread has authoritative command and shortcut
+Phase 12 Sessions 1–8 and 4A are complete. The main thread has authoritative command and shortcut
 registries. The query-spec dialect has matched compilation and recognition, bounded execution,
 durable round trips, paging, rename healing, and read-only user query edges.
 
@@ -52,23 +52,31 @@ or Deep preview rows through the canonical inline-reference transaction, then no
 and relation sync run. Changed or unmounted editors are refused with a reason. No schema change
 occurred.
 
+One app-scoped, runtime-only session store now keeps at most six successful focus destinations, six
+canceled Deep states, and bounded actual-viewport identities. Jump back excludes the visible focus
+chain. Recent Deep restores committed chips plus ordinary text without running or navigating;
+successful go, run, save, and insert exits do not enter it. Discovery adds conservative on-screen
+and session-recency weights while preserving stronger match quality. Reload and plugin/database
+reset clear every signal. No session state is persisted, replicated, or classified as user data.
+
 The unreleased app remains at reset-only schema version 0. The durable dogfooding gate may follow
 all currently planned phases.
 
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 8 — session memory and on-screen signals](phases/Phase-12/Session-8-session-memory-and-on-screen-signals.md).
-3. [Query Spec](Query-Spec.md), [Launcher](Launcher.md), [Design](Design.md), and the completed
-   [Session 4A prototype record](phases/Phase-12/Session-4a-quick-deep-overlay-prototypes.md).
+2. [Session 9 — surface capture, tab retirement, and closeout](phases/Phase-12/Session-9-surface-capture-tab-retirement-and-closeout.md).
+3. [Launcher](Launcher.md), [Architecture](Architecture.md), [Design](Design.md), and
+   [Design Faces](Design-Faces.md).
 
 ## Boundary
 
-Session 8 owns bounded in-memory focus history, recent Deep recovery, and on-screen ranking signals.
-Preserve SQL as the sole stored query truth and the Session 7 editor/save exits. Do not build tab
-retirement early.
+Session 9 must capture the retiring Table and Tags surfaces in Storybook before removing their
+production roots. It must also decide whether narrow navigation needs a single-panel shell before
+tab retirement. Preserve embedded table and tag flows plus the Phase 13 face/runtime migration. Do
+not build Phase 13 early.
 
 ## Next action
 
-Read Session 8 and implement its plan in order without adding persisted frecency or widening the
-schema.
+Read Session 9, investigate the narrow shell, prove every navigation-role parity gate, then capture
+the retiring surfaces before removing the temporary roots.

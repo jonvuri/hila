@@ -232,25 +232,22 @@
   max-height: 100%;
 }
 
-.emptyState,
+.memoryState,
 .guide {
-  display: grid;
-  gap: var(--space-16);
   padding: var(--space-16);
 }
 
-.emptyState {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.guide {
+  display: grid;
+  gap: var(--space-16);
 }
 
-.emptyState section,
 .guide section {
   min-width: 0;
   padding: var(--space-8);
   border: var(--border-subtle);
 }
 
-.emptyState h2,
 .guide h2 {
   margin: 0 0 var(--space-8);
   color: var(--color-text-strong);
@@ -260,10 +257,8 @@
   letter-spacing: var(--type-label-letter-spacing);
 }
 
-.emptyState p {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--type-body-small-size);
+.memoryState :global([role='listbox']) {
+  border: var(--border-subtle);
 }
 
 .guide {
@@ -473,7 +468,6 @@
     height: 50dvh;
   }
 
-  .emptyState,
   .guide {
     grid-template-columns: minmax(0, 1fr);
   }

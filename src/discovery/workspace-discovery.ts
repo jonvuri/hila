@@ -19,6 +19,7 @@ type DiscoveryServiceDependencies = {
     query: string
     filter: DiscoveryFilter
     limit: number
+    rankingSignals?: Required<DiscoveryRequest>['rankingSignals']
   }) => Promise<DiscoveryCatalogEntry[]>
   readonly commandContext?: () => CommandInvocationContext
   readonly commandEntries?: (context: CommandInvocationContext) => readonly CommandEntry[]
@@ -39,6 +40,10 @@ const normalizeRequest = (request: DiscoveryRequest): Required<DiscoveryRequest>
   query: request.query,
   filter: request.filter ?? 'all',
   limit: Math.max(1, Math.min(MAX_LIMIT, Math.trunc(request.limit ?? DEFAULT_LIMIT))),
+  rankingSignals: request.rankingSignals ?? {
+    onScreenIdentities: new Set(),
+    sessionRecency: [],
+  },
 })
 
 /**
@@ -79,6 +84,7 @@ export const createWorkspaceDiscoveryService = (
             queued.request.query,
             queued.request.filter,
             queued.request.limit,
+            queued.request.rankingSignals,
           ),
         })
       }

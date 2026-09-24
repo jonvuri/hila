@@ -9,7 +9,11 @@ import type {
 import type { PluginContext, PluginDefinition, PluginRow } from '../plugin-types'
 import { toPluginRegistration } from '../plugin-types'
 import type { TagType } from '../../tags/tag-types'
-import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../../discovery/types'
+import type {
+  DiscoveryCatalogEntry,
+  DiscoveryFilter,
+  DiscoveryRankingSignals,
+} from '../../discovery/types'
 import type { AppearanceProvenance, ResolvedPlaceNavigation } from '../place-navigation'
 import type { NodeRef } from '../tree'
 import type { CreatedViewBlock } from '../block-marker'
@@ -53,6 +57,7 @@ export const queryDiscoveryCatalog = (input: {
   query: string
   filter: DiscoveryFilter
   limit: number
+  rankingSignals?: DiscoveryRankingSignals
 }): Promise<DiscoveryCatalogEntry[]> => workerCall('queryDiscoveryCatalog', input)
 
 export const resolvePlaceNavigation = (

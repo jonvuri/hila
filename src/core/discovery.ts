@@ -5,6 +5,7 @@ import type {
   DiscoveryBreadcrumb,
   DiscoveryCatalogEntry,
   DiscoveryFilter,
+  DiscoveryRankingSignals,
 } from '../discovery/types'
 
 import { extractTextFromPmDoc } from './pm-text'
@@ -21,6 +22,7 @@ export type QueryDiscoveryCatalogInput = {
   readonly query: string
   readonly filter: DiscoveryFilter
   readonly limit: number
+  readonly rankingSignals?: DiscoveryRankingSignals
 }
 
 type MatrixCatalogRow = {
@@ -144,6 +146,7 @@ const retainBestCandidates = (
       input.query,
       input.filter,
       candidateLimit,
+      input.rankingSignals,
     ).map(({ id }) => id),
   )
   return candidates.filter(({ id }) => rankedIds.has(id))
@@ -405,7 +408,12 @@ export const queryDiscoveryCatalog = (
     })
   }
 
-  return rankDiscoveryResults(hydrated, [], input.query, input.filter, candidateLimit).map(
-    (result) => hydrated.find(({ id }) => id === result.id)!,
-  )
+  return rankDiscoveryResults(
+    hydrated,
+    [],
+    input.query,
+    input.filter,
+    candidateLimit,
+    input.rankingSignals,
+  ).map((result) => hydrated.find(({ id }) => id === result.id)!)
 }

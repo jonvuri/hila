@@ -23,6 +23,11 @@ import type { ColumnDefinition } from '../core/matrix'
 import type { AppearanceProvenance, PlaceNavigationTarget } from '../core/place-navigation'
 import type { NodeRef } from '../core/tree'
 import type { SqlObserver, SqlQuery } from '../core/sql-types'
+import type {
+  RecentDeepSearch,
+  SessionFocusEntry,
+  SessionMemoryStore,
+} from '../session/session-memory'
 import { CenteredOverlay } from '../design/overlay/Overlay'
 import {
   SelectableList,
@@ -90,6 +95,7 @@ export type QuickLauncherProps = {
   rootMatrixId: number | null
   visualTheme: VisualTheme
   invocation: LauncherInvocation
+  sessionMemory?: SessionMemoryStore
   commandCapabilities?: CommandInvocationCapabilities
   discoveryService?: LauncherDiscoveryService
   loadColumns?: (matrixId: number) => Promise<ColumnDefinition[]>
@@ -208,21 +214,21 @@ const WipeoutEchoes = (props: { tempo: 'quick' | 'deep' }) => {
 type OperatorDraft = {
   readonly stage: 'operator'
   readonly column: ColumnDefinition
-  readonly restoreState?: LauncherQueryState
+  readonly committedState: LauncherQueryState
 }
 
 type ValueDraft = {
   readonly stage: 'value'
   readonly column: ColumnDefinition
   readonly operator: QueryAuthoringOperator
-  readonly restoreState?: LauncherQueryState
+  readonly committedState: LauncherQueryState
 }
 
 type AuthoringDraft = OperatorDraft | ValueDraft
 
 type ObjectEditDraft = {
   readonly chip: LauncherQueryChip
-  readonly beforeState: LauncherQueryState
+  readonly committedState: LauncherQueryState
 }
 
 type ColumnAuthoringItem = SelectableListItem & {
@@ -241,6 +247,27 @@ type ValueAuthoringItem = SelectableListItem & {
 }
 
 type AuthoringItem = ColumnAuthoringItem | OperatorAuthoringItem | ValueAuthoringItem
+
+type LauncherMemoryItem = SelectableListItem &
+  (
+    | { readonly kind: 'jump-back'; readonly entry: SessionFocusEntry }
+    | { readonly kind: 'recent-search'; readonly entry: RecentDeepSearch }
+  )
+
+type LauncherExitOutcome = 'pending' | 'canceled' | 'successful'
+
+const queryChipSummary = (chip: LauncherQueryChip): string => {
+  if (chip.type === 'kind') return `${chip.mark}${chip.label}`
+  if (chip.type === 'scope') return `${chip.label} ›`
+  if (chip.type === 'order') return `${chip.operatorGlyph} ${chip.columnName}`
+  return `${chip.columnName} ${chip.operatorGlyph}${chip.valueLabel ? ` ${chip.valueLabel}` : ''}`
+}
+
+const recentSearchLabel = (entry: RecentDeepSearch): string => {
+  const chips = entry.state.chips.map(queryChipSummary)
+  const text = entry.state.spec.text.trim()
+  return [...chips, ...(text ? [`“${text}”`] : [])].join(' · ') || 'Deep search'
+}
 
 const columnItems = (
   columns: readonly ColumnDefinition[],
@@ -349,6 +376,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     readonly request: SqlQuery
     readonly observer: SqlObserver
   } | null = null
+  let exitOutcome: LauncherExitOutcome = 'pending'
 
   const tempo = createMemo(() => queryTempo(queryState().spec))
   const searchActive = () => filter() !== null || editorText().trim().length > 0
@@ -362,6 +390,30 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       subjectLabel: props.invocation.subjectLabel,
     }),
   )
+  const memoryItems = createMemo<readonly LauncherMemoryItem[]>(() => [
+    ...(props.sessionMemory?.jumpBackEntries() ?? []).map(
+      (entry): LauncherMemoryItem => ({
+        id: `jump-back:${entry.matrixId}:${entry.rowId}`,
+        kind: 'jump-back',
+        group: 'jump-back',
+        entry,
+        label: entry.label,
+        description: 'Visited earlier this session',
+        mark: '↶',
+      }),
+    ),
+    ...(props.sessionMemory?.recentDeepSearches() ?? []).map(
+      (entry): LauncherMemoryItem => ({
+        id: `recent-search:${entry.key}`,
+        kind: 'recent-search',
+        group: 'recent-searches',
+        entry,
+        label: recentSearchLabel(entry),
+        description: 'Restore without running',
+        mark: '≔',
+      }),
+    ),
+  ])
   const activeFilter = createMemo(() =>
     launcherFamilies.find((family) => family.filter === filter()),
   )
@@ -402,7 +454,9 @@ const QuickLauncher = (props: QuickLauncherProps) => {
   const deepDiscoveryItems = createMemo(() =>
     tempo() === 'deep' && filter() !== null ? launcherItems() : [],
   )
-  const activeItems = createMemo<readonly (LauncherListItem | AuthoringItem)[]>(() => {
+  const activeItems = createMemo<
+    readonly (LauncherListItem | AuthoringItem | LauncherMemoryItem)[]
+  >(() => {
     const current = draft()
     if (current?.stage === 'operator') return operatorMenuItems()
     if (current?.stage === 'value') return valueMenuItems()
@@ -410,7 +464,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       if (filter() !== null) return deepDiscoveryItems()
       return authoringColumns()
     }
-    return launcherItems()
+    return searchActive() ? launcherItems() : memoryItems()
   })
   const authoringListVisible = createMemo(
     () =>
@@ -424,6 +478,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     const requestedFilter = filter()
     const showingHelp = helpOpen()
     const discover = shouldDiscover()
+    props.sessionMemory?.revision()
     const generation = ++searchGeneration
 
     if (
@@ -450,6 +505,9 @@ const QuickLauncher = (props: QuickLauncherProps) => {
         query: requestedQuery,
         filter: requestedFilter ?? 'all',
         limit: 12,
+        ...(props.sessionMemory ?
+          { rankingSignals: props.sessionMemory.rankingSignals() }
+        : {}),
       })
       .then((outcome) => {
         if (generation !== searchGeneration || outcome.status === 'stale') return
@@ -580,6 +638,17 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     return catalogError() ?? state.invalid?.reason ?? compiledPreview()?.error ?? null
   })
 
+  const committedStateForCancellation = (): LauncherQueryState =>
+    objectEdit()?.committedState ?? draft()?.committedState ?? queryState()
+
+  const settleExit = (outcome: Exclude<LauncherExitOutcome, 'pending'>): void => {
+    if (exitOutcome !== 'pending') return
+    exitOutcome = outcome
+    if (outcome !== 'canceled') return
+    const state = committedStateForCancellation()
+    if (state.chips.length > 0) props.sessionMemory?.recordRecentDeepSearch(state)
+  }
+
   onCleanup(() => {
     searchGeneration += 1
     catalogGeneration += 1
@@ -589,11 +658,26 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       removeObserver(distinctSubscription.request, distinctSubscription.observer)
       distinctSubscription = null
     }
+    settleExit('canceled')
   })
 
-  const dismiss = () => {
+  const finishExit = (
+    outcome: Exclude<LauncherExitOutcome, 'pending'>,
+    beforeDismiss?: () => void,
+  ): void => {
+    settleExit(outcome)
+    beforeDismiss?.()
     discovery.cancel()
     props.onDismiss()
+  }
+
+  const dismiss = () => finishExit('canceled')
+  const dismissSuccessfully = (beforeDismiss?: () => void) =>
+    finishExit('successful', beforeDismiss)
+  const navigateAndDismiss = (target: PlaceNavigationTarget): void => {
+    settleExit('successful')
+    props.onNavigate(target)
+    dismissSuccessfully()
   }
 
   const applyFilter = (nextFilter: LauncherFamilyFilter, clearQuery: boolean) => {
@@ -609,25 +693,53 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     queueMicrotask(() => untrack(input)?.focus({ preventScroll: true }))
   }
 
-  const activate = (item: LauncherListItem) => {
+  const restoreRecentSearch = (
+    item: Extract<LauncherMemoryItem, { kind: 'recent-search' }>,
+  ) => {
+    const state = structuredClone(item.entry.state)
+    batch(() => {
+      setQueryState(state)
+      setEditorText(state.spec.text)
+      setDraft(null)
+      setObjectEdit(null)
+      setFilter(null)
+      setHelpOpen(false)
+      setSelectedId(null)
+      setInteractionNotice(null)
+      setCursorIndex(state.spec.text.length)
+    })
+    queueMicrotask(() => untrack(input)?.focus({ preventScroll: true }))
+  }
+
+  const activate = (item: LauncherListItem | LauncherMemoryItem) => {
+    if (item.kind === 'jump-back') {
+      setRestoreInvoker(false)
+      navigateAndDismiss(item.entry.target)
+      return
+    }
+    if (item.kind === 'recent-search') {
+      restoreRecentSearch(item)
+      return
+    }
     if (item.kind === 'family') {
       applyFilter(item.filter, true)
       return
     }
 
     if (item.result.family === 'command') {
-      void invokeCommand(item.result.commandId, context).catch((error: unknown) => {
-        console.error('launcher command failed', error)
+      const commandId = item.result.commandId
+      dismissSuccessfully(() => {
+        void invokeCommand(commandId, context).catch((error: unknown) => {
+          console.error('launcher command failed', error)
+        })
       })
-      dismiss()
       return
     }
 
     const target = navigationTargetForLauncherItem(item)
     if (!target) return
     setRestoreInvoker(false)
-    props.onNavigate(target)
-    dismiss()
+    navigateAndDismiss(target)
   }
 
   const insertRefTarget = (target: {
@@ -644,11 +756,20 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       return
     }
     setRestoreInvoker(false)
-    dismiss()
+    dismissSuccessfully()
   }
 
-  const insertRefFromItem = (item: LauncherListItem | AuthoringItem | undefined): void => {
-    if (!item || item.kind === 'column' || item.kind === 'operator' || item.kind === 'value') {
+  const insertRefFromItem = (
+    item: LauncherListItem | AuthoringItem | LauncherMemoryItem | undefined,
+  ): void => {
+    if (
+      !item ||
+      item.kind === 'column' ||
+      item.kind === 'operator' ||
+      item.kind === 'value' ||
+      item.kind === 'jump-back' ||
+      item.kind === 'recent-search'
+    ) {
       return
     }
     if (item.kind === 'family' || item.result.family === 'command') return
@@ -668,7 +789,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     }
     const commit = authoringCommitForLauncherItem(item)
     if (!commit) return false
-    const editState = objectEdit()?.beforeState
+    const editState = objectEdit()?.committedState
     batch(() => {
       setQueryState((state) => {
         const baseState = editState ?? state
@@ -707,10 +828,10 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     })
   }
 
-  const beginColumn = (column: ColumnDefinition, restoreState?: LauncherQueryState) => {
+  const beginColumn = (column: ColumnDefinition, committedState = queryState()): void => {
     batch(() => {
       setQueryState((state) => reduceLauncherQuery(state, { type: 'set-text', text: '' }))
-      setDraft({ stage: 'operator', column, ...(restoreState ? { restoreState } : {}) })
+      setDraft({ stage: 'operator', column, committedState })
       setObjectEdit(null)
       setEditorText('')
       setFilter(null)
@@ -724,8 +845,8 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     column: ColumnDefinition,
     operator: QueryAuthoringOperator,
     valueText = '',
+    committedState = draft()?.committedState ?? queryState(),
   ): boolean => {
-    const restoreState = draft()?.restoreState
     const next = reduceLauncherQuery(queryState(), {
       type: 'commit-column',
       column,
@@ -739,7 +860,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
           stage: 'value',
           column,
           operator,
-          ...(restoreState ? { restoreState } : {}),
+          committedState,
         })
         setEditorText(valueText)
       })
@@ -760,15 +881,15 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     column: ColumnDefinition,
     operator: QueryAuthoringOperator,
     valueText = '',
+    committedState = draft()?.committedState ?? queryState(),
   ) => {
     if (operator.requiresValue && !valueText.trim()) {
-      const restoreState = draft()?.restoreState
       batch(() => {
         setDraft({
           stage: 'value',
           column,
           operator,
-          ...(restoreState ? { restoreState } : {}),
+          committedState,
         })
         setEditorText('')
         setSelectedId(null)
@@ -776,10 +897,14 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       focusInput()
       return
     }
-    commitColumn(column, operator, valueText)
+    commitColumn(column, operator, valueText, committedState)
   }
 
-  const activateActiveItem = (item: LauncherListItem | AuthoringItem) => {
+  const activateActiveItem = (item: LauncherListItem | AuthoringItem | LauncherMemoryItem) => {
+    if (item.kind === 'jump-back' || item.kind === 'recent-search') {
+      activate(item)
+      return
+    }
     if (item.kind === 'column') {
       beginColumn(item.column)
       return
@@ -804,7 +929,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
   }
 
   const editChip = (chip: LauncherQueryChip) => {
-    const beforeState = queryState()
+    const committedState = queryState()
     const column =
       chip.type === 'predicate' || chip.type === 'order' ?
         columns().find((candidate) => candidate.id === chip.columnId)
@@ -818,8 +943,8 @@ const QuickLauncher = (props: QuickLauncherProps) => {
         setObjectEdit(null)
         setDraft(
           operator.requiresValue ?
-            { stage: 'value', column, operator, restoreState: beforeState }
-          : { stage: 'operator', column, restoreState: beforeState },
+            { stage: 'value', column, operator, committedState }
+          : { stage: 'operator', column, committedState },
         )
         setEditorText(operator.requiresValue ? chip.valueLabel : '')
       })
@@ -827,13 +952,13 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       return
     }
     if (chip.type === 'order' && column) {
-      beginColumn(column, beforeState)
+      beginColumn(column, committedState)
       return
     }
     if (chip.type === 'kind' || chip.type === 'scope') {
       batch(() => {
         setDraft(null)
-        setObjectEdit({ chip, beforeState })
+        setObjectEdit({ chip, committedState })
         setFilter(
           chip.type === 'scope' ? 'named'
           : chip.mark === '#' ? 'types'
@@ -877,6 +1002,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     if (tempo() !== 'deep' || draft() || objectEdit() || filter()) return false
     const typed = parseTypedColumnOperator(text, availableColumns)
     if (!typed) return false
+    const committedState = queryState()
     if (typed.column.formula !== null) {
       batch(() => {
         setQueryState((state) => reduceLauncherQuery(state, { type: 'set-text', text: '' }))
@@ -888,7 +1014,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       setQueryState((state) => reduceLauncherQuery(state, { type: 'set-text', text: '' }))
       setEditorText(typed.valueText)
     })
-    chooseOperator(typed.column, typed.operator, typed.valueText)
+    chooseOperator(typed.column, typed.operator, typed.valueText, committedState)
     return true
   }
 
@@ -1009,7 +1135,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
         name,
       )
       setRestoreInvoker(false)
-      dismiss()
+      dismissSuccessfully()
       requestAnimationFrame(() => {
         if (props.onSavedView) props.onSavedView(marker, name, provenance)
         else props.onNavigate({ type: 'node', node: marker, provenance })
@@ -1108,6 +1234,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     if (event.key === 'Tab') {
       const selectedItem = activeItems().find((item) => item.id === selectedId())
       if (selectedItem) {
+        if (selectedItem.kind === 'jump-back' || selectedItem.kind === 'recent-search') return
         event.preventDefault()
         if (selectedItem.unavailableReason) {
           setInteractionNotice(selectedItem.unavailableReason)
@@ -1201,14 +1328,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       setFilter(null)
       setSelectedId(null)
       setInteractionNotice(null)
-      const restoreState = currentObjectEdit?.beforeState ?? currentDraft?.restoreState
-      if (restoreState) setQueryState(restoreState)
-      else {
-        setQueryState((state) => {
-          const cleared = reduceLauncherQuery(state, { type: 'clear-invalid' })
-          return reduceLauncherQuery(cleared, { type: 'set-text', text: '' })
-        })
-      }
+      setQueryState((currentObjectEdit ?? currentDraft)!.committedState)
     })
     focusInput()
     return true
@@ -1248,8 +1368,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
 
   const navigateFromPreview = (target: PlaceNavigationTarget) => {
     setRestoreInvoker(false)
-    props.onNavigate(target)
-    dismiss()
+    navigateAndDismiss(target)
   }
 
   return (
@@ -1385,15 +1504,29 @@ const QuickLauncher = (props: QuickLauncherProps) => {
                 <Show
                   when={searchActive()}
                   fallback={
-                    <div class={styles.emptyState} data-testid="launcher-empty-state">
-                      <section>
-                        <h2>Jump back</h2>
-                        <p>Places visited this session will appear here.</p>
-                      </section>
-                      <section>
-                        <h2>Recent deep searches</h2>
-                        <p>Deep searches will appear here.</p>
-                      </section>
+                    <div class={styles.memoryState} data-testid="launcher-empty-state">
+                      <SelectableList
+                        id={listId}
+                        items={memoryItems()}
+                        groups={[
+                          {
+                            id: 'jump-back',
+                            label: 'Jump back',
+                            emptyMessage: 'Successful navigation will appear here.',
+                          },
+                          {
+                            id: 'recent-searches',
+                            label: 'Recent deep searches',
+                            emptyMessage: 'Canceled Deep searches will appear here.',
+                          },
+                        ]}
+                        selectedId={selectedId()}
+                        ariaLabel="Session history"
+                        focusable={false}
+                        focusOwner={input()}
+                        onSelectedIdChange={(id) => setSelectedId(id)}
+                        onActivate={activateActiveItem}
+                      />
                     </div>
                   }
                 >

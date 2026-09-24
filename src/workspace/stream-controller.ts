@@ -11,6 +11,7 @@ import {
 import { resolvePlaceNavigation } from '../core/client/matrix-client'
 import type { PlaceNavigationTarget, ResolvedPlaceNavigation } from '../core/place-navigation'
 import { extractTextFromPmDoc } from '../editor/pm-text'
+import type { SessionFocusEntry } from '../session/session-memory'
 import { useQuery } from '../sql/useQuery'
 
 import { buildAncestryForRowsQuery, buildMatrixTitleQuery } from './workspace-plugin'
@@ -23,6 +24,8 @@ export type StreamPanel =
       matrixId: number
       rowId: number
       rowKey: Uint8Array
+      label: Accessor<string | undefined>
+      setLabel: (label: string) => void
       foldedOrigin?: boolean
       unresolvedPosition?: boolean
     }
@@ -39,15 +42,30 @@ export type StreamControllerInput = {
   matrixId: number
   navigateToPlace?: PlaceNavigationTarget | null
   onNavigated?: () => void
+  onFocusTransition?: (entry: SessionFocusEntry) => void
 }
 
 export type StreamController = {
   panels: Accessor<readonly StreamPanel[]>
   title: Accessor<string>
   ancestry: Accessor<readonly (readonly StreamAncestor[])[]>
+  focusEntries: Accessor<readonly SessionFocusEntry[]>
   focusedRowForNavigation: (index: number) => number | undefined
-  appendFocus: (fromIndex: number, matrixId: number, rowId: number, rowKey: Uint8Array) => void
-  replaceFocus: (fromIndex: number, matrixId: number, rowId: number, rowKey: Uint8Array) => void
+  appendFocus: (
+    fromIndex: number,
+    matrixId: number,
+    rowId: number,
+    rowKey: Uint8Array,
+    label?: string,
+  ) => void
+  replaceFocus: (
+    fromIndex: number,
+    matrixId: number,
+    rowId: number,
+    rowKey: Uint8Array,
+    label?: string,
+  ) => void
+  setFocusLabel: (panelId: string, label: string) => void
   closeFrom: (fromIndex: number) => void
   selectAncestor: (panelIndex: number, ancestor: StreamAncestor) => void
   openPlace: (fromIndex: number, target: PlaceNavigationTarget) => Promise<void>
@@ -83,31 +101,66 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     matrixId: number,
     rowId: number,
     rowKey: Uint8Array,
+    label?: string,
     options?: { foldedOrigin?: boolean; unresolvedPosition?: boolean },
-  ): StreamPanel => ({
-    id: `stream-focus-${nextPanelId++}`,
-    type: 'focus',
-    matrixId,
-    rowId,
-    rowKey,
-    ...options,
-  })
+  ): StreamPanel => {
+    const [panelLabel, setPanelLabel] = createSignal(label)
+    return {
+      id: `stream-focus-${nextPanelId++}`,
+      type: 'focus',
+      matrixId,
+      rowId,
+      rowKey,
+      label: panelLabel,
+      setLabel: setPanelLabel,
+      ...options,
+    }
+  }
 
   const enforceColumnLimit = (next: StreamPanel[]): StreamPanel[] => next.slice(-MAX_COLUMNS)
+
+  const focusEntry = (
+    matrixId: number,
+    rowId: number,
+    rowKey?: Uint8Array,
+    label?: string,
+  ): SessionFocusEntry => ({
+    matrixId,
+    rowId,
+    label: label ?? `Focused row ${rowId}`,
+    labelResolved: label !== undefined,
+    target: {
+      type: 'node',
+      node: { matrixId, rowId },
+      ...(rowKey && rowKey.length > 0 ? { provenance: { key: new Uint8Array(rowKey) } } : {}),
+    },
+  })
+
+  const recordResolvedFocus = (resolved: ResolvedPlaceNavigation): void => {
+    input.onFocusTransition?.(
+      focusEntry(
+        resolved.node.matrixId,
+        resolved.node.rowId,
+        resolved.type === 'position' ? resolved.appearance.key : undefined,
+      ),
+    )
+  }
 
   const appendFocusWithOptions = (
     fromIndex: number,
     matrixId: number,
     rowId: number,
     rowKey: Uint8Array,
+    label?: string,
     options?: { foldedOrigin?: boolean; unresolvedPosition?: boolean },
   ) => {
     setPanels((previous) =>
       enforceColumnLimit([
         ...previous.slice(0, fromIndex + 1),
-        createFocusPanel(matrixId, rowId, rowKey, options),
+        createFocusPanel(matrixId, rowId, rowKey, label, options),
       ]),
     )
+    input.onFocusTransition?.(focusEntry(matrixId, rowId, rowKey, label))
   }
 
   const appendFocus = (
@@ -115,7 +168,8 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     matrixId: number,
     rowId: number,
     rowKey: Uint8Array,
-  ) => appendFocusWithOptions(fromIndex, matrixId, rowId, rowKey)
+    label?: string,
+  ) => appendFocusWithOptions(fromIndex, matrixId, rowId, rowKey, label)
 
   const resolvePanels = (
     base: StreamPanel[],
@@ -129,6 +183,7 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
           resolved.node.matrixId,
           resolved.node.rowId,
           new Uint8Array(resolved.appearance.key),
+          undefined,
           options,
         ),
       ])
@@ -149,15 +204,22 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
           container.node.matrixId,
           container.node.rowId,
           container.key ? new Uint8Array(container.key) : new Uint8Array(0),
+          undefined,
           container.key ? undefined : { unresolvedPosition: true },
         ),
       )
     }
     additions.push(
-      createFocusPanel(resolved.node.matrixId, resolved.node.rowId, new Uint8Array(0), {
-        ...options,
-        unresolvedPosition: true,
-      }),
+      createFocusPanel(
+        resolved.node.matrixId,
+        resolved.node.rowId,
+        new Uint8Array(0),
+        undefined,
+        {
+          ...options,
+          unresolvedPosition: true,
+        },
+      ),
     )
     return enforceColumnLimit([...base, ...additions])
   }
@@ -168,10 +230,12 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     options?: { foldedOrigin?: boolean },
   ): void => {
     setPanels((previous) => resolvePanels(previous.slice(0, fromIndex + 1), resolved, options))
+    recordResolvedFocus(resolved)
   }
 
   const replaceWithResolvedPlaceFromRoot = (resolved: ResolvedPlaceNavigation): void => {
     setPanels(resolvePanels([createNavigationRootPanel()], resolved))
+    recordResolvedFocus(resolved)
   }
 
   const replaceFocus = (
@@ -179,18 +243,33 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     matrixId: number,
     rowId: number,
     rowKey: Uint8Array,
+    label?: string,
   ) => {
     setPanels((previous) =>
       enforceColumnLimit([
         ...previous.slice(0, fromIndex),
-        createFocusPanel(matrixId, rowId, rowKey),
+        createFocusPanel(matrixId, rowId, rowKey, label),
       ]),
     )
+    input.onFocusTransition?.(focusEntry(matrixId, rowId, rowKey, label))
   }
 
   const closeFrom = (fromIndex: number) => {
     setPanels((previous) => previous.slice(0, fromIndex))
   }
+
+  const setFocusLabel = (panelId: string, label: string): void => {
+    const panel = panels().find((candidate) => candidate.id === panelId)
+    if (panel?.type === 'focus') panel.setLabel(label)
+  }
+
+  const focusEntries = createMemo(() =>
+    panels().flatMap((panel) =>
+      panel.type === 'focus' ?
+        [focusEntry(panel.matrixId, panel.rowId, panel.rowKey, panel.label())]
+      : [],
+    ),
+  )
 
   const focusPairs = createMemo(() =>
     panels().flatMap((panel) =>
@@ -297,7 +376,13 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
       ancestor.key ??
       ancestorKeyByCompositeKey().get(panelCompositeKey(ancestor.matrixId, ancestor.rowId))
     if (key) {
-      replaceFocus(panelIndex, ancestor.matrixId, ancestor.rowId, new Uint8Array(key))
+      replaceFocus(
+        panelIndex,
+        ancestor.matrixId,
+        ancestor.rowId,
+        new Uint8Array(key),
+        ancestor.label,
+      )
     }
   }
 
@@ -403,9 +488,11 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     panels,
     title,
     ancestry,
+    focusEntries,
     focusedRowForNavigation: (index) => focusedRowsByNavigationIndex().get(index),
     appendFocus,
     replaceFocus,
+    setFocusLabel,
     closeFrom,
     selectAncestor,
     openPlace,
