@@ -2,7 +2,7 @@
 title: Browser and E2E testing
 kind: canonical
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Browser and E2E testing guide
@@ -51,6 +51,13 @@ await expect(async () => {
 **Stabilize counts before comparing.** After `addSampleRows`, the button can re-enable
 before the outline finishes updating. Wait for the expected minimum with
 `waitForRows(page, minCount)` before taking the baseline count.
+
+**Test responsive workspace behavior at the host boundary.** Resize the viewport with the dev
+sidebar closed, then wait for `data-shell-presentation`. At 719px, assert that only the active panel
+is visible while every retained panel remains attached, and that hidden panels carry `hidden`,
+`aria-hidden`, and `inert`. At 720px, assert that the same panel and editor nodes return to the rail.
+Capture editor focus and DOM selection before both transitions. If focus begins in a panel that
+becomes hidden, assert transfer to the active panel landmark and the polite status announcement.
 
 ### Debugging failures
 

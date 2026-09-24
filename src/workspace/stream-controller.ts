@@ -88,6 +88,9 @@ const ROOT_PANEL_ID = 'stream-root'
 
 const panelCompositeKey = (matrixId: number, rowId: number): string => `${matrixId}:${rowId}`
 
+const sameKey = (left: Uint8Array, right: Uint8Array): boolean =>
+  left.length === right.length && left.every((byte, index) => byte === right[index])
+
 const createNavigationRootPanel = (): StreamPanel => ({
   id: ROOT_PANEL_ID,
   type: 'navigation',
@@ -319,26 +322,13 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
     const currentPanels = panels()
     const byCompositeKey = ancestryByCompositeKey()
 
-    return currentPanels.map((panel, index) => {
+    return currentPanels.map((panel) => {
       const chain =
         panel.type === 'focus' ?
           (byCompositeKey.get(panelCompositeKey(panel.matrixId, panel.rowId)) ?? [])
         : []
-      const previous = currentPanels[index - 1]
-      const previousCompositeKey =
-        previous?.type === 'focus' ?
-          panelCompositeKey(previous.matrixId, previous.rowId)
-        : undefined
-      const previousIndex =
-        previousCompositeKey === undefined ? -1 : (
-          chain.findIndex(
-            (ancestor) =>
-              panelCompositeKey(ancestor.matrix_id, ancestor.row_id) === previousCompositeKey,
-          )
-        )
-      const visibleChain = previousIndex >= 0 ? chain.slice(previousIndex + 1) : chain
 
-      return visibleChain.map((ancestor) => ({
+      return chain.map((ancestor) => ({
         id: `ancestor-${ancestor.matrix_id}-${ancestor.row_id}`,
         label: extractTextFromPmDoc(ancestor.label ?? '') || 'Untitled',
         rowId: ancestor.row_id,
@@ -370,6 +360,26 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
   const selectAncestor = (panelIndex: number, ancestor: StreamAncestor) => {
     if (ancestor.rowId == null || ancestor.matrixId == null) {
       setPanels([createNavigationRootPanel()])
+      return
+    }
+    const currentPanels = panels()
+    let retainedAncestorIndex = -1
+    if (ancestor.key) {
+      for (let index = Math.min(panelIndex, currentPanels.length) - 1; index >= 0; index--) {
+        const panel = currentPanels[index]
+        if (
+          panel?.type === 'focus' &&
+          panel.matrixId === ancestor.matrixId &&
+          panel.rowId === ancestor.rowId &&
+          sameKey(panel.rowKey, ancestor.key)
+        ) {
+          retainedAncestorIndex = index
+          break
+        }
+      }
+    }
+    if (retainedAncestorIndex >= 0) {
+      setPanels((previous) => previous.slice(0, retainedAncestorIndex + 1))
       return
     }
     const key =
@@ -406,7 +416,14 @@ export const createStreamController = (input: StreamControllerInput): StreamCont
 
   const openFoldedFocus = async (fromIndex: number, matrixId: number, rowId: number) => {
     const resolved = await resolvePlaceNavigation(input.matrixId, { matrixId, rowId })
-    if (resolved) appendResolvedPlace(fromIndex, resolved, { foldedOrigin: true })
+    if (resolved) {
+      appendResolvedPlace(fromIndex, resolved, { foldedOrigin: true })
+      return
+    }
+    appendFocusWithOptions(fromIndex, matrixId, rowId, new Uint8Array(0), undefined, {
+      foldedOrigin: true,
+      unresolvedPosition: true,
+    })
   }
 
   let externalNavigationGeneration = 0

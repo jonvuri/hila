@@ -18,6 +18,14 @@ const resetDB = async (page: Page) => {
   await expect(resetBtn).toContainText('Reset DB', { timeout: 10000 })
 }
 
+const closeSidebar = async (page: Page) => {
+  const sidebar = page.locator('.app-sidebar')
+  if (await sidebar.isVisible()) {
+    await page.getByRole('button', { name: 'Close sidebar' }).click()
+    await expect(sidebar).toBeHidden({ timeout: 3000 })
+  }
+}
+
 const waitForRows = async (page: Page, minCount = 1) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
   await expect(async () => {
@@ -66,6 +74,15 @@ test.describe('Welcome row and empty state', () => {
     const emptyState = page.getByTestId('navigation-panel-empty')
     await expect(emptyState).toBeVisible({ timeout: 5000 })
     await expect(emptyState).toContainText('Press Enter to create your first row.')
+
+    await closeSidebar(page)
+    await page.setViewportSize({ width: 500, height: 844 })
+    await expect(page.getByTestId('workspace-shell')).toHaveAttribute(
+      'data-shell-presentation',
+      'single-panel',
+    )
+    await expect(emptyState).toBeVisible()
+    await expect(page.locator('[data-testid="workspace-shell-column"]:visible')).toHaveCount(1)
   })
 
   test('pressing Enter in empty state creates a new row', async ({ page }) => {

@@ -1,7 +1,7 @@
 ---
 title: Phase 12 Session 9A — Responsive workspace shell implementation
 kind: phase-session
-state: planned
+state: complete
 updated: 2026-09-24
 ---
 
@@ -38,42 +38,42 @@ coverage, and explicit rejection of a user-selected wide focused workflow.
 
 ### 1. Define the production presentation contract
 
-- [ ] Add the typed host-computed shell presentation and one authoritative 719/720 boundary.
-- [ ] Derive it from the workspace host width, not visual density or a global window assumption.
-- [ ] Expose the resolved presentation for CSS, accessibility, and deterministic tests without
+- [x] Add the typed host-computed shell presentation and one authoritative 719/720 boundary.
+- [x] Derive it from the workspace host width, not visual density or a global window assumption.
+- [x] Expose the resolved presentation for CSS, accessibility, and deterministic tests without
       persisting it.
 
 ### 2. Project the retained stack without remounting
 
-- [ ] Keep the controller's bounded panel array and keyed panel instances unchanged during resize.
-- [ ] In single-panel mode, hide every non-active panel from layout, hit testing, tab order, and the
+- [x] Keep the controller's bounded panel array and keyed panel instances unchanged during resize.
+- [x] In single-panel mode, hide every non-active panel from layout, hit testing, tab order, and the
       accessibility tree while leaving its component state mounted.
-- [ ] In rail mode, restore all retained panels in their existing order and preserve the active
+- [x] In rail mode, restore all retained panels in their existing order and preserve the active
       panel identity.
-- [ ] Render the active focused panel's existing ancestry breadcrumb in single-panel mode. Root
+- [x] Render the active focused panel's existing ancestry breadcrumb in single-panel mode. Root
       focus renders the existing navigation panel.
 
 ### 3. Preserve focus and interaction continuity
 
-- [ ] Preserve editor DOM identity, document selection, pending-save state, focus-region and outline
+- [x] Preserve editor DOM identity, document selection, pending-save state, focus-region and outline
       scroll, virtualizer position, disclosure state, and active panel identity across both resize
       directions.
-- [ ] If focus belongs to a panel that becomes hidden, move it to the active panel landmark and
+- [x] If focus belongs to a panel that becomes hidden, move it to the active panel landmark and
       announce the presentation change. Do not steal focus when the active panel already owns it.
-- [ ] Keep ancestry actions, `Meta-Left`, Jump back, and `Mod-k` unchanged and reachable.
-- [ ] Make deep ancestry horizontally reachable at narrow width. Use coarse-pointer target sizing
+- [x] Keep ancestry actions, `Meta-Left`, Jump back, and `Mod-k` unchanged and reachable.
+- [x] Make deep ancestry horizontally reachable at narrow width. Use coarse-pointer target sizing
       without coupling touch behavior to density or viewport width.
 
 ### 4. Verify and document the shipped boundary
 
-- [ ] Add component coverage for the 719/720 boundary, root and focus panels, all ancestry sources,
+- [x] Add component coverage for the 719/720 boundary, root and focus panels, all ancestry sources,
       resize continuity, hidden-panel semantics, and theme independence.
-- [ ] Add real-browser coverage for editor selection, focus transfer, scroll and virtualizer
+- [x] Add real-browser coverage for editor selection, focus transfer, scroll and virtualizer
       continuity, keyboard order, coarse-pointer targets, long/dense content, reduced motion, and
       loading/empty/error states.
-- [ ] Inspect Ghost, Null, and Wipeout in both polarities at 390, 500, 719, 720, and 1180 widths.
-- [ ] Update the canonical architecture/design/testing contracts from designed to shipped.
-- [ ] Confirm no schema or durability-policy change occurred.
+- [x] Inspect Ghost, Null, and Wipeout in both polarities at 390, 500, 719, 720, and 1180 widths.
+- [x] Update the canonical architecture/design/testing contracts from designed to shipped.
+- [x] Confirm no schema or durability-policy change occurred.
 
 ## Acceptance
 
@@ -95,3 +95,17 @@ coverage, and explicit rejection of a user-selected wide focused workflow.
 - Run focused real-Chrome workspace, launcher, editor-churn, accessibility, and resize E2E, then the
   full E2E suite.
 - Run `git diff --check` and verify active context links.
+
+## Verification record
+
+- Focused StreamView and WorkspaceShell suites passed: 27 tests.
+- Formatter, linter, static types, and the full unit suite passed: 96 files and 1,231 tests. The
+  linter retained 15 pre-existing warnings and reported no errors.
+- Storybook production build passed.
+- Focused real-Chrome responsive coverage passed at 390, 500, 719, 720, and 1180px for every
+  theme/polarity pair. It preserves the active ProseMirror node and DOM selection, transfers hidden
+  focus, exposes narrow ancestry, and restores the same rail nodes.
+- The full real-Chrome suite passed: 177 tests, including the two 20×-throttled performance
+  contracts with zero editor churn.
+- No schema, sync, durability, persistence, or user-data classification changed. Existing
+  durability coverage remains sufficient.

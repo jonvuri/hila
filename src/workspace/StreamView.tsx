@@ -64,7 +64,7 @@ const StreamView = (props: StreamViewProps) => {
         get ancestry() {
           const panelIndex = controller.panels().findIndex((panel) => panel.id === source.id)
           const chain = panelIndex < 0 ? [] : (controller.ancestry()[panelIndex] ?? [])
-          if (panelIndex !== 0 || source.type !== 'focus') return chain
+          if (source.type !== 'focus') return chain
           return [
             { id: 'workspace-root', label: controller.title() },
             ...chain,

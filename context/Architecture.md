@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # Architecture
@@ -130,6 +130,19 @@ The target view layer has three kinds:
 
 The stream is the primary surface. Local navigation uses focus panels and rooted ancestry. Global
 identity navigation reconstructs a rooted focus state rather than creating a second root.
+
+The production stream has one host-computed, runtime-only presentation axis. A workspace host at
+719px or below projects the controller's active panel at full width; at 720px or above it shows the
+existing bounded rail. All panels in the retained four-panel window remain mounted and keyed in
+both presentations. Hidden panels are inert and absent from layout and the accessibility tree, but
+their editor, scroll, virtualizer, pending-save, and disclosure state remains live. This axis is not
+density, theme, navigation state, or user data, and it is never persisted or replicated.
+
+Single-panel mode renders the active focus panel's rooted ancestry, or the existing navigation
+panel when root is active. Ancestor selection collapses to a retained panel instance when possible
+and otherwise uses the established root/ancestry reconstruction path. Back, Jump back, and the
+launcher retain their existing meanings. No narrow route, history, toolbar, or wide focused mode
+exists.
 
 The shell owns one transient Quick launcher. It captures the focused node and optional appearance
 provenance when global `Mod-k` opens, then freezes that command context until dismissal. Search,

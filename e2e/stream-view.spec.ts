@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type ElementHandle, type Locator, type Page } from '@playwright/test'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -60,6 +60,74 @@ const navigationColumns = (page: Page) =>
 
 const focusColumns = (page: Page) =>
   page.locator('[data-testid="workspace-shell-column"][data-panel-kind="focus"]')
+
+const sameNode = async (
+  original: ElementHandle<Element>,
+  current: Locator,
+): Promise<boolean> => {
+  const currentHandle = await current.elementHandle()
+  if (!currentHandle) return false
+  const same = await original.evaluate((node, candidate) => node === candidate, currentHandle)
+  await currentHandle.dispose()
+  return same
+}
+
+const selectionState = (editor: Locator) =>
+  editor.evaluate((element) => {
+    const selection = window.getSelection()
+    return {
+      anchorOffset: selection?.anchorOffset ?? -1,
+      focusOffset: selection?.focusOffset ?? -1,
+      inside: selection?.anchorNode ? element.contains(selection.anchorNode) : false,
+    }
+  })
+
+const seedDenseFocusFixture = (page: Page, childCount = 105) =>
+  page.evaluate(async (count) => {
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const sql = await import('/src/core/client/sql-client.ts')
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const matrix = await import('/src/core/client/matrix-client.ts')
+    const makeDoc = (text: string) =>
+      JSON.stringify({
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+      })
+    const matrixRows = (await sql.execQuery(
+      "SELECT id FROM matrix WHERE title = 'Workspace'",
+    )) as { id: number }[]
+    const matrixId = matrixRows[0]!.id
+    const parent = await matrix.insertRow(matrixId, {
+      values: {
+        label: makeDoc(
+          'Dense responsive parent with a deliberately long label for narrow layout review',
+        ),
+        content: makeDoc('Dense focus content'),
+      },
+    })
+
+    for (let index = 0; index < count; index += 1) {
+      const child = await matrix.insertRow(matrixId, {
+        parentKey: parent.key,
+        values: {
+          label: makeDoc(
+            index === 0 ?
+              'Expandable child with a deliberately long label for narrow layout review'
+            : `Dense child ${index + 1}`,
+          ),
+          content: index % 10 === 0 ? makeDoc(`Dense content ${index + 1}`) : null,
+        },
+      })
+      if (index === 0) {
+        await matrix.insertRow(matrixId, {
+          parentKey: child.key,
+          values: { label: makeDoc('Nested disclosure child'), content: null },
+        })
+      }
+    }
+
+    return { parentRowId: parent.rowId as number }
+  }, childCount)
 
 // Build a single linear ancestry chain `names[0] > names[1] > ...` in the root
 // navigation panel. Rows are first created flat (deterministic count), then
@@ -350,6 +418,294 @@ test.describe('Stream view: panel management', () => {
     await expect(workspaceColumns(page)).toHaveCount(4)
     await expect(navigationColumns(page)).toHaveCount(0)
     await expect(focusColumns(page)).toHaveCount(4)
+  })
+})
+
+test.describe('Stream view: responsive shell', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 844 })
+    await resetDB(page)
+    await waitForRows(page, 1)
+    await closeSidebar(page)
+  })
+
+  test('uses the 719/720 host boundary without remounting the active editor', async ({
+    page,
+  }) => {
+    const shell = page.getByTestId('workspace-shell')
+    const rootEditor = rowEditorAt(page, 0)
+    const rootEditorHandle = await rootEditor.elementHandle()
+    expect(rootEditorHandle).toBeTruthy()
+
+    await page.setViewportSize({ width: 719, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'single-panel')
+    await expect(workspaceColumns(page)).toHaveCount(1)
+    await expect(navigationColumns(page)).toHaveAttribute('data-visible', 'true')
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toHaveCount(0)
+    expect(await sameNode(rootEditorHandle!, rootEditor)).toBe(true)
+
+    await page.setViewportSize({ width: 720, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'bounded-rail')
+    expect(await sameNode(rootEditorHandle!, rootEditor)).toBe(true)
+    await rootEditorHandle!.dispose()
+
+    await page.setViewportSize({ width: 1180, height: 844 })
+    await openFocusPanelOnRow(page, 0)
+    const editor = page.getByTestId('focus-label-editor').locator('.ProseMirror')
+    const editorHandle = await editor.elementHandle()
+    expect(editorHandle).toBeTruthy()
+    await editor.click()
+    await editor.press('End')
+    const beforeSelection = await selectionState(editor)
+    expect(beforeSelection.inside).toBe(true)
+
+    await page.setViewportSize({ width: 719, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'single-panel')
+    await expect(workspaceColumns(page)).toHaveCount(2)
+    await expect(navigationColumns(page)).toHaveAttribute('hidden', '')
+    await expect(navigationColumns(page)).toBeHidden()
+    await expect(focusColumns(page)).toHaveAttribute('data-visible', 'true')
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toContainText('Workspace')
+    await expect(editor).toBeFocused()
+    expect(await sameNode(editorHandle!, editor)).toBe(true)
+    expect(await selectionState(editor)).toEqual(beforeSelection)
+    const narrowWidths = await shell.evaluate((element) => {
+      const active = element.querySelector<HTMLElement>('[data-active="true"]')!
+      return {
+        shell: element.getBoundingClientRect().width,
+        active: active.getBoundingClientRect().width,
+      }
+    })
+    expect(narrowWidths.active).toBeCloseTo(narrowWidths.shell, 0)
+
+    await page.setViewportSize({ width: 720, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'bounded-rail')
+    await expect(page.locator('[data-testid="workspace-shell-column"]:visible')).toHaveCount(2)
+    await expect(page.getByTestId('workspace-shell-breadcrumb')).toHaveCount(0)
+    await expect(editor).toBeFocused()
+    expect(await sameNode(editorHandle!, editor)).toBe(true)
+    expect(await selectionState(editor)).toEqual(beforeSelection)
+    await editorHandle!.dispose()
+  })
+
+  test('preserves dense virtualized, disclosure, scroll, and pending-save state', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000)
+    const { parentRowId } = await seedDenseFocusFixture(page)
+    const parentRow = page.locator(`.outline-row[data-row-id="${parentRowId}"]`)
+    await expect(parentRow).toBeVisible({ timeout: 20_000 })
+    await parentRow.hover()
+    await parentRow.locator('.nav-row-open-focus').click()
+    await expect(page.getByTestId('focus-panel')).toBeVisible({ timeout: 10_000 })
+
+    const activeFocus = focusColumns(page)
+    const children = activeFocus.getByTestId('focus-panel-children')
+    await expect(children.locator('.outline-row')).toHaveCount(106, { timeout: 30_000 })
+    const disclosure = children.locator('button[aria-expanded]').first()
+    await disclosure.click()
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+
+    const outlineScrollport = children.locator('.production-navigation-scrollport')
+    await expect
+      .poll(() => outlineScrollport.evaluate((element) => element.scrollHeight))
+      .toBeGreaterThan(0)
+    await outlineScrollport.evaluate((element) => {
+      element.scrollTop = Math.min(900, element.scrollHeight - element.clientHeight)
+      element.dispatchEvent(new Event('scroll'))
+    })
+    await expect
+      .poll(() => outlineScrollport.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0)
+    const scrollTop = await outlineScrollport.evaluate((element) => element.scrollTop)
+    const scrollportHandle = await outlineScrollport.elementHandle()
+    const virtualWindowIndex = await children
+      .locator('[data-window-index]')
+      .last()
+      .getAttribute('data-window-index')
+    expect(virtualWindowIndex).not.toBeNull()
+    const virtualWindow = children.locator(`[data-window-index="${virtualWindowIndex!}"]`)
+    const virtualWindowHandle = await virtualWindow.elementHandle()
+    expect(scrollportHandle).toBeTruthy()
+    expect(virtualWindowHandle).toBeTruthy()
+
+    const navigationEditor = rowEditorAt(page, 0)
+    const navigationRow = page.locator('.outline-row').nth(0)
+    const editedRow = {
+      matrixId: Number(await navigationRow.getAttribute('data-launcher-matrix-id')),
+      rowId: Number(await navigationRow.getAttribute('data-row-id')),
+    }
+    expect(editedRow.matrixId).toBeGreaterThan(0)
+    expect(editedRow.rowId).toBeGreaterThan(0)
+    const navigationEditorHandle = await navigationEditor.elementHandle()
+    expect(navigationEditorHandle).toBeTruthy()
+    await navigationEditor.click()
+    await navigationEditor.press('End')
+    await page.keyboard.type(' pending resize save')
+    await expect(navigationEditor).toBeFocused()
+
+    await page.setViewportSize({ width: 500, height: 844 })
+    const shell = page.getByTestId('workspace-shell')
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'single-panel')
+    const navigation = navigationColumns(page)
+    await expect(navigation).toHaveAttribute('aria-hidden', 'true')
+    await expect(navigation).toHaveAttribute('inert', '')
+    await expect(focusColumns(page)).toBeFocused()
+    await expect(shell.getByRole('status')).toContainText(
+      'Single-panel workspace. Focus moved to Dense responsive parent',
+    )
+    expect(await sameNode(navigationEditorHandle!, navigationEditor)).toBe(true)
+    expect(await sameNode(scrollportHandle!, outlineScrollport)).toBe(true)
+    expect(await sameNode(virtualWindowHandle!, virtualWindow)).toBe(true)
+    expect(await outlineScrollport.evaluate((element) => element.scrollTop)).toBe(scrollTop)
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+
+    await page.setViewportSize({ width: 720, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'bounded-rail')
+    expect(await sameNode(navigationEditorHandle!, navigationEditor)).toBe(true)
+    expect(await sameNode(scrollportHandle!, outlineScrollport)).toBe(true)
+    expect(await sameNode(virtualWindowHandle!, virtualWindow)).toBe(true)
+    expect(await outlineScrollport.evaluate((element) => element.scrollTop)).toBe(scrollTop)
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(async ({ matrixId, rowId }) => {
+            // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+            const sql = await import('/src/core/client/sql-client.ts')
+            const rows = (await sql.execQuery({
+              sql: `SELECT label FROM "mx_${matrixId}_data" WHERE id = ?`,
+              bindings: [rowId],
+            })) as { label: string }[]
+            return rows[0]?.label ?? ''
+          }, editedRow),
+        { timeout: 5_000 },
+      )
+      .toContain('pending resize save')
+    await page.reload()
+    await waitForRows(page, 1)
+    await expect(rowEditorAt(page, 0)).toContainText('pending resize save')
+
+    await navigationEditorHandle!.dispose()
+    await scrollportHandle!.dispose()
+    await virtualWindowHandle!.dispose()
+  })
+
+  test('keeps a keyboard-reachable four-panel path across themes and inputs', async ({
+    browser,
+    page,
+  }) => {
+    const names = [
+      'Alpha ancestor with a deliberately long label for narrow ancestry review',
+      'Bravo ancestor with a deliberately long label for narrow ancestry review',
+      'Charlie ancestor with a deliberately long label for narrow ancestry review',
+      'Delta ancestor with a deliberately long label for narrow ancestry review',
+      'Echo active panel with a deliberately long label for narrow ancestry review',
+    ]
+    await buildLinearChain(page, names)
+    await openFocusPanelOnRow(page, 0)
+    await drillIntoChild(page, names[1]!)
+    await drillIntoChild(page, names[2]!)
+    await drillIntoChild(page, names[3]!)
+    await drillIntoChild(page, names[4]!)
+    const shell = page.getByTestId('workspace-shell')
+    await expect(workspaceColumns(page)).toHaveCount(4)
+    const retainedHandles = await workspaceColumns(page).elementHandles()
+    expect(retainedHandles).toHaveLength(4)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(shell).toHaveAttribute('data-shell-presentation', 'single-panel')
+    const breadcrumb = page.getByTestId('workspace-shell-breadcrumb')
+    const breadcrumbButtons = breadcrumb.getByRole('button')
+    await expect(breadcrumbButtons).toHaveCount(5)
+    expect(
+      await breadcrumb.evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true)
+    await focusColumns(page).last().focus()
+    for (let index = 0; index < 5; index += 1) {
+      await page.keyboard.press('Tab')
+      await expect(breadcrumbButtons.nth(index)).toBeFocused()
+    }
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    const feedbackDuration = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--duration-feedback').trim(),
+    )
+    expect(feedbackDuration).toBe('0ms')
+
+    const themes = ['ghost', 'null', 'wipeout'] as const
+    const polarities = ['dark', 'light'] as const
+    const widths = [390, 500, 719, 720, 1180] as const
+
+    for (const theme of themes) {
+      for (const polarity of polarities) {
+        await page.evaluate(
+          ([nextTheme, nextPolarity]) => {
+            document.documentElement.dataset.visualTheme = nextTheme
+            document.documentElement.dataset.theme = nextPolarity
+          },
+          [theme, polarity] as const,
+        )
+        for (const width of widths) {
+          await page.setViewportSize({ width, height: 844 })
+          const narrow = width <= 719
+          await expect(shell).toHaveAttribute(
+            'data-shell-presentation',
+            narrow ? 'single-panel' : 'bounded-rail',
+          )
+          await expect(
+            page.locator('[data-testid="workspace-shell-column"]:visible'),
+          ).toHaveCount(narrow ? 1 : 4)
+          await expect(workspaceColumns(page)).toHaveCount(4)
+          if (narrow) {
+            const hiddenColumns = page.locator(
+              '[data-testid="workspace-shell-column"][data-active="false"]',
+            )
+            await expect(hiddenColumns).toHaveCount(3)
+            for (const column of await hiddenColumns.all()) {
+              await expect(column).toHaveAttribute('hidden', '')
+              await expect(column).toHaveAttribute('aria-hidden', 'true')
+              await expect(column).toHaveAttribute('inert', '')
+            }
+          }
+        }
+      }
+    }
+
+    for (let index = 0; index < retainedHandles.length; index += 1) {
+      expect(await sameNode(retainedHandles[index]!, workspaceColumns(page).nth(index))).toBe(
+        true,
+      )
+      await retainedHandles[index]!.dispose()
+    }
+
+    const coarseContext = await browser.newContext({
+      hasTouch: true,
+      viewport: { width: 500, height: 844 },
+    })
+    try {
+      const coarsePage = await coarseContext.newPage()
+      await resetDB(coarsePage)
+      await waitForRows(coarsePage, 1)
+      await closeSidebar(coarsePage)
+      await openFocusPanelOnRow(coarsePage, 0)
+      await expect(coarsePage.getByTestId('workspace-shell')).toHaveAttribute(
+        'data-shell-presentation',
+        'single-panel',
+      )
+      expect(await coarsePage.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(
+        true,
+      )
+      const rootTarget = coarsePage
+        .getByTestId('workspace-shell-breadcrumb')
+        .getByRole('button', { name: 'Workspace' })
+      const targetBox = await rootTarget.boundingBox()
+      expect(targetBox?.width).toBeGreaterThanOrEqual(44)
+      expect(targetBox?.height).toBeGreaterThanOrEqual(44)
+    } finally {
+      await coarseContext.close()
+    }
   })
 })
 

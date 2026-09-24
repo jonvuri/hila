@@ -22,6 +22,10 @@ x-ray inspection state are also orthogonal. Do not multiply face renderers acros
 product of these axes. Face styles must consume semantic tokens supplied by the active visual theme
 and polarity.
 
+The responsive workspace presentation is another independent host axis. Its `bounded-rail` and
+`single-panel` values change only which retained shell panels are exposed at the host width. A
+theme, polarity, fidelity, or component variant cannot select it or change its state meaning.
+
 ## Navigation outline
 
 Session 4m reviewed seven treatments and approved Guides as the only forward navigation outline.

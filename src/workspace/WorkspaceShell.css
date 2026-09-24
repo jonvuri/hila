@@ -29,6 +29,10 @@
   box-shadow: var(--elevation-surface);
 }
 
+.workspace-shell-column[hidden] {
+  display: none;
+}
+
 .workspace-shell-column:first-child {
   border-left: var(--width-line) solid var(--color-line-strong);
 }
@@ -36,6 +40,15 @@
 .workspace-shell-column-active {
   color: var(--color-text-strong);
   border-right-color: var(--color-text-muted);
+}
+
+.workspace-shell[data-shell-presentation='single-panel'] {
+  overflow-x: hidden;
+}
+
+.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-column-active {
+  flex-basis: 100%;
+  max-width: none;
 }
 
 .workspace-shell-content {
@@ -99,8 +112,33 @@
   outline-offset: var(--offset-focus-ring);
 }
 
-@media (max-width: 720px) {
-  .workspace-shell-column {
-    flex-basis: min(300px, 88vw);
+.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb ol {
+  width: max-content;
+}
+
+.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb li {
+  flex: none;
+}
+
+.workspace-shell-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (pointer: coarse) {
+  .workspace-shell-breadcrumb button {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

@@ -8,6 +8,14 @@ const openSidebar = async (page: Page) => {
   }
 }
 
+const closeSidebar = async (page: Page) => {
+  const sidebar = page.locator('.app-sidebar')
+  if (await sidebar.isVisible()) {
+    await page.getByRole('button', { name: 'Close sidebar' }).click()
+    await expect(sidebar).toBeHidden({ timeout: 3000 })
+  }
+}
+
 const resetDB = async (page: Page) => {
   await page.goto('/')
   await openSidebar(page)
@@ -287,6 +295,12 @@ test.describe('named view places', () => {
       },
       [root.matrixId, root.rowId] as const,
     )
+    await closeSidebar(page)
+    await page.setViewportSize({ width: 500, height: 844 })
+    await expect(page.getByTestId('workspace-shell')).toHaveAttribute(
+      'data-shell-presentation',
+      'single-panel',
+    )
     await openFirstFocus(page)
 
     const parent = page.getByTestId('focus-panel').first()
@@ -297,6 +311,7 @@ test.describe('named view places', () => {
     await expect(page.getByTestId('focus-panel')).toHaveCount(2, { timeout: 5_000 })
     const emptyFocused = page.getByTestId('focus-panel').last()
     await expect(emptyFocused.getByTestId('query-band-empty')).toBeVisible()
+    await expect(page.locator('[data-testid="workspace-shell-column"]:visible')).toHaveCount(1)
     await expect(emptyFocused.getByTestId('saved-view-custom-chip')).toBeVisible()
     await expect(emptyFocused.getByTestId('saved-view-sql-editor')).toHaveValue(
       'SELECT 1 WHERE 0',
@@ -312,11 +327,7 @@ test.describe('named view places', () => {
       'SELECT 2 AS answer',
     )
     await emptyFocused.getByTestId('saved-view-sql-cancel').click()
-    await page
-      .getByTestId('focus-panel')
-      .first()
-      .getByRole('button', { name: 'Collapse to this panel' })
-      .click()
+    await page.getByTestId('workspace-shell-breadcrumb').getByRole('button').last().click()
     await expect(page.getByTestId('focus-panel')).toHaveCount(1)
 
     await parent.getByTestId('view-place-open').filter({ hasText: 'Broken view' }).click()
@@ -326,6 +337,7 @@ test.describe('named view places', () => {
       'Error preparing SQL',
       { timeout: 5000 },
     )
+    await expect(page.locator('[data-testid="workspace-shell-column"]:visible')).toHaveCount(1)
     await expect(brokenFocused.getByTestId('saved-view-sql-editor')).toHaveValue(
       'SELECT * FROM missing_view_source',
     )

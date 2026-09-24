@@ -55,6 +55,7 @@ type MockFocusPanelProps = {
   rootMatrixId: number
   matrixId: number
   rowId: number
+  rowKey: Uint8Array
   foldedOrigin?: boolean
   unresolvedPosition?: boolean
   onAppendFocus: (matrixId: number, rowId: number, key: Uint8Array, label?: string) => void
@@ -73,6 +74,7 @@ vi.mock('./FocusPanel', () => ({
         data-folded-origin={props.foldedOrigin ? 'true' : undefined}
         data-instance-id={instanceId}
         data-matrix-id={props.matrixId}
+        data-row-key={Array.from(props.rowKey).join(',')}
         data-root-matrix-id={props.rootMatrixId}
         data-row-id={props.rowId}
         data-testid="mock-focus-panel"
@@ -167,6 +169,26 @@ const positionResolution = (
   liveAppearanceCount: 1,
 })
 
+const stubWorkspaceResizeObserver = () => {
+  let resize!: (target: Element, width: number) => void
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = (target, width) =>
+          callback(
+            [{ target, contentRect: { width } } as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          )
+      }
+
+      observe() {}
+      disconnect() {}
+    },
+  )
+  return (target: Element, width: number) => resize(target, width)
+}
+
 describe('StreamView controller contract', () => {
   let container: HTMLDivElement
   let dispose: (() => void) | undefined
@@ -182,6 +204,7 @@ describe('StreamView controller contract', () => {
   afterEach(() => {
     dispose?.()
     container.remove()
+    vi.unstubAllGlobals()
   })
 
   const mount = (props?: {
@@ -354,6 +377,139 @@ describe('StreamView controller contract', () => {
     expect(panelIdentity(container)).toEqual(['navigation'])
   })
 
+  test('narrow ancestry collapses to an already retained parent instance', async () => {
+    let resize!: (target: Element, width: number) => void
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = (target, width) =>
+            callback(
+              [{ target, contentRect: { width } } as ResizeObserverEntry],
+              this as unknown as ResizeObserver,
+            )
+        }
+
+        observe() {}
+        disconnect() {}
+      },
+    )
+    mount()
+    click(container, 'Append focus')
+    const parent = container.querySelector<HTMLElement>('[data-row-id="101"]')!
+    const parentInstance = parent.dataset.instanceId
+    click(container, 'Append child')
+    setAncestryResult([
+      {
+        for_matrix_id: 10,
+        for_row_id: 102,
+        key: Uint8Array.of(1),
+        matrix_id: 10,
+        row_id: 101,
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Parent row' }] }],
+        }),
+        depth: 0,
+      },
+    ])
+
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await Promise.resolve()
+    expect(container.querySelectorAll('[data-visible="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Parent row')
+
+    click(container, 'Parent row')
+    expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
+    expect(
+      container.querySelector<HTMLElement>('[data-row-id="101"]')?.dataset.instanceId,
+    ).toBe(parentInstance)
+  })
+
+  test('narrow ancestry reconstructs an ancestor when retained provenance differs', async () => {
+    let resize!: (target: Element, width: number) => void
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = (target, width) =>
+            callback(
+              [{ target, contentRect: { width } } as ResizeObserverEntry],
+              this as unknown as ResizeObserver,
+            )
+        }
+
+        observe() {}
+        disconnect() {}
+      },
+    )
+    mount()
+    click(container, 'Append focus')
+    const retainedInstance =
+      container.querySelector<HTMLElement>('[data-row-id="101"]')!.dataset.instanceId
+    click(container, 'Append child')
+    setAncestryResult([
+      {
+        for_matrix_id: 10,
+        for_row_id: 102,
+        key: Uint8Array.of(9),
+        matrix_id: 10,
+        row_id: 101,
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Other parent' }] }],
+        }),
+        depth: 0,
+      },
+    ])
+
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await Promise.resolve()
+    click(container, 'Other parent')
+
+    expect(panelIdentity(container)).toEqual(['navigation', '10:101', '10:101'])
+    const matchingPanels = [...container.querySelectorAll<HTMLElement>('[data-row-id="101"]')]
+    expect(matchingPanels.map((panel) => panel.dataset.rowKey)).toEqual(['1', '9'])
+    expect(matchingPanels[0]?.dataset.instanceId).toBe(retainedInstance)
+    expect(matchingPanels[1]?.dataset.instanceId).not.toBe(retainedInstance)
+  })
+
+  test('wide ancestry does not reuse a matching panel after the breadcrumb source', () => {
+    mount()
+    click(container, 'Append focus')
+    click(container, 'Append child')
+    click(container, 'Append child', 1)
+    click(container, 'Append child', 2)
+    expect(panelIdentity(container)).toEqual(['10:101', '10:102', '10:103', '10:104'])
+    const laterInstance =
+      container.querySelector<HTMLElement>('[data-row-id="103"]')!.dataset.instanceId
+    setAncestryResult([
+      {
+        for_matrix_id: 10,
+        for_row_id: 101,
+        key: Uint8Array.of(103),
+        matrix_id: 10,
+        row_id: 103,
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Later panel' }] }],
+        }),
+        depth: 0,
+      },
+    ])
+
+    click(container, 'Later panel')
+
+    expect(panelIdentity(container)).toEqual(['10:103'])
+    const reconstructed = container.querySelector<HTMLElement>('[data-row-id="103"]')!
+    expect(reconstructed.dataset.rowKey).toBe('103')
+    expect(reconstructed.dataset.instanceId).not.toBe(laterInstance)
+  })
+
   test('Meta+ArrowLeft closes only the rightmost focus panel', () => {
     mount()
     click(container, 'Append focus')
@@ -372,6 +528,7 @@ describe('StreamView controller contract', () => {
   })
 
   test('external position navigation replaces panels from a fresh root', async () => {
+    const resize = stubWorkspaceResizeObserver()
     mocks.resolvePlaceNavigation.mockResolvedValue(
       positionResolution(20, 300, Uint8Array.of(30)),
     )
@@ -430,9 +587,19 @@ describe('StreamView controller contract', () => {
     expect(sessionMemory.jumpBackEntries().map(({ rowId }) => rowId)).toEqual([
       104, 103, 102, 101,
     ])
+
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await flushPromises()
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Workspace')
+    click(container, 'Workspace')
+    expect(panelIdentity(container)).toEqual(['navigation'])
   })
 
   test('external membership navigation rebuilds context from a fresh root', async () => {
+    const resize = stubWorkspaceResizeObserver()
     mocks.resolvePlaceNavigation.mockResolvedValue({
       type: 'membership',
       node: { matrixId: 30, rowId: 500 },
@@ -461,9 +628,19 @@ describe('StreamView controller contract', () => {
     await flushPromises()
 
     expect(panelIdentity(container)).toEqual(['navigation', '10:201', '20:301', '30:500'])
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await flushPromises()
+    expect(container.querySelectorAll('[data-visible="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Workspace')
+    click(container, 'Workspace')
+    expect(panelIdentity(container)).toEqual(['navigation'])
   })
 
   test('preserves explicit appearance provenance for external navigation', async () => {
+    const resize = stubWorkspaceResizeObserver()
     const provenance = { key: Uint8Array.of(9, 0) }
     mocks.resolvePlaceNavigation.mockResolvedValue(
       positionResolution(20, 300, provenance.key, 'provenance'),
@@ -483,6 +660,14 @@ describe('StreamView controller contract', () => {
       provenance,
     )
     expect(panelIdentity(container)).toEqual(['navigation', '20:300'])
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await flushPromises()
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Workspace')
+    click(container, 'Workspace')
+    expect(panelIdentity(container)).toEqual(['navigation'])
   })
 
   test('ignores an older external navigation completion', async () => {
@@ -640,9 +825,19 @@ describe('StreamView controller contract', () => {
     focus = container.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')!
     expect(focus.dataset.foldedOrigin).toBe('true')
     expect(focus.dataset.unresolvedPosition).toBe('true')
+
+    click(container, 'Close focus')
+    mocks.resolvePlaceNavigation.mockResolvedValueOnce(null)
+    click(container, 'Open folded focus')
+    await flushPromises()
+
+    focus = container.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')!
+    expect(focus.dataset.foldedOrigin).toBe('true')
+    expect(focus.dataset.unresolvedPosition).toBe('true')
   })
 
   test('cross-matrix boundary hops keep the target matrix identity', async () => {
+    const resize = stubWorkspaceResizeObserver()
     mocks.resolvePlaceNavigation.mockResolvedValue(
       positionResolution(20, 301, Uint8Array.of(60)),
     )
@@ -653,5 +848,14 @@ describe('StreamView controller contract', () => {
     await flushPromises()
 
     expect(panelIdentity(container)).toEqual(['navigation', '10:101', '20:301'])
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    resize(shell, 500)
+    await flushPromises()
+    expect(container.querySelectorAll('[data-visible="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Workspace')
+    click(container, 'Workspace')
+    expect(panelIdentity(container)).toEqual(['navigation'])
   })
 })

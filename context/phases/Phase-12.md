@@ -65,15 +65,16 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | [7 — Saved-view authoring and editor exits](Phase-12/Session-7-saved-view-authoring-and-editor-exits.md)                 | Save, reopen/edit, focus/name, and insert-ref handoffs                       | 2, 3, 5, 6 | Complete |
 | [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                   | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Complete |
 | [9 — Narrow and focused workspace shell exploration](Phase-12/Session-9-narrow-and-focused-workspace-shell.md)           | Storybook comparison and design decisions for one-column stream presentation | 5–8        | Complete |
-| [9A — Responsive workspace shell implementation](Phase-12/Session-9a-responsive-workspace-shell-implementation.md)       | One mounted retained stack with a width-selected narrow projection           | 9          | Planned  |
+| [9A — Responsive workspace shell implementation](Phase-12/Session-9a-responsive-workspace-shell-implementation.md)       | One mounted retained stack with a width-selected narrow projection           | 9          | Complete |
 | [10 — Surface capture, tab retirement, and closeout](Phase-12/Session-10-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–9A       | Planned  |
 
-Sessions 1–9 and 4A are complete. Quick and Deep now implement the approved theme-specific
+Sessions 1–9A and 4A are complete. Quick and Deep now implement the approved theme-specific
 presentation contract over one behavior and interaction model. Bounded session memory supplies
 successful-navigation Jump back, cancellation-only Deep recovery, and actual-viewport ranking
-signals without persistence. Session 9 selected a width-driven single-panel projection with no new
-navigation chrome or wide focused mode. Session 9A implements it without unmounting the bounded
-retained stack. Session 10 owns surface capture, tab retirement, and phase closeout afterward. The
+signals without persistence. The production workspace now selects its presentation from the host
+width: one active mounted panel through 719px and the retained rail from 720px. Hidden panels are
+inert, ancestry and focus recovery remain rooted, and resize preserves live editor and scroll state.
+Session 10 owns surface capture, tab retirement, and phase closeout. The
 dependency column explains architectural coupling, not permission to skip the incremental sequence.
 
 ## Phase acceptance
