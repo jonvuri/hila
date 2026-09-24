@@ -4,8 +4,9 @@ import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../discovery/types'
 
 import type { FaceConfig, FaceTypeDefinition } from './face-types'
 import type { ColumnDefinition, JoinKind, JoinRow } from './matrix'
-import type { ResolvedPlaceNavigation } from './place-navigation'
+import type { AppearanceProvenance, ResolvedPlaceNavigation } from './place-navigation'
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
+import type { CreatedViewBlock } from './block-marker'
 
 // Matrix operation registry: maps operation names to request params and response results.
 // All message types and the protocol shape are derived from this single declaration.
@@ -222,6 +223,16 @@ export type MatrixOperationMap = {
   createViewBlock: {
     params: { focalMatrixId: number; focalRowId: number; sql: string; name?: string }
     result: { matrixId: number; rowId: number }
+  }
+  createViewBlockAtAppearance: {
+    params: {
+      focalMatrixId: number
+      focalRowId: number
+      provenance: AppearanceProvenance
+      sql: string
+      name?: string
+    }
+    result: CreatedViewBlock
   }
   updateViewBlock: {
     params: { markerMatrixId: number; markerRowId: number; sql: string }

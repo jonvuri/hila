@@ -42,6 +42,7 @@ vi.mock('./NavigationPanel', () => ({
 }))
 
 type MockFocusPanelProps = {
+  rootMatrixId: number
   matrixId: number
   rowId: number
   foldedOrigin?: boolean
@@ -61,6 +62,7 @@ vi.mock('./FocusPanel', () => ({
         data-folded-origin={props.foldedOrigin ? 'true' : undefined}
         data-instance-id={instanceId}
         data-matrix-id={props.matrixId}
+        data-root-matrix-id={props.rootMatrixId}
         data-row-id={props.rowId}
         data-testid="mock-focus-panel"
         data-unresolved-position={props.unresolvedPosition ? 'true' : undefined}
@@ -179,6 +181,10 @@ describe('StreamView controller contract', () => {
 
     click(container, 'Append focus')
     expect(panelIdentity(container)).toEqual(['navigation', '10:101'])
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="mock-focus-panel"]')?.dataset
+        .rootMatrixId,
+    ).toBe('10')
     const firstIds = stablePanelIds(container)
     const firstFocusInstance = container.querySelector<HTMLElement>(
       '[data-testid="mock-focus-panel"]',

@@ -45,6 +45,18 @@ export const launcherInteractionShortcutDescriptors = [
   },
   { id: 'launcher.open-result', title: 'Open or run', key: 'Enter', context: 'launcher' },
   {
+    id: 'launcher.insert-reference',
+    title: 'Insert selected result as a reference',
+    key: 'Mod-Enter',
+    context: 'launcher',
+  },
+  {
+    id: 'launcher.save-view',
+    title: 'Save query as a view',
+    key: 'Mod-s',
+    context: 'launcher',
+  },
+  {
     id: 'launcher.remove-filter',
     title: 'Remove family filter',
     key: 'Backspace',

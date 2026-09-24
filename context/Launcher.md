@@ -1,8 +1,8 @@
 # The launcher surface
 
-> **Status: Quick, chips, and bounded Deep preview implemented.** Saving, insert-ref, session
-> signals, and tab retirement remain later Phase 12 work. Workspace, Table, and Tags tabs therefore
-> remain temporary roots.
+> **Status: Quick, Deep, save-as-view, and insert-ref exits implemented.** Session signals and tab
+> retirement remain later Phase 12 work. Workspace, Table, and Tags tabs therefore remain temporary
+> roots.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
 
@@ -161,7 +161,9 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 2. **Query-spec compiler + recognizer — shipped.** `src/sql/query-spec/` beside `recognize-updatable.ts`, round-trip conformance suite (3b-i; shared with view blocks).
 3. **Launcher shell — shipped.** Overlay, input, flat ranked results, sigil filter tokens + family rows, ranking blend, reserved jump-back + recents, and generated help; name/content match over places + commands. `Mod-k` has left `keymap.ts` (I1).
 4. **Chips + deep tempo — shipped.** Chip authoring (menu/typeahead/typed), per-keystroke compiled runs, viewport expansion, and spec-touched bounded preview.
-5. **Save-as-node + `⌘⏎` insert-ref** — the two exits; retires insert-link's job for good.
+5. **Save-as-node + `⌘⏎` insert-ref — shipped.** Concrete specs save through the existing view-block
+   identity and focus/name handoff. Quick discovery and Deep preview insert through the invoking
+   live editor selection; stale or absent editors state a reason.
 6. **Session memory wiring** — in-memory focus history, recent deep searches, on-screen boost; isolated so frecency later only persists it.
 7. **Tab retirement** — Table/Tags tabs captured as Storybook components, then removed (gated on 3–5; the §4 sequencing constraint).
 
@@ -172,5 +174,3 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 - **Live-relative date tokens** — the runtime-parameter dialect extension above, on a second consumer or proven need.
 - **Family-filter hotkeys** (local or global) · **a view-family sigil** · **filter-strip counts** (a count can ride the filter token) — each on proven need.
 - **Preview-pane peek** (`⌘⏎` alternate considered and rejected for v1) · per-type widget editors — §4-era garnish.
-- **Saved-view chip chrome** — Phase 12 applies the same grammar to recognized stored SQL and keeps
-  raw SQL as x-ray/custom mode.

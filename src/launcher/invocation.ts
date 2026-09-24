@@ -1,11 +1,16 @@
 import type { AppearanceProvenance } from '../core/place-navigation'
 import type { NodeRef } from '../core/tree'
+import {
+  captureActiveEditorInvocation,
+  type ActiveEditorInvocation,
+} from '../editor/active-editor'
 
 export type LauncherInvocation = {
   readonly focusElement?: HTMLElement
   readonly subject?: NodeRef
   readonly subjectLabel?: string
   readonly provenance?: AppearanceProvenance
+  readonly editor?: ActiveEditorInvocation
 }
 
 const bytesFromHex = (hex: string | undefined): Uint8Array | undefined => {
@@ -21,8 +26,10 @@ export const captureLauncherInvocation = (
   activeElement: Element | null = document.activeElement,
 ): LauncherInvocation => {
   const focusElement = activeElement instanceof HTMLElement ? activeElement : undefined
+  const editor = captureActiveEditorInvocation(activeElement)
+  const editorInvocation = editor ? { editor } : {}
   const host = focusElement?.closest<HTMLElement>('[data-launcher-subject]')
-  if (!host) return { focusElement }
+  if (!host) return { focusElement, ...editorInvocation }
 
   const matrixId = Number(host.dataset.launcherMatrixId)
   const rowId = Number(host.dataset.launcherRowId)
@@ -32,7 +39,7 @@ export const captureLauncherInvocation = (
     !Number.isSafeInteger(rowId) ||
     rowId <= 0
   ) {
-    return { focusElement }
+    return { focusElement, ...editorInvocation }
   }
 
   const provenanceKey = bytesFromHex(host.dataset.launcherProvenance)
@@ -42,5 +49,6 @@ export const captureLauncherInvocation = (
     subject: { matrixId, rowId },
     subjectLabel,
     provenance: provenanceKey ? { key: provenanceKey } : undefined,
+    ...editorInvocation,
   }
 }

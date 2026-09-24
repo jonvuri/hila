@@ -1,13 +1,22 @@
-import { createEffect, createMemo, createSignal, For, Show, type Component } from 'solid-js'
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+  untrack,
+  type Component,
+} from 'solid-js'
 
 import type { ColumnDefinition } from '../core/matrix'
 import {
-  createViewBlock,
   deleteViewBlock,
   getColumns,
   updateViewBlock,
   updateRow,
 } from '../core/client/matrix-client'
+import { execQuery } from '../core/client/sql-client'
 import { useQuery } from '../sql/useQuery'
 import {
   addIdToProjection,
@@ -15,11 +24,20 @@ import {
   resolveEditableColumns,
 } from '../sql/recognize-updatable'
 import { FieldEditor } from '../shared/FieldEditor'
-import { buildTagTypesWithCountsQuery } from '../tags/tag-queries'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { registerFaceRenderings, type FaceRenderingProps } from '../core/face-runtime'
+import {
+  createQueryCatalog,
+  type QueryCatalog,
+  type QueryNodeIdentity,
+} from '../sql/query-spec/catalog'
+import { materializeQuerySpec } from '../sql/query-spec/materialize'
+import { recognizeQuerySpec } from '../sql/query-spec/recognize'
+import { isReadOnlySelect, parseSingleStatement } from '../sql/sql-statement'
+import type { NormalizedQuerySpec } from '../sql/query-spec/types'
 
-import { buildViewBlocksForNodeQuery, buildTypeInSubtreeQuery } from './block-marker-queries'
+import { buildViewBlocksForNodeQuery } from './block-marker-queries'
+import { SavedViewStructuredAuthoring } from './SavedViewStructuredAuthoring'
 
 /**
  * View blocks (Phase 9.7 Stage B; successor to the Phase 9.3 query band).
@@ -50,13 +68,6 @@ type ViewBlockRow = {
   sql: string
 }
 
-type TagTypeOption = {
-  id: number
-  name: string
-  matrix_id: number
-  instance_count: number
-}
-
 /**
  * Synthesize a column definition for a result key, defaulting to a plain text
  * field. Arbitrary-SELECT results carry no ColumnDefinition, so this is the
@@ -76,8 +87,473 @@ const synthesizeColumn = (name: string, order: number): ColumnDefinition => ({
   role: null,
 })
 
+type QueryNodeRow = { matrix_id: number; row_id: number }
+type QueryMatrixRow = { id: number; title: string }
+
+type SqlDraftValidation =
+  | { type: 'idle' }
+  | { type: 'checking' }
+  | { type: 'valid' }
+  | { type: 'invalid'; message: string }
+
+type AppliedSql = { sql: string; previousStoredSql: string }
+type StructuredWrite = {
+  markerMatrixId: number
+  markerRowId: number
+  sql: string
+  generation: number
+}
+
+const mergeNodeIdentities = (
+  current: readonly QueryNodeIdentity[],
+  additions: readonly QueryNodeIdentity[],
+): QueryNodeIdentity[] => {
+  const merged = new Map<string, QueryNodeIdentity>()
+  for (const node of [...current, ...additions]) {
+    if (
+      Number.isSafeInteger(node.matrixId) &&
+      node.matrixId > 0 &&
+      Number.isSafeInteger(node.rowId) &&
+      node.rowId > 0
+    ) {
+      merged.set(`${node.matrixId}:${node.rowId}`, node)
+    }
+  }
+  return [...merged.values()]
+}
+
+/** Recognition-backed authoring chrome. SQL remains the only durable query state. */
+export const SavedViewAuthoring: Component<{
+  block: ViewBlockRow
+  rootMatrixId: number
+}> = (props) => {
+  const initialStoredSql = untrack(() => props.block.sql)
+  const [catalogMatrices, setCatalogMatrices] = createSignal<
+    readonly { id: number; title: string; columns: readonly ColumnDefinition[] }[] | null
+  >(null)
+  const [catalogError, setCatalogError] = createSignal<string | null>(null)
+  const [discoveredNodes, setDiscoveredNodes] = createSignal<readonly QueryNodeIdentity[]>([])
+  const { result: nodeRowsResult } = useQuery(
+    () => 'SELECT DISTINCT matrix_id, row_id FROM scroll_index',
+  )
+  let missingScopeGeneration = 0
+  let requestedMissingScopeKey: string | null = null
+  const [confirmedMissingScopeKey, setConfirmedMissingScopeKey] = createSignal<string | null>(
+    null,
+  )
+
+  const mergeDiscoveredNodes = (additions: readonly QueryNodeIdentity[]): void => {
+    setDiscoveredNodes((current) => {
+      const merged = mergeNodeIdentities(current, additions)
+      return merged.length === current.length ? current : merged
+    })
+  }
+
+  createEffect(() => {
+    setCatalogMatrices(null)
+    setCatalogError(null)
+    void execQuery('SELECT id, title FROM matrix ORDER BY id')
+      .then(async (result) => {
+        const matrices = result as unknown as QueryMatrixRow[]
+        return Promise.all(
+          matrices.map(async (matrix) => ({
+            ...matrix,
+            columns: await getColumns(matrix.id),
+          })),
+        )
+      })
+      .then(setCatalogMatrices)
+      .catch((error: unknown) => {
+        setCatalogMatrices([])
+        setCatalogError(error instanceof Error ? error.message : String(error))
+      })
+  })
+
+  const catalog = createMemo<QueryCatalog | null>(() => {
+    const matrices = catalogMatrices()
+    const nodeRows = nodeRowsResult()
+    if (matrices === null || nodeRows === null) return null
+    const nodes = mergeNodeIdentities(
+      (nodeRows as unknown as QueryNodeRow[]).map((node) => ({
+        matrixId: node.matrix_id,
+        rowId: node.row_id,
+      })),
+      discoveredNodes(),
+    )
+    return createQueryCatalog({
+      matrices,
+      nodes,
+    })
+  })
+
+  const [sqlOpen, setSqlOpen] = createSignal(false)
+  const [sqlDraft, setSqlDraft] = createSignal('')
+  const [validation, setValidation] = createSignal<SqlDraftValidation>({ type: 'idle' })
+  const [appliedSql, setAppliedSql] = createSignal<AppliedSql | null>(null)
+  const [structuredSql, setStructuredSql] = createSignal<string | null>(null)
+  const [structuredWriteError, setStructuredWriteError] = createSignal<string | null>(null)
+  let validationGeneration = 0
+  let structuredWriteGeneration = 0
+  let structuredWriteRunning = false
+  const structuredWriteQueue: StructuredWrite[] = []
+  let confirmedStructuredSql = initialStoredSql
+  let observedStoredSql = initialStoredSql
+  const issuedStructuredSql = new Set<string>()
+  let initialRecognitionHandled = false
+
+  createEffect(() => {
+    const pending = appliedSql()
+    if (pending && props.block.sql !== pending.previousStoredSql) setAppliedSql(null)
+  })
+
+  createEffect(() => {
+    const storedSql = props.block.sql
+    if (storedSql === observedStoredSql) return
+    observedStoredSql = storedSql
+    confirmedStructuredSql = storedSql
+    if (storedSql === structuredSql()) {
+      issuedStructuredSql.clear()
+      setStructuredSql(null)
+    } else if (issuedStructuredSql.has(storedSql)) {
+      issuedStructuredSql.delete(storedSql)
+    } else {
+      issuedStructuredSql.clear()
+      setStructuredSql(null)
+    }
+  })
+
+  const effectiveStoredSql = (): string =>
+    structuredSql() ?? appliedSql()?.sql ?? props.block.sql
+
+  const storedRecognition = createMemo(() => {
+    const loadedCatalog = catalog()
+    if (!loadedCatalog) return null
+    return recognizeQuerySpec(effectiveStoredSql(), loadedCatalog)
+  })
+
+  const recognition = createMemo(() => {
+    const loadedCatalog = catalog()
+    if (!loadedCatalog) return null
+    return recognizeQuerySpec(sqlOpen() ? sqlDraft() : effectiveStoredSql(), loadedCatalog)
+  })
+
+  const missingScopeKey = (sql: string, node: QueryNodeIdentity): string =>
+    `${sql}\u0000${node.matrixId}:${node.rowId}`
+
+  createEffect(() => {
+    const current = storedRecognition()
+    if (current?.type !== 'custom-sql' || !current.missingNode) {
+      missingScopeGeneration += 1
+      requestedMissingScopeKey = null
+      setConfirmedMissingScopeKey(null)
+      return
+    }
+    const node = current.missingNode
+    const key = missingScopeKey(effectiveStoredSql(), node)
+    if (requestedMissingScopeKey === key) return
+    requestedMissingScopeKey = key
+    setConfirmedMissingScopeKey(null)
+    const generation = ++missingScopeGeneration
+    void execQuery(
+      `SELECT 1 AS found FROM "mx_${node.matrixId}_data" WHERE id = ${node.rowId} LIMIT 1`,
+    ).then(
+      (rows) => {
+        if (generation !== missingScopeGeneration) return
+        if (rows.length > 0) mergeDiscoveredNodes([node])
+        else setConfirmedMissingScopeKey(key)
+      },
+      () => {
+        if (generation === missingScopeGeneration) setConfirmedMissingScopeKey(key)
+      },
+    )
+  })
+
+  const validateDraft = (draft: string): void => {
+    const generation = ++validationGeneration
+    const parsed = parseSingleStatement(draft)
+    if (!parsed.ok) {
+      setValidation({ type: 'invalid', message: parsed.message })
+      return
+    }
+    if (!isReadOnlySelect(parsed.statement.root)) {
+      setValidation({ type: 'invalid', message: 'Enter one read-only SELECT query.' })
+      return
+    }
+    setValidation({ type: 'checking' })
+    void execQuery(`SELECT * FROM (${parsed.statement.sql}) AS saved_view_draft LIMIT 0`).then(
+      () => {
+        if (generation === validationGeneration) setValidation({ type: 'valid' })
+      },
+      (error: unknown) => {
+        if (generation !== validationGeneration) return
+        setValidation({
+          type: 'invalid',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      },
+    )
+  }
+
+  const openSql = (): void => {
+    setSqlDraft(effectiveStoredSql())
+    setSqlOpen(true)
+    validateDraft(effectiveStoredSql())
+  }
+
+  const cancelSql = (): void => {
+    validationGeneration += 1
+    setSqlDraft(effectiveStoredSql())
+    setValidation({ type: 'idle' })
+    setSqlOpen(false)
+  }
+
+  const applySql = (): void => {
+    if (validation().type !== 'valid') return
+    const nextSql = sqlDraft()
+    const previousStoredSql = props.block.sql
+    void updateViewBlock(props.block.marker_matrix_id, props.block.marker_row_id, nextSql).then(
+      () => {
+        setAppliedSql({ sql: nextSql, previousStoredSql })
+        setSqlOpen(false)
+      },
+      (error: unknown) => {
+        setValidation({
+          type: 'invalid',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      },
+    )
+  }
+
+  const persistNextStructuredWrite = (): void => {
+    if (structuredWriteRunning) return
+    const write = structuredWriteQueue.shift()
+    if (!write) return
+    structuredWriteRunning = true
+    void updateViewBlock(write.markerMatrixId, write.markerRowId, write.sql)
+      .then(
+        () => {
+          confirmedStructuredSql = write.sql
+        },
+        (error: unknown) => {
+          issuedStructuredSql.delete(write.sql)
+          if (write.generation !== structuredWriteGeneration) return
+          setStructuredSql(
+            confirmedStructuredSql === observedStoredSql ? null : confirmedStructuredSql,
+          )
+          setStructuredWriteError(error instanceof Error ? error.message : String(error))
+        },
+      )
+      .then(() => {
+        structuredWriteRunning = false
+        persistNextStructuredWrite()
+      })
+  }
+
+  const commitStructuredEdit = (
+    next: NormalizedQuerySpec,
+    discoveredScope?: QueryNodeIdentity,
+  ): void => {
+    const loadedCatalog = catalog()
+    if (!loadedCatalog) return
+    const commitCatalog =
+      discoveredScope ?
+        createQueryCatalog({
+          matrices: loadedCatalog.matrices,
+          nodes: mergeNodeIdentities(loadedCatalog.nodes, [discoveredScope]),
+        })
+      : loadedCatalog
+    let sql: string
+    try {
+      sql = materializeQuerySpec(next, commitCatalog)
+    } catch (error) {
+      setStructuredWriteError(error instanceof Error ? error.message : String(error))
+      return
+    }
+
+    const generation = ++structuredWriteGeneration
+    batch(() => {
+      if (discoveredScope) mergeDiscoveredNodes([discoveredScope])
+      issuedStructuredSql.add(sql)
+      setStructuredSql(sql)
+      setStructuredWriteError(null)
+    })
+    structuredWriteQueue.push({
+      markerMatrixId: props.block.marker_matrix_id,
+      markerRowId: props.block.marker_row_id,
+      sql,
+      generation,
+    })
+    persistNextStructuredWrite()
+  }
+
+  createEffect(() => {
+    const current = storedRecognition()
+    if (!current || initialRecognitionHandled) return
+    if (
+      current.type === 'custom-sql' &&
+      current.missingNode &&
+      confirmedMissingScopeKey() !== missingScopeKey(effectiveStoredSql(), current.missingNode)
+    ) {
+      return
+    }
+    initialRecognitionHandled = true
+    if (current.type === 'custom-sql') openSql()
+  })
+
+  return (
+    <div
+      data-testid="saved-view-authoring"
+      style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}
+    >
+      <Show when={catalogMatrices() === null}>
+        <span data-testid="saved-view-catalog-loading" style={{ 'font-size': '11px' }}>
+          Loading query fields…
+        </span>
+      </Show>
+      <Show when={catalogError()}>
+        {(message) => (
+          <span data-testid="saved-view-catalog-error" style={{ color: 'var(--color-danger)' }}>
+            {message()}
+          </span>
+        )}
+      </Show>
+      <Show when={structuredWriteError()}>
+        {(message) => (
+          <span
+            data-testid="saved-view-structured-error"
+            role="alert"
+            style={{ color: 'var(--color-danger)', 'font-size': '11px' }}
+          >
+            {message()}
+          </span>
+        )}
+      </Show>
+      <Show when={recognition()}>
+        {(recognized) => (
+          <Show
+            when={recognized().type !== 'custom-sql'}
+            fallback={
+              <span
+                data-testid="saved-view-custom-chip"
+                title={(() => {
+                  const current = recognized()
+                  return current.type === 'custom-sql' ? current.message : undefined
+                })()}
+                style={{ 'font-size': '11px', color: 'var(--color-text-muted)' }}
+              >
+                ≔ custom SQL
+              </span>
+            }
+          >
+            {(() => {
+              const current = recognized()
+              const loadedCatalog = catalog()
+              if (current.type === 'custom-sql' || !loadedCatalog) return null
+              return (
+                <SavedViewStructuredAuthoring
+                  spec={current.spec}
+                  catalog={loadedCatalog}
+                  rootMatrixId={props.rootMatrixId}
+                  disabled={sqlOpen()}
+                  onCommit={commitStructuredEdit}
+                />
+              )
+            })()}
+          </Show>
+        )}
+      </Show>
+
+      <Show
+        when={sqlOpen()}
+        fallback={
+          <button
+            type="button"
+            data-testid="saved-view-sql-disclosure"
+            onClick={() => openSql()}
+            style={{
+              border: 'none',
+              background: 'none',
+              color: 'var(--color-text-muted)',
+              cursor: 'pointer',
+              padding: 0,
+              'font-size': '11px',
+              'align-self': 'flex-start',
+            }}
+          >
+            view SQL ▸
+          </button>
+        }
+      >
+        <div
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape') return
+            event.preventDefault()
+            event.stopPropagation()
+            cancelSql()
+          }}
+          style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}
+        >
+          <textarea
+            data-testid="saved-view-sql-editor"
+            aria-label="View SQL"
+            value={sqlDraft()}
+            onInput={(event) => {
+              const draft = event.currentTarget.value
+              setSqlDraft(draft)
+              validateDraft(draft)
+            }}
+            style={{
+              'font-family': 'monospace',
+              'font-size': '11px',
+              'min-height': '76px',
+              width: '100%',
+              'box-sizing': 'border-box',
+            }}
+          />
+          <Show when={validation().type === 'checking'}>
+            <span data-testid="saved-view-sql-checking" style={{ 'font-size': '11px' }}>
+              Checking…
+            </span>
+          </Show>
+          <Show when={validation().type === 'invalid'}>
+            <span
+              data-testid="saved-view-sql-invalid"
+              role="alert"
+              style={{ color: 'var(--color-danger)', 'font-size': '11px' }}
+            >
+              {(() => {
+                const current = validation()
+                return current.type === 'invalid' ? current.message : ''
+              })()}
+            </span>
+          </Show>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              type="button"
+              data-testid="saved-view-sql-apply"
+              disabled={validation().type !== 'valid'}
+              onClick={() => applySql()}
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              data-testid="saved-view-sql-cancel"
+              onClick={() => cancelSql()}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Show>
+    </div>
+  )
+}
+
 export const ViewCollection: Component<{
   block: ViewBlockRow
+  rootMatrixId: number
   onDelete?: () => void
   onOpen?: () => void
   focused?: boolean
@@ -262,18 +738,7 @@ export const ViewCollection: Component<{
         </div>
       </Show>
 
-      <Show when={props.focused && !props.interiorOnly}>
-        <code
-          data-testid="view-place-sql"
-          style={{
-            color: 'var(--color-text-muted)',
-            'font-size': '11px',
-            'overflow-wrap': 'anywhere',
-          }}
-        >
-          {props.block.sql}
-        </code>
-      </Show>
+      <SavedViewAuthoring block={props.block} rootMatrixId={props.rootMatrixId} />
 
       <Show
         when={!error()}
@@ -362,6 +827,7 @@ export const ViewCollection: Component<{
 const ViewCollectionRendering: Component<FaceRenderingProps> = (props) => (
   <Show when={props.subject.mode === 'view'}>
     <ViewCollection
+      rootMatrixId={props.rootMatrixId}
       block={{
         marker_matrix_id: props.subject.matrixId,
         marker_row_id: props.subject.rowId,
@@ -377,10 +843,11 @@ export const registerViewCollectionRendering = (faceTypeId: string): void => {
 }
 
 /**
- * The bands stack for a focal node, plus the dev-grade authoring affordance.
+ * The saved-view stack for a focal node. New views are created through Quick.
  * Mounted in the focus panel like the aspect band.
  */
 export const QueryBandsSection: Component<{
+  rootMatrixId: number
   matrixId: number
   rowId: number
   onOpenView?: (matrixId: number, rowId: number) => void
@@ -400,35 +867,6 @@ export const QueryBandsSection: Component<{
     return data as unknown as ViewBlockRow[]
   })
 
-  // Promoted type-nodes for the "in this subtree" snippet. Scoped to the focal
-  // matrix as the workspace matrix (the common case: an outline node whose
-  // type-nodes are promoted in the same matrix). Dev-grade.
-  const { result: typesResult } = useQuery(() => buildTagTypesWithCountsQuery(props.matrixId))
-  const typeOptions = createMemo<TagTypeOption[]>(() => {
-    const data = typesResult()
-    if (!data) return []
-    return data as unknown as TagTypeOption[]
-  })
-
-  const [sqlDraft, setSqlDraft] = createSignal('')
-  const [nameDraft, setNameDraft] = createSignal('Untitled view')
-  const [selectedType, setSelectedType] = createSignal<number | null>(null)
-
-  const insertSnippet = () => {
-    const typeMatrixId = selectedType() ?? typeOptions()[0]?.matrix_id
-    if (typeMatrixId == null) return
-    setSqlDraft(buildTypeInSubtreeQuery(typeMatrixId, props.matrixId, props.rowId))
-  }
-
-  const saveBand = () => {
-    const sql = sqlDraft().trim()
-    if (!sql) return
-    void createViewBlock(props.matrixId, props.rowId, sql, nameDraft()).then(() => {
-      setSqlDraft('')
-      setNameDraft('Untitled view')
-    })
-  }
-
   return (
     <div
       class="query-bands-section"
@@ -446,6 +884,7 @@ export const QueryBandsSection: Component<{
         <For each={blocks()}>
           {(block) => (
             <ViewCollection
+              rootMatrixId={props.rootMatrixId}
               block={block}
               onOpen={
                 props.onOpenView ?
@@ -457,65 +896,6 @@ export const QueryBandsSection: Component<{
           )}
         </For>
       </Show>
-
-      {/* Dev-grade authoring affordance. */}
-      <div
-        class="query-band-authoring"
-        data-testid="query-band-authoring"
-        style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}
-      >
-        <input
-          data-testid="query-band-name-input"
-          aria-label="View name"
-          value={nameDraft()}
-          onInput={(event) => setNameDraft(event.currentTarget.value)}
-          style={{ 'font-size': '12px' }}
-        />
-        <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
-          <select
-            data-testid="query-band-type-select"
-            value={selectedType() ?? ''}
-            onChange={(e) =>
-              setSelectedType(e.currentTarget.value ? Number(e.currentTarget.value) : null)
-            }
-            style={{ 'font-size': '12px' }}
-          >
-            <option value="">— type —</option>
-            <For each={typeOptions()}>
-              {(t) => <option value={t.matrix_id}>{t.name}</option>}
-            </For>
-          </select>
-          <button
-            type="button"
-            data-testid="query-band-insert-snippet"
-            onClick={() => insertSnippet()}
-            style={{ 'font-size': '12px', cursor: 'pointer' }}
-          >
-            Insert "in this subtree" snippet
-          </button>
-        </div>
-        <textarea
-          data-testid="query-band-sql-input"
-          placeholder="SELECT … (raw SQL — read-only view)"
-          value={sqlDraft()}
-          onInput={(e) => setSqlDraft(e.currentTarget.value)}
-          style={{
-            'font-family': 'monospace',
-            'font-size': '12px',
-            'min-height': '60px',
-            width: '100%',
-            'box-sizing': 'border-box',
-          }}
-        />
-        <button
-          type="button"
-          data-testid="query-band-save"
-          onClick={() => saveBand()}
-          style={{ 'font-size': '12px', cursor: 'pointer', 'align-self': 'flex-start' }}
-        >
-          Save band
-        </button>
-      </div>
     </div>
   )
 }

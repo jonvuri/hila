@@ -196,6 +196,104 @@ test('Mod-k yields from navigation and focus editors without editor churn', asyn
   expect(await selectionState(focusEditor)).toEqual(focusSelection)
 })
 
+test('Mod-Enter inserts a cross-matrix reference at the invoking editor cursor', async ({
+  page,
+}) => {
+  await resetDatabase(page)
+  await setTheme(page, 'ghost')
+  const sourceRow = page.locator('.outline-row').first()
+  const source = {
+    matrixId: Number(await sourceRow.getAttribute('data-launcher-matrix-id')),
+    rowId: Number(await sourceRow.getAttribute('data-launcher-row-id')),
+  }
+  const target = await page.evaluate(
+    async ([sourceMatrixId, sourceRowId]) => {
+      // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+      const matrix = await import('/src/core/client/matrix-client.ts')
+      const targetMatrixId = Number(
+        await matrix.createOwnedMatrix(
+          { matrixId: sourceMatrixId, rowId: sourceRowId },
+          'Reference targets',
+          [{ name: 'title', type: 'TEXT', role: 'label' }],
+        ),
+      )
+      const { rowId: targetRowId } = await matrix.insertRow(targetMatrixId, {
+        values: { title: 'Cross-matrix reference target' },
+      })
+      return { matrixId: targetMatrixId, rowId: targetRowId }
+    },
+    [source.matrixId, source.rowId] as const,
+  )
+
+  const editor = sourceRow.locator('.nav-label-editor .ProseMirror')
+  await editor.focus()
+  await expect(editor).toBeFocused()
+  await page.keyboard.press('Home')
+  const capturedEditor = await page.evaluate(async () => {
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const activeEditor = await import('/src/editor/active-editor.ts')
+    return Boolean(activeEditor.captureActiveEditorInvocation(document.activeElement))
+  })
+  expect(capturedEditor).toBe(true)
+  await page.keyboard.press(launcherShortcut)
+  const launcher = page.getByTestId('quick-launcher')
+  const input = launcher.locator('#quick-launcher-input')
+  await input.fill('Cross-matrix reference target')
+  await expect(
+    launcher.getByRole('option', { name: /Cross-matrix reference target/ }).first(),
+  ).toBeVisible({ timeout: 10_000 })
+  await input.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter')
+
+  await expect(launcher).toHaveCount(0)
+  await expect(editor).toBeFocused()
+  const inserted = editor.locator(
+    `.inlineref[data-target-matrix-id="${target.matrixId}"][data-target-row-id="${target.rowId}"]`,
+  )
+  await expect(inserted).toBeVisible()
+
+  await editor.focus()
+  await page.keyboard.press('End')
+  await page.keyboard.press(launcherShortcut)
+  await input.fill('Reference targets')
+  await expect(launcher.getByRole('option', { name: /Reference targets/ }).first()).toBeVisible(
+    {
+      timeout: 10_000,
+    },
+  )
+  await input.press('Tab')
+  await expect(launcher.locator('[data-chip-type="kind"]')).toContainText('Reference targets')
+  await expect(
+    launcher.getByRole('option', { name: /Cross-matrix reference target/ }).first(),
+  ).toBeVisible({ timeout: 10_000 })
+  await input.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter')
+  await expect(launcher).toHaveCount(0)
+  await expect(editor).toBeFocused()
+  await expect(inserted).toHaveCount(2)
+
+  await expect(async () => {
+    const joins = await page.evaluate(
+      async ({ source, target }) => {
+        // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+        const sql = await import('/src/core/client/sql-client.ts')
+        return sql.execQuery(
+          `SELECT kind FROM joins
+           WHERE source_matrix_id = ${source.matrixId} AND source_row_id = ${source.rowId}
+             AND target_matrix_id = ${target.matrixId} AND target_row_id = ${target.rowId}`,
+        )
+      },
+      { source, target },
+    )
+    expect(joins).toEqual([{ kind: 'ref' }])
+  }).toPass({ timeout: 5_000 })
+
+  await page.reload()
+  await expect(
+    page.locator(
+      `.inlineref[data-target-matrix-id="${target.matrixId}"][data-target-row-id="${target.rowId}"]`,
+    ),
+  ).toHaveCount(2, { timeout: 10_000 })
+})
+
 test('Wipeout aligns its wide Quick cursor and post-facto echoes to the workspace mark', async ({
   page,
 }) => {

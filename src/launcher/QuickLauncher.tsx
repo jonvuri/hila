@@ -16,10 +16,12 @@ import {
   type CommandInvocationCapabilities,
   type CommandInvocationContext,
 } from '../command-registry'
-import { getColumns } from '../core/client/matrix-client'
+import { createViewBlockAtAppearance, getColumns } from '../core/client/matrix-client'
+import type { CreatedViewBlock } from '../core/block-marker'
 import { addObserver, removeObserver } from '../core/client/sql-client'
 import type { ColumnDefinition } from '../core/matrix'
-import type { PlaceNavigationTarget } from '../core/place-navigation'
+import type { AppearanceProvenance, PlaceNavigationTarget } from '../core/place-navigation'
+import type { NodeRef } from '../core/tree'
 import type { SqlObserver, SqlQuery } from '../core/sql-types'
 import { CenteredOverlay } from '../design/overlay/Overlay'
 import {
@@ -44,6 +46,7 @@ import {
 } from '../shortcuts'
 import { createQueryCatalog } from '../sql/query-spec/catalog'
 import { compileQuerySpec } from '../sql/query-spec/compile'
+import { materializeQuerySpec } from '../sql/query-spec/materialize'
 
 import DeepPreview from './DeepPreview'
 import { buildDistinctValuesRequest } from './distinct-values'
@@ -91,6 +94,23 @@ export type QuickLauncherProps = {
   discoveryService?: LauncherDiscoveryService
   loadColumns?: (matrixId: number) => Promise<ColumnDefinition[]>
   runCommand?: (id: string, context: CommandInvocationContext) => Promise<void>
+  createView?: (
+    focalMatrixId: number,
+    focalRowId: number,
+    provenance: AppearanceProvenance,
+    sql: string,
+    name: string,
+  ) => Promise<CreatedViewBlock>
+  onSavedView?: (
+    marker: NodeRef,
+    generatedName: string,
+    provenance: AppearanceProvenance,
+  ) => void
+  insertRef?: (target: {
+    matrixId: number
+    rowId: number
+    cachedTitle: string
+  }) => string | null
   onNavigate: (target: PlaceNavigationTarget) => void
   onDismiss: () => void
 }
@@ -300,6 +320,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
       commandContext: () => context,
     })
   const invokeCommand = untrack(() => props.runCommand) ?? commandRegistry.invoke
+  const createSavedView = untrack(() => props.createView) ?? createViewBlockAtAppearance
   const loadMatrixColumns = untrack(() => props.loadColumns) ?? getColumns
   const [queryState, setQueryState] = createSignal(createLauncherQueryState())
   const [editorText, setEditorText] = createSignal('')
@@ -317,6 +338,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
   const [columns, setColumns] = createSignal<readonly ColumnDefinition[]>([])
   const [helpOpen, setHelpOpen] = createSignal(false)
   const [restoreInvoker, setRestoreInvoker] = createSignal(true)
+  const [saving, setSaving] = createSignal(false)
   const [cursorIndex, setCursorIndex] = createSignal(0)
   const [input, setInput] = createSignal<HTMLInputElement>()
   const chipElements = new Map<string, HTMLButtonElement>()
@@ -608,6 +630,37 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     dismiss()
   }
 
+  const insertRefTarget = (target: {
+    matrixId: number
+    rowId: number
+    cachedTitle: string
+  }): void => {
+    const reason =
+      props.insertRef ?
+        props.insertRef(target)
+      : 'Open the launcher from an editor to insert a reference.'
+    if (reason) {
+      setInteractionNotice(reason)
+      return
+    }
+    setRestoreInvoker(false)
+    dismiss()
+  }
+
+  const insertRefFromItem = (item: LauncherListItem | AuthoringItem | undefined): void => {
+    if (!item || item.kind === 'column' || item.kind === 'operator' || item.kind === 'value') {
+      return
+    }
+    if (item.kind === 'family' || item.result.family === 'command') return
+    const target = navigationTargetForLauncherItem(item)
+    if (target?.type !== 'node') return
+    insertRefTarget({
+      matrixId: target.node.matrixId,
+      rowId: target.node.rowId,
+      cachedTitle: item.label,
+    })
+  }
+
   const commitObject = (item: LauncherListItem): boolean => {
     if (item.kind === 'family') {
       applyFilter(item.filter, true)
@@ -895,6 +948,79 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     focusInput()
   }
 
+  const saveUnavailableReason = createMemo((): string | null => {
+    if (tempo() !== 'deep') return 'Add a query chip before saving.'
+    if (draft() || objectEdit()) return 'Finish editing the current chip before saving.'
+    if (queryState().invalid) return queryState().invalid!.reason
+    if (queryState().spec.kind.type !== 'matrix') {
+      return 'Choose a type or container before saving.'
+    }
+    if (!props.invocation.subject || !props.invocation.provenance) {
+      return 'Open the launcher from a place before saving.'
+    }
+    if (catalogLoading()) return 'Wait for the query fields to finish loading.'
+    if (catalogError()) return catalogError()
+    if (!compiledPreview()?.compiled) {
+      return compiledPreview()?.error ?? 'The query cannot be saved.'
+    }
+    return null
+  })
+
+  const generatedViewName = (): string =>
+    queryState()
+      .chips.map((chip) => {
+        if (chip.type === 'kind') return chip.label
+        if (chip.type === 'scope') return `${chip.label} ›`
+        if (chip.type === 'order') return `${chip.operatorGlyph} ${chip.columnName}`
+        return `${chip.columnName} ${chip.operatorGlyph}${chip.valueLabel ? ` ${chip.valueLabel}` : ''}`
+      })
+      .join(' · ') || 'Untitled view'
+
+  const saveView = async (): Promise<void> => {
+    const unavailable = saveUnavailableReason()
+    if (unavailable || saving()) {
+      if (unavailable) setInteractionNotice(unavailable)
+      return
+    }
+    const subject = props.invocation.subject!
+    const invocationProvenance = props.invocation.provenance!
+    const compiled = compiledPreview()?.compiled
+    if (!compiled || compiled.spec.kind.type !== 'matrix') return
+    const catalog = createQueryCatalog({
+      matrices: [
+        {
+          id: compiled.spec.kind.matrixId,
+          title: selectedKindChip()?.label,
+          columns: columns(),
+        },
+      ],
+      nodes: compiled.spec.scope.type === 'node' ? [compiled.spec.scope] : [],
+    })
+    const name = generatedViewName()
+    setSaving(true)
+    setInteractionNotice(null)
+    try {
+      const sql = materializeQuerySpec(compiled.spec, catalog)
+      const { marker, provenance } = await createSavedView(
+        subject.matrixId,
+        subject.rowId,
+        invocationProvenance,
+        sql,
+        name,
+      )
+      setRestoreInvoker(false)
+      dismiss()
+      requestAnimationFrame(() => {
+        if (props.onSavedView) props.onSavedView(marker, name, provenance)
+        else props.onNavigate({ type: 'node', node: marker, provenance })
+      })
+    } catch (error) {
+      setInteractionNotice(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const handleInputKeyDown = (event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing) return
     const element = event.currentTarget as HTMLInputElement
@@ -902,6 +1028,18 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     const atEnd =
       element.selectionStart === element.value.length &&
       element.selectionEnd === element.value.length
+
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault()
+      insertRefFromItem(activeItems().find((item) => item.id === selectedId()))
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault()
+      void saveView()
+      return
+    }
 
     if (
       event.key === '?' &&
@@ -1085,7 +1223,11 @@ const QuickLauncher = (props: QuickLauncherProps) => {
     return null
   })
   const visibleNotice = createMemo(
-    () => queryState().invalid?.reason ?? interactionNotice() ?? freezeNotice() ?? null,
+    () =>
+      queryState().invalid?.reason ??
+      interactionNotice() ??
+      freezeNotice() ??
+      (tempo() === 'deep' ? saveUnavailableReason() : null),
   )
 
   const valuePrompt = createMemo(() => {
@@ -1309,6 +1451,7 @@ const QuickLauncher = (props: QuickLauncherProps) => {
                   invalidReason={previewInvalidReason()}
                   loadingReason={catalogLoading() ? 'Loading query fields…' : null}
                   onNavigate={navigateFromPreview}
+                  onInsertRef={insertRefTarget}
                 />
               </div>
             </Show>
@@ -1327,9 +1470,20 @@ const QuickLauncher = (props: QuickLauncherProps) => {
           </span>
           <span class={styles.keyboardHint}>
             {tempo() === 'deep' ?
-              'Tab chip · ↑↓ select · ↵ open'
+              'Tab chip · ↑↓ select · ↵ open · ⌘S save'
             : '↑↓ select · ↵ open · Esc close'}
           </span>
+          <Show when={tempo() === 'deep'}>
+            <button
+              type="button"
+              class={styles.saveButton}
+              disabled={saving() || saveUnavailableReason() !== null}
+              title={saveUnavailableReason() ?? 'Save as a view'}
+              onClick={() => void saveView()}
+            >
+              {saving() ? 'Saving…' : 'Save view'}
+            </button>
+          </Show>
           <button
             type="button"
             class={styles.helpButton}

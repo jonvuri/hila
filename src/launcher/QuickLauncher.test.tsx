@@ -258,6 +258,7 @@ describe('QuickLauncher', () => {
     expect(container.querySelector('[data-chip-type="scope"]')?.textContent).toContain(
       'Ordinary',
     )
+    expect(container.textContent).toContain('Choose a type or container before saving.')
   })
 
   test('commits a kind, authors a typed predicate, and removes chips back to Quick', async () => {
@@ -299,6 +300,7 @@ describe('QuickLauncher', () => {
 
     expect(container.querySelector('[data-launcher-tempo="deep"]')).not.toBeNull()
     expect(container.querySelector('[data-chip-type="kind"]')?.textContent).toBe('#Projects')
+    expect(container.textContent).toContain('Open the launcher from a place before saving.')
     await vi.waitFor(() => expect(sqlMocks.addObserver).toHaveBeenCalled())
 
     input.value = 'status = open'
@@ -336,6 +338,188 @@ describe('QuickLauncher', () => {
       new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }),
     )
     expect(container.querySelector('[data-launcher-tempo="quick"]')).not.toBeNull()
+  })
+
+  test('saves under portal provenance and hands off marker identity, name, and appearance', async () => {
+    const typeResult = result('7', 'Projects', {
+      family: 'type',
+      node: undefined,
+      subjectMatrixId: 7,
+    })
+    const markerProvenance = { key: new Uint8Array([1, 2, 3, 4]) }
+    const createView = vi.fn(async () => ({
+      marker: { matrixId: 2, rowId: 91 },
+      provenance: markerProvenance,
+    }))
+    const saved = vi.fn()
+    const dismiss = vi.fn()
+    dispose = render(
+      () => (
+        <QuickLauncher
+          rootMatrixId={1}
+          visualTheme="ghost"
+          invocation={{
+            subject: { matrixId: 2, rowId: 4 },
+            provenance: { key: new Uint8Array([1, 2, 3]) },
+          }}
+          discoveryService={{
+            search: async () => ({ status: 'current', results: [typeResult] }),
+            cancel: vi.fn(),
+          }}
+          loadColumns={() =>
+            Promise.resolve([column(1, 'label', 'text', 'label'), column(2, 'status')])
+          }
+          createView={createView}
+          onSavedView={saved}
+          onNavigate={() => {}}
+          onDismiss={dismiss}
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    input.value = 'Projects'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    await Promise.resolve()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    )
+    await vi.waitFor(() => expect(container.textContent).toContain('Save view'))
+
+    input.value = 'status = open'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 's',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+
+    await vi.waitFor(() => expect(createView).toHaveBeenCalledTimes(1))
+    expect(createView).toHaveBeenCalledWith(
+      2,
+      4,
+      { key: new Uint8Array([1, 2, 3]) },
+      expect.stringContaining(`d."status" = 'open'`),
+      'Projects · status = open',
+    )
+    await vi.waitFor(() =>
+      expect(saved).toHaveBeenCalledWith(
+        { matrixId: 2, rowId: 91 },
+        'Projects · status = open',
+        markerProvenance,
+      ),
+    )
+    expect(dismiss).toHaveBeenCalledTimes(1)
+  })
+
+  test('keeps the launcher open when captured provenance is stale at save time', async () => {
+    const typeResult = result('7', 'Projects', {
+      family: 'type',
+      node: undefined,
+      subjectMatrixId: 7,
+    })
+    const createView = vi.fn(async () => {
+      throw new Error('The invoking place is no longer open.')
+    })
+    const saved = vi.fn()
+    const dismiss = vi.fn()
+    dispose = render(
+      () => (
+        <QuickLauncher
+          rootMatrixId={1}
+          visualTheme="ghost"
+          invocation={{
+            subject: { matrixId: 2, rowId: 4 },
+            provenance: { key: new Uint8Array([1, 2, 3]) },
+          }}
+          discoveryService={{
+            search: async () => ({ status: 'current', results: [typeResult] }),
+            cancel: vi.fn(),
+          }}
+          loadColumns={() =>
+            Promise.resolve([column(1, 'label', 'text', 'label'), column(2, 'status')])
+          }
+          createView={createView}
+          onSavedView={saved}
+          onNavigate={() => {}}
+          onDismiss={dismiss}
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    input.value = 'Projects'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    await Promise.resolve()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+    )
+    await vi.waitFor(() => expect(container.textContent).toContain('Save view'))
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 's',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain('The invoking place is no longer open.'),
+    )
+    expect(createView).toHaveBeenCalledOnce()
+    expect(saved).not.toHaveBeenCalled()
+    expect(dismiss).not.toHaveBeenCalled()
+  })
+
+  test('inserts a selected place with Mod-Enter', async () => {
+    const insertRef = vi.fn(() => null)
+    const dismiss = vi.fn()
+    dispose = render(
+      () => (
+        <QuickLauncher
+          rootMatrixId={1}
+          visualTheme="null"
+          invocation={{}}
+          discoveryService={{
+            search: async () => ({ status: 'current', results: [result('5', 'Target')] }),
+            cancel: vi.fn(),
+          }}
+          insertRef={insertRef}
+          onNavigate={() => {}}
+          onDismiss={dismiss}
+        />
+      ),
+      container,
+    )
+    await Promise.resolve()
+    const input = container.querySelector<HTMLInputElement>('#quick-launcher-input')!
+    input.value = 'Target'
+    input.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    await vi.waitFor(() => expect(container.textContent).toContain('Target'))
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+    expect(insertRef).toHaveBeenCalledWith({
+      matrixId: 2,
+      rowId: 5,
+      cachedTitle: 'Target',
+    })
+    expect(dismiss).toHaveBeenCalledOnce()
+    expect(container.textContent).not.toContain(
+      'Open the launcher from an editor to insert a reference.',
+    )
   })
 
   test('pointer-replaces edited objects and preserves clauses only for the same kind', async () => {

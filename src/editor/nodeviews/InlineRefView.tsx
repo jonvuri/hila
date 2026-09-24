@@ -220,6 +220,8 @@ export const InlineRefView: Component = () => {
     <span
       class={'inlineref' + kindClass() + stateClass() + tetherClass()}
       data-kind={kind()}
+      data-target-matrix-id={targetMatrixId() ?? undefined}
+      data-target-row-id={targetRowId() ?? undefined}
       style={badgeStyle()}
       onClick={handleClick}
       onMouseEnter={() => {

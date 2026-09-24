@@ -41,6 +41,7 @@ import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { createSlashPlugin } from '../editor/slash-plugin'
+import { registerActiveEditor } from '../editor/active-editor'
 import {
   syncInlineRefs,
   refreshCachedTitles,
@@ -216,6 +217,7 @@ type LabelEditorProps = {
 const LabelEditorInner = (props: LabelEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
+  let unregisterActiveEditor: (() => void) | undefined
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
@@ -299,12 +301,17 @@ const LabelEditorInner = (props: LabelEditorProps) => {
     })
 
     editorView = view
+    unregisterActiveEditor = registerActiveEditor(view, {
+      matrixId: props.matrixId,
+      rowId: props.rowId,
+    })
     logPmMount(props.rowId, props.pageIndex)
     props.onHandle?.(handle)
   }
 
   onCleanup(() => {
     saveHandle.destroy()
+    unregisterActiveEditor?.()
     logPmUnmount(props.rowId, props.pageIndex)
     editorView?.destroy()
   })
@@ -391,6 +398,7 @@ type ContentEditorProps = {
 const ContentEditorInner = (props: ContentEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
+  let unregisterActiveEditor: (() => void) | undefined
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
@@ -473,11 +481,16 @@ const ContentEditorInner = (props: ContentEditorProps) => {
     })
 
     editorView = view
+    unregisterActiveEditor = registerActiveEditor(view, {
+      matrixId: props.matrixId,
+      rowId: props.rowId,
+    })
     props.onHandle?.(handle)
   }
 
   onCleanup(() => {
     saveHandle.destroy()
+    unregisterActiveEditor?.()
     editorView?.destroy()
   })
 

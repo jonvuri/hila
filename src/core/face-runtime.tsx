@@ -8,6 +8,7 @@ export type FaceRenderingKind = 'line' | 'collection'
 export type FaceRenderingProps = {
   subject: FaceSubject
   recipe: FaceRecipe
+  rootMatrixId: number
 }
 
 export type FaceRenderRegistration = Partial<
@@ -41,6 +42,7 @@ export const FaceHostSlot: Component<{
   kind: FaceRenderingKind
   subject: FaceSubject
   recipe: FaceRecipe
+  rootMatrixId: number
   fidelity: 'composed' | 'substrate' | 'x-ray'
   fallback?: JSX.Element
 }> = (props) => {
@@ -56,7 +58,12 @@ export const FaceHostSlot: Component<{
     >
       <Show when={Rendering()} fallback={props.fallback}>
         {(rendering) => (
-          <Dynamic component={rendering()} subject={props.subject} recipe={props.recipe} />
+          <Dynamic
+            component={rendering()}
+            subject={props.subject}
+            recipe={props.recipe}
+            rootMatrixId={props.rootMatrixId}
+          />
         )}
       </Show>
     </div>

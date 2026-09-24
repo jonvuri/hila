@@ -6,9 +6,12 @@ import type { PluginDefinition } from '../plugin-types'
 vi.mock('./worker-client', () => ({ postMessage: vi.fn() }))
 
 const { commandRegistry } = await import('../../command-registry')
-const { PluginRegistrationSupersededError, disposePlugin, registerPlugin } = await import(
-  './matrix-client'
-)
+const {
+  PluginRegistrationSupersededError,
+  createViewBlockAtAppearance,
+  disposePlugin,
+  registerPlugin,
+} = await import('./matrix-client')
 const { handleMatrixWorkerMessage } = await import('./matrix-client-handler')
 const { pendingRequests } = await import('./matrix-client-promises')
 const { postMessage } = await import('./worker-client')
@@ -168,5 +171,48 @@ describe('main-thread plugin command contributions', () => {
     await firstRejection
 
     expect(commandRegistry.list().map(({ id }) => id)).toEqual(['test.second'])
+  })
+})
+
+describe('appearance-aware view creation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    pendingRequests.clear()
+  })
+
+  test('round-trips parent and marker provenance through the worker protocol', async () => {
+    const parentProvenance = { key: Uint8Array.of(1, 0, 2, 0) }
+    const createdProvenance = { key: Uint8Array.of(1, 0, 2, 0, 3, 0) }
+    const creation = createViewBlockAtAppearance(
+      2,
+      4,
+      parentProvenance,
+      'SELECT 1',
+      'Portal view',
+    )
+    const message = mockPost.mock.lastCall?.[0] as { id: string }
+
+    expect(message).toMatchObject({
+      type: 'createViewBlockAtAppearance',
+      focalMatrixId: 2,
+      focalRowId: 4,
+      provenance: parentProvenance,
+      sql: 'SELECT 1',
+      name: 'Portal view',
+    })
+
+    handleMatrixWorkerMessage({
+      type: 'createViewBlockAtAppearanceSuccess',
+      id: message.id,
+      result: {
+        marker: { matrixId: 2, rowId: 91 },
+        provenance: createdProvenance,
+      },
+    })
+
+    await expect(creation).resolves.toEqual({
+      marker: { matrixId: 2, rowId: 91 },
+      provenance: createdProvenance,
+    })
   })
 })

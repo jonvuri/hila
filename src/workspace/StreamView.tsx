@@ -85,6 +85,7 @@ const StreamView = (props: StreamViewProps) => {
 
     return (
       <FocusPanel
+        rootMatrixId={props.matrixId}
         matrixId={panel.matrixId}
         navigationOutline={navigationOutline()}
         rowId={panel.rowId}

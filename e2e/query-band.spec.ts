@@ -61,6 +61,20 @@ const seedTasksMatrix = async (page: Page): Promise<{ tasksId: number; rowId: nu
     return { tasksId, rowId }
   })
 
+const seedViewBlock = async (page: Page, sql: string, name = 'Test view') => {
+  const focus = page.getByTestId('focus-panel').last()
+  const matrixId = Number(await focus.getAttribute('data-launcher-matrix-id'))
+  const rowId = Number(await focus.getAttribute('data-launcher-row-id'))
+  await page.evaluate(
+    async ({ matrixId, rowId, sql, name }) => {
+      // @ts-expect-error -- resolved by Vite dev server at runtime
+      const client = await import('/src/core/client/matrix-client.ts')
+      await client.createViewBlock(matrixId, rowId, sql, name)
+    },
+    { matrixId, rowId, sql, name },
+  )
+}
+
 test.describe('Query bands (read slice)', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
@@ -76,13 +90,9 @@ test.describe('Query bands (read slice)', () => {
 
     await openFocusPanel(page)
 
-    // Author a raw-SQL band via the dev-grade box. No `id` in the projection →
-    // a genuinely read-only view (the row-identity gate), so this isolates live
-    // reactivity from write-back.
-    const sqlInput = page.getByTestId('query-band-sql-input')
-    await expect(sqlInput).toBeVisible({ timeout: 5000 })
-    await sqlInput.fill(`SELECT title FROM "mx_${tasksId}_data"`)
-    await page.getByTestId('query-band-save').click()
+    // Seed custom SQL through the existing durable block path. No `id` in the
+    // projection means a genuinely read-only view (the row-identity gate).
+    await seedViewBlock(page, `SELECT title FROM "mx_${tasksId}_data"`)
 
     // The band renders, with a read-only row showing the seeded task.
     const band = page.getByTestId('query-band')
@@ -92,9 +102,7 @@ test.describe('Query bands (read slice)', () => {
 
     // The cells are genuinely read-only (display spans, not editable inputs).
     await expect(bandRow.locator('input')).toHaveCount(0)
-    await expect(
-      bandRow.getByTestId('property-row-readonly-cell').first(),
-    ).toBeVisible()
+    await expect(bandRow.getByTestId('property-row-readonly-cell').first()).toBeVisible()
 
     // Edit the underlying data — the band updates live (SQLite update hook →
     // subscription re-run), no manual refresh.
@@ -117,9 +125,7 @@ test.describe('Query bands (read slice)', () => {
 
     await openFocusPanel(page)
 
-    const sqlInput = page.getByTestId('query-band-sql-input')
-    await sqlInput.fill(`SELECT * FROM "mx_${tasksId}_data"`)
-    await page.getByTestId('query-band-save').click()
+    await seedViewBlock(page, `SELECT * FROM "mx_${tasksId}_data"`)
     await expect(page.getByTestId('query-band')).toBeVisible({ timeout: 5000 })
 
     // Reload the page — the view block is persisted (its marker node + its SQL
@@ -145,9 +151,7 @@ test.describe('Query bands (read slice)', () => {
     await openFocusPanel(page)
 
     // A `SELECT *` over the base table is a recognized updatable view (id present).
-    const sqlInput = page.getByTestId('query-band-sql-input')
-    await sqlInput.fill(`SELECT * FROM "mx_${tasksId}_data"`)
-    await page.getByTestId('query-band-save').click()
+    await seedViewBlock(page, `SELECT * FROM "mx_${tasksId}_data"`)
 
     // The band advertises itself as editable and exposes a live input.
     await expect(page.getByTestId('query-band-editable-badge')).toBeVisible({ timeout: 5000 })
@@ -163,7 +167,9 @@ test.describe('Query bands (read slice)', () => {
         async ([mid, rid]) => {
           // @ts-expect-error -- resolved by Vite dev server at runtime
           const sql = await import('/src/core/client/sql-client.ts')
-          const rows = await sql.execQuery(`SELECT title FROM "mx_${mid}_data" WHERE id = ${rid}`)
+          const rows = await sql.execQuery(
+            `SELECT title FROM "mx_${mid}_data" WHERE id = ${rid}`,
+          )
           return (rows[0] as { title: string } | undefined)?.title
         },
         [tasksId, rowId] as const,
@@ -178,9 +184,7 @@ test.describe('Query bands (read slice)', () => {
     await openFocusPanel(page)
 
     // No `id` in the projection → no row identity → read-only (the gate).
-    const sqlInput = page.getByTestId('query-band-sql-input')
-    await sqlInput.fill(`SELECT title FROM "mx_${tasksId}_data"`)
-    await page.getByTestId('query-band-save').click()
+    await seedViewBlock(page, `SELECT title FROM "mx_${tasksId}_data"`)
 
     await expect(page.getByTestId('query-band')).toBeVisible({ timeout: 5000 })
     await expect(page.getByTestId('query-band-row').first()).toContainText('Task A', {
@@ -198,9 +202,7 @@ test.describe('Query bands (read slice)', () => {
 
     await openFocusPanel(page)
 
-    const sqlInput = page.getByTestId('query-band-sql-input')
-    await sqlInput.fill(`SELECT title FROM "mx_${tasksId}_data"`)
-    await page.getByTestId('query-band-save').click()
+    await seedViewBlock(page, `SELECT title FROM "mx_${tasksId}_data"`)
 
     // Click the affordance → the stored SQL gains `id` → the band becomes editable.
     const enable = page.getByTestId('query-band-enable-edit')
@@ -219,7 +221,9 @@ test.describe('Query bands (read slice)', () => {
         async ([mid, rid]) => {
           // @ts-expect-error -- resolved by Vite dev server at runtime
           const sql = await import('/src/core/client/sql-client.ts')
-          const rows = await sql.execQuery(`SELECT title FROM "mx_${mid}_data" WHERE id = ${rid}`)
+          const rows = await sql.execQuery(
+            `SELECT title FROM "mx_${mid}_data" WHERE id = ${rid}`,
+          )
           return (rows[0] as { title: string } | undefined)?.title
         },
         [tasksId, rowId] as const,

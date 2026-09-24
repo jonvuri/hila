@@ -118,6 +118,13 @@ The Playwright suite remains the regression source of truth.
   assert the 1,000-row semantic cap indirectly through the last reachable row, no more than six
   100-row windows in the DOM, reusable prepared templates during input changes, and zero editor
   churn. Keep unloaded virtual windows at estimated height so a far scroll cannot collapse paging.
+- Save-view browser checks must wait until the visible save action enables, then assert one existing
+  marker/source identity, focused and selected generated name, recognition after reload, a
+  structured edit followed by another reload, and raw custom SQL Apply/Cancel behavior. Invalid raw
+  drafts must classify immediately and keep Apply disabled.
+- Run `Mod-Enter` from a real registered ProseMirror editor through both Quick discovery and Deep
+  preview rows. Assert insertion at the invoking selection, normal `joins(kind = 'ref')` sync, focus
+  return, and reload persistence. Component tests own changed-selection and unmounted-editor refusal.
 
 ## Performance and churn
 

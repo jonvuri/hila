@@ -81,4 +81,9 @@ export type QueryRecognitionReason =
 export type QueryRecognition =
   | { type: 'chips'; spec: NormalizedQuerySpec }
   | { type: 'chips-with-leaves'; spec: NormalizedQuerySpec }
-  | { type: 'custom-sql'; reason: QueryRecognitionReason; message: string }
+  | {
+      type: 'custom-sql'
+      reason: QueryRecognitionReason
+      message: string
+      missingNode?: { readonly matrixId: number; readonly rowId: number }
+    }

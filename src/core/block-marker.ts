@@ -1,6 +1,7 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { insertDataRow } from './matrix'
+import type { AppearanceProvenance } from './place-navigation'
 import { deleteHomeGhostingPortals } from './portal'
 import { createTreePosition, type NodeRef } from './tree'
 import { withTransaction } from './transaction'
@@ -58,6 +59,52 @@ export type ViewBlockRow = {
   sql: string
 }
 
+export type CreatedViewBlock = {
+  readonly marker: NodeRef
+  readonly provenance: AppearanceProvenance
+}
+
+const concatBytes = (a: Uint8Array, b: Uint8Array): Uint8Array => {
+  const result = new Uint8Array(a.length + b.length)
+  result.set(a)
+  result.set(b, a.length)
+  return result
+}
+
+const isLiveAppearance = (
+  db: Database,
+  node: NodeRef,
+  provenance: AppearanceProvenance,
+): boolean => {
+  const statement = db.prepare(
+    `SELECT 1 FROM scroll_index
+     WHERE global_lexkey = ? AND matrix_id = ? AND row_id = ? AND is_ghost = 0`,
+  )
+  statement.bind([provenance.key, node.matrixId, node.rowId])
+  const live = statement.step()
+  statement.finalize()
+  return live
+}
+
+const createViewBlockRecord = (
+  db: Database,
+  focal: NodeRef,
+  sql: string,
+  name: string,
+): { marker: NodeRef; edgeKey: Uint8Array } => {
+  const labelColumn = getLabelColumnName(db, focal.matrixId)
+  const markerRowId = insertDataRow(db, focal.matrixId, {
+    [labelColumn]: textToPmJson(name.trim() || DEFAULT_VIEW_NAME),
+  })
+  const edgeKey = createTreePosition(db, focal.matrixId, markerRowId, { parent: focal })
+  db.exec(
+    `INSERT INTO block_sources (marker_matrix_id, marker_row_id, kind, sql)
+     VALUES (?, ?, 'view', ?)`,
+    { bind: [focal.matrixId, markerRowId, sql] },
+  )
+  return { marker: { matrixId: focal.matrixId, rowId: markerRowId }, edgeKey }
+}
+
 /**
  * Create a `view` block marker under `focal`: mint a marker node (own-child of
  * focal, so its `edge_key` positions it), and record its SQL in `block_sources`.
@@ -68,21 +115,28 @@ export const createViewBlock = (
   focal: NodeRef,
   sql: string,
   name = DEFAULT_VIEW_NAME,
-): NodeRef =>
+): NodeRef => withTransaction(db, () => createViewBlockRecord(db, focal, sql, name).marker)
+
+/**
+ * Create a view under one exact live appearance of `focal`. The returned provenance selects the
+ * matching marker appearance, rather than silently navigating to its ownership home.
+ */
+export const createViewBlockAtAppearance = (
+  db: Database,
+  focal: NodeRef,
+  provenance: AppearanceProvenance,
+  sql: string,
+  name = DEFAULT_VIEW_NAME,
+): CreatedViewBlock =>
   withTransaction(db, () => {
-    // The marker is a normal named row in the focal's matrix. Its label-role
-    // field is the view's name; block_sources owns only the SQL.
-    const labelColumn = getLabelColumnName(db, focal.matrixId)
-    const markerRowId = insertDataRow(db, focal.matrixId, {
-      [labelColumn]: textToPmJson(name.trim() || DEFAULT_VIEW_NAME),
-    })
-    createTreePosition(db, focal.matrixId, markerRowId, { parent: focal })
-    db.exec(
-      `INSERT INTO block_sources (marker_matrix_id, marker_row_id, kind, sql)
-       VALUES (?, ?, 'view', ?)`,
-      { bind: [focal.matrixId, markerRowId, sql] },
-    )
-    return { matrixId: focal.matrixId, rowId: markerRowId }
+    if (!isLiveAppearance(db, focal, provenance)) {
+      throw new Error('The invoking place is no longer open.')
+    }
+    const { marker, edgeKey } = createViewBlockRecord(db, focal, sql, name)
+    return {
+      marker,
+      provenance: { key: concatBytes(provenance.key, edgeKey) },
+    }
   })
 
 /** Replace a view-block marker's SQL. */

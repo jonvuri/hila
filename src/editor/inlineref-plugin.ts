@@ -3,6 +3,8 @@ import type { EditorView } from 'prosemirror-view'
 
 import { execQuery } from '../core/client/sql-client'
 
+import { buildInlineRefInsertion } from './inlineref-insert'
+
 export type AutocompleteOption = { id: number; title: string }
 
 export type TriggerChar = '@' | '[[' | '#'
@@ -144,17 +146,14 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
     const state = getAutocompleteState(view)
     if (!state.active) return
     const kind = state.trigger === '#' ? 'own' : 'ref'
-    const inlinerefType = view.state.schema.nodes.inlineref!
-    const node = inlinerefType.create({
-      targetMatrixId: attrs.targetMatrixId,
-      targetRowId: attrs.targetRowId,
-      kind,
-      cachedTitle: attrs.cachedTitle ?? null,
-    })
     const triggerLength = state.trigger === '[[' ? 2 : 1
     const deleteFrom = state.from - triggerLength
     const deleteTo = state.from + state.query.length
-    const tr = view.state.tr.replaceWith(deleteFrom, deleteTo, node)
+    const tr = buildInlineRefInsertion(view, attrs, {
+      kind,
+      from: deleteFrom,
+      to: deleteTo,
+    })
     tr.setMeta(inlinerefPluginKey, { active: false, from: 0, query: '', trigger: null })
     view.dispatch(tr)
     view.focus()

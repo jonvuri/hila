@@ -162,7 +162,8 @@
 }
 
 .filterToken:focus-visible,
-.helpButton:focus-visible {
+.helpButton:focus-visible,
+.saveButton:focus-visible {
   outline: var(--width-focus-ring) solid var(--color-state-focus);
   outline-offset: var(--offset-focus-ring);
 }
@@ -342,7 +343,8 @@
   color: var(--color-text-faint);
 }
 
-.helpButton {
+.helpButton,
+.saveButton {
   min-height: 28px;
   padding: var(--space-4) var(--space-8);
   color: var(--color-text-muted);
@@ -353,9 +355,15 @@
   cursor: pointer;
 }
 
-.helpButton:hover {
+.helpButton:hover,
+.saveButton:hover:not(:disabled) {
   color: var(--color-text-strong);
   border-color: var(--color-line-strong);
+}
+
+.saveButton:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-state-disabled);
 }
 
 .status {

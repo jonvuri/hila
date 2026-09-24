@@ -29,10 +29,15 @@ import {
   type QuerySpec,
 } from './types'
 
-const custom = (reason: QueryRecognitionReason, message: string): QueryRecognition => ({
+const custom = (
+  reason: QueryRecognitionReason,
+  message: string,
+  details: Pick<Extract<QueryRecognition, { type: 'custom-sql' }>, 'missingNode'> = {},
+): QueryRecognition => ({
   type: 'custom-sql',
   reason,
   message,
+  ...details,
 })
 
 const nameText = (node: SqlAstNode | undefined): string | undefined =>
@@ -573,7 +578,11 @@ export const recognizeQuerySpec = (sql: string, catalog: QueryCatalog): QueryRec
       error instanceof QuerySpecError &&
       (error.code === 'node-not-found' || error.code === 'column-not-found')
     ) {
-      return custom(error.code, error.message)
+      return custom(
+        error.code,
+        error.message,
+        error.code === 'node-not-found' && scope.type === 'node' ? { missingNode: scope } : {},
+      )
     }
     return custom(
       'invalid-spec',

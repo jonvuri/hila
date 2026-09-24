@@ -1,8 +1,9 @@
 # Query spec and SQL-analog gestures
 
-> **Status: executable v1 runtime and transient chip surface shipped.** Session 2 delivered the
-> compiler, recognizer, bound runtime, deterministic paging, and rename healing. Session 6 added the
-> launcher reducer, value grammar, and bounded read-only preview. Session 7 owns durable chip editing.
+> **Status: executable v1 runtime and transient and durable chip surfaces shipped.** Session 2
+> delivered the compiler, recognizer, bound runtime, deterministic paging, and rename healing.
+> Session 6 added launcher authoring and preview. Session 7 added recognition-backed saved-view
+> editing and raw SQL x-ray/custom mode.
 
 > Decided in [Phase 10 §3b](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (session 3b-i; visual companion + round-by-round reasoning: [Phase-10-Session-3b-visuals.html](./archive/visuals/Phase-10-Session-3b-visuals.html), determinations D1–D19). This is the shared model behind the `⌘K` launcher's filtered search, persisted `view` nodes/blocks, and result-surface gestures — the higher-level authoring layer above raw SQL anticipated by [Phase 9 §9.3](./archive/phases/Phase-9.md#93-embedded-collections--live-views), designed once and spoken by every surface.
 
@@ -277,6 +278,8 @@ Sequence, by value:
 
 - ~~Session 3b-ii — the launcher surface proper~~ **Resolved:** the launcher surface is designed in [Launcher.md](Launcher.md) (Phase 10 §3b-ii, determinations D20–D32) — result layout, ranking, family narrowing, tempo continuum, keyboard map, value editors, save flow, and the stage-4 build items.
 - **Live-relative date tokens** (a saved "today" view that is always today) — the designed dialect extension, deferred on need: the compile rule emits a reserved **runtime parameter** (`:today`-family) that the recognizer lifts back to the token; the executor binds an environment at run time; the invalidation engine gains clock-based invalidation (re-run at date rollover). In v1 relative tokens freeze to literal ranges at compile (stated by a save nudge — [Launcher.md](Launcher.md) D29). No second runtime-parameter consumer exists in the immediate plan (host execution params are a different, already-general layer; Phase 11's `date('now')` column defaults evaluate at write time); identity (`:me`) and context (`:here`) are the eventual siblings that would justify extracting the general environment mechanism.
-- **Saved-view chip chrome:** Phase 12 implements the shared authoring grammar over stored view SQL
-  and replaces the development textarea. Raw SQL remains available as x-ray/custom mode.
+- ~~**Saved-view chip chrome.**~~ **Resolved:** recognized view SQL now uses the shared kind, scope,
+  text, predicate, order, and limit grammar. Structured commits rewrite only the sole stored SQL and
+  retain opaque WHERE leaves byte-for-byte. Raw SQL remains explicit x-ray/custom mode with live
+  recognition and validation.
 - **FTS** (compile-rule swap; Phase 11+) · **frecency ranking** (slots into launcher ranking only; the spec is untouched) · **view-node-as-source** · the growth items above, each on proven need.

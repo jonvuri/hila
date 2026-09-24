@@ -32,10 +32,12 @@ import { captureLauncherInvocation, type LauncherInvocation } from './launcher/i
 import { useQuery } from './sql/useQuery'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
+import { insertInlineRefFromInvocation } from './editor/active-editor'
 import { tagsPlugin } from './tags/tags-plugin'
 import { workspacePlugin, buildMatrixTitleQuery } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
 import { requestTableFaceFocus } from './table/focus-handoff'
+import { requestGeneratedViewNameFocus } from './workspace/pending-view-name-focus'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
@@ -389,6 +391,24 @@ const App: Component = () => {
             visualTheme={resolveVisualTheme(document.documentElement.dataset.visualTheme)}
             invocation={invocation()}
             commandCapabilities={{ focusCreatedTable }}
+            insertRef={(target) => {
+              const editor = invocation().editor
+              if (!editor) return 'Open the launcher from an editor to insert a reference.'
+              const result = insertInlineRefFromInvocation(editor, {
+                targetMatrixId: target.matrixId,
+                targetRowId: target.rowId,
+                cachedTitle: target.cachedTitle,
+              })
+              if (result.ok) return null
+              return result.reason === 'editor-unmounted' ?
+                  'The invoking editor is no longer open.'
+                : 'The invoking editor changed while the launcher was open.'
+            }}
+            onSavedView={(marker, _generatedName, provenance) => {
+              requestGeneratedViewNameFocus(marker)
+              setWorkspaceNavigateToPlace({ type: 'node', node: marker, provenance })
+              setActiveView('workspace')
+            }}
             onNavigate={(target) => {
               setWorkspaceNavigateToPlace(target)
               setActiveView('workspace')

@@ -10,7 +10,7 @@ import {
   lazy,
 } from 'solid-js'
 import { EditorView } from 'prosemirror-view'
-import { Selection, type Plugin as StatePlugin } from 'prosemirror-state'
+import { Selection, TextSelection, type Plugin as StatePlugin } from 'prosemirror-state'
 import { ProsemirrorAdapterProvider, useNodeViewFactory } from '@prosemirror-adapter/solid'
 import { keymap } from 'prosemirror-keymap'
 import { toggleMark } from 'prosemirror-commands'
@@ -32,6 +32,7 @@ import { HeadingView } from '../editor/nodeviews/HeadingView'
 import { InlineRefView } from '../editor/nodeviews/InlineRefView'
 import { createInlinerefPlugin } from '../editor/inlineref-plugin'
 import { createSlashPlugin } from '../editor/slash-plugin'
+import { registerActiveEditor } from '../editor/active-editor'
 import {
   syncInlineRefs,
   extractInlineRefsFromStored,
@@ -52,6 +53,12 @@ import {
   buildChildCountQuery,
 } from './workspace-plugin'
 import { buildViewSourceQuery } from './block-marker-queries'
+import {
+  consumeGeneratedViewNameFocus,
+  hasGeneratedViewNameFocusRequest,
+} from './pending-view-name-focus'
+
+export { requestGeneratedViewNameFocus } from './pending-view-name-focus'
 
 const NavigationPanel = lazy(() => import('./NavigationPanel'))
 
@@ -71,6 +78,7 @@ const EMPTY_CONTENT_JSON = JSON.stringify({
 // ---------------------------------------------------------------------------
 
 type FocusPanelProps = {
+  rootMatrixId: number
   matrixId: number
   rowId: number
   rowKey: Uint8Array
@@ -170,6 +178,8 @@ type FocusLabelEditorProps = {
 const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
+  let unregisterActiveEditor: (() => void) | undefined
+  let pendingNameFocusFrame: number | undefined
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
@@ -228,10 +238,35 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
     })
 
     editorView = view
+
+    const marker = { matrixId: props.matrixId, rowId: props.rowId }
+    if (hasGeneratedViewNameFocusRequest(marker)) {
+      const focusGeneratedName = (): void => {
+        if (view.isDestroyed || !hasGeneratedViewNameFocusRequest(marker)) return
+        view.focus()
+        view.dispatch(
+          view.state.tr.setSelection(
+            TextSelection.create(view.state.doc, 1, view.state.doc.content.size - 1),
+          ),
+        )
+        pendingNameFocusFrame = requestAnimationFrame(() => {
+          if (view.isDestroyed || !hasGeneratedViewNameFocusRequest(marker)) return
+          if (view.hasFocus()) consumeGeneratedViewNameFocus(marker)
+          else focusGeneratedName()
+        })
+      }
+      pendingNameFocusFrame = requestAnimationFrame(focusGeneratedName)
+    }
+    unregisterActiveEditor = registerActiveEditor(view, {
+      matrixId: props.matrixId,
+      rowId: props.rowId,
+    })
   }
 
   onCleanup(() => {
     saveHandle.destroy()
+    if (pendingNameFocusFrame !== undefined) cancelAnimationFrame(pendingNameFocusFrame)
+    unregisterActiveEditor?.()
     editorView?.destroy()
   })
 
@@ -303,6 +338,7 @@ type FocusContentEditorProps = {
 const FocusContentEditorInner = (props: FocusContentEditorProps) => {
   const nodeViewFactory = useNodeViewFactory()
   let editorView: EditorView | undefined
+  let unregisterActiveEditor: (() => void) | undefined
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
@@ -364,6 +400,10 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
     })
 
     editorView = view
+    unregisterActiveEditor = registerActiveEditor(view, {
+      matrixId: props.matrixId,
+      rowId: props.rowId,
+    })
 
     queueMicrotask(() => {
       view.focus()
@@ -374,6 +414,7 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
 
   onCleanup(() => {
     saveHandle.destroy()
+    unregisterActiveEditor?.()
     editorView?.destroy()
   })
 
@@ -685,72 +726,61 @@ const FocusPanel = (props: FocusPanelProps) => {
               </Show>
 
               <Show when={viewSource()}>
-                {(source) => (
-                  <section
-                    aria-label="View collection"
-                    data-testid="view-place-collection"
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Escape') return
-                      event.preventDefault()
-                      props.onClose()
-                    }}
+                <section
+                  aria-label="View collection"
+                  data-testid="view-place-collection"
+                  onKeyDown={(event) => {
+                    if (event.defaultPrevented || event.key !== 'Escape') return
+                    event.preventDefault()
+                    props.onClose()
+                  }}
+                  style={{
+                    display: 'flex',
+                    'flex-direction': 'column',
+                    gap: 'var(--space-control-gap)',
+                    'margin-bottom': 'var(--space-section-gap)',
+                  }}
+                >
+                  <div
+                    data-testid="view-collection-host-chrome"
                     style={{
                       display: 'flex',
-                      'flex-direction': 'column',
-                      gap: 'var(--space-control-gap)',
-                      'margin-bottom': 'var(--space-section-gap)',
+                      'align-items': 'center',
+                      'justify-content': 'space-between',
+                      gap: '8px',
                     }}
                   >
-                    <div
-                      data-testid="view-collection-host-chrome"
+                    <span style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>
+                      Collection
+                    </span>
+                    <button
+                      type="button"
+                      data-testid="query-band-delete"
+                      aria-label="Delete view"
+                      onClick={() => {
+                        void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
+                      }}
                       style={{
-                        display: 'flex',
-                        'align-items': 'center',
-                        'justify-content': 'space-between',
-                        gap: '8px',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: 'var(--color-danger)',
+                        'font-size': '13px',
                       }}
                     >
-                      <span style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>
-                        Collection
-                      </span>
-                      <button
-                        type="button"
-                        data-testid="query-band-delete"
-                        aria-label="Delete view"
-                        onClick={() => {
-                          void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--color-danger)',
-                          'font-size': '13px',
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                    <code
-                      data-testid="view-place-sql"
-                      style={{
-                        color: 'var(--color-text-muted)',
-                        'font-size': '11px',
-                        'overflow-wrap': 'anywhere',
-                      }}
-                    >
-                      {source().sql}
-                    </code>
-                    <FaceHostSlot
-                      host="focus-panel"
-                      kind="collection"
-                      subject={viewSubject()!}
-                      recipe={SUBSTRATE_COLLECTION_RECIPE}
-                      fidelity="substrate"
-                      fallback={<div data-testid="view-collection-unavailable" />}
-                    />
-                  </section>
-                )}
+                      ×
+                    </button>
+                  </div>
+                  <FaceHostSlot
+                    host="focus-panel"
+                    kind="collection"
+                    subject={viewSubject()!}
+                    recipe={SUBSTRATE_COLLECTION_RECIPE}
+                    rootMatrixId={props.rootMatrixId}
+                    fidelity="substrate"
+                    fallback={<div data-testid="view-collection-unavailable" />}
+                  />
+                </section>
               </Show>
 
               {/* Content section: only when the matrix has a content column. */}
@@ -832,6 +862,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                   blocks, and dedicated containers. */}
               <Show when={!viewSource()}>
                 <SubstrateRegion
+                  rootMatrixId={props.rootMatrixId}
                   focalMatrixId={props.matrixId}
                   focalRowId={props.rowId}
                   contentAnchoredKeys={contentAnchoredKeys()}

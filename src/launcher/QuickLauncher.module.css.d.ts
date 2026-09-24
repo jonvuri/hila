@@ -17,6 +17,7 @@ const queryChip: string;
 const invalidInput: string;
 const filterToken: string;
 const helpButton: string;
+const saveButton: string;
 const blockCursor: string;
 const cursorBlink: string;
 const body: string;
@@ -46,6 +47,7 @@ export {
 	invalidInput,
 	filterToken,
 	helpButton,
+	saveButton,
 	blockCursor,
 	cursorBlink as "cursor-blink",
 	body,
@@ -76,6 +78,7 @@ export default {
 	invalidInput,
 	filterToken,
 	helpButton,
+	saveButton,
 	blockCursor,
 	"cursor-blink": cursorBlink,
 	body,

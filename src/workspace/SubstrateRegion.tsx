@@ -254,6 +254,7 @@ const LooseRegion: Component<{
 // ---------------------------------------------------------------------------
 
 const SubstrateRegion: Component<{
+  rootMatrixId: number
   focalMatrixId: number
   focalRowId: number
   contentAnchoredKeys?: Set<string>
@@ -271,6 +272,7 @@ const SubstrateRegion: Component<{
 
       {/* view — persisted SQL blocks (owns nothing; the firewall) */}
       <QueryBandsSection
+        rootMatrixId={props.rootMatrixId}
         matrixId={props.focalMatrixId}
         rowId={props.focalRowId}
         onOpenView={props.onOpenRowRef}

@@ -31,11 +31,11 @@ index when a task needs wider product or architecture context.
 - [Data-Model.md](Data-Model.md) — current ownership forest, relationships, matrixes, derived
   caches, and block markers.
 - [Plugins.md](Plugins.md) — shipped plugin mechanics and the target face/command composition model.
-- [Query-Spec.md](Query-Spec.md) — shipped compiler, recognizer, query runtime, and durable SQL
-  round-trip; gesture authoring remains planned.
-- [Launcher.md](Launcher.md) — shipped Quick launcher, discovery, ranking, family filters, commands,
-  presentation variants, and rooted navigation; Deep query authoring, exits, session signals, and
-  tab retirement remain planned.
+- [Query-Spec.md](Query-Spec.md) — shipped compiler, recognizer, query runtime, transient and durable
+  chip authoring, raw SQL mode, and SQL-only durable round-trip.
+- [Launcher.md](Launcher.md) — shipped Quick and Deep launcher, discovery, ranking, query authoring,
+  save and insert-ref exits, presentation variants, and rooted navigation; session signals and tab
+  retirement remain planned.
 - [Sync.md](Sync.md) — shipped readiness, Phase 11 repair contract, and future replica boundary.
 - [Virtualization.md](Virtualization.md) — paged data and rendering residency contract.
 - [Performance.md](Performance.md) — deterministic guards and calibrated browser budgets.

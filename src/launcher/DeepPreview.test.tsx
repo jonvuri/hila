@@ -284,6 +284,31 @@ describe('DeepPreview', () => {
     })
   })
 
+  test('inserts the selected preview row with Mod-Enter', async () => {
+    const insertRef = vi.fn()
+    const navigate = vi.fn()
+    renderPreview({ onNavigate: navigate, onInsertRef: insertRef })
+    input.focus()
+    await publish(countCalls()[0]!, [{ row_count: 1 }])
+    await publish(rangeCalls().at(-1)!, [{ id: 11, label: pmLabel('Referenced row') }])
+
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    )
+
+    expect(insertRef).toHaveBeenCalledWith({
+      matrixId: 7,
+      rowId: 11,
+      cachedTitle: 'Referenced row',
+    })
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
   test('does not consume preview navigation while a replacement range is loading', async () => {
     renderPreview()
     await publish(countCalls()[0]!, [{ row_count: 2 }])

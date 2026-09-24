@@ -39,7 +39,11 @@ describe('forward face runtime', () => {
 
   test('lets the host choose rendering kind and own presentation policy', () => {
     registerFaceRenderings(recipe.faceTypeId, {
-      collection: (props) => <span data-testid="face-interior">{props.subject.mode}</span>,
+      collection: (props) => (
+        <span data-testid="face-interior">
+          {props.subject.mode}:{props.rootMatrixId}
+        </span>
+      ),
     })
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -50,6 +54,7 @@ describe('forward face runtime', () => {
           kind="collection"
           subject={subject}
           recipe={recipe}
+          rootMatrixId={1}
           fidelity="substrate"
         />
       ),
@@ -61,7 +66,7 @@ describe('forward face runtime', () => {
     expect(slot.dataset.faceRendering).toBe('collection')
     expect(slot.dataset.fidelity).toBe('substrate')
     expect(slot.dataset.subjectMode).toBe('view')
-    expect(container.querySelector('[data-testid="face-interior"]')?.textContent).toBe('view')
+    expect(container.querySelector('[data-testid="face-interior"]')?.textContent).toBe('view:1')
     dispose()
   })
 
@@ -75,6 +80,7 @@ describe('forward face runtime', () => {
           kind="line"
           subject={subject}
           recipe={recipe}
+          rootMatrixId={1}
           fidelity="composed"
           fallback={<span data-testid="fallback">substrate fallback</span>}
         />

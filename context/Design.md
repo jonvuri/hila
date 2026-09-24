@@ -2,9 +2,9 @@
 
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
 > production workspace/sticky slice, shared overlay/selectable-list primitives, and production
-> Quick launcher ship. App-wide fidelity behavior and remaining face, browser, Deep launcher, and
-> system-edge migrations do not. Future sequencing belongs in [Plan.md](Plan.md), not this topic
-> contract.
+> Quick and Deep launcher presentations ship. App-wide fidelity behavior and remaining face,
+> browser, and system-edge migrations do not. Future sequencing belongs in [Plan.md](Plan.md), not
+> this topic contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
 

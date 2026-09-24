@@ -4,12 +4,12 @@ kind: status
 state: active
 updated: 2026-09-23
 phase: 12
-session: saved-view-authoring-and-editor-exits
+session: session-memory-and-on-screen-signals
 ---
 
 # Now
 
-Phase 12 Sessions 1–6 and 4A are complete. The main thread has authoritative command and shortcut
+Phase 12 Sessions 1–7 and 4A are complete. The main thread has authoritative command and shortcut
 registries. The query-spec dialect has matched compilation and recognition, bounded execution,
 durable round trips, paging, rename healing, and read-only user query edges.
 
@@ -42,23 +42,33 @@ results, and mounts no face or editor. Ghost and Null expand within centered vie
 Wipeout fills the viewport and preserves its post-facto/reduced-motion behavior. No schema change
 occurred.
 
+Concrete Deep specs now save through the existing marker/`block_sources` path. Save focuses the
+returned marker and selects its chip-derived name. Reopened SQL recognizes into durable gesture
+chips, chips plus byte-exact opaque leaves, or honest custom SQL. Raw SQL remains one gesture away,
+reclassifies and validates live, and cannot apply an invalid draft.
+
+Launcher invocation now retains an exact live editor selection. `Mod-Enter` inserts Quick discovery
+or Deep preview rows through the canonical inline-reference transaction, then normal persistence
+and relation sync run. Changed or unmounted editors are refused with a reason. No schema change
+occurred.
+
 The unreleased app remains at reset-only schema version 0. The durable dogfooding gate may follow
 all currently planned phases.
 
 ## Read next
 
 1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 7 — saved-view authoring and editor exits](phases/Phase-12/Session-7-saved-view-authoring-and-editor-exits.md).
+2. [Session 8 — session memory and on-screen signals](phases/Phase-12/Session-8-session-memory-and-on-screen-signals.md).
 3. [Query Spec](Query-Spec.md), [Launcher](Launcher.md), [Design](Design.md), and the completed
    [Session 4A prototype record](phases/Phase-12/Session-4a-quick-deep-overlay-prototypes.md).
 
 ## Boundary
 
-Session 7 owns save-as-view, recognition-backed durable chip editing, and the live-editor insert-ref
-exit. Preserve SQL as the sole stored truth and keep custom or opaque SQL honest. Do not build
-session memory or tab retirement early.
+Session 8 owns bounded in-memory focus history, recent Deep recovery, and on-screen ranking signals.
+Preserve SQL as the sole stored query truth and the Session 7 editor/save exits. Do not build tab
+retirement early.
 
 ## Next action
 
-Implement Session 7 in order, reusing the shipped query operations, compiler/recognizer, view-block
-identity, place navigation, and editor persistence paths.
+Read Session 8 and implement its plan in order without adding persisted frecency or widening the
+schema.

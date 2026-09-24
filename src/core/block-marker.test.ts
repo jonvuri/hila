@@ -5,12 +5,14 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 import { initMatrixSchema, createMatrix, insertRow, updateRow } from './matrix'
 import {
   createViewBlock,
+  createViewBlockAtAppearance,
   deleteViewBlock,
   getViewBlocksForNode,
   updateViewBlockSql,
 } from './block-marker'
 import { getGlobalKey, positionsOf } from './scroll-index'
-import { addPortal } from './portal'
+import { addPortal, homeKeyOf, removePortal } from './portal'
+import { resolvePlaceNavigation } from './place-navigation'
 import { deleteSubtree, getOwnEdge, type NodeRef } from './tree'
 
 const textFromStoredName = (stored: string): string => {
@@ -61,6 +63,48 @@ describe('View block markers (Phase 9.7 Stage B)', () => {
       /no writable label field/,
     )
     expect(getOwnEdge(db, marker.matrixId, marker.rowId)).not.toBeNull()
+  })
+
+  test('creates at an exact portal appearance and rejects stale provenance', () => {
+    const portalHost = {
+      matrixId: wsId,
+      rowId: insertRow(db, wsId).rowId,
+    }
+    addPortal(db, portalHost, focal)
+    const homeKey = homeKeyOf(db, focal)!
+    const portalAppearance = positionsOf(db, focal).find(
+      ({ key }) =>
+        key.length !== homeKey.length || key.some((byte, index) => byte !== homeKey[index]),
+    )!
+
+    const created = createViewBlockAtAppearance(
+      db,
+      focal,
+      { key: portalAppearance.key },
+      'SELECT 1',
+      'Portal view',
+    )
+
+    expect(created.provenance.key.slice(0, portalAppearance.key.length)).toEqual(
+      portalAppearance.key,
+    )
+    expect(resolvePlaceNavigation(db, wsId, created.marker, created.provenance)).toMatchObject({
+      type: 'position',
+      source: 'provenance',
+      appearance: { key: created.provenance.key },
+    })
+
+    removePortal(db, portalHost, focal)
+    expect(() =>
+      createViewBlockAtAppearance(
+        db,
+        focal,
+        { key: portalAppearance.key },
+        'SELECT 2',
+        'Stale view',
+      ),
+    ).toThrow('The invoking place is no longer open.')
+    expect(getViewBlocksForNode(db, focal)).toHaveLength(1)
   })
 
   test('rename changes only the marker label field', () => {

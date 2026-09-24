@@ -12,6 +12,7 @@ import type { TagType } from '../../tags/tag-types'
 import type { DiscoveryCatalogEntry, DiscoveryFilter } from '../../discovery/types'
 import type { AppearanceProvenance, ResolvedPlaceNavigation } from '../place-navigation'
 import type { NodeRef } from '../tree'
+import type { CreatedViewBlock } from '../block-marker'
 import { commandRegistry } from '../../command-registry'
 import {
   registerFaceType as registerFaceTypeLocal,
@@ -322,6 +323,21 @@ export const createViewBlock = (
   name?: string,
 ): Promise<{ matrixId: number; rowId: number }> =>
   workerCall('createViewBlock', { focalMatrixId, focalRowId, sql, name })
+
+export const createViewBlockAtAppearance = (
+  focalMatrixId: number,
+  focalRowId: number,
+  provenance: AppearanceProvenance,
+  sql: string,
+  name?: string,
+): Promise<CreatedViewBlock> =>
+  workerCall('createViewBlockAtAppearance', {
+    focalMatrixId,
+    focalRowId,
+    provenance,
+    sql,
+    name,
+  })
 
 export const updateViewBlock = (
   markerMatrixId: number,

@@ -38,6 +38,7 @@ import {
 } from '../../tags/tag-types'
 import {
   createViewBlock as createViewBlockImpl,
+  createViewBlockAtAppearance as createViewBlockAtAppearanceImpl,
   updateViewBlockSql as updateViewBlockSqlImpl,
   deleteViewBlock as deleteViewBlockImpl,
 } from '../block-marker'
@@ -820,6 +821,24 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'createViewBlockSuccess', id, result: marker })
       } catch (err: unknown) {
         postMessage({ type: 'createViewBlockError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'createViewBlockAtAppearance': {
+      const { id, focalMatrixId, focalRowId, provenance, sql, name } = message
+      try {
+        const { db } = await sqliteWasm
+        const created = createViewBlockAtAppearanceImpl(
+          db,
+          { matrixId: focalMatrixId, rowId: focalRowId },
+          provenance,
+          sql,
+          name,
+        )
+        postMessage({ type: 'createViewBlockAtAppearanceSuccess', id, result: created })
+      } catch (err: unknown) {
+        postMessage({ type: 'createViewBlockAtAppearanceError', id, error: toError(err) })
       }
       break
     }

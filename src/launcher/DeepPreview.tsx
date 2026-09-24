@@ -55,6 +55,7 @@ export type DeepPreviewProps = {
   invalidReason?: string | null
   loadingReason?: string | null
   onNavigate: (target: PlaceNavigationTarget) => void
+  onInsertRef?: (target: { matrixId: number; rowId: number; cachedTitle: string }) => void
 }
 
 const boundedText = (value: unknown, limit: number): string => {
@@ -283,6 +284,16 @@ const DeepPreview: Component<DeepPreviewProps> = (props) => {
     props.onNavigate({ type: 'node', node: { matrixId, rowId } })
   }
 
+  const insertRefTo = (row: SqlResult[number] | undefined): void => {
+    const matrixId = props.matrixId
+    const rowId = rowIdOf(row)
+    if (matrixId === null || rowId === null || !props.onInsertRef) return
+    const column = labelColumn()
+    const cachedTitle =
+      (column ? extractTextFromPmDoc(row?.[column.name]) : '') || `Untitled (#${rowId})`
+    props.onInsertRef({ matrixId, rowId, cachedTitle })
+  }
+
   const revealSelection = (index: number): void => {
     const selectedId = selectedOptionId()
     queueMicrotask(() => {
@@ -333,7 +344,9 @@ const DeepPreview: Component<DeepPreviewProps> = (props) => {
       else if (event.key === 'ArrowUp') moveSelection(current - 1)
       else if (event.key === 'Home') moveSelection(0)
       else if (event.key === 'End') moveSelection((totalRows() ?? 1) - 1)
-      else if (event.key === 'Enter') navigateTo(selectedRow())
+      else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+        insertRefTo(selectedRow())
+      } else if (event.key === 'Enter') navigateTo(selectedRow())
       else return
       event.preventDefault()
       event.stopPropagation()

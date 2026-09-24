@@ -348,6 +348,7 @@ LIMIT 5`
     expect(recognizeQuerySpec(scopedSql, withoutScopeNode)).toMatchObject({
       type: 'custom-sql',
       reason: 'node-not-found',
+      missingNode: { matrixId: 2, rowId: 20 },
     })
 
     const predicateSql = materializeQuerySpec(
