@@ -178,6 +178,12 @@ Storybook exposes separate `polarity` and `visualTheme` toolbar values through o
 The focused theme preview can keep its local `visualTheme` control. The forward navigation
 specimen uses the approved Guides treatment and does not expose a single-option outline control.
 
+Phase 13's approved build/development-startup input is
+`VITE_HILA_VISUAL_THEME=ghost|null|wipeout`. Missing or invalid input resolves to Ghost before the
+root attribute is written. This is environment configuration, not a runtime chooser or persisted
+preference. It never selects polarity, density, component variants, shell presentation, or
+fidelity.
+
 ### Fidelity inputs
 
 ```typescript
@@ -205,6 +211,10 @@ Substrate rendering uses explicit line and label roles and selects `--elevation-
 expose all fields and relationship metadata. It can use surface brightness steps, but it must not
 use elevation to imply hidden structure. X-ray applies the substrate rules at every scope and is
 the identity-face conformance check.
+
+The Phase 13 live target applies this cascade recursively through face hosts. Non-face editor,
+browser, and system-edge controls still migrate to canonical semantic roles, but they do not need
+parallel composed and substrate renderings. X-ray remains transient development inspection state.
 
 ### Accessibility ownership
 

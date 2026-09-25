@@ -111,6 +111,10 @@ Each table row is independently renderable given its props, enabling windowed re
 The variant renderer receives a flat array of these rows and renders them with the selected visual
 treatment. The header row (`TableHeaderRow`) is separate and always visible. It is not virtualized.
 
+The Phase 13 live table resolves `tableTreatment` from its intentional recipe and falls back to
+`thin-line` for missing or invalid values. The implicit substrate floor is host infrastructure and
+does not require a persisted table recipe on unrelated matrixes.
+
 ### CSS architecture
 
 All variants share one CSS module (`Table.module.css`) with a base `.table` class and

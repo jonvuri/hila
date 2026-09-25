@@ -2,7 +2,7 @@
 title: Roadmap
 kind: roadmap
 state: active
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # Roadmap
@@ -74,8 +74,11 @@ Depends on Phase 12. Detailed plan: [phases/Phase-13.md](phases/Phase-13.md).
 - Complete host-owned `line`/`collection` dispatch, recursion, panel scaffold, and affinity.
 - Remove `TemporaryLegacyFaceAdapter`, the direct embedded `TableFace` mount, and workspace
   recipe/config-panel bypasses.
-- Implement or explicitly narrow composed/substrate/x-ray behavior.
-- Decide whether theme selection needs user-facing choice and persistence.
+- Keep one intentional matrix recipe and an implicit substrate floor. Stop provisioning unused
+  table recipes merely to guarantee a generic fallback.
+- Implement recursive composed/substrate/x-ray behavior through the face-host tree.
+- Allow build/development-startup theme selection through `VITE_HILA_VISUAL_THEME`, defaulting to
+  Ghost. Defer a runtime chooser and persisted preference.
 - Resolve source-row/sticky-row visual and interaction continuity.
 
 Phase 14 cannot begin until the legacy face runtime is removed.
@@ -208,6 +211,12 @@ can move earlier independently of remote sync.
     target-equivalent Chrome CPU slowdown.
 13. Schema version 0 remains reset-only until the durable dogfooding gate explicitly establishes
     version 1.
+14. Until a real multi-recipe consumer exists, a matrix stores one intentional recipe and hosts
+    supply the universal substrate floor implicitly. Automatic unused table recipes are
+    compatibility residue, not alternate product views.
+15. Visual theme may be selected at build or development-server startup through an environment
+    value and defaults to Ghost. Theme polarity and rendering fidelity remain independent;
+    user-facing choice and persistence stay deferred.
 
 ## Deferred decisions
 

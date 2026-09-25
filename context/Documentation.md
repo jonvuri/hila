@@ -2,7 +2,7 @@
 title: Documentation maintenance
 kind: instructions
 state: active
-updated: 2026-08-29
+updated: 2026-09-25
 ---
 
 # Documentation maintenance
@@ -15,7 +15,9 @@ These rules apply whenever a session changes files under `context/`.
 - `README.md` routes readers by task and names each active document's role.
 - Canonical topic documents own current product and architecture contracts.
 - `Plan.md` owns future phase order, dependencies, and a compact decision index.
-- The current phase plan owns execution scope, ordered checklists, and acceptance criteria.
+- The current phase plan owns execution scope, ordered session state, and phase acceptance.
+- Planned session documents own outcome-level requirements, boundaries, acceptance, verification,
+  and handoff. They do not predict detailed implementation checklists far ahead of execution.
 - Completed plans, explorations, and visuals are history. They preserve rationale but do not direct
   current work.
 
@@ -43,8 +45,10 @@ phases/Phase-N.md
 phases/Phase-N/Session-1.md
 ```
 
-The phase front door remains thin. It owns scope, dependencies, progress, and links. Session plans
-own detailed execution checklists.
+The phase front door remains thin. It owns scope, dependencies, progress, and links. Planned session
+documents own high-level requirements and gates. Add a detailed checklist only when an active
+session needs one, and keep it local to that session so later work is not specified before its
+inputs settle.
 
 ## Verification
 

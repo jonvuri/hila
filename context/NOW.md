@@ -4,7 +4,7 @@ kind: status
 state: active
 updated: 2026-09-25
 phase: 13
-session: entry
+session: 1
 ---
 
 # Now
@@ -26,17 +26,18 @@ or replication contract.
 ## Read next
 
 1. [Phase 13 front door](phases/Phase-13.md).
-2. [Plugins](Plugins.md) for the compatibility-removal list.
-3. [Architecture](Architecture.md), [Design](Design.md), and [Design Faces](Design-Faces.md).
+2. [Session 1](phases/Phase-13/Session-1-face-recipe-and-host-runtime-foundation.md).
+3. [Plugins](Plugins.md) and [Architecture](Architecture.md) for the face-host contract.
 
 ## Boundary
 
 Phase 13 completes the live design-system and face-runtime migration without restoring retired
 application roots. Preserve embedded table behavior, inline tags, property editing, rooted
 navigation, and the system-edge route while removing the temporary adapter and direct embedded
-`TableFace` mount incrementally.
+`TableFace` mount incrementally. One intentional matrix recipe replaces automatic unused table
+recipes; the substrate floor remains implicit.
 
 ## Next action
 
-Inventory remaining live legacy-style and face-runtime consumers. Then write the first focused
-Phase 13 session with an ordered migration slice and verification gate.
+Execute Phase 13 Session 1. Establish the recipe, affinity, registration, and host-service boundary
+before migrating a live surface.

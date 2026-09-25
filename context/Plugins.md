@@ -2,7 +2,7 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Plugins and face composition
@@ -55,8 +55,11 @@ A plugin matrix declaration supplies a local key, title, and columns. Columns ca
 type, constraints, and optional `label` or `content` role. The runtime records `managed_by` so
 plugin-required columns cannot be removed accidentally.
 
-Matrix creation also creates a table identity recipe when the table face is registered. Matrix
-ownership and promoted type-nodes are data-model concerns, not plugin lifecycle shortcuts. See
+The current registration path also creates a table identity recipe for every new matrix when the
+table face is registered. This is compatibility behavior, not the forward substrate contract.
+Phase 13 stops provisioning unused table recipes: actual table subjects and explicit table choices
+keep them, while every other host receives an implicit substrate floor. Matrix ownership and
+promoted type-nodes remain data-model concerns, not plugin lifecycle shortcuts. See
 [Data-Model.md](Data-Model.md).
 
 ## Shipped face slots
@@ -110,6 +113,10 @@ type FaceRecipe = {
 
 SQL is not part of the recipe. Shipped view subjects own it through `block_sources`.
 
+Normalized table sort and filter rows remain durable collection presentation state associated with
+the intentional table recipe. They use stable column IDs and do not become subject SQL or untyped
+recipe settings.
+
 ### Faces provide line and collection renderings
 
 A face type may declare at most two interior renderings:
@@ -149,7 +156,9 @@ Hosts resolve a recipe in this order:
 3. universal substrate floor.
 
 The preferred recipe follows the subject everywhere it appears. Fidelity is view state, not stored
-inside the recipe.
+inside the recipe. Phase 13 stores at most one intentional matrix recipe and uses the substrate
+floor when none exists. Multiple saved recipes and appearance overrides remain deferred until a
+real consumer requires selection among them.
 
 ## Runtime migration
 
@@ -168,6 +177,7 @@ The migration has mandatory boundaries:
 - migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete host recursion, affinity, and fidelity behavior;
+- replace automatic unused table recipes with the implicit substrate floor;
 - remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
 - replace the direct `TableFace` mount in `SubTableBand.tsx`;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
@@ -245,5 +255,7 @@ rendering, and source-document reconciliation.
 - Do not expose pixel sizing or shell DOM to face implementations.
 - Do not let a query result infer ownership or insertion.
 - Keep stable column IDs in persisted recipes.
+- Do not add multiple stored recipes or a preferred-recipe pointer until a real consumer needs
+  alternate recipes for one matrix.
 - Extract a richer region-services contract only when a genuine whole-interior consumer proves that
   line/collection is insufficient.

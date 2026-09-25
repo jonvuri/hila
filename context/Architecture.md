@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # Architecture
@@ -232,6 +232,11 @@ The resolution ladder is:
 2. subject or matrix preferred recipe;
 3. substrate floor.
 
+Phase 13's approved storage boundary keeps at most one intentional recipe per matrix. It does not
+store an automatic table recipe merely to represent rung 3: the substrate floor is host
+infrastructure. Actual table subjects and explicit table choices retain table recipes. Multiple
+saved recipes and a preferred-recipe pointer remain deferred until a real consumer needs them.
+
 The shipped Phase 11 slice keeps SQL on view subjects and lets the focus-panel host request a
 registered `collection` interior. Unmigrated table consumers remain behind the explicitly
 temporary `TemporaryLegacyFaceAdapter`. Phase 13 completes host dispatch and removes every
@@ -245,9 +250,10 @@ Rendering fidelity is independent of theme and density:
 - **Substrate:** explicit fields, roles, relationships, and structure.
 - **X-ray:** a shell inspection state that forces substrate through descendants.
 
-The tokens and resolver ship. App-wide host behavior remains Phase 13 work. Visual theme, polarity,
-component variants, density, and fidelity must not select or mutate one another. See
-[Design.md](Design.md).
+The tokens and resolver ship. Phase 13 completes the recursive face-host cascade: x-ray forces
+substrate through descendant hosts, while non-face system and editor controls consume canonical
+design roles without acquiring alternate face renderings. Visual theme, polarity, component
+variants, density, and fidelity must not select or mutate one another. See [Design.md](Design.md).
 
 ## Plugins and commands
 

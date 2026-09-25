@@ -21,8 +21,9 @@ index when a task needs wider product or architecture context.
 
 - [NOW.md](NOW.md) is the short rolling handoff.
 - [Plan.md](Plan.md) owns future phase order, dependencies, and the resolved-decision index.
-- The current phase front door owns scope and progress. Focused session plans own detailed
-  checklists and acceptance criteria.
+- The current phase front door owns scope and progress. Planned session documents own high-level
+  requirements, boundaries, acceptance, verification, and handoff. Detailed checklists belong only
+  to active execution when they are useful.
 - [Documentation.md](Documentation.md) defines maintenance and archive rules.
 
 ### Canonical topics
