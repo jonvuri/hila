@@ -1,13 +1,10 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show, type JSX } from 'solid-js'
 
+import WorkspacePathHeader, { type WorkspacePathSegment } from './WorkspacePathHeader'
+
 import './WorkspaceShell.css'
 
-export type WorkspaceShellAncestor = {
-  id: string
-  label: string
-  matrixId?: number
-  rowId?: number
-}
+export type WorkspaceShellAncestor = WorkspacePathSegment
 
 export type WorkspaceShellPanel = {
   id: string
@@ -37,11 +34,61 @@ const WorkspaceShell = <Panel extends WorkspaceShellPanel>(
   props: WorkspaceShellProps<Panel>,
 ): JSX.Element => {
   let shell!: HTMLElement
+  let rail!: HTMLDivElement
   let focusCheckGeneration = 0
   const [presentation, setPresentation] =
     createSignal<WorkspaceShellPresentation>('bounded-rail')
   const [presentationReady, setPresentationReady] = createSignal(false)
   const [announcement, setAnnouncement] = createSignal('')
+  const [rootOriginVisible, setRootOriginVisible] = createSignal(true)
+  const [leadingVisiblePanelId, setLeadingVisiblePanelId] = createSignal<string>()
+
+  const pathHeaderEntry = () => {
+    const index = (() => {
+      if (presentation() === 'single-panel') {
+        return props.panels.findIndex((panel) => panel.active)
+      }
+      if (props.panels[0]?.kind === 'navigation' && rootOriginVisible()) return -1
+      const leadingId = leadingVisiblePanelId()
+      const leadingIndex = props.panels.findIndex((panel) => panel.id === leadingId)
+      return leadingIndex >= 0 ? leadingIndex : (
+          props.panels.findIndex((panel) => panel.kind === 'focus')
+        )
+    })()
+    const panel = props.panels[index]
+    return panel?.kind === 'focus' && panel.ancestry.length > 0 ? { index, panel } : null
+  }
+
+  const updateRailVisibility = (): void => {
+    if (presentation() !== 'bounded-rail') return
+    const railBounds = rail.getBoundingClientRect()
+    if (railBounds.width <= 0) return
+    const columns = [
+      ...rail.querySelectorAll<HTMLElement>('[data-testid="workspace-shell-column"]'),
+    ]
+    const intersectsRail = (element: HTMLElement): boolean => {
+      const bounds = element.getBoundingClientRect()
+      return bounds.right > railBounds.left && bounds.left < railBounds.right
+    }
+    const rootColumn = columns.find((column) => column.dataset.panelKind === 'navigation')
+    const rootIndicator = rootColumn?.querySelector<HTMLElement>(
+      '[data-workspace-root-indicator]',
+    )
+    const rootIndicatorBounds = rootIndicator?.getBoundingClientRect()
+    const originVisible =
+      rootColumn != null &&
+      (rootIndicatorBounds != null && rootIndicatorBounds.width > 0 ?
+        rootIndicatorBounds.left >= railBounds.left &&
+        rootIndicatorBounds.right <= railBounds.right
+      : intersectsRail(rootColumn))
+    setRootOriginVisible(originVisible)
+    setLeadingVisiblePanelId(
+      originVisible ? undefined : (
+        columns.find((column) => column.dataset.panelKind === 'focus' && intersectsRail(column))
+          ?.dataset.panelId
+      ),
+    )
+  }
 
   const updatePresentation = (hostWidth: number): void => {
     if (hostWidth <= 0) return
@@ -51,14 +98,24 @@ const WorkspaceShell = <Panel extends WorkspaceShellPanel>(
 
   onMount(() => {
     updatePresentation(shell.getBoundingClientRect().width)
+    updateRailVisibility()
+    rail.addEventListener('scroll', updateRailVisibility, { passive: true })
+    onCleanup(() => rail.removeEventListener('scroll', updateRailVisibility))
     if (typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver((entries) => {
       const entry = entries.find(({ target }) => target === shell)
       if (entry) updatePresentation(entry.contentRect.width)
+      queueMicrotask(updateRailVisibility)
     })
     observer.observe(shell)
     onCleanup(() => observer.disconnect())
+  })
+
+  createEffect(() => {
+    void props.panels
+    void presentation()
+    queueMicrotask(updateRailVisibility)
   })
 
   createEffect(() => {
@@ -97,59 +154,76 @@ const WorkspaceShell = <Panel extends WorkspaceShellPanel>(
       data-shell-presentation={presentation()}
       data-testid="workspace-shell"
     >
-      <For each={props.panels}>
-        {(panel, index) => {
-          const visible = () => presentation() === 'bounded-rail' || panel.active
-          const showBreadcrumb = () =>
-            panel.kind === 'focus' &&
-            panel.ancestry.length > 0 &&
-            (presentation() === 'single-panel' ? panel.active : index() === 0)
+      <Show when={pathHeaderEntry()}>
+        {(entry) => (
+          <div class="workspace-shell-path-header">
+            <WorkspacePathHeader
+              ariaLabel={`${entry().panel.title}: ancestry`}
+              launcherOrigin={true}
+              rootLabel={entry().panel.ancestry[0]!.label}
+              segments={entry().panel.ancestry.slice(1)}
+              testId="workspace-shell-breadcrumb"
+              onRootSelect={() =>
+                props.onAncestorSelect?.(entry().index, entry().panel.ancestry[0]!)
+              }
+              onSegmentSelect={(ancestor) => props.onAncestorSelect?.(entry().index, ancestor)}
+            />
+          </div>
+        )}
+      </Show>
+      <div class="workspace-shell-rail" ref={rail}>
+        <For each={props.panels}>
+          {(panel) => {
+            const visible = () => presentation() === 'bounded-rail' || panel.active
 
-          return (
-            <article
-              aria-hidden={visible() ? undefined : 'true'}
-              aria-label={panel.title}
-              class="workspace-shell-column"
-              classList={{ 'workspace-shell-column-active': panel.active }}
-              data-active={panel.active ? 'true' : 'false'}
-              data-panel-id={panel.id}
-              data-panel-kind={panel.kind}
-              data-testid="workspace-shell-column"
-              data-visible={visible() ? 'true' : 'false'}
-              hidden={!visible()}
-              ref={(element) => {
-                createEffect(() => element.toggleAttribute('inert', !visible()))
-              }}
-              tabindex={-1}
-            >
-              <Show when={showBreadcrumb()}>
-                <nav
-                  aria-label={`${panel.title}: ancestry`}
-                  class="workspace-shell-breadcrumb"
-                  data-testid="workspace-shell-breadcrumb"
-                >
-                  <ol>
-                    <For each={panel.ancestry}>
-                      {(ancestor) => (
-                        <li>
-                          <button
-                            type="button"
-                            title={ancestor.label}
-                            onClick={() => props.onAncestorSelect?.(index(), ancestor)}
-                          >
-                            {ancestor.label}
-                          </button>
-                        </li>
-                      )}
-                    </For>
-                  </ol>
-                </nav>
-              </Show>
-              <div class="workspace-shell-content">{props.renderPanel(panel)}</div>
-            </article>
-          )
-        }}
-      </For>
+            return (
+              <article
+                aria-hidden={visible() ? undefined : 'true'}
+                aria-label={panel.title}
+                class="workspace-shell-column"
+                classList={{ 'workspace-shell-column-active': panel.active }}
+                data-active={panel.active ? 'true' : 'false'}
+                data-panel-id={panel.id}
+                data-panel-kind={panel.kind}
+                data-testid="workspace-shell-column"
+                data-visible={visible() ? 'true' : 'false'}
+                data-launcher-origin={
+                  (
+                    panel.kind === 'navigation' &&
+                    visible() &&
+                    (presentation() === 'single-panel' || rootOriginVisible())
+                  ) ?
+                    'true'
+                  : undefined
+                }
+                hidden={!visible()}
+                ref={(element) => {
+                  createEffect(() => element.toggleAttribute('inert', !visible()))
+                }}
+                tabindex={-1}
+                onKeyDown={(event) => {
+                  if (
+                    event.key !== 'Tab' ||
+                    event.shiftKey ||
+                    event.target !== event.currentTarget ||
+                    pathHeaderEntry()?.panel.id !== panel.id
+                  ) {
+                    return
+                  }
+                  const firstPathAction = shell.querySelector<HTMLElement>(
+                    '[data-testid="workspace-shell-breadcrumb"] button',
+                  )
+                  if (!firstPathAction) return
+                  event.preventDefault()
+                  firstPathAction.focus()
+                }}
+              >
+                <div class="workspace-shell-content">{props.renderPanel(panel)}</div>
+              </article>
+            )
+          }}
+        </For>
+      </div>
       <div
         aria-atomic="true"
         aria-live="polite"

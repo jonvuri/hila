@@ -32,6 +32,12 @@ neutral borders carry hierarchy. Opening Quick and expanding to Deep realize the
 immediately, then measured decoration-grey border echoes trace the change post-facto. Reduced motion
 removes the echoes without delaying or changing state.
 
+The workspace owns one shared root/path indicator. The normal root form keeps its editable title;
+when the root panel is hidden, horizontally clipped, or evicted, the same indicator becomes a root
+action followed by ancestry segments. The shell publishes exactly one visible launcher origin and
+keeps the replacement header outside the horizontally scrolling panel rail. Wipeout measures that
+origin; it does not own or globally position the workspace mark.
+
 Quick and Deep now ship in this direction. Both presentations remain provisional while dogfooding
 continues; a future review may revise Wipeout's geometry without changing the shared launcher
 contract.

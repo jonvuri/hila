@@ -5,26 +5,6 @@
   padding: 0;
 }
 
-:global([data-launcher-workspace-mark]) {
-  display: none;
-}
-
-:global([data-visual-theme='wipeout']) :global([data-launcher-workspace-mark]) {
-  position: fixed;
-  z-index: 1;
-  top: calc(var(--space-16) + var(--width-line));
-  left: calc(var(--space-16) + var(--width-line));
-  display: block;
-  width: var(--width-line);
-  height: var(--size-16);
-  background: var(--color-accent);
-  pointer-events: none;
-}
-
-:global([data-visual-theme='wipeout']) :global([data-launcher-workspace-title]) {
-  padding-left: var(--space-32);
-}
-
 :global([data-theme='dark'][data-visual-theme='ghost']) .overlay,
 :global([data-theme='dark'][data-visual-theme='wipeout']) .overlay {
   background: var(--color-overlay-strong);

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { VisualTheme } from '../design/tokens'
 
 import WorkspaceShell, { type WorkspaceShellPanel } from './WorkspaceShell'
+import WorkspacePathHeader from './WorkspacePathHeader'
 
 class TestResizeObserver {
   static instances: TestResizeObserver[] = []
@@ -142,7 +143,7 @@ describe('WorkspaceShell', () => {
     expect(columns[0]?.hasAttribute('inert')).toBe(true)
     expect(columns[1]?.hidden).toBe(false)
     expect(columns[1]?.dataset.visible).toBe('true')
-    expect(columns[1]?.querySelector('[data-testid="workspace-shell-breadcrumb"]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="workspace-shell-breadcrumb"]')).toBeTruthy()
     const activeContent = columns[1]?.querySelector<HTMLElement>('[data-content-id]')
     expect(activeContent?.dataset.contentState).toBe('loading')
     setContentState('empty')
@@ -155,6 +156,191 @@ describe('WorkspaceShell', () => {
     expect(columns.every((column) => !column.hidden)).toBe(true)
     expect(columns.map((column) => column.querySelector('[data-content-id]'))).toEqual(content)
     expect(columns[1]?.querySelector('[data-content-id]')).toBe(activeContent)
+  })
+
+  test('publishes one visible launcher origin across the 719/720 root boundary', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const rootAndFocus: readonly WorkspaceShellPanel[] = [
+      {
+        id: 'navigation',
+        kind: 'navigation',
+        active: false,
+        title: 'Workspace',
+        ancestry: [],
+      },
+      {
+        id: 'focus',
+        kind: 'focus',
+        active: true,
+        title: 'Focused row',
+        ancestry: [{ id: 'workspace-root', label: 'Workspace' }],
+      },
+    ]
+    dispose = render(
+      () => (
+        <div data-visual-theme="wipeout">
+          <WorkspaceShell
+            panels={rootAndFocus}
+            renderPanel={(panel) =>
+              panel.kind === 'navigation' ?
+                <WorkspacePathHeader rootLabel="Workspace" onRootRename={() => undefined} />
+              : <div>Focused row</div>
+            }
+          />
+        </div>
+      ),
+      container,
+    )
+
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    const origins = () => [
+      ...container.querySelectorAll<HTMLElement>('[data-launcher-origin="true"]'),
+    ]
+
+    TestResizeObserver.resize(shell, 720)
+    expect(origins()).toHaveLength(1)
+    expect(origins()[0]?.dataset.panelKind).toBe('navigation')
+    expect(origins()[0]?.querySelector('[data-launcher-workspace-mark]')).toBeTruthy()
+    expect(container.querySelector('[data-testid="workspace-shell-breadcrumb"]')).toBeNull()
+
+    TestResizeObserver.resize(shell, 719)
+    expect(origins()).toHaveLength(1)
+    expect(origins()[0]?.dataset.testid).toBe('workspace-shell-breadcrumb')
+    expect(origins()[0]?.querySelector('[data-launcher-workspace-title]')?.textContent).toBe(
+      'Workspace',
+    )
+    expect(origins()[0]?.querySelector('button')?.getAttribute('type')).toBe('button')
+
+    TestResizeObserver.resize(shell, 720)
+    expect(origins()).toHaveLength(1)
+    expect(origins()[0]?.dataset.panelKind).toBe('navigation')
+  })
+
+  test('keeps an evicted-root path origin outside the horizontally scrolling rail', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    dispose = render(
+      () => (
+        <WorkspaceShell
+          panels={panels}
+          renderPanel={(panel) => <div data-content-id={panel.id}>{panel.title}</div>}
+        />
+      ),
+      container,
+    )
+
+    const origin = container.querySelector<HTMLElement>('[data-launcher-origin="true"]')!
+    const rail = container.querySelector<HTMLElement>('.workspace-shell-rail')!
+    expect(origin.dataset.testid).toBe('workspace-shell-breadcrumb')
+    expect(rail.contains(origin)).toBe(false)
+    expect(origin.querySelectorAll('button')).toHaveLength(1)
+  })
+
+  test('replaces a retained root origin when scrolling clips its shared indicator', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const retainedRootPanels: readonly WorkspaceShellPanel[] = [
+      {
+        id: 'navigation',
+        kind: 'navigation',
+        active: false,
+        title: 'Workspace',
+        ancestry: [],
+      },
+      ...['Alpha', 'Bravo', 'Charlie'].map(
+        (title, index): WorkspaceShellPanel => ({
+          id: `focus-${index}`,
+          kind: 'focus',
+          active: index === 2,
+          title,
+          ancestry: [
+            { id: 'workspace-root', label: 'Workspace' },
+            ...['Alpha', 'Bravo'].slice(0, index).map((label) => ({
+              id: label.toLowerCase(),
+              label,
+            })),
+          ],
+        }),
+      ),
+    ]
+    dispose = render(
+      () => (
+        <WorkspaceShell
+          panels={retainedRootPanels}
+          renderPanel={(panel) =>
+            panel.kind === 'navigation' ?
+              <WorkspacePathHeader rootLabel="Workspace" onRootRename={() => undefined} />
+            : <div>{panel.title}</div>
+          }
+        />
+      ),
+      container,
+    )
+
+    const shell = container.querySelector<HTMLElement>('[data-testid="workspace-shell"]')!
+    const rail = container.querySelector<HTMLElement>('.workspace-shell-rail')!
+    const columns = [
+      ...container.querySelectorAll<HTMLElement>('[data-testid="workspace-shell-column"]'),
+    ]
+    const rootIndicator = columns[0]!.querySelector<HTMLElement>(
+      '[data-workspace-root-indicator]',
+    )!
+    let scrollLeft = 0
+    const rect = (left: number, width: number): DOMRect =>
+      ({
+        x: left,
+        y: 0,
+        top: 0,
+        right: left + width,
+        bottom: 800,
+        left,
+        width,
+        height: 800,
+        toJSON: () => ({}),
+      }) as DOMRect
+    vi.spyOn(rail, 'getBoundingClientRect').mockImplementation(() => rect(0, 720))
+    columns.forEach((column, index) => {
+      vi.spyOn(column, 'getBoundingClientRect').mockImplementation(() =>
+        rect(index * 280 - scrollLeft, 280),
+      )
+    })
+    vi.spyOn(rootIndicator, 'getBoundingClientRect').mockImplementation(() =>
+      rect(17 - scrollLeft, 160),
+    )
+
+    TestResizeObserver.resize(shell, 720)
+    rail.dispatchEvent(new Event('scroll'))
+    expect(container.querySelectorAll('[data-launcher-origin="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector<HTMLElement>('[data-launcher-origin="true"]')?.dataset.panelKind,
+    ).toBe('navigation')
+
+    scrollLeft = 20
+    rail.dispatchEvent(new Event('scroll'))
+    expect(columns[0]?.hidden).toBe(false)
+    expect(columns[0]!.getBoundingClientRect().right).toBeGreaterThan(
+      rail.getBoundingClientRect().left,
+    )
+    expect(container.querySelectorAll('[data-launcher-origin="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector<HTMLElement>('[data-launcher-origin="true"]')?.dataset.testid,
+    ).toBe('workspace-shell-breadcrumb')
+    expect(
+      container.querySelector('[data-testid="workspace-shell-breadcrumb"]')?.textContent,
+    ).toContain('Workspace')
+
+    scrollLeft = 400
+    rail.dispatchEvent(new Event('scroll'))
+    expect(container.querySelectorAll('[data-launcher-origin="true"]')).toHaveLength(1)
+    expect(
+      container.querySelector<HTMLElement>('[data-launcher-origin="true"]')?.dataset.testid,
+    ).toBe('workspace-shell-breadcrumb')
+
+    scrollLeft = 0
+    rail.dispatchEvent(new Event('scroll'))
+    expect(container.querySelector('[data-testid="workspace-shell-breadcrumb"]')).toBeNull()
+    expect(container.querySelectorAll('[data-launcher-origin="true"]')).toHaveLength(1)
   })
 
   test('moves focus from a hidden panel to the active landmark and announces it', async () => {

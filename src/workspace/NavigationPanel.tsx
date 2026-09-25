@@ -60,6 +60,7 @@ import {
   ProductionNavigationRowHeader,
 } from './NavigationRowHeader'
 import ProductionStickyNavigation from './ProductionStickyNavigation'
+import WorkspacePathHeader from './WorkspacePathHeader'
 import {
   PRODUCTION_STICKY_FLOW_GAP,
   PRODUCTION_STICKY_ROW_HEIGHT,
@@ -1773,37 +1774,11 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           navigationOutline={navigationOutline()}
           title={
             isRootPanel ?
-              <div class="workspace-title-header" data-testid="workspace-title">
-                <span data-launcher-workspace-mark aria-hidden="true" />
-                <span
-                  class="label-heading workspace-title-editor"
-                  contentEditable={true}
-                  data-launcher-workspace-title
-                  data-testid="workspace-title-editor"
-                  onBlur={(e) => {
-                    const newTitle =
-                      (e.currentTarget as HTMLSpanElement).textContent?.trim() ?? ''
-                    if (newTitle && newTitle !== matrixTitle()) {
-                      void renameMatrix(props.matrixId, newTitle)
-                    } else if (!newTitle) {
-                      ;(e.currentTarget as HTMLSpanElement).textContent =
-                        matrixTitle() || 'Workspace'
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      ;(e.currentTarget as HTMLSpanElement).blur()
-                    } else if (e.key === 'Escape') {
-                      ;(e.currentTarget as HTMLSpanElement).textContent =
-                        matrixTitle() || 'Workspace'
-                      ;(e.currentTarget as HTMLSpanElement).blur()
-                    }
-                  }}
-                >
-                  {matrixTitle() || 'Workspace'}
-                </span>
-              </div>
+              <WorkspacePathHeader
+                rootLabel={matrixTitle() || 'Workspace'}
+                testId="workspace-title"
+                onRootRename={(label) => void renameMatrix(props.matrixId, label)}
+              />
             : undefined
           }
           decorationFor={(row) => decorationByPk().get(row.identity.pk) ?? { continues: [] }}

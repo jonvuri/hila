@@ -1,13 +1,21 @@
 .workspace-shell {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   color: var(--color-text);
   background: var(--color-canvas);
   font-family: var(--type-body-family);
+}
+
+.workspace-shell-rail {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .workspace-shell-loading {
@@ -42,7 +50,7 @@
   border-right-color: var(--color-text-muted);
 }
 
-.workspace-shell[data-shell-presentation='single-panel'] {
+.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-rail {
   overflow-x: hidden;
 }
 
@@ -57,72 +65,15 @@
   overflow: hidden;
 }
 
-.workspace-shell-breadcrumb {
+.workspace-shell-path-header {
   flex: none;
   min-width: 0;
-  padding: var(--space-control-gap) var(--space-content-inset);
   overflow: hidden;
   border-bottom: var(--width-line) solid var(--color-line-subtle);
 }
 
-.workspace-shell-breadcrumb ol {
-  display: flex;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.workspace-shell-breadcrumb li {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-}
-
-.workspace-shell-breadcrumb li:not(:last-child)::after {
-  flex: none;
-  padding: 0 var(--space-label-inset);
-  color: var(--color-text-faint);
-  content: '/';
-}
-
-.workspace-shell-breadcrumb button {
-  min-width: 0;
-  max-width: 132px;
-  padding: var(--space-label-inset);
-  overflow: hidden;
-  color: var(--color-text-muted);
-  background: transparent;
-  border: 0;
-  font: inherit;
-  font-size: var(--type-label-size);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.workspace-shell-breadcrumb button:hover {
-  color: var(--color-text);
-  text-decoration: underline;
-  text-underline-offset: var(--space-label-inset);
-}
-
-.workspace-shell-breadcrumb button:focus-visible {
-  outline: var(--width-focus-ring) solid var(--color-state-focus);
-  outline-offset: var(--offset-focus-ring);
-}
-
-.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb {
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb ol {
-  width: max-content;
-}
-
-.workspace-shell[data-shell-presentation='single-panel'] .workspace-shell-breadcrumb li {
-  flex: none;
+.workspace-shell-path-header .workspace-path-header {
+  padding-left: calc(12px + var(--width-line));
 }
 
 .workspace-shell-announcement {
@@ -134,11 +85,4 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-@media (pointer: coarse) {
-  .workspace-shell-breadcrumb button {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }

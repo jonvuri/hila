@@ -2,7 +2,7 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-09-24
+updated: 2026-09-25
 phase: 13
 session: entry
 ---
@@ -14,8 +14,12 @@ and direct application roots are retired. `[` discovers containers, `#` discover
 and ordinary rows, content, saved views, commands, and `/table` use rooted launcher/place routes.
 Worker-free Storybook references preserve the retired surfaces.
 
+The editable root title and offscreen ancestry header now share one root indicator. The shell keeps
+exactly one visible launcher origin across narrow focus, bounded-rail eviction, and horizontal rail
+scrolling.
+
 Embedded tables, inline tags, property editing, and schema/face administration through the
-development system edge remain live. All 1,235 unit tests and 165 system-browser E2E tests pass.
+development system edge remain live. All 1,239 unit tests and 166 system-browser E2E tests pass.
 The unreleased app remains at reset-only schema version 0; Phase 12 changed no schema, durable data,
 or replication contract.
 

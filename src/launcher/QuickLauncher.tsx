@@ -144,8 +144,9 @@ const WipeoutEchoes = (props: { tempo: 'quick' | 'deep' }) => {
         }
       }
     } else {
-      const mark = document.querySelector<HTMLElement>('[data-launcher-workspace-mark]')
-      const title = document.querySelector<HTMLElement>('[data-launcher-workspace-title]')
+      const origin = document.querySelector<HTMLElement>('[data-launcher-origin="true"]')
+      const mark = origin?.querySelector<HTMLElement>('[data-launcher-workspace-mark]')
+      const title = origin?.querySelector<HTMLElement>('[data-launcher-workspace-title]')
       if (!mark || !title) return
       const markBounds = mark.getBoundingClientRect()
       const titleBounds = title.getBoundingClientRect()

@@ -108,9 +108,12 @@ to the active panel landmark and a polite status message announces the change. F
 the active panel is not moved.
 
 Narrow mode reuses the active panel's ancestry and root recovery plus existing Back, Jump back, and
-launcher gestures. Deep ancestry scrolls horizontally, and its controls use coarse-pointer target
-sizing independently of density. The projection adds no persistent toolbar, path rail, switcher,
-history, or durable state. No explicit focused workflow exists for wide viewports.
+launcher gestures. When the root panel is offscreen, a shell-level path header reuses the root
+indicator and adds ancestry segments. It stays outside the horizontally scrolling panel rail and
+becomes the shell's sole launcher origin. Deep ancestry scrolls horizontally, and its controls use
+coarse-pointer target sizing independently of density. The projection adds no persistent toolbar,
+path rail, switcher, history, or durable state. No explicit focused workflow exists for wide
+viewports.
 
 The reduced-motion media query sets nonessential duration roles to `0ms`. It keeps scroll-linked
 position continuity and final states. No component can use motion to carry information that is

@@ -74,6 +74,73 @@ const openFirstFocus = async (page: Page) => {
   await expect(page.getByTestId('focus-panel')).toHaveCount(1, { timeout: 5_000 })
 }
 
+const rowEditorAt = (page: Page, index: number) =>
+  page.locator('.outline-row').nth(index).locator('.nav-label-editor .ProseMirror')
+
+const focusColumns = (page: Page) =>
+  page.locator('[data-testid="workspace-shell-column"][data-panel-kind="focus"]')
+
+const buildLinearChain = async (page: Page, names: readonly string[]) => {
+  for (let index = 1; index < names.length; index += 1) {
+    await rowEditorAt(page, index - 1).click()
+    await page.keyboard.press('Enter')
+    await expect(async () => {
+      expect(await page.locator('.outline-row').count()).toBeGreaterThanOrEqual(index + 1)
+    }).toPass({ timeout: 5_000 })
+  }
+
+  for (let index = 0; index < names.length; index += 1) {
+    const editor = rowEditorAt(page, index)
+    await editor.click()
+    await editor.press('ControlOrMeta+a')
+    await page.keyboard.type(names[index]!)
+    await expect(editor).toHaveText(names[index]!)
+  }
+
+  for (let index = 1; index < names.length; index += 1) {
+    const editor = rowEditorAt(page, index)
+    await editor.click()
+    for (let depth = 1; depth <= index; depth += 1) {
+      await editor.press('Tab')
+      await expect(page.locator('.outline-row').nth(index)).toHaveAttribute(
+        'data-depth',
+        String(depth),
+      )
+    }
+  }
+}
+
+const drillIntoChild = async (page: Page, label: string) => {
+  const childRow = focusColumns(page)
+    .last()
+    .getByTestId('focus-panel-children')
+    .locator('.outline-row')
+    .filter({ hasText: label })
+    .first()
+  await expect(childRow).toBeVisible({ timeout: 5_000 })
+  await childRow.hover()
+  await childRow.locator('.nav-row-open-focus').click()
+}
+
+const expectWipeoutOriginAligned = async (page: Page) => {
+  const origins = page.locator('[data-launcher-origin="true"]')
+  await expect(origins).toHaveCount(1)
+  await expect(origins).toBeVisible()
+  const alignment = await page.evaluate(() => {
+    const origin = document.querySelector<HTMLElement>('[data-launcher-origin="true"]')!
+    const mark = origin.querySelector<HTMLElement>('[data-launcher-workspace-mark]')!
+    const cursor = document.querySelector<HTMLElement>('[data-testid="launcher-block-cursor"]')!
+    const markRect = mark.getBoundingClientRect()
+    const cursorRect = cursor.getBoundingClientRect()
+    return {
+      horizontal: Math.abs(markRect.left - cursorRect.left),
+      vertical: Math.abs(markRect.top - cursorRect.top),
+    }
+  })
+  expect(alignment.horizontal).toBeLessThan(1)
+  expect(alignment.vertical).toBeLessThan(1)
+}
+
 const commitWorkspaceKind = async (page: Page) => {
   const launcher = page.getByTestId('quick-launcher')
   const input = launcher.locator('#quick-launcher-input')
@@ -534,6 +601,86 @@ test('Wipeout keeps the narrow top-half state when reduced motion removes echoes
   })
   expect(deepGeometry).toEqual({ left: 0, top: 0, width: 500, height: 844 })
   await expect(page.getByTestId('launcher-echoes')).toHaveCSS('display', 'none')
+})
+
+test('Wipeout keeps one aligned path origin when the root is hidden, clipped, or evicted', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.setViewportSize({ width: 719, height: 900 })
+  await resetDatabase(page)
+  await buildLinearChain(page, ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'])
+  await setTheme(page, 'wipeout')
+  await openFirstFocus(page)
+
+  const breadcrumb = page.getByTestId('workspace-shell-breadcrumb')
+  await expect(breadcrumb.getByRole('button', { name: 'Workspace' })).toBeVisible()
+  await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
+  await page.keyboard.press(launcherShortcut)
+  await expect(page.getByTestId('quick-launcher')).toBeVisible()
+  await expectWipeoutOriginAligned(page)
+  await expect(page.getByTestId('launcher-echoes')).toHaveCSS('display', 'none')
+  await page.keyboard.press('Escape')
+
+  await page.setViewportSize({ width: 720, height: 900 })
+  await expect(page.getByTestId('workspace-shell')).toHaveAttribute(
+    'data-shell-presentation',
+    'bounded-rail',
+  )
+  await drillIntoChild(page, 'Bravo')
+  await drillIntoChild(page, 'Charlie')
+  const rail = page.locator('.workspace-shell-rail')
+  const partialIntersection = await rail.evaluate((element) => {
+    element.scrollLeft = 64
+    element.dispatchEvent(new Event('scroll'))
+    const root = element.querySelector<HTMLElement>(
+      '[data-testid="workspace-shell-column"][data-panel-kind="navigation"]',
+    )!
+    const rootBounds = root.getBoundingClientRect()
+    const railBounds = element.getBoundingClientRect()
+    return rootBounds.left < railBounds.left && rootBounds.right > railBounds.left
+  })
+  const retainedRootColumn = page.locator(
+    '[data-testid="workspace-shell-column"][data-panel-kind="navigation"]',
+  )
+  await expect(retainedRootColumn).toHaveCount(1)
+  expect(partialIntersection).toBe(true)
+  await expect(breadcrumb).toBeVisible()
+  await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
+  await page.keyboard.press(launcherShortcut)
+  await expect(page.getByTestId('quick-launcher')).toBeVisible()
+  await expectWipeoutOriginAligned(page)
+  await page.keyboard.press('Escape')
+
+  await rail.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth
+  })
+  await expect(retainedRootColumn).toHaveCount(1)
+  await expect(breadcrumb).toBeVisible()
+  await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
+  await rail.evaluate((element) => {
+    element.scrollLeft = 0
+  })
+  await expect(breadcrumb).toHaveCount(0)
+  await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
+  await expect(retainedRootColumn.locator('[data-launcher-workspace-title]')).toBeVisible()
+
+  await drillIntoChild(page, 'Delta')
+  await drillIntoChild(page, 'Echo')
+  await expect(
+    page.locator('[data-testid="workspace-shell-column"][data-panel-kind="navigation"]'),
+  ).toHaveCount(0)
+  await rail.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth
+  })
+  await expect(breadcrumb).toBeVisible()
+  await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
+
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
+  await page.keyboard.press(launcherShortcut)
+  await expect(page.getByTestId('quick-launcher')).toBeVisible()
+  await expectWipeoutOriginAligned(page)
+  await expectAnimatedEchoFrames(page)
 })
 
 test('filters, explains command context, runs a command, and navigates cross-matrix', async ({
