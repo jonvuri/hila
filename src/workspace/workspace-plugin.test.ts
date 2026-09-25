@@ -90,7 +90,7 @@ describe('Workspace plugin registration', () => {
     expect(wsConfig.slotBindings).toEqual({ label: labelColId, content: contentColId })
   })
 
-  test('face type is registered', async () => {
+  test('stores only the intentional workspace recipe', async () => {
     await registerPlugin(db, testWorkspacePlugin)
 
     const configs = getFaceConfigsForMatrix(
@@ -99,8 +99,7 @@ describe('Workspace plugin registration', () => {
     )
     const faceTypeIds = configs.map((c) => c.faceTypeId)
 
-    expect(faceTypeIds).toContain('hila.workspace')
-    expect(faceTypeIds).toContain('hila.table')
+    expect(faceTypeIds).toEqual(['hila.workspace'])
   })
 
   test('re-registering the workspace plugin is idempotent', async () => {

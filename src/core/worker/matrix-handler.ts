@@ -66,6 +66,7 @@ import {
 import {
   applyFaceToMatrix as applyFaceToMatrixImpl,
   saveFaceConfig as saveFaceConfigImpl,
+  getFaceConfigForMatrix as getFaceConfigForMatrixImpl,
   getFaceConfigsForMatrix as getFaceConfigsForMatrixImpl,
 } from '../face-config'
 import { registerFaceType as registerFaceTypeImpl } from '../face-registry'
@@ -533,6 +534,18 @@ export const handleMatrixClientMessage = async (message: MatrixClientMessage) =>
         postMessage({ type: 'getFaceConfigsSuccess', id, result: configs })
       } catch (err: unknown) {
         postMessage({ type: 'getFaceConfigsError', id, error: toError(err) })
+      }
+      break
+    }
+
+    case 'getFaceConfigForMatrix': {
+      const { id, matrixId } = message
+      try {
+        const { db } = await sqliteWasm
+        const config = getFaceConfigForMatrixImpl(db, matrixId)
+        postMessage({ type: 'getFaceConfigForMatrixSuccess', id, result: config })
+      } catch (err: unknown) {
+        postMessage({ type: 'getFaceConfigForMatrixError', id, error: toError(err) })
       }
       break
     }

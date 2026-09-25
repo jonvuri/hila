@@ -4,9 +4,10 @@ import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { initMatrixSchema, createMatrix } from './matrix'
 import { registerPlugin, unregisterPlugin, getPlugin, getAllPlugins } from './plugin'
-import { getFaceType, clearFaceTypeRegistry } from './face-registry'
+import { clearFaceTypeRegistry, getFaceType, registerFaceType } from './face-registry'
 import { toPluginRegistration, type PluginDefinition } from './plugin-types'
 import type { FaceTypeDefinition } from './face-types'
+import { getFaceConfigForMatrix, getFaceConfigsForMatrix } from './face-config'
 
 const makeDefinition = (overrides: Partial<PluginDefinition> = {}): PluginDefinition => ({
   id: 'test-plugin',
@@ -90,6 +91,54 @@ describe('Plugin system', () => {
     checkStmt.finalize()
   })
 
+  test('does not provision a table recipe for an unbound plugin matrix', async () => {
+    registerFaceType({
+      id: 'hila.table',
+      name: 'Table',
+      slots: [],
+      overflowBehavior: 'none',
+    })
+    const ctx = await registerPlugin(
+      db,
+      makeDefinition({
+        matrixes: [{ key: 'data', title: 'Data', columns: [{ name: 'val', type: 'TEXT' }] }],
+      }),
+    )
+
+    expect(getFaceConfigForMatrix(db, ctx.matrixIds['data']!)).toBeNull()
+  })
+
+  test('an explicit binding initializes one recipe and re-registration preserves it', async () => {
+    const faceType: FaceTypeDefinition = {
+      id: 'test.bound',
+      name: 'Bound',
+      slots: [{ name: 'value', preferredType: 'text', required: true }],
+      overflowBehavior: 'none',
+    }
+    const def = makeDefinition({
+      faceTypes: [faceType],
+      matrixes: [{ key: 'data', title: 'Data', columns: [{ name: 'val', type: 'TEXT' }] }],
+      faceBindings: [
+        {
+          key: 'main',
+          faceTypeId: faceType.id,
+          matrixKey: 'data',
+          slotBindings: { value: 'val' },
+          settings: { treatment: 'compact' },
+        },
+      ],
+    })
+
+    const first = await registerPlugin(db, def)
+    const matrixId = first.matrixIds['data']!
+    const config = getFaceConfigForMatrix(db, matrixId)!
+    expect(config.settings).toEqual({ treatment: 'compact' })
+    expect(config.slotBindings.value).toBeTypeOf('number')
+
+    await registerPlugin(db, def)
+    expect(getFaceConfigsForMatrix(db, matrixId)).toEqual([config])
+  })
+
   test('source_plugin_id is set on plugin-created matrixes', async () => {
     const def = makeDefinition({
       matrixes: [{ key: 'data', title: 'Data', columns: [{ name: 'val', type: 'TEXT' }] }],
@@ -152,6 +201,7 @@ describe('Plugin system', () => {
           run: vi.fn(),
         },
       ],
+      faceRenderings: [{ faceTypeId: 'test.face', line: () => null }],
     })
 
     const registration = toPluginRegistration(def)
@@ -162,6 +212,7 @@ describe('Plugin system', () => {
     expect(initFn).not.toHaveBeenCalled()
     expect(destroyFn).not.toHaveBeenCalled()
     expect('commands' in registration).toBe(false)
+    expect('faceRenderings' in registration).toBe(false)
     expect('init' in registration).toBe(false)
     expect('destroy' in registration).toBe(false)
   })

@@ -4,40 +4,38 @@ kind: status
 state: active
 updated: 2026-09-25
 phase: 13
-session: 1
+session: 2
 ---
 
 # Now
 
-Phase 12 is complete. The production app mounts one stream root; the temporary Table and Tags tabs
-and direct application roots are retired. `[` discovers containers, `#` discovers promoted types,
-and ordinary rows, content, saved views, commands, and `/table` use rooted launcher/place routes.
-Worker-free Storybook references preserve the retired surfaces.
+Phase 13 Session 1 is complete. Each configured matrix now has one intentional recipe, while hosts
+can select the implicit substrate floor without storing `hila.table`. Same-face application keeps
+normalized table presentation state; replacement reuses one replica-stable config identity.
 
-The editable root title and offscreen ancestry header now share one root indicator. The shell keeps
-exactly one visible launcher origin across narrow focus, bounded-rail eviction, and horizontal rail
-scrolling.
+Callable `line` and `collection` renderings now have owner-scoped, reactive plugin lifecycle.
+Failed initialization, replacement, disposal, and database reset cannot retain stale renderers.
+The host boundary exposes navigation and insertion requests plus nested-subject yielding without
+shell DOM or recursive face mounting.
 
-Embedded tables, inline tags, property editing, and schema/face administration through the
-development system edge remain live. All 1,239 unit tests and 166 system-browser E2E tests pass.
-The unreleased app remains at reset-only schema version 0; Phase 12 changed no schema, durable data,
-or replication contract.
+No live surface migrated. Embedded tables, inline tags, property editing, rooted navigation, and
+the system edge retain their compatibility paths. The database remains reset-only at schema
+version 0. Fresh initialization now enforces one recipe per matrix, and sync resolves the recipe
+and normalized presentation rows as one last-write-wins aggregate. All 1,262 unit tests pass.
 
 ## Read next
 
 1. [Phase 13 front door](phases/Phase-13.md).
-2. [Session 1](phases/Phase-13/Session-1-face-recipe-and-host-runtime-foundation.md).
-3. [Plugins](Plugins.md) and [Architecture](Architecture.md) for the face-host contract.
+2. [Session 2](phases/Phase-13/Session-2-theme-and-fidelity-inputs.md).
+3. [Design](Design.md) and [Design Faces](Design-Faces.md) for theme and fidelity inputs.
 
 ## Boundary
 
-Phase 13 completes the live design-system and face-runtime migration without restoring retired
-application roots. Preserve embedded table behavior, inline tags, property editing, rooted
-navigation, and the system-edge route while removing the temporary adapter and direct embedded
-`TableFace` mount incrementally. One intentional matrix recipe replaces automatic unused table
-recipes; the substrate floor remains implicit.
+Session 2 adds environment-selected visual theme and recursive transient fidelity inputs. It does
+not migrate later live surface styles, couple theme to polarity or fidelity, or persist theme and
+x-ray state.
 
 ## Next action
 
-Execute Phase 13 Session 1. Establish the recipe, affinity, registration, and host-service boundary
-before migrating a live surface.
+Execute Phase 13 Session 2. Establish theme selection and recursive fidelity before the first live
+surface cutover.

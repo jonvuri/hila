@@ -9,7 +9,13 @@ import {
 
 import { rebuildClosure } from './closure'
 import { getReplicatedTableDefinitions } from './durability-policy'
-import { getFaceConfig, saveFaceConfig } from './face-config'
+import {
+  applyFaceToMatrix,
+  getFaceConfig,
+  getFaceConfigsForMatrix,
+  saveFaceConfig,
+} from './face-config'
+import { clearFaceTypeRegistry, registerFaceType } from './face-registry'
 import {
   createDependentRow,
   createMatrix,
@@ -296,6 +302,25 @@ const createTwoReplicaFixture = async (): Promise<ReplicaFixture> => {
   return { a, b, ids, initialChanges }
 }
 
+const saveTestRecipe = (
+  db: Database,
+  matrixId: number,
+  configId: string,
+  faceTypeId: string,
+  slotName: string,
+  columnId: number,
+): void => {
+  saveFaceConfig(db, {
+    id: configId,
+    faceTypeId,
+    matrixId,
+    slotBindings: { [slotName]: columnId },
+    settings: { treatment: faceTypeId },
+    sort: null,
+    filters: [],
+  })
+}
+
 describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
   let fixture: ReplicaFixture
 
@@ -306,6 +331,7 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
   afterEach(() => {
     fixture?.a.close()
     fixture?.b.close()
+    clearFaceTypeRegistry()
   })
 
   test('reconstructs source truth and rendered derived state by logical identity', () => {
@@ -435,6 +461,226 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
       ),
     ).toBe(sourceSql)
     expect(logicalSnapshot(b)).toEqual(logicalSnapshot(a))
+  })
+
+  test('converges concurrent first recipe creation on one replica-stable ID', () => {
+    const { a, b, ids, initialChanges } = fixture
+    registerFaceType({
+      id: 'hila.workspace',
+      name: 'Workspace',
+      slots: [],
+      overflowBehavior: 'none',
+    })
+
+    const left = applyFaceToMatrix(a, 'hila.workspace', ids.workspaceMatrixId)
+    const right = applyFaceToMatrix(b, 'hila.workspace', ids.workspaceMatrixId)
+    expect(left.id).toBe(right.id)
+
+    const delta = getLocalChanges(a, initialChanges.toSeq)
+    applyRemoteChanges(b, delta)
+
+    expect(getFaceConfigsForMatrix(a, ids.workspaceMatrixId)).toHaveLength(1)
+    expect(getFaceConfigsForMatrix(b, ids.workspaceMatrixId)).toEqual(
+      getFaceConfigsForMatrix(a, ids.workspaceMatrixId),
+    )
+  })
+
+  test('converges concurrent recipe replacements as one normalized aggregate', () => {
+    const { a, b, ids, initialChanges } = fixture
+    const columns = getColumns(a, ids.ownedMatrixId)
+    const labelColumnId = columns.find(({ name }) => name === 'label')!.id
+    const statusColumnId = columns.find(({ name }) => name === 'status')!.id
+
+    saveFaceConfig(a, {
+      id: ids.faceConfigId,
+      faceTypeId: 'test.remote',
+      matrixId: ids.ownedMatrixId,
+      slotBindings: { title: labelColumnId },
+      settings: { treatment: 'remote' },
+      sort: { columnId: labelColumnId, direction: 'ASC' },
+      filters: [
+        {
+          id: 'filter-remote',
+          columnId: statusColumnId,
+          operator: '=',
+          value: 'remote',
+          order: 0,
+        },
+      ],
+    })
+    saveFaceConfig(b, {
+      id: ids.faceConfigId,
+      faceTypeId: 'test.local',
+      matrixId: ids.ownedMatrixId,
+      slotBindings: { status: statusColumnId },
+      settings: { treatment: 'local' },
+      sort: { columnId: statusColumnId, direction: 'DESC' },
+      filters: [
+        {
+          id: 'filter-local',
+          columnId: labelColumnId,
+          operator: '=',
+          value: 'local',
+          order: 0,
+        },
+      ],
+    })
+
+    const remoteDelta = getLocalChanges(a, initialChanges.toSeq)
+    for (const entry of remoteDelta.entries) entry.timestamp = '2099-01-01 00:00:00'
+    const staleDelta = getLocalChanges(b, 0)
+    for (const entry of staleDelta.entries) entry.timestamp = '2000-01-01 00:00:00'
+
+    const remoteResult = applyRemoteChanges(b, remoteDelta)
+    expect(remoteResult.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: 'face_configs', winner: 'remote' }),
+      ]),
+    )
+    expect(getFaceConfig(b, ids.faceConfigId)).toEqual(getFaceConfig(a, ids.faceConfigId))
+    expect(getFaceConfig(b, ids.faceConfigId)?.filters.map(({ id }) => id)).toEqual([
+      'filter-remote',
+    ])
+
+    const localResult = applyRemoteChanges(a, staleDelta)
+    expect(localResult.conflicts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tableName: 'face_configs', winner: 'local' }),
+      ]),
+    )
+    expect(getFaceConfig(a, ids.faceConfigId)?.faceTypeId).toBe('test.remote')
+    expect(getFaceConfig(a, ids.faceConfigId)?.slotBindings).toEqual({ title: labelColumnId })
+    expect(getFaceConfig(a, ids.faceConfigId)?.filters.map(({ id }) => id)).toEqual([
+      'filter-remote',
+    ])
+  })
+
+  test('applies the final remote recipe aggregate after an earlier remote write loses', () => {
+    const { a, b, ids, initialChanges } = fixture
+    const columns = getColumns(a, ids.ownedMatrixId)
+    const labelColumnId = columns.find(({ name }) => name === 'label')!.id
+    const statusColumnId = columns.find(({ name }) => name === 'status')!.id
+
+    saveTestRecipe(b, ids.ownedMatrixId, ids.faceConfigId, 'test.local', 'title', labelColumnId)
+    saveTestRecipe(
+      a,
+      ids.ownedMatrixId,
+      ids.faceConfigId,
+      'test.remote-old',
+      'title',
+      labelColumnId,
+    )
+    const olderDelta = getLocalChanges(a, initialChanges.toSeq)
+    saveTestRecipe(
+      a,
+      ids.ownedMatrixId,
+      ids.faceConfigId,
+      'test.remote-final',
+      'status',
+      statusColumnId,
+    )
+    const finalDelta = getLocalChanges(a, olderDelta.toSeq)
+    for (const entry of olderDelta.entries) entry.timestamp = '2000-01-01 00:00:00'
+    for (const entry of finalDelta.entries) entry.timestamp = '2099-01-01 00:00:00'
+
+    const result = applyRemoteChanges(b, {
+      deviceId: olderDelta.deviceId,
+      fromSeq: olderDelta.fromSeq,
+      toSeq: finalDelta.toSeq,
+      entries: [...olderDelta.entries, ...finalDelta.entries],
+    })
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({ tableName: 'face_configs', winner: 'remote' }),
+    ])
+    expect(getFaceConfig(b, ids.faceConfigId)).toEqual(getFaceConfig(a, ids.faceConfigId))
+    expect(getFaceConfig(b, ids.faceConfigId)?.slotBindings).toEqual({
+      status: statusColumnId,
+    })
+  })
+
+  test('preserves the local recipe aggregate when the final remote write loses', () => {
+    const { a, b, ids, initialChanges } = fixture
+    const columns = getColumns(a, ids.ownedMatrixId)
+    const labelColumnId = columns.find(({ name }) => name === 'label')!.id
+    const statusColumnId = columns.find(({ name }) => name === 'status')!.id
+
+    saveTestRecipe(
+      b,
+      ids.ownedMatrixId,
+      ids.faceConfigId,
+      'test.local-final',
+      'status',
+      statusColumnId,
+    )
+    const expected = getFaceConfig(b, ids.faceConfigId)
+    saveTestRecipe(
+      a,
+      ids.ownedMatrixId,
+      ids.faceConfigId,
+      'test.remote-newer',
+      'title',
+      labelColumnId,
+    )
+    const newerDelta = getLocalChanges(a, initialChanges.toSeq)
+    saveTestRecipe(
+      a,
+      ids.ownedMatrixId,
+      ids.faceConfigId,
+      'test.remote-final',
+      'status',
+      statusColumnId,
+    )
+    const finalDelta = getLocalChanges(a, newerDelta.toSeq)
+    for (const entry of newerDelta.entries) entry.timestamp = '2099-01-01 00:00:00'
+    for (const entry of finalDelta.entries) entry.timestamp = '2000-01-01 00:00:00'
+
+    const result = applyRemoteChanges(b, {
+      deviceId: newerDelta.deviceId,
+      fromSeq: newerDelta.fromSeq,
+      toSeq: finalDelta.toSeq,
+      entries: [...newerDelta.entries, ...finalDelta.entries],
+    })
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({ tableName: 'face_configs', winner: 'local' }),
+    ])
+    expect(getFaceConfig(b, ids.faceConfigId)).toEqual(expected)
+  })
+
+  test('replicates intentional recipe deletion and normalized-child cascades', () => {
+    const { a, b, ids, initialChanges } = fixture
+    a.exec('DELETE FROM face_configs WHERE id = ?', { bind: [ids.faceConfigId] })
+
+    const delta = getLocalChanges(a, initialChanges.toSeq)
+    const result = applyRemoteChanges(b, delta)
+
+    expect(result.conflicts).toEqual([])
+    expect(getFaceConfig(b, ids.faceConfigId)).toBeNull()
+    for (const table of ['face_slot_bindings', 'face_sort_config', 'face_filter_configs']) {
+      expect(
+        b.selectValue(`SELECT COUNT(*) FROM ${table} WHERE face_config_id = ?`, [
+          ids.faceConfigId,
+        ]),
+      ).toBe(0)
+    }
+  })
+
+  test('applies a winning recipe deletion by matrix identity across legacy config IDs', () => {
+    const { a, b, ids, initialChanges } = fixture
+    const localConfig = getFaceConfig(b, ids.faceConfigId)!
+    b.exec('DELETE FROM face_configs WHERE id = ?', { bind: [ids.faceConfigId] })
+    saveFaceConfig(b, { ...localConfig, id: 'legacy-local-recipe' })
+    a.exec('DELETE FROM face_configs WHERE id = ?', { bind: [ids.faceConfigId] })
+    const delta = getLocalChanges(a, initialChanges.toSeq)
+    for (const entry of delta.entries) entry.timestamp = '2099-01-01 00:00:00'
+
+    const result = applyRemoteChanges(b, delta)
+
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({ tableName: 'face_configs', winner: 'remote' }),
+    ])
+    expect(getFaceConfigsForMatrix(b, ids.ownedMatrixId)).toEqual([])
   })
 })
 

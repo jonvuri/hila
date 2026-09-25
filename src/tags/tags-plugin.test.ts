@@ -123,12 +123,11 @@ describe('Tag type registry (type-node model)', () => {
     expect(row.source_plugin_id).toBe('hila.tags')
   })
 
-  test('createTagType creates identity face config (table face) for the matrix', () => {
+  test('createTagType creates one intentional table recipe for the matrix', () => {
     const tagType = createTagType(db, 'task')
 
     const configs = getFaceConfigsForMatrix(db, tagType.matrixId)
-    const faceTypeIds = configs.map((c) => c.faceTypeId)
-    expect(faceTypeIds).toContain('hila.table')
+    expect(configs.map((c) => c.faceTypeId)).toEqual(['hila.table'])
   })
 
   test('createTagType sets matrix.owner to the type-node', () => {

@@ -625,9 +625,14 @@ LIMIT 1000`
           host="focus-panel"
           kind="collection"
           subject={{ mode: 'view', matrixId: 10, rowId: 20, sql }}
-          recipe={{ faceTypeId: 'test.saved-view', slotBindings: {}, settings: {} }}
+          affinity={{
+            source: 'intentional',
+            recipe: { faceTypeId: 'test.saved-view', slotBindings: {}, settings: {} },
+          }}
           rootMatrixId={1}
           fidelity="substrate"
+          services={{}}
+          substrate={<div data-testid="view-collection-unavailable" />}
         />
       ),
       container,

@@ -6,11 +6,13 @@ import type { PluginDefinition } from '../plugin-types'
 vi.mock('./worker-client', () => ({ postMessage: vi.fn() }))
 
 const { commandRegistry } = await import('../../command-registry')
+const { faceRenderingRegistry, getFaceRendering } = await import('../face-runtime')
 const {
   PluginRegistrationSupersededError,
   createViewBlockAtAppearance,
   disposePlugin,
   registerPlugin,
+  resetDatabase,
 } = await import('./matrix-client')
 const { handleMatrixWorkerMessage } = await import('./matrix-client-handler')
 const { pendingRequests } = await import('./matrix-client-promises')
@@ -26,6 +28,9 @@ const command = (id: `${string}.${string}`): CommandDescriptor => ({
   subject: 'none',
   run: vi.fn(),
 })
+
+const OldLine = () => null
+const NewCollection = () => null
 
 const definition = (
   commands: readonly CommandDescriptor[],
@@ -62,11 +67,14 @@ describe('main-thread plugin command contributions', () => {
     pendingRequests.clear()
     await disposePlugin('test.plugin')
     commandRegistry.unregisterOwner('test.other')
+    faceRenderingRegistry.unregisterOwner('test.other')
   })
 
   test('keeps command functions out of the worker payload and replaces registrations', async () => {
     const firstRegistration = registerPlugin(
-      definition([command('test.first'), command('test.second')]),
+      definition([command('test.first'), command('test.second')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
     )
     await resolveRegistration(firstRegistration)
 
@@ -75,34 +83,72 @@ describe('main-thread plugin command contributions', () => {
     }
     expect(() => structuredClone(payload.definition)).not.toThrow()
     expect(payload.definition).not.toHaveProperty('commands')
+    expect(payload.definition).not.toHaveProperty('faceRenderings')
     expect(commandRegistry.list().map(({ id }) => id)).toEqual(['test.first', 'test.second'])
+    expect(getFaceRendering('test.face', 'line')).toBe(OldLine)
 
     const secondRegistration = registerPlugin(
-      definition([command('test.first'), command('test.replacement')]),
+      definition([command('test.first'), command('test.replacement')], {
+        faceRenderings: [{ faceTypeId: 'test.face', collection: NewCollection }],
+      }),
     )
     await resolveRegistration(secondRegistration)
     expect(commandRegistry.list().map(({ id }) => id)).toEqual([
       'test.first',
       'test.replacement',
     ])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
+    expect(getFaceRendering('test.face', 'collection')).toBe(NewCollection)
+  })
+
+  test('destroys a replaced plugin after its callable contributions cease', async () => {
+    const destroyOld = vi.fn(() => {
+      expect(commandRegistry.list().map(({ id }) => id)).toEqual(['test.new'])
+      expect(getFaceRendering('test.face', 'line')).toBeUndefined()
+      expect(getFaceRendering('test.face', 'collection')).toBe(NewCollection)
+    })
+    const firstRegistration = registerPlugin(
+      definition([command('test.old')], {
+        destroy: destroyOld,
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
+    await resolveRegistration(firstRegistration)
+
+    const secondRegistration = registerPlugin(
+      definition([command('test.new')], {
+        faceRenderings: [{ faceTypeId: 'test.face', collection: NewCollection }],
+      }),
+    )
+    await resolveRegistration(secondRegistration)
+
+    expect(destroyOld).toHaveBeenCalledOnce()
   })
 
   test('teardown removes commands before running the plugin destroy hook', async () => {
     const destroy = vi.fn(() => {
       expect(commandRegistry.list()).toEqual([])
+      expect(getFaceRendering('test.face', 'line')).toBeUndefined()
     })
-    const registration = registerPlugin(definition([command('test.command')], { destroy }))
+    const registration = registerPlugin(
+      definition([command('test.command')], {
+        destroy,
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
     await resolveRegistration(registration)
 
     await disposePlugin('test.plugin')
 
     expect(destroy).toHaveBeenCalledOnce()
     expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
   })
 
   test('failed initialization does not leave commands registered', async () => {
     const registration = registerPlugin(
       definition([command('test.command')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
         init: async () => {
           throw new Error('init failed')
         },
@@ -111,14 +157,20 @@ describe('main-thread plugin command contributions', () => {
 
     await expect(resolveRegistration(registration)).rejects.toThrow('init failed')
     expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
   })
 
   test('failed re-initialization preserves the last successful registration', async () => {
-    const firstRegistration = registerPlugin(definition([command('test.stable')]))
+    const firstRegistration = registerPlugin(
+      definition([command('test.stable')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
     await resolveRegistration(firstRegistration)
 
     const failedRegistration = registerPlugin(
       definition([command('test.replacement')], {
+        faceRenderings: [{ faceTypeId: 'test.face', collection: NewCollection }],
         init: async () => {
           throw new Error('stale init failed')
         },
@@ -127,6 +179,8 @@ describe('main-thread plugin command contributions', () => {
     await expect(resolveRegistration(failedRegistration)).rejects.toThrow('stale init failed')
 
     expect(commandRegistry.list().map(({ id }) => id)).toEqual(['test.stable'])
+    expect(getFaceRendering('test.face', 'line')).toBe(OldLine)
+    expect(getFaceRendering('test.face', 'collection')).toBeUndefined()
   })
 
   test('rejects command conflicts before worker registration or initialization', async () => {
@@ -143,7 +197,11 @@ describe('main-thread plugin command contributions', () => {
   })
 
   test('does not install commands when teardown supersedes an in-flight registration', async () => {
-    const registration = registerPlugin(definition([command('test.stale')]))
+    const registration = registerPlugin(
+      definition([command('test.stale')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
     const message = mockPost.mock.lastCall?.[0] as { id: string }
 
     await disposePlugin('test.plugin')
@@ -154,12 +212,21 @@ describe('main-thread plugin command contributions', () => {
     await rejection
 
     expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
   })
 
   test('keeps the latest overlapping registration when responses arrive out of order', async () => {
-    const firstRegistration = registerPlugin(definition([command('test.first')]))
+    const firstRegistration = registerPlugin(
+      definition([command('test.first')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
     const firstMessage = mockPost.mock.lastCall?.[0] as { id: string }
-    const secondRegistration = registerPlugin(definition([command('test.second')]))
+    const secondRegistration = registerPlugin(
+      definition([command('test.second')], {
+        faceRenderings: [{ faceTypeId: 'test.face', collection: NewCollection }],
+      }),
+    )
     const secondMessage = mockPost.mock.lastCall?.[0] as { id: string }
 
     const firstRejection = expect(firstRegistration).rejects.toBeInstanceOf(
@@ -171,6 +238,91 @@ describe('main-thread plugin command contributions', () => {
     await firstRejection
 
     expect(commandRegistry.list().map(({ id }) => id)).toEqual(['test.second'])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
+    expect(getFaceRendering('test.face', 'collection')).toBe(NewCollection)
+  })
+
+  test('database reset tears down callable plugin contributions', async () => {
+    const registration = registerPlugin(
+      definition([command('test.command')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
+    await resolveRegistration(registration)
+
+    const reset = resetDatabase()
+    const message = mockPost.mock.lastCall?.[0] as { id: string }
+    handleMatrixWorkerMessage({
+      type: 'resetDatabaseSuccess',
+      id: message.id,
+      result: undefined,
+    })
+    await reset
+
+    expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
+  })
+
+  test('database reset supersedes an in-flight plugin registration', async () => {
+    const registration = registerPlugin(
+      definition([command('test.stale')], {
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+      }),
+    )
+    const registrationMessage = mockPost.mock.lastCall?.[0] as { id: string }
+
+    const reset = resetDatabase()
+    const resetMessage = mockPost.mock.lastCall?.[0] as { id: string }
+    handleMatrixWorkerMessage({
+      type: 'resetDatabaseSuccess',
+      id: resetMessage.id,
+      result: undefined,
+    })
+    await reset
+
+    const rejection = expect(registration).rejects.toBeInstanceOf(
+      PluginRegistrationSupersededError,
+    )
+    resolveRegistrationMessage(registrationMessage)
+    await rejection
+    expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
+  })
+
+  test('database reset supersedes a registration blocked in initialization', async () => {
+    let releaseInitialization!: () => void
+    const initializationGate = new Promise<void>((resolve) => {
+      releaseInitialization = resolve
+    })
+    const initStarted = vi.fn()
+    const destroy = vi.fn()
+    const registration = registerPlugin(
+      definition([command('test.stale')], {
+        destroy,
+        faceRenderings: [{ faceTypeId: 'test.face', line: OldLine }],
+        init: async () => {
+          initStarted()
+          await initializationGate
+        },
+      }),
+    )
+    resolveRegistrationMessage(mockPost.mock.lastCall?.[0] as { id: string })
+    await vi.waitFor(() => expect(initStarted).toHaveBeenCalledOnce())
+
+    const reset = resetDatabase()
+    const resetMessage = mockPost.mock.lastCall?.[0] as { id: string }
+    handleMatrixWorkerMessage({
+      type: 'resetDatabaseSuccess',
+      id: resetMessage.id,
+      result: undefined,
+    })
+    await reset
+    releaseInitialization()
+
+    await expect(registration).rejects.toBeInstanceOf(PluginRegistrationSupersededError)
+    expect(destroy).toHaveBeenCalledOnce()
+    expect(commandRegistry.list()).toEqual([])
+    expect(getFaceRendering('test.face', 'line')).toBeUndefined()
   })
 })
 

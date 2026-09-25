@@ -86,6 +86,11 @@ export const applyFaceToMatrix = (
   }
 
   return withTransaction(db, () => {
+    const existing = getFaceConfigForMatrix(db, matrixId)
+
+    // Ensuring the current choice is idempotent and preserves its normalized table presentation.
+    if (existing?.faceTypeId === faceTypeId) return existing
+
     const columns = getColumns(db, matrixId)
     const { bindings } = resolveSlotBindings(faceType, columns)
 
@@ -95,7 +100,9 @@ export const applyFaceToMatrix = (
     }
 
     const config: FaceConfig = {
-      id: crypto.randomUUID(),
+      // Matrix IDs are replica-stable, so replicas independently choosing their first recipe
+      // converge on one logical config row.
+      id: existing?.id ?? `matrix:${matrixId}`,
       faceTypeId,
       matrixId,
       slotBindings,
@@ -112,6 +119,21 @@ export const applyFaceToMatrix = (
 
 /** Insert or update a face configuration (writes normalized tables). */
 export const saveFaceConfig = (db: Database, config: FaceConfig): void => {
+  const currentMatrixId = db.selectValue('SELECT matrix_id FROM face_configs WHERE id = ?', [
+    config.id,
+  ]) as number | undefined
+  if (currentMatrixId !== undefined && currentMatrixId !== config.matrixId) {
+    throw new Error(`Face config "${config.id}" cannot move between matrixes`)
+  }
+
+  const competingId = db.selectValue(
+    'SELECT id FROM face_configs WHERE matrix_id = ? AND id <> ? LIMIT 1',
+    [config.matrixId, config.id],
+  ) as string | undefined
+  if (competingId !== undefined) {
+    throw new Error(`Matrix ${config.matrixId} already has an intentional face recipe`)
+  }
+
   // Upsert without REPLACE so the main-row write cannot cascade-delete normalized children.
   // slot_bindings stays an empty derived compatibility copy.
   db.exec(
@@ -196,7 +218,7 @@ export const getFaceConfig = (db: Database, id: string): FaceConfig | null => {
 export const getFaceConfigsForMatrix = (db: Database, matrixId: number): FaceConfig[] => {
   const stmt = db.prepare(
     `SELECT id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin
-     FROM face_configs WHERE matrix_id = ?`,
+     FROM face_configs WHERE matrix_id = ? ORDER BY id`,
   )
   stmt.bind([matrixId])
 
@@ -206,4 +228,13 @@ export const getFaceConfigsForMatrix = (db: Database, matrixId: number): FaceCon
   }
   stmt.finalize()
   return configs
+}
+
+/** Retrieve the matrix's one intentional recipe, or null when the host uses substrate. */
+export const getFaceConfigForMatrix = (db: Database, matrixId: number): FaceConfig | null => {
+  const configs = getFaceConfigsForMatrix(db, matrixId)
+  if (configs.length > 1) {
+    throw new Error(`Matrix ${matrixId} has ambiguous face recipes`)
+  }
+  return configs[0] ?? null
 }

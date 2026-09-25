@@ -25,9 +25,9 @@ Registration is transactional and idempotent:
 
 1. Register declared face-type metadata.
 2. Upsert the plugin row.
-3. Recover or create declared matrixes and their identity table faces.
+3. Recover or create declared matrixes without inventing a fallback recipe.
 4. Persist the plugin's matrix-key-to-ID mapping.
-5. Apply declared face bindings.
+5. Initialize a declared face binding when its matrix has no intentional recipe.
 6. Commit, then run `init` on the main thread.
 
 Unregistering removes the plugin row and runs `destroy`; user data and matrixes persist.
@@ -55,10 +55,9 @@ A plugin matrix declaration supplies a local key, title, and columns. Columns ca
 type, constraints, and optional `label` or `content` role. The runtime records `managed_by` so
 plugin-required columns cannot be removed accidentally.
 
-The current registration path also creates a table identity recipe for every new matrix when the
-table face is registered. This is compatibility behavior, not the forward substrate contract.
-Phase 13 stops provisioning unused table recipes: actual table subjects and explicit table choices
-keep them, while every other host receives an implicit substrate floor. Matrix ownership and
+Plugin matrix creation does not create a table recipe. A declared face binding initializes the one
+intentional matrix recipe only when none exists. Actual table subjects and explicit table choices
+keep table recipes; every other host receives the implicit substrate floor. Matrix ownership and
 promoted type-nodes remain data-model concerns, not plugin lifecycle shortcuts. See
 [Data-Model.md](Data-Model.md).
 
@@ -69,11 +68,20 @@ The current runtime has:
 - `FaceTypeDefinition` with named slots and overflow behavior;
 - stable-ID slot bindings;
 - normalized sort/filter configuration;
-- query-free `FaceConfig` recipes with matrix affinity, face type, bindings, and settings;
+- one query-free intentional `FaceConfig` recipe per configured matrix, with face type, bindings,
+  and settings;
 - temporary whole-component dispatch through `TemporaryLegacyFaceAdapter`.
 
-Normalized slot bindings are authoritative; the JSON copy on `face_configs` is derived
-compatibility state. Filter rows use stable UUID identity and an explicit order field.
+New recipe IDs derive from replica-stable matrix identity. Applying the same face preserves the
+existing recipe and normalized presentation state; explicit replacement reuses its ID. Normalized
+slot bindings are authoritative; the JSON copy on `face_configs` is derived compatibility state.
+Filter rows use stable UUID identity and an explicit order field.
+
+Callable `line` and `collection` contributions stay on the main thread. They are reserved and
+committed by plugin owner only after worker registration and initialization succeed. Complete-set
+replacement removes omitted renderings, and plugin disposal or database reset removes the owner's
+renderings before `destroy`. Hosts pass navigation and insertion requests plus nested-subject
+yielding without exposing shell DOM or face-mounting callbacks.
 
 Slot resolution is:
 
@@ -156,9 +164,9 @@ Hosts resolve a recipe in this order:
 3. universal substrate floor.
 
 The preferred recipe follows the subject everywhere it appears. Fidelity is view state, not stored
-inside the recipe. Phase 13 stores at most one intentional matrix recipe and uses the substrate
-floor when none exists. Multiple saved recipes and appearance overrides remain deferred until a
-real consumer requires selection among them.
+inside the recipe. The shipped Phase 13 foundation stores at most one intentional matrix recipe
+and uses the substrate floor when none exists. Multiple saved recipes and appearance overrides
+remain deferred until a real consumer requires selection among them.
 
 ## Runtime migration
 
@@ -174,10 +182,11 @@ The migration has mandatory boundaries:
 
 ### Phase 13
 
+- Session 1 shipped singular recipe creation and replacement, the implicit substrate affinity,
+  owner-scoped callable rendering lifecycle, and the host-service capability boundary;
 - migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete host recursion, affinity, and fidelity behavior;
-- replace automatic unused table recipes with the implicit substrate floor;
 - remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
 - replace the direct `TableFace` mount in `SubTableBand.tsx`;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;

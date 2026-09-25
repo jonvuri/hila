@@ -7,6 +7,7 @@ import {
   applyFaceToMatrix,
   saveFaceConfig,
   getFaceConfig,
+  getFaceConfigForMatrix,
   getFaceConfigsForMatrix,
 } from './face-config'
 import { registerFaceType, clearFaceTypeRegistry } from './face-registry'
@@ -100,7 +101,7 @@ describe('Face config', () => {
     expect(getFaceConfig(db, 'nonexistent')).toBeNull()
   })
 
-  test('getFaceConfigsForMatrix returns configs for a specific matrix', () => {
+  test('stores at most one intentional recipe for a matrix', () => {
     const m1 = createMatrix(db, 'M1', [{ name: 'a', type: 'TEXT' }])
     const m2 = createMatrix(db, 'M2', [{ name: 'b', type: 'TEXT' }])
 
@@ -113,15 +114,17 @@ describe('Face config', () => {
       sort: null,
       filters: [],
     })
-    saveFaceConfig(db, {
-      id: 'cfg-b',
-      faceTypeId: 'hila.outline',
-      matrixId: m1,
-      slotBindings: {},
-      settings: {},
-      sort: null,
-      filters: [],
-    })
+    expect(() =>
+      saveFaceConfig(db, {
+        id: 'cfg-b',
+        faceTypeId: 'hila.outline',
+        matrixId: m1,
+        slotBindings: {},
+        settings: {},
+        sort: null,
+        filters: [],
+      }),
+    ).toThrow('already has an intentional face recipe')
     saveFaceConfig(db, {
       id: 'cfg-c',
       faceTypeId: 'hila.table',
@@ -133,12 +136,72 @@ describe('Face config', () => {
     })
 
     const m1Configs = getFaceConfigsForMatrix(db, m1)
-    expect(m1Configs).toHaveLength(2)
-    expect(m1Configs.map((c) => c.id).sort()).toEqual(['cfg-a', 'cfg-b'])
+    expect(m1Configs.map((c) => c.id)).toEqual(['cfg-a'])
+    expect(getFaceConfigForMatrix(db, m1)?.id).toBe('cfg-a')
 
     const m2Configs = getFaceConfigsForMatrix(db, m2)
     expect(m2Configs).toHaveLength(1)
     expect(m2Configs[0]!.id).toBe('cfg-c')
+  })
+
+  test('enforces one intentional recipe per matrix in storage', () => {
+    const matrixId = createMatrix(db, 'M1')
+    db.exec(
+      `INSERT INTO face_configs
+         (id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin)
+       VALUES ('cfg-a', 'hila.table', ?, '{}', NULL, NULL)`,
+      { bind: [matrixId] },
+    )
+
+    expect(() =>
+      db.exec(
+        `INSERT INTO face_configs
+           (id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin)
+         VALUES ('cfg-b', 'hila.note', ?, '{}', NULL, NULL)`,
+        { bind: [matrixId] },
+      ),
+    ).toThrow()
+  })
+
+  test('converges reset-era duplicate recipes before enforcing uniqueness', () => {
+    const matrixId = createMatrix(db, 'M1')
+    db.exec('DROP INDEX face_configs_matrix_unique')
+    db.exec(
+      `INSERT INTO face_configs
+         (id, face_type_id, matrix_id, slot_bindings, settings, created_by_plugin)
+       VALUES ('cfg-old', 'hila.table', ?, '{}', NULL, NULL),
+              ('cfg-new', 'hila.note', ?, '{}', NULL, NULL)`,
+      { bind: [matrixId, matrixId] },
+    )
+
+    initMatrixSchema(db)
+
+    expect(getFaceConfigsForMatrix(db, matrixId).map(({ id }) => id)).toEqual(['cfg-new'])
+    expect(
+      db.selectValue(
+        `SELECT COUNT(*) FROM pragma_index_list('face_configs')
+         WHERE name = 'face_configs_matrix_unique' AND "unique" = 1`,
+      ),
+    ).toBe(1)
+  })
+
+  test('rejects moving an intentional recipe between matrixes', () => {
+    const m1 = createMatrix(db, 'M1')
+    const m2 = createMatrix(db, 'M2')
+    const config: FaceConfig = {
+      id: 'cfg-stable',
+      faceTypeId: 'hila.table',
+      matrixId: m1,
+      slotBindings: {},
+      settings: {},
+      sort: null,
+      filters: [],
+    }
+    saveFaceConfig(db, config)
+
+    expect(() => saveFaceConfig(db, { ...config, matrixId: m2 })).toThrow(
+      'cannot move between matrixes',
+    )
   })
 
   // -- applyFaceToMatrix --------------------------------------------------------
@@ -174,6 +237,71 @@ describe('Face config', () => {
     const loaded = getFaceConfig(db, config.id)
     expect(loaded).not.toBeNull()
     expect(loaded!.slotBindings).toEqual({ title: titleColId, body: bodyColId })
+  })
+
+  test('same-face application preserves normalized presentation state', () => {
+    registerFaceType({
+      id: 'hila.table',
+      name: 'Table',
+      slots: [],
+      overflowBehavior: 'none',
+    })
+    const matrixId = createMatrix(db, 'Data', [
+      { name: 'title', type: 'TEXT' },
+      { name: 'status', type: 'TEXT' },
+    ])
+    const columns = getColumns(db, matrixId)
+    const titleColumnId = columns.find(({ name }) => name === 'title')!.id
+    const statusColumnId = columns.find(({ name }) => name === 'status')!.id
+    const created = applyFaceToMatrix(db, 'hila.table', matrixId)
+    saveFaceConfig(db, {
+      ...created,
+      settings: { treatment: 'ledger' },
+      sort: { columnId: titleColumnId, direction: 'ASC' },
+      filters: [
+        {
+          id: 'stable-filter',
+          columnId: statusColumnId,
+          operator: '=',
+          value: 'open',
+          order: 0,
+        },
+      ],
+    })
+
+    const ensured = applyFaceToMatrix(db, 'hila.table', matrixId)
+
+    expect(ensured).toMatchObject({
+      id: created.id,
+      settings: { treatment: 'ledger' },
+      sort: { columnId: titleColumnId, direction: 'ASC' },
+      filters: [{ id: 'stable-filter', columnId: statusColumnId, order: 0 }],
+    })
+    expect(getFaceConfigsForMatrix(db, matrixId)).toHaveLength(1)
+  })
+
+  test('replaces the intentional recipe in place', () => {
+    registerFaceType({
+      id: 'hila.table',
+      name: 'Table',
+      slots: [],
+      overflowBehavior: 'none',
+    })
+    registerFaceType({
+      id: 'hila.note',
+      name: 'Note',
+      slots: [{ name: 'title', preferredType: 'text', required: true }],
+      overflowBehavior: 'property-panel',
+    })
+    const matrixId = createMatrix(db, 'Data', [{ name: 'title', type: 'TEXT' }])
+    const first = applyFaceToMatrix(db, 'hila.table', matrixId)
+    const replacement = applyFaceToMatrix(db, 'hila.note', matrixId)
+
+    expect(replacement.id).toBe(first.id)
+    expect(replacement.faceTypeId).toBe('hila.note')
+    expect(replacement.sort).toBeNull()
+    expect(replacement.filters).toEqual([])
+    expect(getFaceConfigsForMatrix(db, matrixId)).toHaveLength(1)
   })
 
   test('applyFaceToMatrix throws for unknown face type', () => {

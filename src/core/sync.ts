@@ -260,6 +260,16 @@ const hasSameIdentity = (
   left: Record<string, unknown>,
   right: Record<string, unknown>,
 ): boolean => {
+  // A matrix owns one intentional face recipe. Treat legacy rows with different
+  // config IDs as the same aggregate so replicas resolve the matrix choice once.
+  if (
+    tableName === 'face_configs' &&
+    left.matrix_id !== undefined &&
+    right.matrix_id !== undefined
+  ) {
+    return left.matrix_id === right.matrix_id
+  }
+
   // An own-edge's parent is mutable, so concurrent reparents conflict by the
   // single-owned target rather than by the row's full composite primary key.
   if (tableName === 'joins' && left.kind === 'own' && right.kind === 'own') {
@@ -303,6 +313,13 @@ const findLocalConflict = (
   stmt.finalize()
   return result
 }
+
+type LocalConflict = NonNullable<ReturnType<typeof findLocalConflict>>
+
+const isFaceConfigChild = (entry: ChangeEntry): boolean =>
+  entry.table === 'face_slot_bindings' ||
+  entry.table === 'face_sort_config' ||
+  entry.table === 'face_filter_configs'
 
 const buildUpsertSql = (
   tableName: string,
@@ -502,6 +519,23 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
   let applied = 0
   let joinsModified = false
   const dirtyMatrixIds = new Set<number>()
+  const faceConfigMatrixIds = new Map<string, number>()
+  const finalFaceConfigEntries = new Map<number, ChangeEntry>()
+  for (const entry of changeset.entries) {
+    if (entry.table !== 'face_configs') continue
+    const configId = entry.data?.id
+    const matrixId = entry.data?.matrix_id
+    if (typeof configId !== 'string' || typeof matrixId !== 'number') continue
+    faceConfigMatrixIds.set(configId, matrixId)
+    finalFaceConfigEntries.set(matrixId, entry)
+  }
+  const faceConfigsWithChildChanges = new Set(
+    changeset.entries.flatMap((entry) => {
+      if (!isFaceConfigChild(entry)) return []
+      const configId = entry.data?.face_config_id
+      return typeof configId === 'string' ? [configId] : []
+    }),
+  )
   const matrixColumnsModified = changeset.entries.some(
     (entry) => entry.table === 'matrix_columns',
   )
@@ -510,15 +544,64 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
     db.exec('INSERT INTO _sync_applying (flag) VALUES (1)')
     if (matrixColumnsModified) db.exec('DELETE FROM formula_column_deps')
 
+    const faceAggregateDecisions = new Map<
+      number,
+      {
+        finalEntry: ChangeEntry
+        localConflict: LocalConflict | null
+        remoteWins: boolean
+      }
+    >()
+    for (const [matrixId, finalEntry] of finalFaceConfigEntries) {
+      const localConflict = findLocalConflict(
+        db,
+        finalEntry,
+        localDeviceId,
+        localSeqAtLastApply,
+      )
+      faceAggregateDecisions.set(matrixId, {
+        finalEntry,
+        localConflict,
+        remoteWins: !localConflict || finalEntry.timestamp > localConflict.timestamp,
+      })
+    }
+
     for (const entry of changeset.entries) {
-      const localConflict = findLocalConflict(db, entry, localDeviceId, localSeqAtLastApply)
+      const rawFaceConfigId =
+        entry.table === 'face_configs' ? entry.data?.id
+        : (
+          entry.table === 'face_slot_bindings' ||
+          entry.table === 'face_sort_config' ||
+          entry.table === 'face_filter_configs'
+        ) ?
+          entry.data?.face_config_id
+        : null
+      const faceConfigId = typeof rawFaceConfigId === 'string' ? rawFaceConfigId : null
+      const faceMatrixId =
+        entry.table === 'face_configs' && typeof entry.data?.matrix_id === 'number' ?
+          entry.data.matrix_id
+        : faceConfigId ? faceConfigMatrixIds.get(faceConfigId)
+        : undefined
+      const faceAggregateDecision =
+        faceMatrixId === undefined ? undefined : faceAggregateDecisions.get(faceMatrixId)
+      const isFinalFaceConfigEntry = faceAggregateDecision?.finalEntry === entry
+
+      if (faceAggregateDecision && !faceAggregateDecision.remoteWins) {
+        if (!isFinalFaceConfigEntry || !faceAggregateDecision.localConflict) continue
+      }
+
+      const localConflict =
+        faceAggregateDecision ?
+          isFinalFaceConfigEntry ? faceAggregateDecision.localConflict
+          : null
+        : findLocalConflict(db, entry, localDeviceId, localSeqAtLastApply)
 
       if (localConflict) {
         // Conflict detected — resolve via LWW
         const remoteTimestamp = entry.timestamp
         const localTimestamp = localConflict.timestamp
 
-        const remoteWins = remoteTimestamp > localTimestamp
+        const remoteWins = faceAggregateDecision?.remoteWins ?? remoteTimestamp > localTimestamp
 
         const conflictRecord: ConflictRecord = {
           id: 0, // will be assigned by DB
@@ -614,6 +697,23 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
       }
 
       if ((entry.operation === 'INSERT' || entry.operation === 'UPDATE') && preparedData) {
+        if (entry.table === 'face_configs') {
+          const configId = String(preparedData.id)
+          // A winning recipe replaces the normalized aggregate as a unit. This prevents
+          // losing local bindings, sort, or filters from mixing into the winning recipe.
+          if (faceConfigsWithChildChanges.has(configId)) {
+            for (const table of [
+              'face_slot_bindings',
+              'face_sort_config',
+              'face_filter_configs',
+            ]) {
+              db.exec(`DELETE FROM ${table} WHERE face_config_id = ?`, { bind: [configId] })
+            }
+          }
+          db.exec('DELETE FROM face_configs WHERE matrix_id = ? AND id <> ?', {
+            bind: [preparedData.matrix_id as number, configId],
+          })
+        }
         if (entry.table === 'joins') {
           if (preparedData.kind === 'own') {
             db.exec(
@@ -632,7 +732,11 @@ export const applyRemoteChanges = (db: Database, changeset: Changeset): ApplyRes
         db.exec(sql, { bind: values })
         applied++
       } else if (entry.operation === 'DELETE') {
-        if (entry.table === 'joins' && identityData.kind === 'own') {
+        if (entry.table === 'face_configs' && typeof identityData.matrix_id === 'number') {
+          db.exec('DELETE FROM face_configs WHERE matrix_id = ?', {
+            bind: [identityData.matrix_id],
+          })
+        } else if (entry.table === 'joins' && identityData.kind === 'own') {
           db.exec(
             `DELETE FROM joins
              WHERE target_matrix_id = ? AND target_row_id = ? AND kind = 'own'`,

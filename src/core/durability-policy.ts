@@ -188,7 +188,8 @@ export const CORE_DURABILITY_POLICY = {
   },
   face_configs: {
     durability: 'replicated-source',
-    responsibility: 'Legacy face recipe identity and settings during the runtime migration.',
+    responsibility:
+      'One matrix-unique intentional face recipe and its normalized replicated aggregate.',
     identity: ['id'],
     deleteSemantics: 'Delete by stable UUID; normalized child rows cascade.',
     columns: {

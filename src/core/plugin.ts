@@ -1,12 +1,10 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import type { PluginContext, PluginRegistration, PluginRow } from './plugin-types'
-import { applyFaceToMatrix } from './face-config'
+import { applyFaceToMatrix, getFaceConfigForMatrix, saveFaceConfig } from './face-config'
 import { getFaceType, registerFaceType as registerFaceTypeLocal } from './face-registry'
-import { createMatrix } from './matrix'
+import { createMatrix, getColumns } from './matrix'
 import { withTransaction } from './transaction'
-
-const TABLE_FACE_TYPE_ID = 'hila.table'
 
 /**
  * Register a plugin: upsert its `plugins` row, create declared matrixes
@@ -23,8 +21,7 @@ export const registerPlugin = async (
   const matrixIds: Record<string, number> = {}
 
   withTransaction(db, () => {
-    // Register face types before creating matrixes (face types are needed
-    // when creating identity faces for new matrixes).
+    // Register face types before applying explicit bindings.
     if (definition.faceTypes) {
       for (const ft of definition.faceTypes) {
         if (!getFaceType(ft.id)) {
@@ -78,10 +75,6 @@ export const registerPlugin = async (
         bind: [definition.id, matrixId],
       })
       matrixIds[spec.key] = matrixId
-
-      if (getFaceType(TABLE_FACE_TYPE_ID)) {
-        applyFaceToMatrix(db, TABLE_FACE_TYPE_ID, matrixId)
-      }
     }
 
     // Persist the key→matrixId mapping in the metadata column
@@ -99,7 +92,27 @@ export const registerPlugin = async (
           `Face binding references unknown matrix key "${fb.matrixKey}" in plugin "${definition.id}"`,
         )
       }
-      applyFaceToMatrix(db, fb.faceTypeId, fbMatrixId, definition.id)
+      // A declaration supplies the initial intentional recipe. Re-registration must not
+      // overwrite a later explicit user choice.
+      if (getFaceConfigForMatrix(db, fbMatrixId)) continue
+
+      const config = applyFaceToMatrix(db, fb.faceTypeId, fbMatrixId, definition.id)
+      const columnsByName = new Map(
+        getColumns(db, fbMatrixId).map((column) => [column.name, column.id]),
+      )
+      const declaredBindings = Object.fromEntries(
+        Object.entries(fb.slotBindings ?? {}).map(([slotName, columnName]) => [
+          slotName,
+          columnsByName.get(columnName) ?? null,
+        ]),
+      )
+      if (Object.keys(declaredBindings).length > 0 || fb.settings) {
+        saveFaceConfig(db, {
+          ...config,
+          slotBindings: { ...config.slotBindings, ...declaredBindings },
+          settings: { ...config.settings, ...fb.settings },
+        })
+      }
     }
   })
 

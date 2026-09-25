@@ -107,6 +107,10 @@ export type MatrixOperationMap = {
     params: { matrixId: number }
     result: FaceConfig[]
   }
+  getFaceConfigForMatrix: {
+    params: { matrixId: number }
+    result: FaceConfig | null
+  }
   seedWelcomeRow: {
     params: { matrixId: number; content: string }
     result: void

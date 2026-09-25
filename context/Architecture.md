@@ -232,10 +232,16 @@ The resolution ladder is:
 2. subject or matrix preferred recipe;
 3. substrate floor.
 
-Phase 13's approved storage boundary keeps at most one intentional recipe per matrix. It does not
-store an automatic table recipe merely to represent rung 3: the substrate floor is host
-infrastructure. Actual table subjects and explicit table choices retain table recipes. Multiple
-saved recipes and a preferred-recipe pointer remain deferred until a real consumer needs them.
+The shipped Phase 13 foundation keeps at most one intentional recipe per matrix. It does not store
+an automatic table recipe merely to represent rung 3: the substrate floor is host infrastructure.
+Actual table subjects and explicit table choices retain table recipes. Applying the same face is
+idempotent; replacement reuses the replica-stable config identity and resets incompatible
+presentation state. Multiple saved recipes and a preferred-recipe pointer remain deferred until a
+real consumer needs them.
+
+Callable `line` and `collection` registrations are owned by plugin lifecycle. A host accepts only
+navigation and insertion requests plus nested-subject yielding; the contract exposes no shell DOM,
+pixel sizing, or recursive face mount.
 
 The shipped Phase 11 slice keeps SQL on view subjects and lets the focus-panel host request a
 registered `collection` interior. Unmigrated table consumers remain behind the explicitly

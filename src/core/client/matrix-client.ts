@@ -18,6 +18,7 @@ import type { AppearanceProvenance, ResolvedPlaceNavigation } from '../place-nav
 import type { NodeRef } from '../tree'
 import type { CreatedViewBlock } from '../block-marker'
 import { commandRegistry } from '../../command-registry'
+import { faceRenderingRegistry } from '../face-runtime'
 import {
   registerFaceType as registerFaceTypeLocal,
   getFaceType as getFaceTypeLocal,
@@ -79,7 +80,11 @@ export const renameMatrix = (matrixId: number, title: string): Promise<void> =>
 
 export const addSampleRows = (matrixId: number) => workerCall('addSampleRows', { matrixId })
 
-export const resetDatabase = () => workerCall('resetDatabase', {})
+export const resetDatabase = async (): Promise<void> => {
+  await workerCall('resetDatabase', {})
+  // Supersede both committed and in-flight owners before the caller re-registers plugins.
+  await Promise.all([...pluginGenerations.keys()].map(disposePlugin))
+}
 
 export const insertRow = (
   matrixId: number,
@@ -112,10 +117,21 @@ export const deleteSubtree = (matrixId: number, key: Uint8Array) =>
 
 export const registerPlugin = async (definition: PluginDefinition): Promise<PluginContext> => {
   const generation = nextPluginGeneration(definition.id)
+  const previousDestroy = pluginDestroyers.get(definition.id)
   const preparedCommands = commandRegistry.prepareOwner(
     definition.id,
     definition.commands ?? [],
   )
+  let preparedRenderings: ReturnType<typeof faceRenderingRegistry.prepareOwner>
+  try {
+    preparedRenderings = faceRenderingRegistry.prepareOwner(
+      definition.id,
+      definition.faceRenderings ?? [],
+    )
+  } catch (error) {
+    preparedCommands.cancel()
+    throw error
+  }
   let initialized = false
 
   const assertCurrentGeneration = (): void => {
@@ -146,13 +162,27 @@ export const registerPlugin = async (definition: PluginDefinition): Promise<Plug
       assertCurrentGeneration()
     }
 
-    if (!preparedCommands.commit()) {
+    const disposeRenderings = preparedRenderings.commit()
+    const disposeCommands = preparedCommands.commit()
+    if (!disposeRenderings || !disposeCommands) {
+      disposeRenderings?.()
+      disposeCommands?.()
       throw new PluginRegistrationSupersededError(definition.id)
     }
     pluginDestroyers.set(definition.id, definition.destroy)
+    try {
+      await previousDestroy?.()
+    } catch (error) {
+      disposeRenderings()
+      disposeCommands()
+      pluginDestroyers.delete(definition.id)
+      await definition.destroy?.()
+      throw error
+    }
     return ctx
   } catch (error) {
     preparedCommands.cancel()
+    preparedRenderings.cancel()
     if (initialized && error instanceof PluginRegistrationSupersededError) {
       await definition.destroy?.()
     }
@@ -163,6 +193,7 @@ export const registerPlugin = async (definition: PluginDefinition): Promise<Plug
 export const disposePlugin = async (pluginId: string): Promise<void> => {
   nextPluginGeneration(pluginId)
   commandRegistry.unregisterOwner(pluginId)
+  faceRenderingRegistry.unregisterOwner(pluginId)
   const destroy = pluginDestroyers.get(pluginId)
   pluginDestroyers.delete(pluginId)
   await destroy?.()
@@ -181,6 +212,9 @@ export const saveFaceConfig = (config: FaceConfig): Promise<void> =>
 
 export const getFaceConfigs = (matrixId: number): Promise<FaceConfig[]> =>
   workerCall('getFaceConfigs', { matrixId })
+
+export const getFaceConfigForMatrix = (matrixId: number): Promise<FaceConfig | null> =>
+  workerCall('getFaceConfigForMatrix', { matrixId })
 
 export const seedWelcomeRow = (matrixId: number, content: string): Promise<void> =>
   workerCall('seedWelcomeRow', { matrixId, content })

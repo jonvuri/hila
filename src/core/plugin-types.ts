@@ -1,6 +1,7 @@
 import type { CommandDescriptor } from '../command-registry'
 
 import type { FaceTypeDefinition } from './face-types'
+import type { FaceRenderingContribution } from './face-runtime'
 
 export type MatrixSpec = {
   key: string // local reference within the plugin
@@ -44,6 +45,7 @@ export type PluginDefinition = {
   name: string
   version: string
   faceTypes?: FaceTypeDefinition[]
+  faceRenderings?: readonly FaceRenderingContribution[]
   matrixes: MatrixSpec[]
   namedQueries: Record<string, string>
   namedMutations: Record<string, string>
@@ -54,10 +56,19 @@ export type PluginDefinition = {
 }
 
 // Serializable subset sent to the worker. All callable contributions stay on the main thread.
-export type PluginRegistration = Omit<PluginDefinition, 'commands' | 'init' | 'destroy'>
+export type PluginRegistration = Omit<
+  PluginDefinition,
+  'commands' | 'faceRenderings' | 'init' | 'destroy'
+>
 
 export const toPluginRegistration = (definition: PluginDefinition): PluginRegistration => {
-  const { commands: _commands, init: _init, destroy: _destroy, ...registration } = definition
+  const {
+    commands: _commands,
+    faceRenderings: _faceRenderings,
+    init: _init,
+    destroy: _destroy,
+    ...registration
+  } = definition
   return registration
 }
 

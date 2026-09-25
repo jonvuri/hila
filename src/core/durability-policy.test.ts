@@ -145,6 +145,15 @@ describe('durability policy inventory', () => {
     expect(auditDurabilityPolicy(db)).toEqual([])
   })
 
+  test('face recipes enforce one replicated aggregate per matrix', () => {
+    expect(
+      db.selectValue(
+        `SELECT COUNT(*) FROM pragma_index_list('face_configs')
+         WHERE name = 'face_configs_matrix_unique' AND "unique" = 1`,
+      ),
+    ).toBe(1)
+  })
+
   test('guard reports an unclassified table and column', () => {
     db.exec('SAVEPOINT durability_unclassified_fixture')
     try {

@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { render } from 'solid-js/web'
 
+import { resolveFaceAffinity, SUBSTRATE_FACE_AFFINITY } from './face-affinity'
 import type { FaceRecipe, FaceSubject } from './face-types'
 import {
   clearFaceRenderings,
+  createFaceRenderingRegistry,
   FaceHostSlot,
   getFaceRendering,
   registerFaceRenderings,
@@ -37,12 +39,72 @@ describe('forward face runtime', () => {
     expect(getFaceRendering(recipe.faceTypeId, 'collection')).toBe(Collection)
   })
 
-  test('lets the host choose rendering kind and own presentation policy', () => {
+  test('replaces an owner completely and ignores stale disposers', () => {
+    const registry = createFaceRenderingRegistry()
+    const OldLine = () => <span>old line</span>
+    const OldCollection = () => <span>old collection</span>
+    const NewCollection = () => <span>new collection</span>
+
+    const staleDispose = registry.replaceOwner('plugin', [
+      { faceTypeId: recipe.faceTypeId, line: OldLine, collection: OldCollection },
+    ])
+    const dispose = registry.replaceOwner('plugin', [
+      { faceTypeId: recipe.faceTypeId, collection: NewCollection },
+    ])
+
+    staleDispose()
+    expect(registry.get(recipe.faceTypeId, 'line')).toBeUndefined()
+    expect(registry.get(recipe.faceTypeId, 'collection')).toBe(NewCollection)
+
+    dispose()
+    expect(registry.get(recipe.faceTypeId, 'collection')).toBeUndefined()
+  })
+
+  test('invalidates stale disposers when the registry is cleared', () => {
+    const registry = createFaceRenderingRegistry()
+    const OldLine = () => <span>old line</span>
+    const NewLine = () => <span>new line</span>
+    const staleDispose = registry.replaceOwner('plugin', [
+      { faceTypeId: recipe.faceTypeId, line: OldLine },
+    ])
+
+    registry.clear()
+    registry.replaceOwner('plugin', [{ faceTypeId: recipe.faceTypeId, line: NewLine }])
+    staleDispose()
+
+    expect(registry.get(recipe.faceTypeId, 'line')).toBe(NewLine)
+  })
+
+  test('reserves rendering keys and preserves committed owners after a conflict', () => {
+    const registry = createFaceRenderingRegistry()
+    const Line = () => <span>line</span>
+    registry.replaceOwner('one', [{ faceTypeId: recipe.faceTypeId, line: Line }])
+
+    expect(() =>
+      registry.prepareOwner('two', [{ faceTypeId: recipe.faceTypeId, line: Line }]),
+    ).toThrow('already registered')
+    expect(registry.get(recipe.faceTypeId, 'line')).toBe(Line)
+  })
+
+  test('lets the host choose rendering kind and supply semantic services', () => {
+    const requestNavigation = vi.fn()
+    const yieldSubject = vi.fn()
     registerFaceRenderings(recipe.faceTypeId, {
       collection: (props) => (
-        <span data-testid="face-interior">
+        <button
+          data-testid="face-interior"
+          onClick={() => {
+            props.services.requestNavigation?.({ matrixId: 30, rowId: 40 })
+            props.services.yieldSubject?.({
+              mode: 'container',
+              matrixId: 30,
+              rowId: 40,
+              extentMatrixId: 50,
+            })
+          }}
+        >
           {props.subject.mode}:{props.rootMatrixId}
-        </span>
+        </button>
       ),
     })
     const container = document.createElement('div')
@@ -53,9 +115,11 @@ describe('forward face runtime', () => {
           host="focus-panel"
           kind="collection"
           subject={subject}
-          recipe={recipe}
+          affinity={resolveFaceAffinity(recipe)}
           rootMatrixId={1}
           fidelity="substrate"
+          services={{ requestNavigation, yieldSubject }}
+          substrate={<span data-testid="substrate">substrate</span>}
         />
       ),
       container,
@@ -64,13 +128,25 @@ describe('forward face runtime', () => {
     const slot = container.querySelector<HTMLElement>('[data-testid="face-host-slot"]')!
     expect(slot.dataset.host).toBe('focus-panel')
     expect(slot.dataset.faceRendering).toBe('collection')
+    expect(slot.dataset.faceSource).toBe('intentional')
     expect(slot.dataset.fidelity).toBe('substrate')
     expect(slot.dataset.subjectMode).toBe('view')
-    expect(container.querySelector('[data-testid="face-interior"]')?.textContent).toBe('view:1')
+    const interior = container.querySelector<HTMLButtonElement>(
+      '[data-testid="face-interior"]',
+    )!
+    expect(interior.textContent).toBe('view:1')
+    interior.click()
+    expect(requestNavigation).toHaveBeenCalledWith({ matrixId: 30, rowId: 40 })
+    expect(yieldSubject).toHaveBeenCalledWith({
+      mode: 'container',
+      matrixId: 30,
+      rowId: 40,
+      extentMatrixId: 50,
+    })
     dispose()
   })
 
-  test('uses the host fallback when a rendering is absent', () => {
+  test('uses the implicit substrate floor without a persisted recipe', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const dispose = render(
@@ -79,18 +155,84 @@ describe('forward face runtime', () => {
           host="row"
           kind="line"
           subject={subject}
-          recipe={recipe}
+          affinity={SUBSTRATE_FACE_AFFINITY}
           rootMatrixId={1}
           fidelity="composed"
-          fallback={<span data-testid="fallback">substrate fallback</span>}
+          services={{}}
+          substrate={<span data-testid="substrate">substrate fallback</span>}
         />
       ),
       container,
     )
 
-    expect(container.querySelector('[data-testid="fallback"]')?.textContent).toBe(
+    expect(container.querySelector('[data-testid="substrate"]')?.textContent).toBe(
       'substrate fallback',
     )
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="face-host-slot"]')?.dataset
+        .faceSource,
+    ).toBe('substrate')
     dispose()
+  })
+
+  test('uses the host substrate when an intentional rendering is unavailable', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const dispose = render(
+      () => (
+        <FaceHostSlot
+          host="row"
+          kind="line"
+          subject={subject}
+          affinity={resolveFaceAffinity(recipe)}
+          rootMatrixId={1}
+          fidelity="composed"
+          services={{}}
+          substrate={<span data-testid="substrate">host substrate</span>}
+        />
+      ),
+      container,
+    )
+
+    expect(container.querySelector('[data-testid="substrate"]')?.textContent).toBe(
+      'host substrate',
+    )
+    dispose()
+  })
+
+  test('updates a mounted slot across registration, replacement, and teardown', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const disposeSlot = render(
+      () => (
+        <FaceHostSlot
+          host="row"
+          kind="line"
+          subject={subject}
+          affinity={resolveFaceAffinity(recipe)}
+          rootMatrixId={1}
+          fidelity="composed"
+          services={{}}
+          substrate={<span data-testid="substrate">substrate</span>}
+        />
+      ),
+      container,
+    )
+
+    expect(container.querySelector('[data-testid="substrate"]')).not.toBeNull()
+    const disposeFirst = registerFaceRenderings(recipe.faceTypeId, {
+      line: () => <span data-testid="first">first</span>,
+    })
+    expect(container.querySelector('[data-testid="first"]')).not.toBeNull()
+
+    const disposeSecond = registerFaceRenderings(recipe.faceTypeId, {
+      line: () => <span data-testid="second">second</span>,
+    })
+    disposeFirst()
+    expect(container.querySelector('[data-testid="second"]')).not.toBeNull()
+
+    disposeSecond()
+    expect(container.querySelector('[data-testid="substrate"]')).not.toBeNull()
+    disposeSlot()
   })
 })

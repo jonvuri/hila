@@ -447,6 +447,19 @@ export const initMatrixSchema = (db: Database) => {
     dropChangeTrackingTriggers(db, 'face_configs')
     db.exec('ALTER TABLE face_configs DROP COLUMN query')
   }
+
+  // Pre-milestone recipe convergence: older reset-era databases may contain an automatic table
+  // config plus later explicit choices. Retain the last-written choice, cascade its obsolete
+  // normalized children, then enforce one intentional recipe per matrix in storage.
+  db.exec(`
+    DELETE FROM face_configs
+    WHERE rowid NOT IN (
+      SELECT MAX(rowid) FROM face_configs GROUP BY matrix_id
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS face_configs_matrix_unique
+      ON face_configs (matrix_id);
+  `)
 }
 
 /**

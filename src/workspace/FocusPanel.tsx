@@ -42,7 +42,8 @@ import {
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 import type { NavigationOutlineVariant } from '../design/tokens'
-import { FaceHostSlot } from '../core/face-runtime'
+import { EMPTY_FACE_HOST_SERVICES, FaceHostSlot } from '../core/face-runtime'
+import { resolveFaceAffinity } from '../core/face-affinity'
 import type { FaceRecipe, ViewSubject } from '../core/face-types'
 
 import SubstrateRegion from './SubstrateRegion'
@@ -137,6 +138,8 @@ const SUBSTRATE_COLLECTION_RECIPE: FaceRecipe = {
   slotBindings: {},
   settings: {},
 }
+
+const SUBSTRATE_COLLECTION_AFFINITY = resolveFaceAffinity(SUBSTRATE_COLLECTION_RECIPE)
 
 registerViewCollectionRendering(SUBSTRATE_COLLECTION_RECIPE.faceTypeId)
 
@@ -798,10 +801,11 @@ const FocusPanel = (props: FocusPanelProps) => {
                     host="focus-panel"
                     kind="collection"
                     subject={viewSubject()!}
-                    recipe={SUBSTRATE_COLLECTION_RECIPE}
+                    affinity={SUBSTRATE_COLLECTION_AFFINITY}
                     rootMatrixId={props.rootMatrixId}
                     fidelity="substrate"
-                    fallback={<div data-testid="view-collection-unavailable" />}
+                    services={EMPTY_FACE_HOST_SERVICES}
+                    substrate={<div data-testid="view-collection-unavailable" />}
                   />
                 </section>
               </Show>
