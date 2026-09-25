@@ -59,7 +59,7 @@ product faces begin in Phase 14.
 | Session                                                                                                                  | Outcome                                                                                       | Depends on | State    |
 | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- | ---------- | -------- |
 | [1 — Face recipe and host-runtime foundation](Phase-13/Session-1-face-recipe-and-host-runtime-foundation.md)             | One deterministic recipe boundary, implicit substrate floor, and lifecycle-owned host runtime | Phase 12   | Complete |
-| [2 — Theme and fidelity inputs](Phase-13/Session-2-theme-and-fidelity-inputs.md)                                         | Environment-selected visual theme and recursive transient fidelity inputs                     | 1          | Planned  |
+| [2 — Theme and fidelity inputs](Phase-13/Session-2-theme-and-fidelity-inputs.md)                                         | Environment-selected visual theme and recursive transient fidelity inputs                     | 1          | Complete |
 | [3 — Table collection cutover](Phase-13/Session-3-table-collection-cutover.md)                                           | Registered table collection, canonical treatments, and compatibility-adapter retirement       | 1–2        | Planned  |
 | [4 — Inline tags and property-line surfaces](Phase-13/Session-4-inline-tags-and-property-line-surfaces.md)               | Canonical inline/property editing and host-consumable line interiors                          | 1–3        | Planned  |
 | [5 — Focus-panel scaffold and collection recursion](Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md) | Host-owned panel regions, recursion, affinity, and fidelity                                   | 1–4        | Planned  |
@@ -103,4 +103,4 @@ boundary here and route `NOW.md` to Phase 14 only after the compatibility-remova
 
 ## Next action
 
-Execute [Session 2](Phase-13/Session-2-theme-and-fidelity-inputs.md).
+Execute [Session 3](Phase-13/Session-3-table-collection-cutover.md).

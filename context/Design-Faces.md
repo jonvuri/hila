@@ -1,9 +1,10 @@
 # Design System — Component Variants
 
 > **Implementation status.** The navigation-outline registry and Guides production treatment ship.
-> Table treatments and the remaining face migrations are design inputs, not shipped runtime
-> variants. Storybook preserves the retired top-level Table and Tags surfaces as fixture-driven
-> references. Future sequencing belongs in [Plan.md](Plan.md).
+> Recursive composed/substrate host inputs now ship. Table treatments and the remaining face
+> migrations are design inputs, not shipped runtime variants. Storybook preserves the retired
+> top-level Table and Tags surfaces as fixture-driven references. Future sequencing belongs in
+> [Plan.md](Plan.md).
 
 This document plans configurable outline and table treatments. These components build on the
 shared semantic token system. An outline treatment can serve the shell navigation panel and an

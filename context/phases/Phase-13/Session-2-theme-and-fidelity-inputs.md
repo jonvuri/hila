@@ -1,7 +1,7 @@
 ---
 title: Phase 13 Session 2 — Theme and fidelity inputs
 kind: phase-session
-state: planned
+state: complete
 updated: 2026-09-25
 ---
 
@@ -18,18 +18,18 @@ Session 1 must define the host boundary and implicit substrate fallback.
 
 ## Requirements
 
-- Read `VITE_HILA_VISUAL_THEME` as `ghost`, `null`, or `wipeout` at build or development-server
-  startup. Resolve a missing or invalid value to Ghost before writing root attributes.
-- Keep polarity independent of visual theme. Preserve the existing polarity fallback and isolated
-  preview-scope rules.
-- Resolve fidelity through the host tree in this order: active x-ray, explicit local fidelity,
-  inherited fidelity, then composed root fallback.
-- Expose resolved composed/substrate state to face interiors without storing it in recipes, schema,
-  plugin metadata, or session history.
-- Keep x-ray transient and available for development inspection. The system-edge control may land
-  in Session 8, but the runtime state and test seam belong here.
-- Prove that theme, polarity, density, component variants, responsive shell presentation, and
-  fidelity cannot select or mutate one another.
+- [x] Read `VITE_HILA_VISUAL_THEME` as `ghost`, `null`, or `wipeout` at build or development-server
+      startup. Resolve a missing or invalid value to Ghost before writing root attributes.
+- [x] Keep polarity independent of visual theme. Preserve the existing polarity fallback and isolated
+      preview-scope rules.
+- [x] Resolve fidelity through the host tree in this order: active x-ray, explicit local fidelity,
+      inherited fidelity, then composed root fallback.
+- [x] Expose resolved composed/substrate state to face interiors without storing it in recipes, schema,
+      plugin metadata, or session history.
+- [x] Keep x-ray transient and available for development inspection. The system-edge control may land
+      in Session 8, but the runtime state and test seam belong here.
+- [x] Prove that theme, polarity, density, component variants, responsive shell presentation, and
+      fidelity cannot select or mutate one another.
 
 ## Boundaries
 
@@ -42,20 +42,39 @@ Session 1 must define the host boundary and implicit substrate fallback.
 
 ## Acceptance
 
-- Local development and offline builds can choose any approved visual theme through one documented
-  environment value.
-- Missing and invalid values produce Ghost without an invalid root attribute or startup flash into
-  another theme.
-- X-ray forces substrate through nested face hosts and leaves all other design axes unchanged.
-- Reload resets fidelity inspection state while preserving the environment-selected visual theme.
+- [x] Local development and offline builds can choose any approved visual theme through one documented
+      environment value.
+- [x] Missing and invalid values produce Ghost without an invalid root attribute or startup flash into
+      another theme.
+- [x] X-ray forces substrate through nested face hosts and leaves all other design axes unchanged.
+- [x] Reload resets fidelity inspection state while preserving the environment-selected visual theme.
 
 ## Verification
 
-- Cover environment parsing, fallback, root attributes, nested fidelity inheritance, local
-  override, and x-ray priority with deterministic tests.
-- Inspect all visual themes and polarities in the app shell and an isolated preview scope.
-- Run formatter, linter, static types, focused unit/component coverage, Storybook build, and
-  `git diff --check`.
+- [x] Cover environment parsing, fallback, root attributes, nested fidelity inheritance, local
+      override, and x-ray priority with deterministic tests.
+- [x] Inspect all visual themes and polarities in the app shell and an isolated preview scope.
+- [x] Run formatter, linter, static types, focused unit/component coverage, Storybook build, and
+      `git diff --check`.
+
+## Outcome
+
+Vite now validates `VITE_HILA_VISUAL_THEME` during development-server or build startup and writes
+the resolved value into the initial `<html>` tag. Ghost, Null, and Wipeout therefore arrive before
+paint; missing or invalid input emits Ghost. The existing early polarity selection remains
+independent, and the value is documented without adding a chooser or preference.
+
+`FaceFidelityRoot` owns transient x-ray state, publishes composed/substrate state at the application
+root, and exposes a testable setter for the later system edge. Each `FaceHostSlot` resolves x-ray,
+local input, inherited input, then composed fallback; provides that context to descendants; and
+passes the resolved value to the selected interior. No recipe, schema, plugin metadata, or session
+state changed.
+
+Deterministic coverage exercises startup parsing and attributes, nested inheritance, local
+override, x-ray priority and restoration, axis independence, and reload reset. All 1,271 unit
+tests pass. Production builds emitted the expected initial attribute for every approved value and
+invalid fallback. Storybook builds, and the six theme/polarity combinations passed live shell and
+isolated-scope inspection.
 
 ## Handoff
 

@@ -1,5 +1,17 @@
-import { createMemo, createSignal, Show, type Component, type JSX } from 'solid-js'
+import {
+  createContext,
+  createMemo,
+  createSignal,
+  Show,
+  useContext,
+  type Accessor,
+  type Component,
+  type JSX,
+  type ParentComponent,
+} from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+
+import { resolveFidelity, type RenderingFidelity } from '../design/tokens'
 
 import type { NodeRef } from './tree'
 import type { FaceAffinity } from './face-affinity'
@@ -30,6 +42,7 @@ export type FaceRenderingProps = {
   subject: FaceSubject
   recipe: FaceRecipe
   rootMatrixId: number
+  fidelity: RenderingFidelity
   services: FaceHostServices
 }
 
@@ -220,6 +233,48 @@ export const clearFaceRenderings = (): void => {
   faceRenderingRegistry.clear()
 }
 
+type SetXray = (next: boolean | ((current: boolean) => boolean)) => boolean
+
+export type FaceFidelityContextValue = Readonly<{
+  fidelity: Accessor<RenderingFidelity>
+  xray: Accessor<boolean>
+  setXray: SetXray
+}>
+
+const defaultFaceFidelity: FaceFidelityContextValue = {
+  fidelity: () => 'composed',
+  xray: () => false,
+  setXray: () => false,
+}
+
+const DEFAULT_FACE_FIDELITY = Object.freeze(defaultFaceFidelity)
+
+const FaceFidelityContext = createContext<FaceFidelityContextValue>()
+
+export const useFaceFidelity = (): FaceFidelityContextValue =>
+  useContext(FaceFidelityContext) ?? DEFAULT_FACE_FIDELITY
+
+/**
+ * Owns transient workspace x-ray state. Recreating the application recreates this state.
+ * A later system-edge control can use the context setter without adding persistence.
+ */
+export const FaceFidelityRoot: ParentComponent<{
+  fidelity?: RenderingFidelity
+  initialXray?: boolean
+}> = (props) => {
+  const [xray, setXray] = createSignal(props.initialXray ?? false)
+  const fidelity = createMemo(() => resolveFidelity({ fidelity: props.fidelity, xray: xray() }))
+  const value: FaceFidelityContextValue = {
+    fidelity,
+    xray,
+    setXray,
+  }
+
+  return (
+    <FaceFidelityContext.Provider value={value}>{props.children}</FaceFidelityContext.Provider>
+  )
+}
+
 /**
  * A host-owned slot requests one face interior. The host keeps the wrapper,
  * fidelity, sizing, recursion, navigation, and insertion policy.
@@ -230,10 +285,23 @@ export const FaceHostSlot: Component<{
   subject: FaceSubject
   affinity: FaceAffinity
   rootMatrixId: number
-  fidelity: 'composed' | 'substrate' | 'x-ray'
+  fidelity?: RenderingFidelity
   services: FaceHostServices
   substrate: JSX.Element
 }> = (props) => {
+  const inheritedFidelity = useFaceFidelity()
+  const fidelity = createMemo(() =>
+    resolveFidelity({
+      fidelity: props.fidelity,
+      inheritedFidelity: inheritedFidelity.fidelity(),
+      xray: inheritedFidelity.xray(),
+    }),
+  )
+  const fidelityContext: FaceFidelityContextValue = {
+    fidelity,
+    xray: inheritedFidelity.xray,
+    setXray: inheritedFidelity.setXray,
+  }
   const Rendering = createMemo(() =>
     props.affinity.source === 'intentional' ?
       getFaceRendering(props.affinity.recipe.faceTypeId, props.kind)
@@ -241,25 +309,28 @@ export const FaceHostSlot: Component<{
   )
 
   return (
-    <div
-      data-testid="face-host-slot"
-      data-face-rendering={props.kind}
-      data-face-source={props.affinity.source}
-      data-fidelity={props.fidelity}
-      data-host={props.host}
-      data-subject-mode={props.subject.mode}
-    >
-      <Show when={Rendering()} fallback={props.substrate}>
-        {(rendering) => (
-          <Dynamic
-            component={rendering()}
-            subject={props.subject}
-            recipe={props.affinity.recipe!}
-            rootMatrixId={props.rootMatrixId}
-            services={props.services}
-          />
-        )}
-      </Show>
-    </div>
+    <FaceFidelityContext.Provider value={fidelityContext}>
+      <div
+        data-testid="face-host-slot"
+        data-face-rendering={props.kind}
+        data-face-source={props.affinity.source}
+        data-fidelity={fidelity()}
+        data-host={props.host}
+        data-subject-mode={props.subject.mode}
+      >
+        <Show when={Rendering()} fallback={props.substrate}>
+          {(rendering) => (
+            <Dynamic
+              component={rendering()}
+              subject={props.subject}
+              recipe={props.affinity.recipe!}
+              rootMatrixId={props.rootMatrixId}
+              fidelity={fidelity()}
+              services={props.services}
+            />
+          )}
+        </Show>
+      </div>
+    </FaceFidelityContext.Provider>
   )
 }

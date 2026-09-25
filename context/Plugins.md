@@ -184,9 +184,11 @@ The migration has mandatory boundaries:
 
 - Session 1 shipped singular recipe creation and replacement, the implicit substrate affinity,
   owner-scoped callable rendering lifecycle, and the host-service capability boundary;
+- Session 2 shipped recursive composed/substrate resolution, transient root-owned x-ray state, and
+  the resolved fidelity input passed to interiors;
 - migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
-- complete host recursion, affinity, and fidelity behavior;
+- complete live host recursion and affinity behavior;
 - remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
 - replace the direct `TableFace` mount in `SubTableBand.tsx`;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;

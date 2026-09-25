@@ -1,11 +1,12 @@
 # Design System
 
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
-> production workspace/sticky slice, shared overlay/selectable-list primitives, and production
-> Quick and Deep launcher presentations ship. Fixture-driven Storybook references preserve the
-> retired Table and Tags roots across themes, polarities, and narrow widths. App-wide fidelity
-> behavior and remaining face, browser, and system-edge migrations do not. Future sequencing
-> belongs in [Plan.md](Plan.md), not this topic contract.
+> production workspace/sticky slice, shared overlay/selectable-list primitives, production Quick
+> and Deep launcher presentations, startup visual-theme selection, and recursive face-host
+> fidelity inputs ship. Fixture-driven Storybook references preserve the retired Table and Tags
+> roots across themes, polarities, and narrow widths. Fidelity-aware live face styling and the
+> remaining face, browser, and system-edge migrations do not. Future sequencing belongs in
+> [Plan.md](Plan.md), not this topic contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
 
@@ -178,11 +179,11 @@ Storybook exposes separate `polarity` and `visualTheme` toolbar values through o
 The focused theme preview can keep its local `visualTheme` control. The forward navigation
 specimen uses the approved Guides treatment and does not expose a single-option outline control.
 
-Phase 13's approved build/development-startup input is
+Phase 13's shipped build/development-startup input is
 `VITE_HILA_VISUAL_THEME=ghost|null|wipeout`. Missing or invalid input resolves to Ghost before the
-root attribute is written. This is environment configuration, not a runtime chooser or persisted
-preference. It never selects polarity, density, component variants, shell presentation, or
-fidelity.
+initial HTML writes the root attribute. This is environment configuration, not a runtime chooser
+or persisted preference. It never selects polarity, density, component variants, shell
+presentation, or fidelity.
 
 ### Fidelity inputs
 
@@ -212,9 +213,11 @@ expose all fields and relationship metadata. It can use surface brightness steps
 use elevation to imply hidden structure. X-ray applies the substrate rules at every scope and is
 the identity-face conformance check.
 
-The Phase 13 live target applies this cascade recursively through face hosts. Non-face editor,
-browser, and system-edge controls still migrate to canonical semantic roles, but they do not need
-parallel composed and substrate renderings. X-ray remains transient development inspection state.
+The Phase 13 runtime applies this cascade recursively through face hosts and passes the resolved
+value to each interior. The workspace root owns transient x-ray state and exposes the inspection
+setter for the later system-edge control. Reload recreates the state with x-ray off. Non-face
+editor, browser, and system-edge controls still migrate to canonical semantic roles, but they do
+not need parallel composed and substrate renderings.
 
 ### Accessibility ownership
 

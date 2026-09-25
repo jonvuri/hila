@@ -116,6 +116,11 @@ export type Density = (typeof densityValues)[number]
 export const renderingFidelityValues = ['composed', 'substrate'] as const
 export type RenderingFidelity = (typeof renderingFidelityValues)[number]
 
+export type FidelityInput = {
+  fidelity?: RenderingFidelity
+  xray?: boolean
+}
+
 export const navigationOutlineValues = ['guides'] as const
 export type NavigationOutlineVariant = (typeof navigationOutlineValues)[number]
 
@@ -185,7 +190,7 @@ export const resolveThemeScope = (
 export const resolveFidelity = (input: {
   fidelity?: unknown
   inheritedFidelity?: RenderingFidelity
-  xray?: boolean
+  xray?: FidelityInput['xray']
 }): RenderingFidelity => {
   if (input.xray) return 'substrate'
   if (input.fidelity !== undefined) return resolveRenderingFidelity(input.fidelity)

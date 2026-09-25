@@ -1,36 +1,46 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import 'vitest/config' // Extends Vite config types
 import solidPlugin from 'vite-plugin-solid'
 import { patchCssModules } from 'vite-css-modules'
 
-export default defineConfig({
-  plugins: [
-    patchCssModules({
-      // Only export an object with the class names, so that special characters
-      // work without much hassle (like having to use es2022 or up).
-      exportMode: 'default',
-      // Generate TypeScript types (*.d.ts files) for the CSS modules.
-      generateSourceTypes: true,
-    }),
-    solidPlugin(),
-  ],
-  test: {
-    setupFiles: ['@vitest/web-worker'],
-    environment: 'jsdom',
-    // Exclude Playwright E2E tests -- they use a different runner
-    exclude: ['e2e/**', 'node_modules/**'],
-  },
-  server: {
-    port: 3000,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+import { injectStartupVisualTheme } from './src/design/startup-theme'
+
+export default defineConfig(({ mode }) => {
+  const environment = loadEnv(mode, process.cwd(), 'VITE_')
+
+  return {
+    plugins: [
+      {
+        name: 'hila-startup-visual-theme',
+        transformIndexHtml: (html) => injectStartupVisualTheme(html, environment),
+      },
+      patchCssModules({
+        // Only export an object with the class names, so that special characters
+        // work without much hassle (like having to use es2022 or up).
+        exportMode: 'default',
+        // Generate TypeScript types (*.d.ts files) for the CSS modules.
+        generateSourceTypes: true,
+      }),
+      solidPlugin(),
+    ],
+    test: {
+      setupFiles: ['@vitest/web-worker'],
+      environment: 'jsdom',
+      // Exclude Playwright E2E tests -- they use a different runner
+      exclude: ['e2e/**', 'node_modules/**'],
     },
-  },
-  build: {
-    target: 'esnext',
-  },
-  optimizeDeps: {
-    exclude: ['@sqlite.org/sqlite-wasm'],
-  },
+    server: {
+      port: 3000,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+      },
+    },
+    build: {
+      target: 'esnext',
+    },
+    optimizeDeps: {
+      exclude: ['@sqlite.org/sqlite-wasm'],
+    },
+  }
 })

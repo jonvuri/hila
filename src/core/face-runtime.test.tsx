@@ -6,9 +6,12 @@ import type { FaceRecipe, FaceSubject } from './face-types'
 import {
   clearFaceRenderings,
   createFaceRenderingRegistry,
+  EMPTY_FACE_HOST_SERVICES,
+  FaceFidelityRoot,
   FaceHostSlot,
   getFaceRendering,
   registerFaceRenderings,
+  useFaceFidelity,
 } from './face-runtime'
 
 const recipe: FaceRecipe = {
@@ -27,6 +30,11 @@ const subject: FaceSubject = {
 afterEach(() => {
   clearFaceRenderings()
   document.body.replaceChildren()
+  delete document.documentElement.dataset.theme
+  delete document.documentElement.dataset.visualTheme
+  delete document.documentElement.dataset.density
+  delete document.documentElement.dataset.navigationOutline
+  delete document.documentElement.dataset.shellPresentation
 })
 
 describe('forward face runtime', () => {
@@ -234,5 +242,183 @@ describe('forward face runtime', () => {
     disposeSecond()
     expect(container.querySelector('[data-testid="substrate"]')).not.toBeNull()
     disposeSlot()
+  })
+
+  test('inherits fidelity recursively and exposes a local override to interiors', () => {
+    const nestedRecipe: FaceRecipe = {
+      faceTypeId: 'test.nested',
+      slotBindings: {},
+      settings: {},
+    }
+    registerFaceRenderings(recipe.faceTypeId, {
+      collection: (props) => (
+        <span data-testid="outer-interior" data-fidelity={props.fidelity} />
+      ),
+    })
+    registerFaceRenderings(nestedRecipe.faceTypeId, {
+      line: (props) => <span data-testid="nested-interior" data-fidelity={props.fidelity} />,
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const dispose = render(
+      () => (
+        <FaceFidelityRoot fidelity="substrate">
+          <FaceHostSlot
+            host="interior"
+            kind="collection"
+            subject={subject}
+            affinity={resolveFaceAffinity(recipe)}
+            rootMatrixId={1}
+            services={EMPTY_FACE_HOST_SERVICES}
+            substrate={<span>root substrate</span>}
+          />
+          <FaceHostSlot
+            host="parent"
+            kind="collection"
+            subject={subject}
+            affinity={SUBSTRATE_FACE_AFFINITY}
+            rootMatrixId={1}
+            services={EMPTY_FACE_HOST_SERVICES}
+            substrate={
+              <FaceHostSlot
+                host="nested"
+                kind="line"
+                subject={subject}
+                affinity={resolveFaceAffinity(nestedRecipe)}
+                rootMatrixId={1}
+                fidelity="composed"
+                services={EMPTY_FACE_HOST_SERVICES}
+                substrate={<span>nested substrate</span>}
+              />
+            }
+          />
+        </FaceFidelityRoot>
+      ),
+      container,
+    )
+
+    const hosts = container.querySelectorAll<HTMLElement>('[data-testid="face-host-slot"]')
+    expect([...hosts].map((host) => host.dataset.fidelity)).toEqual([
+      'substrate',
+      'substrate',
+      'composed',
+    ])
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="outer-interior"]')?.dataset.fidelity,
+    ).toBe('substrate')
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="nested-interior"]')?.dataset.fidelity,
+    ).toBe('composed')
+    dispose()
+  })
+
+  test('gives transient x-ray priority through nested hosts without changing other axes', () => {
+    const nestedRecipe: FaceRecipe = {
+      faceTypeId: 'test.xray-nested',
+      slotBindings: {},
+      settings: {},
+    }
+    registerFaceRenderings(nestedRecipe.faceTypeId, {
+      line: (props) => <span data-testid="nested-interior" data-fidelity={props.fidelity} />,
+    })
+
+    const Workspace = () => {
+      const fidelity = useFaceFidelity()
+      return (
+        <section
+          data-testid="workspace"
+          data-fidelity={fidelity.fidelity()}
+          data-x-ray={fidelity.xray() ? 'true' : undefined}
+        >
+          <button type="button" onClick={() => fidelity.setXray((active) => !active)}>
+            Toggle x-ray
+          </button>
+          <FaceHostSlot
+            host="root"
+            kind="collection"
+            subject={subject}
+            affinity={SUBSTRATE_FACE_AFFINITY}
+            rootMatrixId={1}
+            fidelity="composed"
+            services={EMPTY_FACE_HOST_SERVICES}
+            substrate={
+              <FaceHostSlot
+                host="nested"
+                kind="line"
+                subject={subject}
+                affinity={resolveFaceAffinity(nestedRecipe)}
+                rootMatrixId={1}
+                fidelity="composed"
+                services={EMPTY_FACE_HOST_SERVICES}
+                substrate={<span>nested substrate</span>}
+              />
+            }
+          />
+        </section>
+      )
+    }
+
+    document.documentElement.dataset.theme = 'light'
+    document.documentElement.dataset.visualTheme = 'wipeout'
+    document.documentElement.dataset.density = 'narrow'
+    document.documentElement.dataset.navigationOutline = 'guides'
+    document.documentElement.dataset.shellPresentation = 'single-panel'
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    let dispose = render(
+      () => (
+        <FaceFidelityRoot>
+          <Workspace />
+        </FaceFidelityRoot>
+      ),
+      container,
+    )
+
+    const workspace = () => container.querySelector<HTMLElement>('[data-testid="workspace"]')!
+    expect(workspace().dataset.fidelity).toBe('composed')
+    expect(workspace().dataset.xRay).toBeUndefined()
+
+    container.querySelector<HTMLButtonElement>('button')!.click()
+    expect(workspace().dataset.fidelity).toBe('substrate')
+    expect(workspace().dataset.xRay).toBe('true')
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-testid="face-host-slot"]')].map(
+        (host) => host.dataset.fidelity,
+      ),
+    ).toEqual(['substrate', 'substrate'])
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="nested-interior"]')?.dataset.fidelity,
+    ).toBe('substrate')
+    expect(document.documentElement.dataset).toMatchObject({
+      theme: 'light',
+      visualTheme: 'wipeout',
+      density: 'narrow',
+      navigationOutline: 'guides',
+      shellPresentation: 'single-panel',
+    })
+
+    container.querySelector<HTMLButtonElement>('button')!.click()
+    expect(workspace().dataset.fidelity).toBe('composed')
+    expect(workspace().dataset.xRay).toBeUndefined()
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-testid="face-host-slot"]')].map(
+        (host) => host.dataset.fidelity,
+      ),
+    ).toEqual(['composed', 'composed'])
+
+    dispose()
+    container.replaceChildren()
+    dispose = render(
+      () => (
+        <FaceFidelityRoot>
+          <Workspace />
+        </FaceFidelityRoot>
+      ),
+      container,
+    )
+    expect(workspace().dataset.fidelity).toBe('composed')
+    expect(workspace().dataset.xRay).toBeUndefined()
+    dispose()
   })
 })

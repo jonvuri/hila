@@ -256,10 +256,12 @@ Rendering fidelity is independent of theme and density:
 - **Substrate:** explicit fields, roles, relationships, and structure.
 - **X-ray:** a shell inspection state that forces substrate through descendants.
 
-The tokens and resolver ship. Phase 13 completes the recursive face-host cascade: x-ray forces
-substrate through descendant hosts, while non-face system and editor controls consume canonical
-design roles without acquiring alternate face renderings. Visual theme, polarity, component
-variants, density, and fidelity must not select or mutate one another. See [Design.md](Design.md).
+The tokens, resolver, and recursive face-host cascade ship. Each host resolves active x-ray, then
+local fidelity, inherited fidelity, and the composed root fallback. X-ray remains separate from the
+resolved value so it forces substrate through descendant hosts even when one requests composed
+fidelity. Non-face system and editor controls consume canonical design roles without acquiring
+alternate face renderings. Visual theme, polarity, component variants, density, and fidelity do
+not select or mutate one another. See [Design.md](Design.md).
 
 ## Plugins and commands
 

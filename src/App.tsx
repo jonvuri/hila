@@ -10,6 +10,7 @@ import {
 } from 'solid-js'
 
 import type { FaceConfig } from './core/face-types'
+import { FaceFidelityRoot, useFaceFidelity } from './core/face-runtime'
 import type { PlaceNavigationTarget } from './core/place-navigation'
 import { registerTemporaryLegacyFaceComponent } from './core/TemporaryLegacyFaceAdapter'
 import {
@@ -44,7 +45,8 @@ const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
 const StreamView = lazy(() => import('./workspace/StreamView'))
 
-const App: Component = () => {
+const AppContent: Component = () => {
+  const fidelity = useFaceFidelity()
   let disposed = false
   const sessionMemory = createSessionMemoryStore()
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
@@ -194,7 +196,11 @@ const App: Component = () => {
   })
 
   return (
-    <div class="app-shell">
+    <div
+      class="app-shell"
+      data-fidelity={fidelity.fidelity()}
+      data-x-ray={fidelity.xray() ? 'true' : undefined}
+    >
       <div class="app-main">
         <Suspense fallback={<div class="app-loading">Loading…</div>}>
           <Show when={faceConfigTarget()}>
@@ -328,5 +334,11 @@ const App: Component = () => {
     </div>
   )
 }
+
+const App: Component = () => (
+  <FaceFidelityRoot>
+    <AppContent />
+  </FaceFidelityRoot>
+)
 
 export default App
