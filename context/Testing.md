@@ -59,6 +59,11 @@ is visible while every retained panel remains attached, and that hidden panels c
 Capture editor focus and DOM selection before both transitions. If focus begins in a panel that
 becomes hidden, assert transfer to the active panel landmark and the polite status announcement.
 
+**Enter production surfaces through current routes.** The app has one stream root and no
+Workspace/Table/Tags test tabs. Wait for `workspace-shell` instead of clicking a root tab. Exercise
+tables through an owned node's embedded table, tags through inline/property and launcher type
+routes, and face/schema administration through Dev Tools → Matrix Browser.
+
 ### Debugging failures
 
 **Read the error context file.** A failed test writes an accessibility snapshot to

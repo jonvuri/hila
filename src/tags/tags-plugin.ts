@@ -1,19 +1,4 @@
-import type { FaceTypeDefinition } from '../core/face-types'
 import type { PluginDefinition } from '../core/plugin-types'
-import { registerFaceType as registerFaceTypeLocal } from '../core/face-registry'
-import { registerFaceType as registerFaceTypeWorker } from '../core/client/matrix-client'
-
-export const tagBrowserFaceTypeDefinition: FaceTypeDefinition = {
-  id: 'hila.tag-browser',
-  name: 'Tag Browser',
-  slots: [],
-  overflowBehavior: 'none',
-}
-
-export const registerTagBrowserFaceType = async (): Promise<void> => {
-  registerFaceTypeLocal(tagBrowserFaceTypeDefinition)
-  await registerFaceTypeWorker(tagBrowserFaceTypeDefinition)
-}
 
 /**
  * The tags plugin owns no matrixes itself: tag types are promoted type-nodes
@@ -29,7 +14,7 @@ export const tagsPlugin: PluginDefinition = {
   id: 'hila.tags',
   name: 'Tags',
   version: '1.0.0',
-  faceTypes: [tagBrowserFaceTypeDefinition],
+  faceTypes: [],
   matrixes: [],
   namedQueries: {
     tagsForRow: 'buildTagsForRowQuery(sourceMatrixId, sourceRowId)',

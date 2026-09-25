@@ -6,6 +6,7 @@ import {
   moveOwner,
   deleteHomeGhostingPortals,
   hardDeleteIncludingRefs,
+  deleteTagType,
 } from '../core/client/matrix-client'
 import type { ColumnDefinition } from '../core/matrix'
 import { partitionPropertyColumns } from '../shared/property-surface'
@@ -20,9 +21,10 @@ import { partitionPropertyColumns } from '../shared/property-surface'
  *
  *  - **portal** (mirror this row under `host`),
  *  - **move-owner** (relocate the home under `host`, leaving a portal behind),
- *  - **two-tier delete** — *detach* (`removePortal`, non-destructive) vs. the
- *    confirmation-gated *hard-delete-including-refs* escalation (never the
- *    silent default; the default delete ghosts surviving portals).
+ *  - **two-tier delete** for ordinary rows — *detach* (`removePortal`,
+ *    non-destructive) vs. the confirmation-gated *hard-delete-including-refs*
+ *    escalation. Promoted types instead use the confirmed type deletion that
+ *    drops their owned matrix.
  *
  * `host` is the destination/parent the position-anchored gestures act against
  * (the focal node in the focus panel; the outline row's own-parent inline). When
@@ -63,10 +65,14 @@ const GestureButton: Component<{
 /**
  * Dev-grade per-row gesture affordance. `host` is the destination context
  * (focal node / outline parent); `target` is the row the gesture acts on. The
- * escalation (hard delete) is confirmation-gated; the default delete ghosts
- * surviving portals.
+ * Ordinary rows keep the portal-aware two-tier delete. Promoted types use their
+ * type-aware, confirmation-gated cascade.
  */
-export const RowGestureMenu: Component<{ host?: GestureRef; target: GestureRef }> = (props) => {
+export const RowGestureMenu: Component<{
+  host?: GestureRef
+  target: GestureRef
+  isTypeNode?: boolean
+}> = (props) => {
   const [open, setOpen] = createSignal(false)
 
   const run = (fn: () => Promise<unknown>) => {
@@ -141,25 +147,53 @@ export const RowGestureMenu: Component<{ host?: GestureRef; target: GestureRef }
               </>
             )}
           </Show>
-          <GestureButton
-            testid="substrate-gesture-delete"
-            label="Delete (ghost mirrors)"
-            onClick={() =>
-              run(() => deleteHomeGhostingPortals(props.target.matrixId, props.target.rowId))
+          <Show
+            when={props.isTypeNode}
+            fallback={
+              <>
+                <GestureButton
+                  testid="substrate-gesture-delete"
+                  label="Delete (ghost mirrors)"
+                  onClick={() =>
+                    run(() =>
+                      deleteHomeGhostingPortals(props.target.matrixId, props.target.rowId),
+                    )
+                  }
+                />
+                <GestureButton
+                  testid="substrate-gesture-hard-delete"
+                  label="Delete everywhere…"
+                  danger
+                  onClick={() => {
+                    if (
+                      confirm('Hard-delete this row and every reference to it, everywhere?')
+                    ) {
+                      run(() =>
+                        hardDeleteIncludingRefs(props.target.matrixId, props.target.rowId),
+                      )
+                    } else {
+                      setOpen(false)
+                    }
+                  }}
+                />
+              </>
             }
-          />
-          <GestureButton
-            testid="substrate-gesture-hard-delete"
-            label="Delete everywhere…"
-            danger
-            onClick={() => {
-              if (confirm('Hard-delete this row and every reference to it, everywhere?')) {
-                run(() => hardDeleteIncludingRefs(props.target.matrixId, props.target.rowId))
-              } else {
-                setOpen(false)
-              }
-            }}
-          />
+          >
+            <GestureButton
+              testid="substrate-gesture-delete-type"
+              label="Delete type…"
+              danger
+              onClick={() => {
+                if (
+                  confirm('Delete this type? Its table and every row in it will be deleted.')
+                ) {
+                  run(() => deleteTagType(props.target.rowId))
+                } else {
+                  setOpen(false)
+                }
+              }}
+            />
+          </Show>
         </div>
       </Show>
     </span>

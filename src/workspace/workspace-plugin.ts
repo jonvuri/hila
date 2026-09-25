@@ -144,7 +144,13 @@ export const buildChildCountQuery = (matrixId: number, rowId: number): string =>
      )`
 
 export const buildSingleRowQuery = (matrixId: number, rowId: number): string => `
-SELECT d.* FROM "mx_${matrixId}_data" d WHERE d.id = ${rowId}
+SELECT d.*,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM promoted_nodes p
+         WHERE p.matrix_id = ${matrixId} AND p.row_id = d.id
+       ) THEN 1 ELSE 0 END AS __hila_is_type_node
+FROM "mx_${matrixId}_data" d
+WHERE d.id = ${rowId}
 `
 
 // The global key for a single row: read directly from the scroll index.

@@ -3,40 +3,36 @@ title: Current state
 kind: status
 state: active
 updated: 2026-09-24
-phase: 12
-session: surface-capture-tab-retirement-closeout
+phase: 13
+session: entry
 ---
 
 # Now
 
-Phase 12 Sessions 1–9A and 4A are complete. The production launcher now owns bounded discovery,
-commands, rooted cross-matrix navigation, Quick and Deep gesture authoring, saved-view round trips,
-editor insert-ref exits, and runtime-only session memory. Its themes share behavior, keyboard,
-pointer, focus, and accessibility semantics.
+Phase 12 is complete. The production app mounts one stream root; the temporary Table and Tags tabs
+and direct application roots are retired. `[` discovers containers, `#` discovers promoted types,
+and ordinary rows, content, saved views, commands, and `/table` use rooted launcher/place routes.
+Worker-free Storybook references preserve the retired surfaces.
 
-The production workspace now retains its existing four-panel window at a 720px-or-wider host and
-projects only the active mounted panel at 719px or below. Hidden panels are absent from layout,
-interaction, and the accessibility tree without losing editor, selection, pending-save, scroll,
-virtualizer, or disclosure state. Narrow focus panels expose rooted ancestry; hidden focus transfers
-to the active landmark with a polite announcement. No wide focused mode or new navigation chrome
-ships. The unreleased app remains at reset-only schema version 0; no Session 9A state is persisted,
-replicated, or classified as user data.
+Embedded tables, inline tags, property editing, and schema/face administration through the
+development system edge remain live. All 1,235 unit tests and 165 system-browser E2E tests pass.
+The unreleased app remains at reset-only schema version 0; Phase 12 changed no schema, durable data,
+or replication contract.
 
 ## Read next
 
-1. [Phase 12 front door](phases/Phase-12.md).
-2. [Session 10 — surface capture, tab retirement, and closeout](phases/Phase-12/Session-10-surface-capture-tab-retirement-and-closeout.md).
-3. [Launcher](Launcher.md), [Architecture](Architecture.md), [Design](Design.md), and
-   [Design Faces](Design-Faces.md).
+1. [Phase 13 front door](phases/Phase-13.md).
+2. [Plugins](Plugins.md) for the compatibility-removal list.
+3. [Architecture](Architecture.md), [Design](Design.md), and [Design Faces](Design-Faces.md).
 
 ## Boundary
 
-Session 9A shipped the responsive workspace contract and repaired the folded-row no-position
-fallback exposed by its empty-state browser coverage. All 177 real-browser tests pass. Session 10
-must preserve Table and Tags evidence before retiring their temporary roots. Embedded table, inline
-tag, property, and face-adapter work remains for Phase 13. No schema change occurred.
+Phase 13 completes the live design-system and face-runtime migration without restoring retired
+application roots. Preserve embedded table behavior, inline tags, property editing, rooted
+navigation, and the system-edge route while removing the temporary adapter and direct embedded
+`TableFace` mount incrementally.
 
 ## Next action
 
-Execute Session 10's navigation-role parity gate, Storybook capture, tab retirement, and Phase 12
-closeout in order.
+Inventory remaining live legacy-style and face-runtime consumers. Then write the first focused
+Phase 13 session with an ordered migration slice and verification gate.

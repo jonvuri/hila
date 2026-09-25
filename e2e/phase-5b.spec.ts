@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { openEmbeddedTable } from './helpers/embedded-table'
+
 // -- Shared helpers -----------------------------------------------------------
 
 const openSidebar = async (page: Page) => {
@@ -25,12 +27,7 @@ const waitForRows = async (page: Page) => {
 }
 
 const applyTableFace = async (page: Page) => {
-  await page.getByTestId('view-as-button').click()
-  await expect(page.getByTestId('face-config-panel')).toBeVisible()
-  await page.getByTestId('face-type-picker').selectOption('hila.table')
-  await page.getByTestId('face-config-apply').click()
-  await expect(page.getByTestId('face-config-panel')).not.toBeVisible({ timeout: 5000 })
-  await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
+  await openEmbeddedTable(page)
 }
 
 const addTextColumn = async (page: Page) => {
@@ -75,7 +72,7 @@ const renameColumnViaAPI = async (page: Page, currentName: string, newName: stri
       const matrixClient = await import('/src/core/client/matrix-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Workspace'",
+        "SELECT id FROM matrix WHERE title = 'Test table'",
       )
       const matrixId = (matrices[0] as { id: number }).id
       await matrixClient.renameColumn(matrixId, currentName, newName)
@@ -107,7 +104,9 @@ const renameColumnViaUI = async (page: Page, currentName: string, newName: strin
   await expect(renameInput).toBeVisible({ timeout: 3000 })
   await renameInput.fill(newName)
   await page.keyboard.press('Enter')
-  await expect(page.locator('th').filter({ has: page.locator('div', { hasText: newName }) })).toBeVisible({
+  await expect(
+    page.locator('th').filter({ has: page.locator('div', { hasText: newName }) }),
+  ).toBeVisible({
     timeout: 5000,
   })
 }
@@ -122,7 +121,9 @@ const getCellInput = (page: Page) => page.locator('table tbody td input')
 
 /** Data rows only (excludes the "+ New Row" add-row at the end). */
 const dataRows = (page: Page) =>
-  page.locator('table tbody tr').filter({ hasNot: page.getByRole('button', { name: '+ New Row' }) })
+  page
+    .locator('table tbody tr')
+    .filter({ hasNot: page.getByRole('button', { name: '+ New Row' }) })
 
 /** Get column index (0-based position within the header row) for a named column. */
 const getColIndex = async (page: Page, columnName: string) => {
@@ -379,7 +380,9 @@ test.describe('Formula column with token input', () => {
       const matrixClient = await import('/src/core/client/matrix-client.ts')
       // @ts-expect-error -- resolved by Vite dev server at runtime
       const sqlClient = await import('/src/core/client/sql-client.ts')
-      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      const matrices = await sqlClient.execQuery(
+        "SELECT id FROM matrix WHERE title = 'Test table'",
+      )
       const matrixId = (matrices[0] as { id: number }).id
       const cols = await matrixClient.getColumns(matrixId)
       const priceCol = cols.find((c: { name: string }) => c.name === 'price')
@@ -444,7 +447,7 @@ test.describe('Formula column with token input', () => {
       const sqlClient = await import('/src/core/client/sql-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Workspace'",
+        "SELECT id FROM matrix WHERE title = 'Test table'",
       )
       const matrixId = (matrices[0] as { id: number }).id
 
@@ -504,7 +507,7 @@ test.describe('Formula column with token input', () => {
       const sqlClient = await import('/src/core/client/sql-client.ts')
 
       const matrices = await sqlClient.execQuery(
-        "SELECT id FROM matrix WHERE title = 'Workspace'",
+        "SELECT id FROM matrix WHERE title = 'Test table'",
       )
       const matrixId = (matrices[0] as { id: number }).id
 
@@ -590,7 +593,9 @@ test.describe('Sort and filter survive column rename', () => {
     }).toPass({ timeout: 5000 })
 
     // The sort indicator should still be visible on the renamed header
-    const sortIndicator = page.locator('th', { hasText: 'produce' }).locator('span', { hasText: '▲' })
+    const sortIndicator = page
+      .locator('th', { hasText: 'produce' })
+      .locator('span', { hasText: '▲' })
     await expect(sortIndicator).toBeVisible({ timeout: 3000 })
   })
 
@@ -621,7 +626,10 @@ test.describe('Sort and filter survive column rename', () => {
     await expect(filterValueInput).toBeVisible({ timeout: 3000 })
 
     // Select the "status" column in the filter column dropdown (first select)
-    const filterSelects = page.locator('input[placeholder="value"]').locator('xpath=..').locator('select')
+    const filterSelects = page
+      .locator('input[placeholder="value"]')
+      .locator('xpath=..')
+      .locator('select')
     const filterColSelect = filterSelects.first()
     await filterColSelect.selectOption({ label: 'status' })
 
@@ -717,7 +725,9 @@ test.describe('Sort and filter survive column rename', () => {
     await page.waitForTimeout(500)
 
     // Column should be gone
-    await expect(page.locator('th', { hasText: 'filtercol' })).not.toBeVisible({ timeout: 5000 })
+    await expect(page.locator('th', { hasText: 'filtercol' })).not.toBeVisible({
+      timeout: 5000,
+    })
 
     // All rows should be visible again (filter cleared by cascade)
     await expect(async () => {

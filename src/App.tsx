@@ -11,9 +11,7 @@ import {
 
 import type { FaceConfig } from './core/face-types'
 import type { PlaceNavigationTarget } from './core/place-navigation'
-import TemporaryLegacyFaceAdapter, {
-  registerTemporaryLegacyFaceComponent,
-} from './core/TemporaryLegacyFaceAdapter'
+import { registerTemporaryLegacyFaceComponent } from './core/TemporaryLegacyFaceAdapter'
 import {
   PluginRegistrationSupersededError,
   applyFaceToMatrix,
@@ -29,33 +27,28 @@ import {
 } from './design/tokens'
 import QuickLauncher from './launcher/QuickLauncher'
 import { captureLauncherInvocation, type LauncherInvocation } from './launcher/invocation'
-import { useQuery } from './sql/useQuery'
 import { shortcuts } from './shortcuts'
 import { inlineReferencesPlugin } from './editor/inlineref-plugin-def'
+import { setPendingNewTable } from './editor/pending-table'
 import { insertInlineRefFromInvocation } from './editor/active-editor'
 import { tagsPlugin } from './tags/tags-plugin'
-import { workspacePlugin, buildMatrixTitleQuery } from './workspace/workspace-plugin'
+import { workspacePlugin } from './workspace/workspace-plugin'
 import { registerTableFaceType } from './table/table-plugin'
-import { requestTableFaceFocus } from './table/focus-handoff'
 import { requestGeneratedViewNameFocus } from './workspace/pending-view-name-focus'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 import { createSessionMemoryStore } from './session/session-memory'
+import type { NodeRef } from './core/tree'
 
 const SqlRunner = lazy(() => import('./SqlRunner'))
 const MatrixBrowser = lazy(() => import('./admin/MatrixBrowser'))
 const FaceConfigPanel = lazy(() => import('./core/FaceConfigPanel'))
-const TagBrowserFace = lazy(() => import('./tags/TagBrowserFace'))
 const StreamView = lazy(() => import('./workspace/StreamView'))
-
-type ActiveView = 'workspace' | 'table' | 'tags'
 
 const App: Component = () => {
   let disposed = false
   const sessionMemory = createSessionMemoryStore()
   const [sidebarOpen, setSidebarOpen] = createSignal(false)
   const [activePanel, setActivePanel] = createSignal<'matrix' | 'sql'>('matrix')
-  const [activeView, setActiveView] = createSignal<ActiveView>('workspace')
-  const [tableFaceConfig, setTableFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceFaceConfig, setWorkspaceFaceConfig] = createSignal<FaceConfig | null>(null)
   const [workspaceMatrixId, setWorkspaceMatrixId] = createSignal<number | null>(null)
   const [workspaceNavigateToPlace, setWorkspaceNavigateToPlace] =
@@ -75,15 +68,6 @@ const App: Component = () => {
     anchorRect: DOMRect
   } | null>(null)
 
-  // Reactive workspace title for the tab label
-  const wsTitleQuery = createMemo(() => {
-    const wsId = workspaceMatrixId()
-    return wsId ? buildMatrixTitleQuery(wsId) : ''
-  })
-  const { result: wsTitleResult } = useQuery(() => wsTitleQuery())
-  const workspaceTabLabel = createMemo(
-    () => (wsTitleResult()?.[0] as { title: string } | undefined)?.title || 'Workspace',
-  )
   const workspaceComponentConfig = createMemo<ComponentVariantConfig>(() => ({
     navigationOutline: resolveComponentVariant(
       'navigationOutline',
@@ -99,11 +83,10 @@ const App: Component = () => {
     )
   }
 
-  const focusCreatedTable = (matrixId: number) => {
-    void applyFaceToMatrix('hila.table', matrixId).then((config) => {
-      requestTableFaceFocus(matrixId)
-      setTableFaceConfig(config)
-      setActiveView('table')
+  const focusCreatedTable = (matrixId: number, subject: NodeRef) => {
+    void applyFaceToMatrix('hila.table', matrixId).then(() => {
+      setPendingNewTable(matrixId)
+      setWorkspaceNavigateToPlace({ type: 'node', node: subject })
     })
   }
 
@@ -111,7 +94,6 @@ const App: Component = () => {
     setLauncherInvocation(null)
     sessionMemory.reset()
     setWorkspaceMatrixId(null)
-    setTableFaceConfig(null)
     setWorkspaceFaceConfig(null)
 
     await registerTableFaceType()
@@ -133,9 +115,7 @@ const App: Component = () => {
     const configs = await getFaceConfigs(wsId)
     if (isDisposed()) return
     const workspaceConfig = configs.find((c) => c.faceTypeId === 'hila.workspace')
-    const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
     if (workspaceConfig) setWorkspaceFaceConfig(workspaceConfig)
-    if (tableConfig) setTableFaceConfig(tableConfig)
   }
 
   const handleTagPanelEvent = (e: Event) => {
@@ -216,46 +196,6 @@ const App: Component = () => {
   return (
     <div class="app-shell">
       <div class="app-main">
-        <Show when={workspaceMatrixId()}>
-          <div class="view-switcher">
-            <span data-launcher-workspace-mark aria-hidden="true" />
-            <button
-              class="view-tab"
-              data-active={activeView() === 'workspace'}
-              data-testid="workspace-tab"
-              data-launcher-workspace-title
-              onClick={() => setActiveView('workspace')}
-            >
-              {workspaceTabLabel()}
-            </button>
-            <button
-              class="view-tab"
-              data-active={activeView() === 'table'}
-              data-testid="table-tab"
-              onClick={() => setActiveView('table')}
-            >
-              Table
-            </button>
-            <button
-              class="view-tab"
-              data-active={activeView() === 'tags'}
-              data-testid="tags-tab"
-              onClick={() => setActiveView('tags')}
-            >
-              Tags
-            </button>
-            <button
-              class="view-tab view-as-btn"
-              onClick={() => {
-                const mid = workspaceMatrixId()
-                if (mid) setFaceConfigTarget({ matrixId: mid })
-              }}
-              data-testid="view-as-button"
-            >
-              View as…
-            </button>
-          </div>
-        </Show>
         <Suspense fallback={<div class="app-loading">Loading…</div>}>
           <Show when={faceConfigTarget()}>
             {(target) => (
@@ -265,12 +205,8 @@ const App: Component = () => {
                   initialFaceTypeId={target().initialFaceTypeId}
                   onApply={(config) => {
                     setFaceConfigTarget(null)
-                    if (config.faceTypeId === 'hila.table') {
-                      setTableFaceConfig(config)
-                      setActiveView('table')
-                    } else if (config.faceTypeId === 'hila.workspace') {
+                    if (config.faceTypeId === 'hila.workspace') {
                       setWorkspaceFaceConfig(config)
-                      setActiveView('workspace')
                     }
                   }}
                   onCancel={() => setFaceConfigTarget(null)}
@@ -280,45 +216,13 @@ const App: Component = () => {
           </Show>
           <Show when={workspaceMatrixId()} fallback={<div class="app-loading">Loading…</div>}>
             {(wsId) => (
-              <Show
-                when={activeView() === 'tags'}
-                fallback={
-                  <Show
-                    when={activeView() === 'table' && tableFaceConfig()}
-                    fallback={
-                      <StreamView
-                        matrixId={wsId()}
-                        componentConfig={workspaceComponentConfig()}
-                        navigateToPlace={workspaceNavigateToPlace()}
-                        onNavigated={() => setWorkspaceNavigateToPlace(null)}
-                        sessionMemory={sessionMemory}
-                      />
-                    }
-                  >
-                    {(config) => <TemporaryLegacyFaceAdapter config={config()} columns={[]} />}
-                  </Show>
-                }
-              >
-                <TagBrowserFace
-                  workspaceMatrixId={workspaceMatrixId() ?? undefined}
-                  onNavigateToWorkspaceRow={(matrixId, rowId) => {
-                    setWorkspaceNavigateToPlace({
-                      type: 'node',
-                      node: { matrixId, rowId },
-                    })
-                    setActiveView('workspace')
-                  }}
-                  onOpenTableFace={(targetMatrixId) => {
-                    void getFaceConfigs(targetMatrixId).then((configs) => {
-                      const tableConfig = configs.find((c) => c.faceTypeId === 'hila.table')
-                      if (tableConfig) {
-                        setTableFaceConfig(tableConfig)
-                        setActiveView('table')
-                      }
-                    })
-                  }}
-                />
-              </Show>
+              <StreamView
+                matrixId={wsId()}
+                componentConfig={workspaceComponentConfig()}
+                navigateToPlace={workspaceNavigateToPlace()}
+                onNavigated={() => setWorkspaceNavigateToPlace(null)}
+                sessionMemory={sessionMemory}
+              />
             )}
           </Show>
         </Suspense>
@@ -413,11 +317,9 @@ const App: Component = () => {
             onSavedView={(marker, _generatedName, provenance) => {
               requestGeneratedViewNameFocus(marker)
               setWorkspaceNavigateToPlace({ type: 'node', node: marker, provenance })
-              setActiveView('workspace')
             }}
             onNavigate={(target) => {
               setWorkspaceNavigateToPlace(target)
-              setActiveView('workspace')
             }}
             onDismiss={() => setLauncherInvocation(null)}
           />

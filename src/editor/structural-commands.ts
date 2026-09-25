@@ -18,7 +18,7 @@ export const structuralCommands: readonly CommandDescriptor[] = [
         { name: 'title', type: 'TEXT', role: 'label' },
         { name: 'content', type: 'TEXT', role: 'content' },
       ])
-      capabilities.focusCreatedTable(matrixId)
+      capabilities.focusCreatedTable(matrixId, subject)
     },
   },
   {

@@ -31,7 +31,7 @@ const resetDB = async (page: Page) => {
 }
 
 const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {
@@ -146,9 +146,9 @@ test.describe('Inline block folding (view block content in the outline)', () => 
     // A row well past the first window (index 110) is present — it lives in the
     // second window's slice of the same block (the folded cells are inputs, so
     // their values are read via inputValue).
-    const values = await strips.locator('input').evaluateAll((els) =>
-      (els as HTMLInputElement[]).map((e) => e.value),
-    )
+    const values = await strips
+      .locator('input')
+      .evaluateAll((els) => (els as HTMLInputElement[]).map((e) => e.value))
     expect(values).toContain('Task 110')
     expect(new Set(values).size).toBe(120)
   })

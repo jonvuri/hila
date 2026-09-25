@@ -8,6 +8,7 @@ import {
   getColumns,
   insertDataRow,
   insertJoin,
+  promoteNode,
 } from '../core/matrix'
 import { createTreePosition, type NodeRef } from '../core/tree'
 import { addPortal } from '../core/portal'
@@ -524,12 +525,30 @@ describe('Workspace single row query', () => {
     const sql = buildSingleRowQuery(matrixId, rowId)
     const stmt = db.prepare(sql)
     expect(stmt.step()).toBe(true)
-    const row = stmt.get({}) as { id: number; label: string; content: string }
+    const row = stmt.get({}) as {
+      id: number
+      label: string
+      content: string
+      __hila_is_type_node: number
+    }
     stmt.finalize()
 
     expect(row.id).toBe(rowId)
     expect(row.label).toBe(labelJson)
     expect(row.content).toBe(contentJson)
+    expect(row.__hila_is_type_node).toBe(0)
+  })
+
+  test('identifies a promoted type for the focused label editor', () => {
+    const rowId = insertDataRow(db, matrixId, { label: null, content: null })
+    promoteNode(db, { matrixId, rowId })
+
+    const stmt = db.prepare(buildSingleRowQuery(matrixId, rowId))
+    expect(stmt.step()).toBe(true)
+    const row = stmt.get({}) as { __hila_is_type_node: number }
+    stmt.finalize()
+
+    expect(row.__hila_is_type_node).toBe(1)
   })
 
   test('returns correct SQL with matrix and row IDs', () => {

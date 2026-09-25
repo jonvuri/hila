@@ -185,10 +185,11 @@ one.
 ### Phase 13 compatibility removal list
 
 - Remove `TemporaryLegacyFaceAdapter` and its registration call in `App.tsx`.
-- Move `TableFace` and its direct mounts in `App.tsx` and `SubTableBand.tsx` to registered
-  `line`/`collection` interiors.
+- Move the embedded `TableFace` mount in `SubTableBand.tsx` to a registered `collection` interior.
 - Move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution.
-- Replace the direct `TagBrowserFace` application mount with the launcher-selected host path.
+
+Phase 12 retired the direct application-level `TableFace` and `TagBrowserFace` mounts before this
+list became active. They are no longer Phase 13 removal work.
 
 ## Stage 7 — Migration policy
 

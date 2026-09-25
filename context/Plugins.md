@@ -79,8 +79,9 @@ Slot resolution is:
 3. preferred type and position;
 4. fallback.
 
-This runtime remains supported only while Phase 13 migrates its consumers. Its whole-component
-dispatch does not match the approved model below.
+This runtime remains supported only while Phase 13 migrates its embedded table consumer. Its
+whole-component dispatch does not match the approved model below. The retired top-level Table and
+Tag Browser mounts are no longer consumers.
 
 ## Forward composition model
 
@@ -168,9 +169,9 @@ The migration has mandatory boundaries:
 - move overflow fields into the host scaffold;
 - complete host recursion, affinity, and fidelity behavior;
 - remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
-- replace the direct `TableFace` mounts in `App.tsx` and `SubTableBand.tsx`;
+- replace the direct `TableFace` mount in `SubTableBand.tsx`;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
-- replace the direct `TagBrowserFace` application mount with the launcher-selected host path.
+- migrate inline tag and property surfaces without restoring a Tag Browser application root.
 
 Phase 14 cannot add task/review renderers until Phase 13 completes this contract.
 

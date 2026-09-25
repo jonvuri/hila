@@ -55,7 +55,7 @@ const resetDatabase = async (page: Page) => {
   await expect(reset).toContainText('Confirm', { timeout: 3_000 })
   await reset.click()
   await expect(reset).toContainText('Reset DB', { timeout: 10_000 })
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 10_000 })
 }
 

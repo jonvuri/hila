@@ -1,7 +1,7 @@
 ---
 title: Phase 12 — Launcher and shell convergence
 kind: phase-plan
-state: active
+state: complete
 updated: 2026-09-24
 ---
 
@@ -66,16 +66,18 @@ inputs. Phase 12 does not complete the app-wide face runtime or style migration 
 | [8 — Session memory and on-screen signals](Phase-12/Session-8-session-memory-and-on-screen-signals.md)                   | Bounded history, recovery, and ranking signals                               | 3, 5, 6    | Complete |
 | [9 — Narrow and focused workspace shell exploration](Phase-12/Session-9-narrow-and-focused-workspace-shell.md)           | Storybook comparison and design decisions for one-column stream presentation | 5–8        | Complete |
 | [9A — Responsive workspace shell implementation](Phase-12/Session-9a-responsive-workspace-shell-implementation.md)       | One mounted retained stack with a width-selected narrow projection           | 9          | Complete |
-| [10 — Surface capture, tab retirement, and closeout](Phase-12/Session-10-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–9A       | Planned  |
+| [10 — Surface capture, tab retirement, and closeout](Phase-12/Session-10-surface-capture-tab-retirement-and-closeout.md) | Storybook evidence, one stream root, and canonical closeout                  | 5–9A       | Complete |
 
-Sessions 1–9A and 4A are complete. Quick and Deep now implement the approved theme-specific
+All Phase 12 sessions are complete. Quick and Deep implement the approved theme-specific
 presentation contract over one behavior and interaction model. Bounded session memory supplies
 successful-navigation Jump back, cancellation-only Deep recovery, and actual-viewport ranking
 signals without persistence. The production workspace now selects its presentation from the host
 width: one active mounted panel through 719px and the retained rail from 720px. Hidden panels are
 inert, ancestry and focus recovery remain rooted, and resize preserves live editor and scroll state.
-Session 10 owns surface capture, tab retirement, and phase closeout. The
-dependency column explains architectural coupling, not permission to skip the incremental sequence.
+Worker-free Storybook references preserve the retired Table and Tags roots. Production now mounts
+one stream root, while embedded tables, inline tags, property editing, and the development system
+edge retain their supported routes. The dependency column explains architectural coupling, not
+permission to skip the incremental sequence.
 
 ## Phase acceptance
 
@@ -102,17 +104,34 @@ dependency column explains architectural coupling, not permission to skip the in
 
 ## Closeout
 
-- [ ] Complete every focused session and its verification in order.
-- [ ] Update `Query-Spec.md`, `Launcher.md`, `Architecture.md`, `Plugins.md`, `Data-Model.md`,
+- [x] Complete every focused session and its verification in order.
+- [x] Update `Query-Spec.md`, `Launcher.md`, `Architecture.md`, `Plugins.md`, `Data-Model.md`,
       `Virtualization.md`, `Design.md`, and `Design-Faces.md` where shipped truth changed.
-- [ ] Reconcile Phase 13's removal list after the top-level Table/Tags roots retire. Keep its
+- [x] Reconcile Phase 13's removal list after the top-level Table/Tags roots retire. Keep its
       embedded face/runtime work explicit.
-- [ ] Add durable launcher guidance to `Testing.md` and performance budgets only if the phase
+- [x] Add durable launcher guidance to `Testing.md` and performance budgets only if the phase
       establishes reusable contracts.
-- [ ] Confirm no schema change occurred. If one becomes necessary, update the durability policy and
+- [x] Confirm no schema change occurred. If one becomes necessary, update the durability policy and
       add the required two-replica case.
-- [ ] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
-- [ ] Build Storybook and run focused launcher, saved-view, editor-handoff, and performance E2E in
+- [x] Run `npm run format`, `npm run lint`, `npm run typecheck`, and `npm run test:run`.
+- [x] Build Storybook and run focused launcher, saved-view, editor-handoff, and performance E2E in
       system Chrome. Then run the full E2E suite.
-- [ ] Run `git diff --check` and verify every active context link.
-- [ ] Record the shipped boundary here, mark the phase complete, and route `NOW.md` to Phase 13.
+- [x] Run `git diff --check` and verify every active context link.
+- [x] Record the shipped boundary here, mark the phase complete, and route `NOW.md` to Phase 13.
+
+## Shipped boundary
+
+Phase 12 ships one production stream root and retires the temporary Table and Tags tabs. `[` owns
+container discovery, `#` owns promoted-type discovery, ordinary and saved-view results use rooted
+place navigation, and `/table` creates and focuses an embedded table under its owner. Inline tag and
+property flows remain live. Schema and face administration remain reachable through the development
+system edge pending Phase 13.
+
+The retired roots survive only as worker-free Storybook evidence. Embedded `TableFace`,
+`TemporaryLegacyFaceAdapter`, host-wide `line`/`collection` dispatch, remaining legacy styles, and
+system-edge migration are Phase 13 work. No schema or durable-state contract changed.
+
+Closeout passed typecheck, 1,235 unit tests, Storybook build and accessibility review, and all 165
+system-browser E2E tests. The throttled browser backstop remained within its existing budget with no
+long tasks or editor churn. `Query-Spec.md`, `Data-Model.md`, `Virtualization.md`, and performance
+guidance were reviewed and required no truth changes.

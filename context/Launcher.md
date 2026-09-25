@@ -1,8 +1,8 @@
 # The launcher surface
 
-> **Status: Quick, Deep, save-as-view, insert-ref exits, and session signals implemented.** Tab
-> retirement remains later Phase 12 work. Workspace, Table, and Tags tabs therefore remain temporary
-> roots.
+> **Status: Phase 12 complete.** Quick, Deep, save-as-view, insert-ref exits, session signals, and
+> the single-root navigation contract ship. The temporary Workspace, Table, and Tags switcher is
+> retired.
 
 > Decided in [Phase 10 §3b-ii](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (visual companion + round-by-round reasoning: [Phase-10-Session-3b-ii-visuals.html](./archive/visuals/Phase-10-Session-3b-ii-visuals.html), determinations D20–D32 continuing [Query-Spec.md](Query-Spec.md)'s D1–D19, plus session inputs I1–I3). This is the design of the `⌘K` surface itself — the shell's universal **"go"** gesture, transient sibling of the `/` **"make"** surface ([Phase 9 §9.6](./archive/phases/Phase-9.md#96-the-unified-creation-gesture)). It consumes the query-spec model whole: chips, glyphs, escalation tiers, and the compile/recognize round-trip are [Query-Spec.md](Query-Spec.md)'s and are not restated here.
 
@@ -93,8 +93,9 @@ types, containers, roots, or navigable nodes into kind or scope chips.
 Commands (registry entries with `'launcher'` in `surfaces` — [Plugins.md](Plugins.md#commands)) rank on merit in the one list; `>` narrows to them. A command row shows its subject inline when `subject: 'required'` ("New table — under ⟨Planning⟩"), with the **provenance node** — the node focused when `⌘K` fired — resolved at open time (the session-2 homing rule). A command whose required subject is absent disables with a stated reason.
 
 `hila.table` is the first concrete launcher command. It captures the invoking node, creates the
-owned matrix through the shared command implementation, applies the table face, and hands focus to
-the existing Table root. `hila.attach` remains slash-only until an app-wide attachment picker exists.
+owned matrix through the shared command implementation, applies the table face, reconstructs the
+owner's rooted focus place, and hands focus to the embedded table name. `hila.attach` remains
+slash-only until an app-wide attachment picker exists.
 
 ## The empty state (D24 · D32)
 
@@ -166,7 +167,7 @@ a valid place; relative dates save as literal ranges.
 
 ## Stage-4 build items
 
-Ordered so every step ships something usable; item 7 is the tab-removal gate this session unblocks.
+Every item now ships.
 
 1. **Command registry extraction — shipped.** `slash-commands.ts` → core registry with `surfaces`; the `/` menu consumes it unchanged (session 3 D6).
 2. **Query-spec compiler + recognizer — shipped.** `src/sql/query-spec/` beside `recognize-updatable.ts`, round-trip conformance suite (3b-i; shared with view blocks).
@@ -178,7 +179,10 @@ Ordered so every step ships something usable; item 7 is the tab-removal gate thi
 6. **Session memory wiring — shipped.** Bounded in-memory focus history, canceled-Deep recovery,
    and viewport-derived on-screen ranking share one isolated store. Persisted frecency remains a
    separate deferred change.
-7. **Tab retirement** — Table/Tags tabs captured as Storybook components, then removed (gated on 3–5; the §4 sequencing constraint).
+7. **Tab retirement — shipped.** Fixture-driven Storybook references preserve the Table and Tags
+   manager states without a worker. The production shell now mounts one stream root; `[` and `#`
+   browse containers and promoted types, and the development system edge retains schema and face
+   administration.
 
 ## Deferred
 

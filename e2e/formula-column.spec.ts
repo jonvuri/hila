@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { openEmbeddedTable } from './helpers/embedded-table'
+
 const openSidebar = async (page: Page) => {
   const sidebar = page.locator('.app-sidebar')
   if (!(await sidebar.isVisible())) {
@@ -23,16 +25,13 @@ const waitForRows = async (page: Page) => {
 }
 
 const applyTableFace = async (page: Page) => {
-  await page.getByTestId('view-as-button').click()
-  await expect(page.getByTestId('face-config-panel')).toBeVisible()
-  await page.getByTestId('face-type-picker').selectOption('hila.table')
-  await page.getByTestId('face-config-apply').click()
-  await expect(page.getByTestId('face-config-panel')).not.toBeVisible({ timeout: 5000 })
-  await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
+  await openEmbeddedTable(page)
 }
 
 const dataRows = (page: Page) =>
-  page.locator('table tbody tr').filter({ hasNot: page.getByRole('button', { name: '+ New Row' }) })
+  page
+    .locator('table tbody tr')
+    .filter({ hasNot: page.getByRole('button', { name: '+ New Row' }) })
 
 const addFormulaColumnViaAPI = async (page: Page, name: string, expression: string) => {
   await page.evaluate(
@@ -41,7 +40,9 @@ const addFormulaColumnViaAPI = async (page: Page, name: string, expression: stri
       const matrixClient = await import('/src/core/client/matrix-client.ts')
       // @ts-expect-error -- resolved by Vite dev server at runtime
       const sqlClient = await import('/src/core/client/sql-client.ts')
-      const matrices = await sqlClient.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      const matrices = await sqlClient.execQuery(
+        "SELECT id FROM matrix WHERE title = 'Test table'",
+      )
       const matrixId = (matrices[0] as { id: number }).id
       await matrixClient.addFormulaColumn(matrixId, name, expression)
     },

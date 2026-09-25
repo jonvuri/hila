@@ -26,7 +26,7 @@ const resetDB = async (page: Page) => {
 }
 
 const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {

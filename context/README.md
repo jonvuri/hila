@@ -9,7 +9,7 @@ index when a task needs wider product or architecture context.
 | ----------------------------------- | ------------------------------------------------------------------------------------ |
 | Continue current work               | [NOW](NOW.md) → named active plan or session → cited canonical topics and code       |
 | Understand the system               | [Architecture](Architecture.md) → relevant focused topic below                       |
-| Review future work                  | [Plan](Plan.md) → [Phase 12](phases/Phase-12.md)                                     |
+| Review future work                  | [Plan](Plan.md) → [Phase 13](phases/Phase-13.md)                                     |
 | Work on query authoring or launcher | [Query Spec](Query-Spec.md) → [Launcher](Launcher.md) → current implementation phase |
 | Work on visual design               | [Design](Design.md) → [Design Faces](Design-Faces.md) → current implementation phase |
 | Run or debug browser tests          | [Testing](Testing.md) → relevant test and implementation files                       |
@@ -34,8 +34,8 @@ index when a task needs wider product or architecture context.
 - [Query-Spec.md](Query-Spec.md) — shipped compiler, recognizer, query runtime, transient and durable
   chip authoring, raw SQL mode, and SQL-only durable round-trip.
 - [Launcher.md](Launcher.md) — shipped Quick and Deep launcher, discovery, ranking, query authoring,
-  save and insert-ref exits, presentation variants, and rooted navigation; session signals and tab
-  retirement remain planned.
+  save and insert-ref exits, presentation variants, session signals, rooted navigation, and retired
+  top-level roots.
 - [Sync.md](Sync.md) — shipped readiness, Phase 11 repair contract, and future replica boundary.
 - [Virtualization.md](Virtualization.md) — paged data and rendering residency contract.
 - [Performance.md](Performance.md) — deterministic guards and calibrated browser budgets.

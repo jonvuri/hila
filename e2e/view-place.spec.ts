@@ -24,7 +24,7 @@ const resetDB = async (page: Page) => {
   await expect(reset).toContainText('Confirm', { timeout: 3000 })
   await reset.click()
   await expect(reset).toContainText('Reset DB', { timeout: 10000 })
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
@@ -192,7 +192,7 @@ test.describe('named view places', () => {
 
     await page.reload()
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 10_000 })
-    await page.getByTestId('workspace-tab').focus()
+    await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K')
     const reopenLauncher = page.getByTestId('quick-launcher')
     const reopenInput = reopenLauncher.locator('#quick-launcher-input')
@@ -235,7 +235,7 @@ test.describe('named view places', () => {
 
     await page.reload()
     await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 10_000 })
-    await page.getByTestId('workspace-tab').focus()
+    await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+K' : 'Control+K')
     const editedLauncher = page.getByTestId('quick-launcher')
     const editedInput = editedLauncher.locator('#quick-launcher-input')

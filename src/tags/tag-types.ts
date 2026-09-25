@@ -1,13 +1,6 @@
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
-import {
-  createOwnedMatrix,
-  insertRow,
-  updateRow,
-  deleteRow,
-  promoteNode,
-  ConstraintViolationError,
-} from '../core/matrix'
+import { createOwnedMatrix, insertRow, updateRow, deleteRow, promoteNode } from '../core/matrix'
 import { applyFaceToMatrix } from '../core/face-config'
 import { getFaceType } from '../core/face-registry'
 import { withTransaction } from '../core/transaction'
@@ -237,40 +230,19 @@ export const getAllTagTypes = (db: Database): TagType[] => {
 
 /**
  * Update a tag type's name. Writes the type-node's label column (the
- * canonical name); core's `updateRow` syncs the owned matrix's derived
- * `title` cache from it.
+ * canonical name); core's `updateRow` enforces promoted-name uniqueness and
+ * syncs the owned matrix's derived `title` cache from it.
  */
 export const updateTagType = (db: Database, id: number, updates: { name?: string }): void => {
   if (updates.name === undefined) return
 
   const wsMatrixId = getWorkspaceMatrixId(db)
   const labelCol = getLabelColumnName(db, wsMatrixId)
-
-  // Check uniqueness (case-insensitive) via matrix.title
-  const existingStmt = db.prepare(
-    `SELECT p.row_id FROM promoted_nodes p
-     JOIN matrix m ON m.owner_matrix_id = p.matrix_id AND m.owner_row_id = p.row_id
-     WHERE p.matrix_id = ? AND m.title = ? COLLATE NOCASE AND p.row_id != ?`,
-  )
-  existingStmt.bind([wsMatrixId, updates.name, id])
-  if (existingStmt.step()) {
-    existingStmt.finalize()
-    throw new Error(`Tag type "${updates.name}" already exists`)
-  }
-  existingStmt.finalize()
-
-  try {
-    updateRow(db, {
-      matrixId: wsMatrixId,
-      rowId: id,
-      values: { [labelCol]: textToPmJson(updates.name) },
-    })
-  } catch (err) {
-    if (err instanceof ConstraintViolationError) {
-      throw new Error(`Tag type "${updates.name}" already exists`)
-    }
-    throw err
-  }
+  updateRow(db, {
+    matrixId: wsMatrixId,
+    rowId: id,
+    values: { [labelCol]: textToPmJson(updates.name) },
+  })
 }
 
 /**

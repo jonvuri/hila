@@ -156,8 +156,11 @@ stored SQL as a substrate collection. Empty and invalid collections remain place
 rows retain source-cell write-back where recognized, but never expose structural insertion,
 reparenting, drag, or ownership gestures.
 
-The current Workspace/Table/Tags tabs are temporary. Phase 12 removes them only after the launcher
-can replace their navigation role. URLs, deep links, and saved stream states remain deferred.
+The production shell mounts one stream root. Phase 12 retired the temporary Workspace, Table, and
+Tags tabs after launcher and rooted-place parity passed. `[` browses containers and the existing
+root; `#` browses promoted types and reaches their matrices through Deep or their type-node place.
+The development system edge retains matrix schema and face administration. URLs, deep links, and
+saved stream states remain deferred.
 
 ### Two planes
 

@@ -2,9 +2,10 @@
 
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
 > production workspace/sticky slice, shared overlay/selectable-list primitives, and production
-> Quick and Deep launcher presentations ship. App-wide fidelity behavior and remaining face,
-> browser, and system-edge migrations do not. Future sequencing belongs in [Plan.md](Plan.md), not
-> this topic contract.
+> Quick and Deep launcher presentations ship. Fixture-driven Storybook references preserve the
+> retired Table and Tags roots across themes, polarities, and narrow widths. App-wide fidelity
+> behavior and remaining face, browser, and system-edge migrations do not. Future sequencing
+> belongs in [Plan.md](Plan.md), not this topic contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
 
@@ -318,6 +319,9 @@ Run with `pnpm storybook`. Configuration:
   decorator.
 
 Token documentation stories (color palette, spacing, typography) are in `src/design/tokens.stories.tsx`.
+The worker-free `References/Retired top-level surfaces` stories preserve the former Table schema,
+cell, sort, and edit states plus Tags list, count, instance, create, and context states. They are
+historical visual evidence, not current navigation.
 
 ## Migration notes
 

@@ -57,6 +57,7 @@ import {
   consumeGeneratedViewNameFocus,
   hasGeneratedViewNameFocusRequest,
 } from './pending-view-name-focus'
+import { updateEditableRowLabel } from './row-label-mutations'
 
 export { requestGeneratedViewNameFocus } from './pending-view-name-focus'
 
@@ -116,6 +117,7 @@ type RowData = Record<string, unknown> & {
   id: number
   label: string | null
   content: string | null
+  __hila_is_type_node: number
 }
 
 type BacklinkData = {
@@ -170,6 +172,7 @@ type FocusLabelEditorProps = {
   rowId: number
   label: string
   matrixId: number
+  isTypeNode: boolean
   // The label-role column this header writes to (Phase 9.5 role-adaptive far side):
   // `label` for the workspace matrix, but e.g. `title` for a sub-table.
   column: string
@@ -184,15 +187,23 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
-    void refreshCachedTitles(docJson).then((updated) => {
-      void updateRow(props.matrixId, props.rowId, { [props.column]: JSON.stringify(updated) })
-    })
-    void syncInlineRefs(
-      doc,
-      props.matrixId,
-      props.rowId,
-      extractInlineRefsFromStored(props.label),
+    void updateEditableRowLabel(
+      {
+        matrixId: props.matrixId,
+        rowId: props.rowId,
+        column: props.column,
+        isTypeNode: props.isTypeNode,
+      },
+      docJson,
     )
+    if (!props.isTypeNode) {
+      void syncInlineRefs(
+        doc,
+        props.matrixId,
+        props.rowId,
+        extractInlineRefsFromStored(props.label),
+      )
+    }
   }, SAVE_DEBOUNCE_MS)
 
   const mountEditor = (el: HTMLDivElement) => {
@@ -317,6 +328,7 @@ const FocusLabelEditor = (props: FocusLabelEditorProps) => (
       rowId={props.rowId}
       label={props.label}
       matrixId={props.matrixId}
+      isTypeNode={props.isTypeNode}
       column={props.column}
       onEscape={props.onEscape}
     />
@@ -727,6 +739,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                         rowId={props.rowId}
                         label={labelValue()}
                         matrixId={props.matrixId}
+                        isTypeNode={rowData()?.__hila_is_type_node === 1}
                         column={col()}
                         onEscape={props.onClose}
                       />

@@ -99,9 +99,9 @@ test.describe('Workspace title', () => {
     await expect(reloadedTitle).toContainText('Persistent Name')
   })
 
-  test('tab label reflects workspace title', async ({ page }) => {
-    const tab = page.getByTestId('workspace-tab')
-    await expect(tab).toContainText('Workspace', { timeout: 5000 })
+  test('launcher origin reflects workspace title', async ({ page }) => {
+    const launcherTitle = page.locator('[data-launcher-workspace-title]')
+    await expect(launcherTitle).toContainText('Workspace', { timeout: 5000 })
 
     // Rename the workspace
     const titleEditor = page.getByTestId('workspace-title-editor')
@@ -110,7 +110,6 @@ test.describe('Workspace title', () => {
     await page.keyboard.type('Custom Tab Name')
     await page.keyboard.press('Enter')
 
-    // Tab label should update reactively
-    await expect(tab).toContainText('Custom Tab Name', { timeout: 5000 })
+    await expect(launcherTitle).toContainText('Custom Tab Name', { timeout: 5000 })
   })
 })

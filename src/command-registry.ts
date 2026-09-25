@@ -3,7 +3,7 @@ import type { NodeRef } from './core/tree'
 export type CommandSurface = 'slash' | 'launcher'
 
 export type CommandInvocationCapabilities = {
-  focusCreatedTable?: (matrixId: number) => void
+  focusCreatedTable?: (matrixId: number, subject: NodeRef) => void
   openTypePicker?: (subject: NodeRef) => void
 }
 

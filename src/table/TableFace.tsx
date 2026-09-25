@@ -40,7 +40,6 @@ import {
   type FilterOperator,
   FILTER_OPERATORS,
 } from './table-query'
-import { clearTableFaceFocusRequest, pendingTableFaceFocusMatrixId } from './focus-handoff'
 import FormulaInput from './FormulaInput'
 import styles from './TableFace.module.css'
 
@@ -568,14 +567,6 @@ const TableFace: Component<TableFaceProps> = (props) => {
   }
 
   let tableRef: HTMLDivElement | undefined
-
-  createEffect(() => {
-    const requestedMatrixId = pendingTableFaceFocusMatrixId()
-    if (requestedMatrixId !== matrixId()) return
-
-    clearTableFaceFocusRequest(requestedMatrixId)
-    queueMicrotask(() => tableRef?.focus({ preventScroll: true }))
-  })
 
   createEffect(() => {
     const el = tableRef

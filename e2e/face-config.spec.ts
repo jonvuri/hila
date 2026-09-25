@@ -22,20 +22,26 @@ const waitForRows = async (page: Page) => {
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 5000 })
 }
 
+const openWorkspaceFaceConfig = async (page: Page) => {
+  await openSidebar(page)
+  await page.locator('.mb-matrix-item', { hasText: 'Workspace' }).click()
+  await expect(page.getByTestId('matrix-detail')).toBeVisible({ timeout: 3000 })
+  await page.getByTestId('apply-face-btn').click()
+  await expect(page.getByTestId('face-config-panel')).toBeVisible({ timeout: 3000 })
+}
+
 test.describe('Face configuration UI', () => {
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
     await waitForRows(page)
   })
 
-  test('opens the face config panel via "View as…" button', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible({ timeout: 3000 })
+  test('opens face configuration from the development system edge', async ({ page }) => {
+    await openWorkspaceFaceConfig(page)
   })
 
   test('face type picker lists available face types', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     const picker = page.getByTestId('face-type-picker')
     await expect(picker).toBeVisible()
@@ -47,8 +53,7 @@ test.describe('Face configuration UI', () => {
   })
 
   test('selecting a face type shows slot bindings', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     const picker = page.getByTestId('face-type-picker')
     await picker.selectOption('hila.workspace')
@@ -58,7 +63,7 @@ test.describe('Face configuration UI', () => {
   })
 
   test('selecting a face type with no slots shows no binding rows', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
+    await openWorkspaceFaceConfig(page)
     const picker = page.getByTestId('face-type-picker')
     await picker.selectOption('hila.table')
 
@@ -66,8 +71,7 @@ test.describe('Face configuration UI', () => {
   })
 
   test('can change a slot binding via dropdown', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     const picker = page.getByTestId('face-type-picker')
     await picker.selectOption('hila.workspace')
@@ -83,8 +87,7 @@ test.describe('Face configuration UI', () => {
   })
 
   test('apply button creates a face config and closes the panel', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     const picker = page.getByTestId('face-type-picker')
     await picker.selectOption('hila.table')
@@ -94,16 +97,14 @@ test.describe('Face configuration UI', () => {
   })
 
   test('cancel button closes the panel', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     await page.getByRole('button', { name: 'Cancel' }).click()
     await expect(page.getByTestId('face-config-panel')).not.toBeVisible()
   })
 
   test('overflow columns are displayed for face types with slots', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
-    await expect(page.getByTestId('face-config-panel')).toBeVisible()
+    await openWorkspaceFaceConfig(page)
 
     const picker = page.getByTestId('face-type-picker')
     // Workspace face has label (required) + content slots, workspace matrix has label + content columns
@@ -113,13 +114,13 @@ test.describe('Face configuration UI', () => {
     await expect(page.getByTestId('slot-binding-row').first()).toBeVisible({ timeout: 3000 })
   })
 
-  test('applying table face switches to the table view', async ({ page }) => {
-    await page.getByTestId('view-as-button').click()
+  test('applying a face keeps the single stream root', async ({ page }) => {
+    await openWorkspaceFaceConfig(page)
     const picker = page.getByTestId('face-type-picker')
     await picker.selectOption('hila.table')
 
     await page.getByTestId('face-config-apply').click()
-
-    await expect(page.locator('.view-tab[data-active="true"]')).toContainText('Table')
+    await expect(page.getByTestId('workspace-shell')).toBeVisible()
+    await expect(page.locator('.view-switcher')).toHaveCount(0)
   })
 })

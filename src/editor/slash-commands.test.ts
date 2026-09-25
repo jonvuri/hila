@@ -67,7 +67,7 @@ describe('slash command adapter', () => {
       { name: 'title', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
-    expect(setPendingNewTable).toHaveBeenCalledWith(123)
+    expect(setPendingNewTable).toHaveBeenCalledWith(123, node)
     expect(createDependentRow).not.toHaveBeenCalled()
     expect(openSlashTypePicker).not.toHaveBeenCalled()
   })

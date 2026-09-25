@@ -1,5 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
+import { openEmbeddedTable } from './helpers/embedded-table'
+
 const openSidebar = async (page: Page) => {
   const sidebar = page.locator('.app-sidebar')
   if (!(await sidebar.isVisible())) {
@@ -23,12 +25,7 @@ const waitForRows = async (page: Page) => {
 }
 
 const applyTableFace = async (page: Page) => {
-  await page.getByTestId('view-as-button').click()
-  await expect(page.getByTestId('face-config-panel')).toBeVisible()
-  await page.getByTestId('face-type-picker').selectOption('hila.table')
-  await page.getByTestId('face-config-apply').click()
-  await expect(page.getByTestId('face-config-panel')).not.toBeVisible({ timeout: 5000 })
-  await expect(page.locator('table')).toBeVisible({ timeout: 5000 })
+  await openEmbeddedTable(page)
 }
 
 const addTextColumn = async (page: Page, name?: string) => {
@@ -73,7 +70,9 @@ test.describe('Table face', () => {
     await expect(cell).toContainText('Hello World', { timeout: 5000 })
   })
 
-  test('add a column via the "+" button, specify a type, verify it appears', async ({ page }) => {
+  test('add a column via the "+" button, specify a type, verify it appears', async ({
+    page,
+  }) => {
     const headersBefore = await page.locator('table thead th').count()
 
     await page.locator('button[title="Add column"]').click()
@@ -173,7 +172,7 @@ test.describe('Table face', () => {
     await page.getByRole('button', { name: '+ New Row' }).click()
     await page.waitForTimeout(300)
 
-    const tableRoot = page.locator('[tabindex="-1"]').first()
+    const tableRoot = page.getByTestId('table-face')
 
     // Double-click cell (0, New Column) to enter edit mode directly
     // Workspace matrix columns: # | label | content | New Column (index 3)

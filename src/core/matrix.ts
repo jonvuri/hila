@@ -820,20 +820,41 @@ export const getOwnedMatrixes = (db: Database, owner: NodeRef): number[] => {
  * owns a private sub-table would still sync it; no consumer hits that yet — see
  * Phase-9.md §9.6 forward notes.)
  */
-const syncOwnedMatrixTitles = (db: Database, owner: NodeRef, labelValue: unknown): void => {
-  if (!isPromotedNode(db, owner)) return
-
-  const ownedIds = getOwnedMatrixes(db, owner)
-  if (ownedIds.length === 0) return
-
+const syncOwnedMatrixTitles = (
+  db: Database,
+  ownedMatrixIds: number[],
+  labelValue: unknown,
+): void => {
   const title = extractTextFromPmDoc(labelValue)
-  for (const id of ownedIds) {
+  for (const id of ownedMatrixIds) {
     // The title guard keeps no-op label writes from dirtying `matrix` (and
     // re-running every subscription that reads it).
     db.exec('UPDATE matrix SET title = ? WHERE id = ? AND title != ?', {
       bind: [title, id, title],
     })
   }
+}
+
+/** Enforce the case-insensitive name invariant for promoted matrix owners. */
+const assertPromotedNodeNameAvailable = (
+  db: Database,
+  owner: NodeRef,
+  ownedMatrixIds: number[],
+  labelValue: unknown,
+): void => {
+  if (ownedMatrixIds.length === 0) return
+
+  const name = extractTextFromPmDoc(labelValue)
+  const stmt = db.prepare(
+    `SELECT 1 FROM promoted_nodes p
+     JOIN matrix m ON m.owner_matrix_id = p.matrix_id AND m.owner_row_id = p.row_id
+     WHERE p.matrix_id = ? AND p.row_id != ? AND m.title = ? COLLATE NOCASE
+     LIMIT 1`,
+  )
+  stmt.bind([owner.matrixId, owner.rowId, name])
+  const exists = stmt.step()
+  stmt.finalize()
+  if (exists) throw new Error(`Tag type "${name}" already exists`)
 }
 
 /**
@@ -985,6 +1006,14 @@ export const updateRow = (
     }
   }
 
+  const owner = { matrixId, rowId }
+  const labelEntry = entries.find(([name]) => columnMap.get(name)?.role === 'label')
+  const promotedOwnedMatrixIds =
+    labelEntry && isPromotedNode(db, owner) ? getOwnedMatrixes(db, owner) : []
+  if (labelEntry) {
+    assertPromotedNodeNameAvailable(db, owner, promotedOwnedMatrixIds, labelEntry[1])
+  }
+
   const setClauses = entries.map(([name]) => `${quoteIdent(name)} = ?`).join(', ')
   const bindValues = [...entries.map(([, value]) => value as SqlValue), rowId]
 
@@ -998,9 +1027,8 @@ export const updateRow = (
 
   // Writing the label-role column renames everything this node owns: keep the
   // owned matrixes' derived `title` cache in sync (Phase 8c §8.3).
-  const labelEntry = entries.find(([name]) => columnMap.get(name)?.role === 'label')
   if (labelEntry) {
-    syncOwnedMatrixTitles(db, { matrixId, rowId }, labelEntry[1])
+    syncOwnedMatrixTitles(db, promotedOwnedMatrixIds, labelEntry[1])
   }
 }
 

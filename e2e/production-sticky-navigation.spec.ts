@@ -19,7 +19,7 @@ const openFreshDatabase = async (page: Page) => {
   await openSidebar(page)
   const resetButton = page.getByTestId('reset-db-btn')
   await expect(resetButton).toContainText('Reset DB', { timeout: 10_000 })
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 10_000 })
 }
 

@@ -326,6 +326,34 @@ describe('Owned matrix drop cascade (Phase 8c §8.1)', () => {
     titleStmt2.finalize()
   })
 
+  test('generic label updates preserve promoted type-name uniqueness', () => {
+    const labeledWsId = createMatrix(db, 'Labeled WS', [
+      { name: 'label', type: 'TEXT', role: 'label' },
+    ])
+    const { rowId: taskId } = insertRow(db, labeledWsId, {
+      values: { label: makePmDoc(makeTextNode('Task')) },
+    })
+    const { rowId: reviewId } = insertRow(db, labeledWsId, {
+      values: { label: makePmDoc(makeTextNode('Review')) },
+    })
+    createOwnedMatrix(db, { matrixId: labeledWsId, rowId: taskId }, 'Task', [
+      { name: 'label', type: 'TEXT' },
+    ])
+    createOwnedMatrix(db, { matrixId: labeledWsId, rowId: reviewId }, 'Review', [
+      { name: 'label', type: 'TEXT' },
+    ])
+    promoteNode(db, { matrixId: labeledWsId, rowId: taskId })
+    promoteNode(db, { matrixId: labeledWsId, rowId: reviewId })
+
+    expect(() =>
+      updateRow(db, {
+        matrixId: labeledWsId,
+        rowId: reviewId,
+        values: { label: makePmDoc(makeTextNode('task')) },
+      }),
+    ).toThrow('already exists')
+  })
+
   test('a non-promoted node owns independently-named dedicated sub-tables that survive label edits (Phase 9 §9.6)', () => {
     const labeledWsId = createMatrix(db, 'Labeled WS', [
       { name: 'label', type: 'TEXT', role: 'label' },

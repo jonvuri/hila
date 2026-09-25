@@ -2,7 +2,8 @@
 
 > **Implementation status.** The navigation-outline registry and Guides production treatment ship.
 > Table treatments and the remaining face migrations are design inputs, not shipped runtime
-> variants. Future sequencing belongs in [Plan.md](Plan.md).
+> variants. Storybook preserves the retired top-level Table and Tags surfaces as fixture-driven
+> references. Future sequencing belongs in [Plan.md](Plan.md).
 
 This document plans configurable outline and table treatments. These components build on the
 shared semantic token system. An outline treatment can serve the shell navigation panel and an
@@ -188,9 +189,8 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
 5. Migrate the live shell and stream without behavior changes.
 6. Session 4q removed the executable overlaid-card implementation after the live cutover passed
    review.
-7. Phase 12 Session 4 shipped the shared overlays, and Session 4A approved provisional
-   theme-specific launcher shells. Sessions 5 and 6 migrate Quick and Deep before top-level tabs are
-   removed.
+7. Phase 12 shipped the shared launcher presentations, captured the retiring Table and Tags roots
+   in worker-free Storybook references, and removed their top-level production mounts.
 8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),

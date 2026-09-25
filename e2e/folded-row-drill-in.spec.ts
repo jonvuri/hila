@@ -36,7 +36,7 @@ const resetDB = async (page: Page) => {
 }
 
 const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {
@@ -50,7 +50,8 @@ const waitForRows = async (page: Page, minCount = 1) => {
 const appearances = (page: Page, rowId: number) =>
   page.locator(`.outline-row[data-row-id="${rowId}"]`)
 
-const openRealPositionBtn = (page: Page) => page.getByRole('button', { name: 'Open real position' })
+const openRealPositionBtn = (page: Page) =>
+  page.getByRole('button', { name: 'Open real position' })
 
 const doc = (text: string) =>
   JSON.stringify({
@@ -96,7 +97,9 @@ test.describe('Phase 9.7 Stage C3 — folded-row focus and drill-in identity', (
     await waitForRows(page, 1)
   })
 
-  test('a folded row with a real, positioned child shows it after drill-in', async ({ page }) => {
+  test('a folded row with a real, positioned child shows it after drill-in', async ({
+    page,
+  }) => {
     const { wsId, tasksId, anchorId } = await seedTasksAndAnchor(page)
 
     const { taskId, childId } = await page.evaluate(
@@ -136,7 +139,9 @@ test.describe('Phase 9.7 Stage C3 — folded-row focus and drill-in identity', (
     await expect(page.getByTestId('focus-no-children')).toHaveCount(0)
     await expect(page.getByTestId('focus-no-position')).toHaveCount(0)
     await expect(
-      page.locator(`[data-testid="focus-panel-children"] .outline-row[data-row-id="${childId}"]`),
+      page.locator(
+        `[data-testid="focus-panel-children"] .outline-row[data-row-id="${childId}"]`,
+      ),
     ).toBeVisible({ timeout: 5000 })
   })
 
@@ -222,7 +227,9 @@ test.describe('Phase 9.7 Stage C3 — folded-row focus and drill-in identity', (
     await expect(page.getByTestId('focus-no-position')).toHaveCount(0)
     await expect(page.getByTestId('focus-no-children')).toHaveCount(0)
     await expect(
-      page.locator(`[data-testid="focus-panel-children"] .outline-row[data-row-id="${childId}"]`),
+      page.locator(
+        `[data-testid="focus-panel-children"] .outline-row[data-row-id="${childId}"]`,
+      ),
     ).toBeVisible({ timeout: 5000 })
   })
 })

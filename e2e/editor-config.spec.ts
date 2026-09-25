@@ -23,7 +23,7 @@ const resetDB = async (page: Page) => {
 }
 
 const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
 }
 
 const waitForRows = async (page: Page, minCount = 1) => {
@@ -39,9 +39,7 @@ const openFocusPanel = async (page: Page) => {
   const focusBtn = firstRow.locator('.nav-row-open-focus')
   await firstRow.hover()
   await expect(async () => {
-    const opacity = await focusBtn.evaluate(
-      (el) => window.getComputedStyle(el).opacity,
-    )
+    const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
     expect(Number(opacity)).toBeGreaterThan(0)
   }).toPass({ timeout: 3000 })
   await focusBtn.click()
@@ -87,9 +85,7 @@ test.describe('Label editor configuration', () => {
     const focusBtn = secondRow.locator('.nav-row-open-focus')
     await secondRow.hover()
     await expect(async () => {
-      const opacity = await focusBtn.evaluate(
-        (el) => window.getComputedStyle(el).opacity,
-      )
+      const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
       expect(Number(opacity)).toBeGreaterThan(0)
     }).toPass({ timeout: 3000 })
     await focusBtn.click()
@@ -278,7 +274,9 @@ test.describe('Content editor configuration', () => {
     expect(text).toContain('@')
 
     // The autocomplete dropdown elements should exist in the DOM
-    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({ timeout: 3000 })
+    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({
+      timeout: 3000,
+    })
 
     // Close autocomplete via Escape
     await page.keyboard.press('Escape')
@@ -299,7 +297,9 @@ test.describe('Content editor configuration', () => {
     expect(text).toContain('@')
 
     // The autocomplete dropdown elements should exist in the DOM
-    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({ timeout: 3000 })
+    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({
+      timeout: 3000,
+    })
   })
 
   test('Shift-Enter from label focuses inline content editor', async ({ page }) => {

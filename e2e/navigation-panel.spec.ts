@@ -23,7 +23,7 @@ const resetDB = async (page: Page) => {
 }
 
 const goToWorkspace = async (page: Page) => {
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
 }
 
 const addSampleRowsToWorkspace = async (page: Page) => {
@@ -59,21 +59,18 @@ const moveCursorToOffset = async (
   editorLocator: ReturnType<Page['locator']>,
   charOffset: number,
 ) => {
-  await editorLocator.evaluate(
-    (el: HTMLElement, offset: number) => {
-      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
-      const textNode = walker.nextNode()
-      if (!textNode) return
-      const clampedOffset = Math.min(offset, textNode.textContent?.length ?? 0)
-      const range = document.createRange()
-      range.setStart(textNode, clampedOffset)
-      range.collapse(true)
-      const sel = window.getSelection()!
-      sel.removeAllRanges()
-      sel.addRange(range)
-    },
-    charOffset,
-  )
+  await editorLocator.evaluate((el: HTMLElement, offset: number) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    const textNode = walker.nextNode()
+    if (!textNode) return
+    const clampedOffset = Math.min(offset, textNode.textContent?.length ?? 0)
+    const range = document.createRange()
+    range.setStart(textNode, clampedOffset)
+    range.collapse(true)
+    const sel = window.getSelection()!
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }, charOffset)
   await page.waitForTimeout(50)
 }
 
@@ -147,7 +144,10 @@ test.describe('Navigation panel', () => {
       expect(count).toBeGreaterThanOrEqual(2)
     }).toPass({ timeout: 5000 })
 
-    const secondEditor = page.locator('.outline-row').nth(1).locator('.nav-label-editor .ProseMirror')
+    const secondEditor = page
+      .locator('.outline-row')
+      .nth(1)
+      .locator('.nav-label-editor .ProseMirror')
     await secondEditor.click()
     await page.keyboard.press('Tab')
 
@@ -195,13 +195,19 @@ test.describe('Navigation panel', () => {
       expect(count).toBeGreaterThanOrEqual(2)
     }).toPass({ timeout: 5000 })
 
-    const secondEditor = page.locator('.outline-row').nth(1).locator('.nav-label-editor .ProseMirror')
+    const secondEditor = page
+      .locator('.outline-row')
+      .nth(1)
+      .locator('.nav-label-editor .ProseMirror')
     await secondEditor.click()
     await page.keyboard.type('Child row')
 
     await page.keyboard.press('ArrowUp')
 
-    const firstPm = page.locator('.outline-row').nth(0).locator('.nav-label-editor .ProseMirror')
+    const firstPm = page
+      .locator('.outline-row')
+      .nth(0)
+      .locator('.nav-label-editor .ProseMirror')
     await expect(firstPm).toBeFocused({ timeout: 3000 })
   })
 
@@ -239,9 +245,7 @@ test.describe('Navigation panel', () => {
 
     await firstRow.hover()
     await expect(async () => {
-      const opacity = await focusBtn.evaluate(
-        (el) => window.getComputedStyle(el).opacity,
-      )
+      const opacity = await focusBtn.evaluate((el) => window.getComputedStyle(el).opacity)
       expect(Number(opacity)).toBeGreaterThan(0)
     }).toPass({ timeout: 3000 })
   })
@@ -274,8 +278,8 @@ test.describe('Navigation panel', () => {
     expect(text.trim().length).toBeGreaterThan(0)
 
     // Verify CSS line-clamp is applied (display: -webkit-box, -webkit-line-clamp: 2)
-    const lineClamp = await preview.evaluate(
-      (el) => window.getComputedStyle(el).getPropertyValue('-webkit-line-clamp'),
+    const lineClamp = await preview.evaluate((el) =>
+      window.getComputedStyle(el).getPropertyValue('-webkit-line-clamp'),
     )
     expect(lineClamp).toBe('2')
 

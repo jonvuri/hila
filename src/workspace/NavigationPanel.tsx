@@ -67,6 +67,7 @@ import {
 } from './production-sticky'
 import { buildMatrixTitleQuery } from './workspace-plugin'
 import { RowGestureMenu, CoalescedHeader, type GestureRef } from './row-gestures'
+import { updateEditableRowLabel } from './row-label-mutations'
 import {
   usePagedWorkspaceData,
   compositeKey,
@@ -210,6 +211,7 @@ type LabelEditorProps = {
   rowId: number
   label: string
   matrixId: number
+  isTypeNode: boolean
   pageIndex: number
   callbacks: OutlineCallbacks
   onHandle?: (handle: EditorHandle) => void
@@ -223,15 +225,23 @@ const LabelEditorInner = (props: LabelEditorProps) => {
 
   const saveHandle = createDebouncedSave((doc) => {
     const docJson = doc.toJSON() as Record<string, unknown>
-    void refreshCachedTitles(docJson).then((updated) => {
-      void updateRow(props.matrixId, props.rowId, { label: JSON.stringify(updated) })
-    })
-    void syncInlineRefs(
-      doc,
-      props.matrixId,
-      props.rowId,
-      extractInlineRefsFromStored(props.label),
+    void updateEditableRowLabel(
+      {
+        matrixId: props.matrixId,
+        rowId: props.rowId,
+        column: 'label',
+        isTypeNode: props.isTypeNode,
+      },
+      docJson,
     )
+    if (!props.isTypeNode) {
+      void syncInlineRefs(
+        doc,
+        props.matrixId,
+        props.rowId,
+        extractInlineRefsFromStored(props.label),
+      )
+    }
   }, SAVE_DEBOUNCE_MS)
 
   const handle: EditorHandle = {
@@ -376,6 +386,7 @@ const LabelEditor = (props: LabelEditorProps) => (
       rowId={props.rowId}
       label={props.label}
       matrixId={props.matrixId}
+      isTypeNode={props.isTypeNode}
       pageIndex={props.pageIndex}
       callbacks={props.callbacks}
       onHandle={props.onHandle}
@@ -1598,6 +1609,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                             rowId={rowId}
                             label={row.label ?? ''}
                             matrixId={rowMatrixId}
+                            isTypeNode={row.is_type_node === 1}
                             pageIndex={wIdx}
                             callbacks={callbacks}
                             onHandle={(handle) => registerHandle(rowCk, handle)}
@@ -1699,7 +1711,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                     </Show>
                   </div>
 
-                  {/* Row-action gestures (portal / move-owner / two-tier delete).
+                  {/* Row-action gestures (portal / move-owner / context-aware delete).
                     Surfaced on every live *owned* outline row; the position
                     gestures need a parent host (hidden at the top level). A
                     folded block row is render-only (no own-edge — the firewall),
@@ -1718,6 +1730,7 @@ const NavigationPanel = (props: NavigationPanelProps) => {
                       <RowGestureMenu
                         host={parentRef()}
                         target={{ matrixId: rowMatrixId, rowId }}
+                        isTypeNode={row.is_type_node === 1}
                       />
                     </span>
                   </Show>
@@ -1761,9 +1774,11 @@ const NavigationPanel = (props: NavigationPanelProps) => {
           title={
             isRootPanel ?
               <div class="workspace-title-header" data-testid="workspace-title">
+                <span data-launcher-workspace-mark aria-hidden="true" />
                 <span
                   class="label-heading workspace-title-editor"
                   contentEditable={true}
+                  data-launcher-workspace-title
                   data-testid="workspace-title-editor"
                   onBlur={(e) => {
                     const newTitle =

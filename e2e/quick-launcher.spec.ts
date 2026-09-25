@@ -27,7 +27,7 @@ const resetDatabase = async (page: Page) => {
   await reset.click()
   await expect(reset).toContainText('Reset DB', { timeout: 10_000 })
   await page.getByRole('button', { name: 'Close sidebar' }).click()
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
   await expect(page.locator('.outline-row').first()).toBeVisible({ timeout: 10_000 })
 }
 
@@ -113,7 +113,7 @@ for (const theme of ['ghost', 'null'] as const) {
   test(`${theme} Quick is centered over the unchanged stream`, async ({ page }) => {
     await resetDatabase(page)
     await setTheme(page, theme)
-    await page.getByTestId('workspace-tab').focus()
+    await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
     await page.keyboard.press(launcherShortcut)
 
     const launcher = page.getByTestId('quick-launcher')
@@ -146,7 +146,7 @@ for (const theme of ['ghost', 'null'] as const) {
     }
 
     await expect(launcher).toHaveCount(0)
-    await expect(page.getByTestId('workspace-tab')).toBeFocused()
+    await expect(page.getByRole('button', { name: 'Toggle dev tools' })).toBeFocused()
   })
 }
 
@@ -542,7 +542,7 @@ test('filters, explains command context, runs a command, and navigates cross-mat
   await resetDatabase(page)
   await setTheme(page, 'ghost')
 
-  await page.getByTestId('workspace-tab').focus()
+  await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
   await page.keyboard.press(launcherShortcut)
   let launcher = page.getByTestId('quick-launcher')
   let input = launcher.locator('#quick-launcher-input')
@@ -563,10 +563,10 @@ test('filters, explains command context, runs a command, and navigates cross-mat
   await expect(command).toContainText('Under Welcome to Hila')
   await input.press('Enter')
   await expect(launcher).toHaveCount(0)
-  await expect(page.locator('table')).toBeVisible({ timeout: 10_000 })
-  await expect(page.getByTestId('table-face')).toBeFocused()
+  await expect(page.getByTestId('sub-table-band-item')).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('sub-table-name-input')).toBeFocused()
 
-  await page.getByTestId('workspace-tab').click()
+  await expect(page.getByTestId('workspace-shell')).toBeVisible({ timeout: 5_000 })
   const target = await page.evaluate(async () => {
     // @ts-expect-error -- Vite resolves this browser-only module at runtime.
     const sql = await import('/src/core/client/sql-client.ts')
@@ -607,6 +607,81 @@ test('filters, explains command context, runs a command, and navigates cross-mat
   await expect(focused).toBeVisible({ timeout: 10_000 })
 })
 
+test('container and type browse routes replace the retired roots', async ({ page }) => {
+  await resetDatabase(page)
+  const fixture = await page.evaluate(async () => {
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const sql = await import('/src/core/client/sql-client.ts')
+    // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+    const matrix = await import('/src/core/client/matrix-client.ts')
+    const workspaceRows = (await sql.execQuery(
+      "SELECT id FROM matrix WHERE title = 'Workspace'",
+    )) as Array<{ id: number }>
+    const workspaceMatrixId = workspaceRows[0]!.id
+    const { rowId: ownerRowId } = await matrix.insertRow(workspaceMatrixId, {
+      values: {
+        label: JSON.stringify({
+          type: 'doc',
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'Container parity' }] },
+          ],
+        }),
+      },
+    })
+    await matrix.createOwnedMatrix(
+      { matrixId: workspaceMatrixId, rowId: ownerRowId },
+      'Research records',
+      [{ name: 'title', type: 'TEXT', role: 'label' }],
+    )
+    const task = await matrix.createTagType('task')
+    const instanceRowId = await matrix.createDependentRow(
+      workspaceMatrixId,
+      ownerRowId,
+      task.matrixId,
+      {
+        label: JSON.stringify({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Type instance' }] }],
+        }),
+      },
+    )
+    return { taskMatrixId: task.matrixId, instanceRowId }
+  })
+
+  await page.keyboard.press(launcherShortcut)
+  let launcher = page.getByTestId('quick-launcher')
+  let input = launcher.locator('#quick-launcher-input')
+  await input.fill('[')
+  await expect(launcher.getByRole('option', { name: 'Workspace', exact: true })).toBeVisible({
+    timeout: 10_000,
+  })
+  const container = launcher.getByRole('option', { name: /Research records/ })
+  await expect(container).toBeVisible()
+  await container.click()
+  await expect(page.getByTestId('focus-panel')).toHaveAttribute(
+    'data-launcher-subject-label',
+    'Container parity',
+  )
+
+  await page.keyboard.press(launcherShortcut)
+  launcher = page.getByTestId('quick-launcher')
+  input = launcher.locator('#quick-launcher-input')
+  await input.fill('#task')
+  const type = launcher.getByRole('option', { name: /task/ }).first()
+  await expect(type).toBeVisible({ timeout: 10_000 })
+  await input.press('Tab')
+  await expect(launcher.locator('[data-chip-type="kind"]')).toContainText('task')
+  const preview = launcher.getByRole('listbox', { name: 'Query preview' })
+  const instance = preview.getByRole('option').first()
+  await expect(instance).toBeVisible({ timeout: 10_000 })
+  await instance.click()
+  await expect(
+    page.locator(
+      `[data-testid="focus-panel"][data-launcher-matrix-id="${fixture.taskMatrixId}"][data-launcher-row-id="${fixture.instanceRowId}"]`,
+    ),
+  ).toBeVisible({ timeout: 10_000 })
+})
+
 for (const theme of ['ghost', 'null', 'wipeout'] as const) {
   for (const viewport of [
     { name: 'wide', width: 1_200, height: 900 },
@@ -618,7 +693,7 @@ for (const theme of ['ghost', 'null', 'wipeout'] as const) {
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await resetDatabase(page)
       await setTheme(page, theme)
-      await page.getByTestId('workspace-tab').focus()
+      await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
       await page.keyboard.press(launcherShortcut)
 
       const { launcher, input } = await commitWorkspaceKind(page)
@@ -723,7 +798,7 @@ test('Deep preview reuses bound templates and keeps large multi-matrix fixtures 
   })
 
   const before = await pmCounts(page)
-  await page.getByTestId('workspace-tab').focus()
+  await page.getByRole('button', { name: 'Toggle dev tools' }).focus()
   await page.keyboard.press(launcherShortcut)
   const launcher = page.getByTestId('quick-launcher')
   const input = launcher.locator('#quick-launcher-input')
