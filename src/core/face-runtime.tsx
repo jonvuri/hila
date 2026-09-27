@@ -11,7 +11,12 @@ import {
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 
-import { resolveFidelity, type RenderingFidelity } from '../design/tokens'
+import {
+  resolveDensity,
+  resolveFidelity,
+  type Density,
+  type RenderingFidelity,
+} from '../design/tokens'
 
 import type { NodeRef } from './tree'
 import type { FaceAffinity } from './face-affinity'
@@ -42,6 +47,7 @@ export type FaceRenderingProps = {
   subject: FaceSubject
   recipe: FaceRecipe
   rootMatrixId: number
+  density: Density
   fidelity: RenderingFidelity
   services: FaceHostServices
 }
@@ -285,6 +291,7 @@ export const FaceHostSlot: Component<{
   subject: FaceSubject
   affinity: FaceAffinity
   rootMatrixId: number
+  density?: Density
   fidelity?: RenderingFidelity
   services: FaceHostServices
   substrate: JSX.Element
@@ -302,6 +309,7 @@ export const FaceHostSlot: Component<{
     xray: inheritedFidelity.xray,
     setXray: inheritedFidelity.setXray,
   }
+  const density = createMemo(() => resolveDensity(props.density))
   const Rendering = createMemo(() =>
     props.affinity.source === 'intentional' ?
       getFaceRendering(props.affinity.recipe.faceTypeId, props.kind)
@@ -314,6 +322,7 @@ export const FaceHostSlot: Component<{
         data-testid="face-host-slot"
         data-face-rendering={props.kind}
         data-face-source={props.affinity.source}
+        data-density={density()}
         data-fidelity={fidelity()}
         data-host={props.host}
         data-subject-mode={props.subject.mode}
@@ -325,6 +334,7 @@ export const FaceHostSlot: Component<{
               subject={props.subject}
               recipe={props.affinity.recipe!}
               rootMatrixId={props.rootMatrixId}
+              density={density()}
               fidelity={fidelity()}
               services={props.services}
             />

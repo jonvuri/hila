@@ -3,9 +3,10 @@
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
 > production workspace/sticky slice, shared overlay/selectable-list primitives, production Quick
 > and Deep launcher presentations, startup visual-theme selection, and recursive face-host
-> fidelity inputs ship. Fixture-driven Storybook references preserve the retired Table and Tags
-> roots across themes, polarities, and narrow widths. Fidelity-aware live face styling and the
-> remaining face, browser, and system-edge migrations do not. Future sequencing belongs in
+> fidelity inputs ship. The live table, inline-reference, autocomplete, tag-property, shared-field,
+> and property-row boundaries use canonical roles. Fixture-driven Storybook references preserve
+> the retired Table and Tags roots across themes, polarities, and narrow widths. The remaining
+> face, browser, and system-edge migrations do not ship yet. Future sequencing belongs in
 > [Plan.md](Plan.md), not this topic contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
@@ -344,7 +345,8 @@ historical visual evidence, not current navigation.
 
 ## Migration notes
 
-The live table collection, formula input, and embedded-table host now consume canonical semantic
-roles. `src/global.css` still contains hardcoded styles for the app shell, sidebar, outline face,
-note face, and matrix browser. Each remaining migration slice replaces its full local style
-boundary without compatibility aliases. See [Design-Faces.md](Design-Faces.md) for the plan.
+The live table collection, table line, inline references, autocomplete, tag properties, shared
+fields, property rows, formula input, and embedded-table host now consume canonical semantic roles.
+`src/global.css` still contains hardcoded styles for the app shell, sidebar, outline face, note
+face, and matrix browser. Each remaining migration slice replaces its full local style boundary
+without compatibility aliases. See [Design-Faces.md](Design-Faces.md) for the plan.

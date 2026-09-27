@@ -68,8 +68,13 @@ export const partitionPropertyColumns = (
   columns: ColumnDefinition[],
 ): PropertyColumnPartition => ({
   label:
-    columns.find((col) => col.role === 'label') ??
-    columns.find((col) => isLabelLikeColumn(col) && !SKIPPED_PROPERTY_COLUMNS.has(col.name)) ??
+    columns.find((col) => col.role === 'label' && col.formula == null) ??
+    columns.find(
+      (col) =>
+        col.formula == null &&
+        isLabelLikeColumn(col) &&
+        !SKIPPED_PROPERTY_COLUMNS.has(col.name),
+    ) ??
     null,
   fields: filterIntrinsicOverflowColumns(columns),
   formula: filterFormulaColumns(columns),

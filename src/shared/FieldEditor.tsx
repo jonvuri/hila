@@ -1,6 +1,8 @@
-import { createEffect, createSignal, For, Show, type Component } from 'solid-js'
+import { createEffect, createSignal, createUniqueId, For, Show, type Component } from 'solid-js'
 
 import type { ColumnDefinition } from '../core/matrix'
+
+import styles from './FieldEditor.module.css'
 
 const parseSelectOptions = (optionsJson: string | null): string[] => {
   if (!optionsJson) return []
@@ -22,21 +24,35 @@ const parseSelectOptions = (optionsJson: string | null): string[] => {
  * like a form input. `showLabel={false}` suppresses the built-in field-name
  * label, letting a parent (e.g. PropertyRow) own the label placement.
  */
-export const FieldEditor: Component<{
+export type FieldEditorProps = {
   column: ColumnDefinition
   value: string
   onSave: (value: string) => void
   seamless?: boolean
   showLabel?: boolean
-}> = (props) => {
+  invalid?: boolean
+  validationMessage?: string
+}
+
+export const FieldEditor: Component<FieldEditorProps> = (props) => {
   const [localValue, setLocalValue] = createSignal('')
+  const controlId = createUniqueId()
+  const errorId = `${controlId}-error`
 
   createEffect(() => {
     setLocalValue(props.value)
   })
 
-  const cls = (base: string) => (props.seamless ? `${base} ${base}--seamless` : base)
+  const fieldClass = () =>
+    props.seamless ? `${styles.field} ${styles.seamlessField}` : styles.field
+  const controlClass = (base: string) =>
+    props.seamless ? `${base} ${styles.seamlessControl}` : base
   const showLabel = () => props.showLabel !== false
+  const accessibilityProps = () => ({
+    'aria-label': showLabel() ? undefined : props.column.name,
+    'aria-invalid': props.invalid ? ('true' as const) : undefined,
+    'aria-describedby': props.invalid && props.validationMessage ? errorId : undefined,
+  })
 
   const commitValue = () => {
     const v = localValue()
@@ -63,16 +79,21 @@ export const FieldEditor: Component<{
   const displayType = () => props.column.displayType
 
   return (
-    <div class={cls('tag-panel-field')}>
+    <div class={fieldClass()} data-invalid={props.invalid ? '' : undefined}>
       <Show when={showLabel()}>
-        <label class="tag-panel-field-label">{props.column.name}</label>
+        <label class={styles.label} for={controlId}>
+          {props.column.name}
+        </label>
       </Show>
       <Show
         when={displayType() !== 'select' || !props.column.options}
         fallback={
           <select
-            class={cls('tag-panel-field-select')}
+            id={controlId}
+            class={controlClass(styles.select!)}
+            data-field-control={props.column.name}
             value={localValue()}
+            {...accessibilityProps()}
             onChange={(e) => {
               setLocalValue(e.currentTarget.value)
               props.onSave(e.currentTarget.value)
@@ -90,9 +111,12 @@ export const FieldEditor: Component<{
           when={displayType() !== 'boolean'}
           fallback={
             <input
-              class={cls('tag-panel-field-checkbox')}
+              id={controlId}
+              class={styles.checkbox}
+              data-field-control={props.column.name}
               type="checkbox"
               checked={localValue() === '1' || localValue() === 'true'}
+              {...accessibilityProps()}
               onChange={(e) => {
                 const v = e.currentTarget.checked ? '1' : '0'
                 setLocalValue(v)
@@ -103,7 +127,9 @@ export const FieldEditor: Component<{
           }
         >
           <input
-            class={cls('tag-panel-field-input')}
+            id={controlId}
+            class={controlClass(styles.input!)}
+            data-field-control={props.column.name}
             type={
               displayType() === 'number' ? 'number'
               : displayType() === 'date' ?
@@ -111,12 +137,43 @@ export const FieldEditor: Component<{
               : 'text'
             }
             value={localValue()}
+            {...accessibilityProps()}
             onInput={(e) => setLocalValue(e.currentTarget.value)}
             onBlur={() => commitValue()}
             onKeyDown={handleKeyDown}
           />
         </Show>
       </Show>
+      <Show when={props.invalid && props.validationMessage}>
+        <span id={errorId} class={styles.error} role="alert">
+          {props.validationMessage}
+        </span>
+      </Show>
+    </div>
+  )
+}
+
+export const ReadonlyField: Component<{
+  column: ColumnDefinition
+  value: string
+  seamless?: boolean
+  showLabel?: boolean
+  testId?: string
+}> = (props) => {
+  const showLabel = () => props.showLabel !== false
+  const fieldClass = () =>
+    props.seamless ? `${styles.field} ${styles.seamlessField}` : styles.field
+  const valueClass = () =>
+    props.seamless ? `${styles.readonly} ${styles.seamlessReadonly}` : styles.readonly
+
+  return (
+    <div class={fieldClass()} role="group" aria-label={props.column.name}>
+      <Show when={showLabel()}>
+        <span class={styles.label}>{props.column.name}</span>
+      </Show>
+      <span class={valueClass()} data-testid={props.testId}>
+        {props.value}
+      </span>
     </div>
   )
 }

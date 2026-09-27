@@ -2,8 +2,9 @@ import { createMemo, For, Show, type Component } from 'solid-js'
 
 import type { ColumnDefinition } from '../core/matrix'
 
-import { FieldEditor } from './FieldEditor'
+import { FieldEditor, ReadonlyField } from './FieldEditor'
 import { partitionPropertyColumns } from './property-surface'
+import styles from './PropertyRow.module.css'
 
 /**
  * Schema-adaptive row renderer (Phase 9.2; see context/Phase-9.2.md).
@@ -23,14 +24,13 @@ import { partitionPropertyColumns } from './property-surface'
  * yet — no aspect carries one today; it lands when this renderer is reused for
  * §9.1 heterogeneous outline rows.
  *
- * Editability is decided **per cell**. `isEditable`, when provided, is the
- * authority — a column renders as an always-live `FieldEditor` iff it returns
- * true, else as a read-only display span (reusing the formula partition's
- * read-only styling). This is how Phase 9.3 query bands light up only the
- * recognized-updatable cells while derived/aggregate cells stay read-only. When
- * `isEditable` is absent, `readOnly` is the row-level fallback: all cells
- * read-only when true, all editable when false (the aspect-band default).
- * `onSave` is never called for a read-only cell (and may be omitted).
+ * Editability is decided **per cell**, and formula cells are always read-only.
+ * For other cells, `isEditable`, when provided, is the authority: a column
+ * renders as an always-live `FieldEditor` iff it returns true. Otherwise,
+ * `readOnly` is the row-level fallback: all cells read-only when true, all
+ * editable when false (the aspect-band default). This lets Phase 9.3 query
+ * bands expose only recognized-updatable cells. `onSave` is never called for a
+ * read-only cell (and may be omitted).
  */
 export const PropertyRow: Component<{
   columns: ColumnDefinition[]
@@ -45,23 +45,11 @@ export const PropertyRow: Component<{
   const valueOf = (col: ColumnDefinition) => String(props.data?.[col.name] ?? '')
 
   const cellEditable = (col: ColumnDefinition): boolean =>
-    props.isEditable ? props.isEditable(col) : !props.readOnly
+    props.data !== null &&
+    col.formula == null &&
+    (props.isEditable ? props.isEditable(col) : !props.readOnly)
 
-  const FieldName = (p: { name: string }) => (
-    <span
-      style={{
-        'font-size': '9px',
-        'font-weight': '600',
-        color: 'var(--c-fg-3, #888)',
-        'letter-spacing': '0.4px',
-        'text-transform': 'uppercase',
-        'line-height': '1',
-        'white-space': 'nowrap',
-      }}
-    >
-      {p.name}
-    </span>
-  )
+  const FieldName = (p: { name: string }) => <span class={styles.fieldName}>{p.name}</span>
 
   // `<Show>` (not a bare ternary) so the cell re-renders if editability resolves
   // reactively — e.g. a query band marking cells editable once the base catalog
@@ -70,9 +58,13 @@ export const PropertyRow: Component<{
     <Show
       when={cellEditable(p.col)}
       fallback={
-        <span class="tag-panel-field-value-readonly" data-testid="property-row-readonly-cell">
-          {valueOf(p.col)}
-        </span>
+        <ReadonlyField
+          column={p.col}
+          value={valueOf(p.col)}
+          seamless
+          showLabel={false}
+          testId="property-row-readonly-cell"
+        />
       }
     >
       <FieldEditor
@@ -86,11 +78,16 @@ export const PropertyRow: Component<{
   )
 
   return (
-    <div class="property-row" data-testid="property-row">
+    <div
+      class={styles.row}
+      data-testid="property-row"
+      data-density={props.density}
+      data-hydrated={props.data !== null ? 'true' : 'false'}
+    >
       {/* Label — prominent, but still an always-live seamless editor. */}
       <Show when={partition().label}>
         {(labelCol) => (
-          <div class="property-row-label">
+          <div class={styles.label}>
             <Field col={labelCol()} />
           </div>
         )}
@@ -101,18 +98,10 @@ export const PropertyRow: Component<{
         <Show
           when={props.density === 'narrow'}
           fallback={
-            <div
-              style={{
-                display: 'flex',
-                'flex-wrap': 'wrap',
-                'align-items': 'flex-start',
-                gap: '6px 16px',
-                padding: '2px 0',
-              }}
-            >
+            <div class={styles.fieldsWide}>
               <For each={partition().fields}>
                 {(col) => (
-                  <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
+                  <div class={styles.fieldGroup}>
                     <FieldName name={col.name} />
                     <Field col={col} />
                   </div>
@@ -122,16 +111,7 @@ export const PropertyRow: Component<{
           }
         >
           {/* narrow: labels-aligned 2-col grid */}
-          <div
-            style={{
-              display: 'grid',
-              'grid-template-columns': 'auto 1fr',
-              'column-gap': '10px',
-              'row-gap': '4px',
-              'align-items': 'baseline',
-              padding: '2px 0',
-            }}
-          >
+          <div class={styles.fieldsNarrow}>
             <For each={partition().fields}>
               {(col) => (
                 <>
@@ -146,14 +126,9 @@ export const PropertyRow: Component<{
 
       {/* Read-only formula columns. */}
       <Show when={partition().formula.length > 0}>
-        <div style={{ display: 'flex', 'flex-direction': 'column', gap: '2px' }}>
+        <div class={styles.formulaList}>
           <For each={partition().formula}>
-            {(col) => (
-              <div class="tag-panel-field tag-panel-field-formula">
-                <label class="tag-panel-field-label">{col.name}</label>
-                <span class="tag-panel-field-value-readonly">{valueOf(col)}</span>
-              </div>
-            )}
+            {(col) => <ReadonlyField column={col} value={valueOf(col)} />}
           </For>
         </div>
       </Show>

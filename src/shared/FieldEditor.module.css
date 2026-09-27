@@ -1,0 +1,122 @@
+.field {
+  display: flex;
+  min-width: 0;
+  min-height: var(--size-control);
+  align-items: center;
+  gap: var(--space-control-gap);
+  padding-block: var(--space-compact-inset);
+  color: var(--color-text);
+  font-family: var(--type-body-family);
+}
+
+.label {
+  min-width: 72px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  line-height: var(--type-label-line-height);
+}
+
+.input,
+.select {
+  min-width: 0;
+  min-height: var(--size-control);
+  flex: 1;
+  padding: var(--space-compact-inset) var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--type-body-size);
+}
+
+.select {
+  cursor: pointer;
+}
+
+.checkbox {
+  width: var(--size-icon);
+  height: var(--size-icon);
+  flex: 0 0 auto;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.checkbox:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.input:invalid,
+.field[data-invalid] .input,
+.field[data-invalid] .select,
+.field[data-invalid] .checkbox {
+  border-color: var(--color-state-invalid);
+}
+
+.field[data-invalid] .input:focus-visible,
+.field[data-invalid] .select:focus-visible,
+.field[data-invalid] .checkbox:focus-visible {
+  outline-color: var(--color-state-invalid);
+}
+
+.error {
+  color: var(--color-state-invalid);
+  font-size: var(--type-body-small-size);
+}
+
+.readonly {
+  min-width: 0;
+  min-height: var(--size-control);
+  flex: 1;
+  padding: var(--space-compact-inset) var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: var(--type-data-family);
+  font-size: var(--type-data-size);
+  line-height: var(--line-height-control);
+  overflow-wrap: anywhere;
+}
+
+.seamlessField {
+  min-height: var(--size-24);
+  padding: 0;
+  gap: var(--space-compact-inset);
+}
+
+.seamlessControl,
+.seamlessReadonly {
+  min-height: var(--size-24);
+  padding: var(--space-label-inset) var(--space-compact-inset);
+  border-color: transparent;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.seamlessControl:hover {
+  border-color: var(--color-line-strong);
+}
+
+.seamlessControl:focus-visible {
+  border-color: var(--color-state-focus);
+  background: var(--color-surface);
+}
+
+.seamlessReadonly {
+  color: var(--color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .select {
+    transition: none;
+  }
+}

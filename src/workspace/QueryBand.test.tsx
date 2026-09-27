@@ -136,9 +136,9 @@ describe('ViewCollection', () => {
     expect(collection.dataset.markerRowId).toBe('20')
     expect(container.querySelector('[data-result-column="id"]')).not.toBeNull()
     expect(container.querySelector('[data-result-column="title"]')).not.toBeNull()
-    expect(container.querySelector<HTMLInputElement>('.tag-panel-field-input')?.value).toBe(
-      'Task A',
-    )
+    expect(
+      container.querySelector<HTMLInputElement>('[data-field-control="title"]')?.value,
+    ).toBe('Task A')
     expect(container.querySelector('[data-testid="saved-view-sql-editor"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="query-band-authoring"]')).toBeNull()
     expect(container.textContent).not.toContain('Add row')

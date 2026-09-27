@@ -1,8 +1,8 @@
 ---
 title: Phase 13 Session 4 — Inline tags and property-line surfaces
 kind: phase-session
-state: planned
-updated: 2026-09-25
+state: complete
+updated: 2026-09-27
 ---
 
 # Phase 13 Session 4 — Inline tags and property-line surfaces
@@ -56,6 +56,27 @@ the whole-component compatibility runtime.
   formulas, narrow widths, and both fidelities.
 - Run relevant system-browser tag/property/editor coverage plus formatter, linter, static types, the
   full unit suite, and `git diff --check`.
+
+## Shipped outcome
+
+- `hila.table` now provides a host-consumable `line` interior backed by the shared property-row
+  adapter. The same adapter provides the substrate fallback, so a row has one field owner in both
+  paths.
+- Face hosts pass resolved density to interiors. Dry source cells and formula columns remain
+  read-only; hydrated editable cells retain write-back.
+- Inline references, autocomplete, tag properties, shared fields, property rows, and aspect
+  previews now use canonical semantic roles and local CSS-module boundaries. The migrated surfaces
+  no longer depend on legacy palette aliases or global tag-panel styles.
+- Live, empty, ghost, loading, owned, and tethered states retain their lifecycle and reconciliation
+  behavior. Stable state hooks, accessible names, focus behavior, listbox semantics, and invalid
+  field feedback cover the shared interaction boundary.
+- Storybook covers live and dry property lines, invalid fields, inline-reference states, both
+  densities, and composed/substrate fidelity. Focus-panel composition remains host work for
+  Session 5.
+
+Formatter, linter, static types, 1,304 unit tests, production and Storybook builds, and 50 focused
+system-browser tests pass. Chrome DevTools inspection passed for wide and narrow Storybook states
+and for live autocomplete, owned-aspect creation, badge activation, and property-panel rendering.
 
 ## Handoff
 

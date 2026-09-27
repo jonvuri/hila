@@ -1,8 +1,14 @@
 import type { EditorView } from 'prosemirror-view'
 
 import { createDependentRow } from '../core/client/matrix-client'
+import {
+  connectListFocusOwner,
+  createListboxId,
+  listboxOptionId,
+} from '../design/overlay/list-focus-owner'
 import { searchTagTypes } from '../tags/tag-search-provider'
 
+import autocompleteStyles from './InlineAutocomplete.module.css'
 import type { SlashNode } from './slash-commands'
 
 /**
@@ -19,22 +25,28 @@ import type { SlashNode } from './slash-commands'
  * the editor selection, and tears itself down on pick / Escape / click-outside.
  */
 export const openSlashTypePicker = (view: EditorView, node: SlashNode): void => {
+  const listId = createListboxId('slash-type-picker-list')
   const container = document.createElement('div')
-  container.className = 'inlineref-autocomplete slash-type-picker'
+  container.className = `${autocompleteStyles.dropdown} ${autocompleteStyles.picker}`
   container.setAttribute('data-testid', 'slash-type-picker')
 
   const input = document.createElement('input')
   input.type = 'text'
-  input.className = 'slash-type-picker-input'
+  input.className = autocompleteStyles.input!
   input.setAttribute('data-testid', 'slash-type-picker-input')
+  input.setAttribute('aria-label', 'Find a type to attach')
   input.placeholder = 'Attach a typed row…'
 
   const list = document.createElement('div')
-  list.className = 'slash-type-picker-list'
+  list.id = listId
+  list.className = autocompleteStyles.list!
+  list.setAttribute('role', 'listbox')
+  list.setAttribute('aria-label', 'Available types')
 
   container.appendChild(input)
   container.appendChild(list)
   document.body.appendChild(container)
+  const focusOwnerConnection = connectListFocusOwner(input, listId)
 
   // Anchor at the caret the `/` was triggered from.
   try {
@@ -54,6 +66,7 @@ export const openSlashTypePicker = (view: EditorView, node: SlashNode): void => 
     if (closed) return
     closed = true
     document.removeEventListener('mousedown', handleClickOutside)
+    focusOwnerConnection.restore()
     container.remove()
     view.focus()
   }
@@ -70,9 +83,12 @@ export const openSlashTypePicker = (view: EditorView, node: SlashNode): void => 
     for (let i = 0; i < items.length; i++) {
       const item = items[i]!
       const el = document.createElement('div')
-      el.className =
-        'inlineref-autocomplete-item' +
-        (i === selectedIndex ? ' inlineref-autocomplete-selected' : '')
+      el.id = listboxOptionId(listId, `type-${item.typeMatrixId}`)
+      el.className = `${autocompleteStyles.item}${
+        i === selectedIndex ? ` ${autocompleteStyles.selected}` : ''
+      }`
+      el.setAttribute('role', 'option')
+      el.setAttribute('aria-selected', i === selectedIndex ? 'true' : 'false')
       el.textContent = `# ${item.typeName}`
       el.addEventListener('mousedown', (e) => {
         e.preventDefault()
@@ -81,6 +97,10 @@ export const openSlashTypePicker = (view: EditorView, node: SlashNode): void => 
       })
       list.appendChild(el)
     }
+    const selectedItem = list.querySelector<HTMLElement>(
+      '[role="option"][aria-selected="true"]',
+    )
+    focusOwnerConnection.setActiveDescendant(selectedItem?.id ?? null)
   }
 
   const refresh = async (query: string) => {

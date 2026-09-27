@@ -111,6 +111,14 @@ const restoreFocus = (snapshot: FocusSnapshot | null, focusAtCleanup?: Element |
     if (focusAtCleanup?.isConnected && document.activeElement !== focusAtCleanup) {
       return
     }
+    if (
+      focusAtCleanup &&
+      !focusAtCleanup.isConnected &&
+      document.activeElement !== document.body &&
+      document.activeElement !== document.documentElement
+    ) {
+      return
+    }
     snapshot.element.focus({ preventScroll: true })
     if (snapshot.inputSelection) {
       const input = snapshot.element as HTMLInputElement | HTMLTextAreaElement
@@ -243,6 +251,10 @@ export type AnchoredOverlayProps = {
   children?: JSX.Element
   restoreFocusTo?: HTMLElement
   restoreFocus?: boolean
+  role?: 'dialog' | 'presentation'
+  ariaLabel?: string
+  width?: number
+  maxHeight?: number
   onDismiss: (reason: OverlayDismissReason) => void
   class?: string
   testId?: string
@@ -264,16 +276,21 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
     if (!surface) return
     const bounds = surface.getBoundingClientRect()
     const viewport = window.visualViewport
-    setPosition(
-      calculateAnchoredPosition(
-        props.anchor,
-        { width: bounds.width, height: bounds.height },
-        {
-          width: viewport?.width ?? window.innerWidth,
-          height: viewport?.height ?? window.innerHeight,
-        },
-      ),
+    const next = calculateAnchoredPosition(
+      props.anchor,
+      {
+        width: bounds.width,
+        height: Math.min(bounds.height, props.maxHeight ?? Number.POSITIVE_INFINITY),
+      },
+      {
+        width: viewport?.width ?? window.innerWidth,
+        height: viewport?.height ?? window.innerHeight,
+      },
     )
+    setPosition({
+      ...next,
+      maxHeight: Math.min(next.maxHeight, props.maxHeight ?? Number.POSITIVE_INFINITY),
+    })
   }
 
   const dismiss = (reason: OverlayDismissReason) => {
@@ -305,6 +322,9 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
     window.visualViewport?.addEventListener('resize', updatePosition)
     window.visualViewport?.addEventListener('scroll', updatePosition)
     updatePosition()
+    if (props.role === 'dialog') {
+      queueMicrotask(() => surface?.focus({ preventScroll: true }))
+    }
   })
 
   onCleanup(() => {
@@ -321,13 +341,16 @@ export const AnchoredOverlay = (props: AnchoredOverlayProps) => {
     <div
       ref={surface}
       class={`${styles.anchored} ${props.class ?? ''}`}
-      role="presentation"
+      role={props.role ?? 'presentation'}
+      aria-label={props.ariaLabel}
+      tabindex={props.role === 'dialog' ? -1 : undefined}
       data-placement={position().placement}
       data-testid={props.testId}
       style={{
         left: `${position().left}px`,
         top: `${position().top}px`,
         'max-height': `${position().maxHeight}px`,
+        width: props.width == null ? undefined : `${props.width}px`,
       }}
     >
       {props.children}

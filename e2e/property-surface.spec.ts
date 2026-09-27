@@ -112,14 +112,15 @@ test.describe('Property surface — aspect band (Phase 9.2)', () => {
     )
 
     // Fields render as always-live seamless inputs, in column order (status, priority).
-    const inputs = band.locator('input.tag-panel-field-input--seamless')
-    await expect(inputs.nth(0)).toHaveValue('todo')
-    await expect(inputs.nth(1)).toHaveValue('high')
+    const statusInput = band.getByLabel('status')
+    const priorityInput = band.getByLabel('priority')
+    await expect(statusInput).toHaveValue('todo')
+    await expect(priorityInput).toHaveValue('high')
 
     // Edit a field in place; it persists to the aspect row.
-    await inputs.nth(0).fill('done')
-    await inputs.nth(0).press('Enter')
-    await expect(inputs.nth(0)).toHaveValue('done')
+    await statusInput.fill('done')
+    await statusInput.press('Enter')
+    await expect(statusInput).toHaveValue('done')
 
     await expect(async () => {
       const persisted = await page.evaluate(
@@ -174,10 +175,12 @@ test.describe('Property surface — aspect band (Phase 9.2)', () => {
     await page.keyboard.type('task')
     await page.waitForTimeout(500)
     await expect(
-      page.locator('.inlineref-autocomplete-item, .inlineref-autocomplete-create').first(),
+      page.getByTestId('inline-reference-autocomplete').getByRole('option').first(),
     ).toBeVisible({ timeout: 5000 })
     await page.keyboard.press('Enter')
-    await expect(seedEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(
+      seedEditor.locator('[data-testid="inline-reference"][data-kind="own"]'),
+    ).toBeVisible({ timeout: 5000 })
 
     await openFocusOnWelcomeRow(page)
 
@@ -190,9 +193,12 @@ test.describe('Property surface — aspect band (Phase 9.2)', () => {
     })
 
     // Hover bridge: hovering the band row lights the matching inline badge.
-    const badge = page.getByTestId('focus-panel').locator('.inlineref-own').first()
+    const badge = page
+      .getByTestId('focus-panel')
+      .locator('[data-testid="inline-reference"][data-kind="own"]')
+      .first()
     await expect(badge).toBeVisible()
     await band.getByTestId('aspect-row').first().hover()
-    await expect(badge).toHaveClass(/inlineref-tethered/, { timeout: 3000 })
+    await expect(badge).toHaveAttribute('data-tethered', 'true', { timeout: 3000 })
   })
 })

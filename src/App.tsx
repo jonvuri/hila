@@ -66,6 +66,7 @@ const AppContent: Component = () => {
     rowId: number
     tagTypeName: string
     anchorRect: DOMRect
+    invoker: HTMLElement
   } | null>(null)
 
   const workspaceComponentConfig = createMemo<ComponentVariantConfig>(() => ({
@@ -127,7 +128,7 @@ const AppContent: Component = () => {
         height: number
       }
     }
-    if (detail?.matrixId != null && detail?.rowId != null) {
+    if (detail?.matrixId != null && detail?.rowId != null && e.target instanceof HTMLElement) {
       setTagPanel({
         matrixId: detail.matrixId,
         rowId: detail.rowId,
@@ -138,6 +139,7 @@ const AppContent: Component = () => {
           detail.anchorRect.width,
           detail.anchorRect.height,
         ),
+        invoker: e.target,
       })
     }
   }
@@ -289,6 +291,7 @@ const AppContent: Component = () => {
             rowId={panel().rowId}
             tagTypeName={panel().tagTypeName}
             anchorRect={panel().anchorRect}
+            restoreFocusTo={panel().invoker}
             onClose={() => setTagPanel(null)}
           />
         )}

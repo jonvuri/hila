@@ -2,7 +2,7 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Architecture
@@ -248,7 +248,13 @@ The shipped runtime keeps SQL on view subjects and lets the focus-panel host req
 plugin-owned table collection through the same host slot. Its host retains title, extent, sizing,
 fidelity, insertion ownership, and boundary-hop navigation. Missing recipes or renderings fall
 through visibly without creating recipe state. The former whole-component adapter and direct table
-mount are absent. See [Plugins.md](Plugins.md).
+mount are absent.
+
+`hila.table` also supplies the first registered `line` interior. It renders one row through the
+shared property adapter; the substrate fallback uses that same adapter instead of acquiring a
+second field owner. Hosts provide density and keep labels, grouping, relations, and gestures.
+Formula and dry source cells remain read-only. Property popovers remain host scaffold rather than
+faces. See [Plugins.md](Plugins.md).
 
 ## Fidelity and design axes
 

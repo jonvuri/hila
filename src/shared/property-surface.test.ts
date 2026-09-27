@@ -90,4 +90,26 @@ describe('property-surface helpers', () => {
     expect(none.label).toBeNull()
     expect(none.fields.map((c) => c.name)).toEqual(['status', 'priority'])
   })
+
+  test.each(['label', 'content', 'title', 'name'])(
+    'partitionPropertyColumns keeps a formula named %s out of the label slot',
+    (name) => {
+      const derived = col(name, { formula: `'derived ${name}'` })
+      const columns = [derived, col('heading', { role: 'label' }), col('status')]
+      const { label, fields, formula } = partitionPropertyColumns(columns)
+
+      expect(label?.name).toBe('heading')
+      expect(fields.map((c) => c.name)).toEqual(['status'])
+      expect(formula).toEqual([derived])
+    },
+  )
+
+  test('partitionPropertyColumns excludes a formula-backed explicit label role', () => {
+    const derived = col('heading', { formula: "'derived'", role: 'label' })
+    const { label, fields, formula } = partitionPropertyColumns([derived, col('status')])
+
+    expect(label).toBeNull()
+    expect(fields.map((c) => c.name)).toEqual(['status'])
+    expect(formula).toEqual([derived])
+  })
 })

@@ -2,7 +2,7 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-09-25
+updated: 2026-09-27
 ---
 
 # Plugins and face composition
@@ -90,9 +90,11 @@ Slot resolution is:
 3. preferred type and position;
 4. fallback.
 
-The embedded table is the first complete live consumer. Its container host resolves the matrix
-recipe, requests the registered `hila.table` collection, and owns title, sizing, insertion, and
-navigation. It never auto-creates a recipe while rendering. The retired top-level Table and Tag
+The embedded table is the first complete live collection consumer. Its container host resolves the
+matrix recipe, requests the registered `hila.table` collection, and owns title, sizing, insertion,
+and navigation. `hila.table` also registers a line interior over the shared property adapter. The
+same adapter serves substrate fallback, so field ownership does not fork between registered and
+fallback paths. Neither rendering auto-creates a recipe. The retired top-level Table and Tag
 Browser mounts remain absent.
 
 ## Forward composition model
@@ -189,11 +191,15 @@ The migration has mandatory boundaries:
   the resolved fidelity input passed to interiors;
 - Session 3 shipped the plugin-owned table collection, host-owned container dispatch, bounded
   paging, canonical treatments, and removal of `TemporaryLegacyFaceAdapter` plus the direct mount;
-- migrate tags, workspace participation, and face configuration to `line`/`collection`;
+- Session 4 shipped the plugin-owned table line, shared substrate fallback, host density input, and
+  canonical inline-reference, autocomplete, tag-property, field-editor, and property-row
+  boundaries;
+- migrate workspace participation and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete live host recursion and affinity behavior;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
-- migrate inline tag and property surfaces without restoring a Tag Browser application root.
+- keep the migrated inline tag and property lifecycle without restoring a Tag Browser application
+  root.
 
 Phase 14 cannot add task/review renderers until Phase 13 completes this contract.
 

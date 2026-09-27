@@ -214,11 +214,12 @@ describe('table row launcher subjects', () => {
   })
 })
 
-describe('table collection contract', () => {
-  test('registers one plugin-owned collection interior', () => {
+describe('table face contract', () => {
+  test('registers plugin-owned line and collection interiors', () => {
     expect(tablePlugin.faceTypes).toEqual([tableFaceTypeDefinition])
     expect(tablePlugin.faceRenderings).toHaveLength(1)
     expect(tablePlugin.faceRenderings?.[0]).toMatchObject({ faceTypeId: 'hila.table' })
+    expect(tablePlugin.faceRenderings?.[0]?.line).toBeTypeOf('function')
     expect(tablePlugin.faceRenderings?.[0]?.collection).toBeTypeOf('function')
   })
 

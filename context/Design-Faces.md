@@ -2,8 +2,9 @@
 
 > **Implementation status.** The navigation-outline registry and Guides production treatment ship.
 > Recursive composed/substrate host inputs and all three live table treatments now ship. The
-> remaining face migrations are design inputs. Storybook preserves the retired top-level Table and
-> Tags surfaces as fixture-driven references. Future sequencing belongs in [Plan.md](Plan.md).
+> table line and shared inline/property surfaces now use canonical roles. The remaining face
+> migrations are design inputs. Storybook preserves the retired top-level Table and Tags surfaces
+> as fixture-driven references. Future sequencing belongs in [Plan.md](Plan.md).
 
 This document plans configurable outline and table treatments. These components build on the
 shared semantic token system. An outline treatment can serve the shell navigation panel and an
@@ -199,7 +200,8 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
 7. Phase 12 shipped the shared launcher presentations, captured the retiring Table and Tags roots
    in worker-free Storybook references, and removed their top-level production mounts.
 8. Phase 13 Session 3 migrated the live table collection and its formula input to canonical roles.
-   Continue switching the remaining faces and browsers one at a time.
+   Session 4 migrated the table line and shared inline/property surface boundary. Continue
+   switching the remaining faces and browsers one at a time.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
 the [Session 4n plan](./archive/phases/Phase-10-Session-4n-plan.md), and the

@@ -343,7 +343,7 @@ const runAttachOnFirstRow = async (page: Page, typeName: string) => {
   await runSlashOnFirstRow(page, '/attach', 'Attach a typed row')
   const picker = page.getByTestId('slash-type-picker')
   await expect(picker).toBeVisible({ timeout: 3000 })
-  const item = picker.locator('.inlineref-autocomplete-item', { hasText: `# ${typeName}` })
+  const item = picker.getByRole('option', { name: `# ${typeName}` })
   await expect(item).toBeVisible({ timeout: 3000 })
   await item.click()
   await expect(picker).toBeHidden({ timeout: 3000 })
@@ -772,7 +772,7 @@ test.describe('Focus panel — creation gesture (Phase 9.6)', () => {
     // The standalone type picker opens; pick the type there (not in the prose).
     const picker = page.getByTestId('slash-type-picker')
     await expect(picker).toBeVisible({ timeout: 3000 })
-    const typeItem = picker.locator('.inlineref-autocomplete-item', { hasText: '# task' })
+    const typeItem = picker.getByRole('option', { name: '# task' })
     await expect(typeItem).toBeVisible({ timeout: 3000 })
     await typeItem.click() // → createDependentRow
     await expect(picker).toBeHidden({ timeout: 3000 })

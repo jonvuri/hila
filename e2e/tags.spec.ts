@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test'
 // -- Shared helpers -----------------------------------------------------------
 
 const launcherShortcut = process.platform === 'darwin' ? 'Meta+K' : 'Control+K'
+const ownReferenceSelector = '[data-testid="inline-reference"][data-kind="own"]'
 
 const openSidebar = async (page: Page) => {
   const sidebar = page.locator('.app-sidebar')
@@ -58,7 +59,7 @@ const createTagTypeViaAPI = async (
  */
 const waitForAutocompleteOption = async (page: Page) => {
   await expect(
-    page.locator('.inlineref-autocomplete-item, .inlineref-autocomplete-create').first(),
+    page.getByTestId('inline-reference-autocomplete').getByRole('option').first(),
   ).toBeVisible({ timeout: 5000 })
 }
 
@@ -79,13 +80,17 @@ const typeHashTag = async (page: Page, searchText: string, selectCreate = false)
   await waitForAutocompleteOption(page)
 
   if (selectCreate) {
-    const createOption = page.locator('.inlineref-autocomplete-create')
+    const createOption = page
+      .getByTestId('inline-reference-autocomplete')
+      .locator('[data-option-kind="create"]')
     await expect(createOption).toBeVisible({ timeout: 5000 })
     for (let i = 0; i < 20; i++) {
-      const selected = page.locator('.inlineref-autocomplete-selected')
+      const selected = page
+        .getByTestId('inline-reference-autocomplete')
+        .locator('[aria-selected="true"]')
       if (
         (await selected.count()) > 0 &&
-        (await selected.getAttribute('class'))?.includes('inlineref-autocomplete-create')
+        (await selected.getAttribute('data-option-kind')) === 'create'
       ) {
         break
       }
@@ -146,7 +151,7 @@ test.describe('Tag insertion', () => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator('[data-testid="inline-reference"][data-kind="own"]')
     await expect(tagBadge).toBeVisible({ timeout: 5000 })
     await expect(tagBadge).toContainText('#task')
   })
@@ -157,7 +162,9 @@ test.describe('Tag insertion', () => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
 
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(
+      newEditor.locator('[data-testid="inline-reference"][data-kind="own"]'),
+    ).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(1000)
 
     const result = await runSQL(page, `SELECT COUNT(*) AS cnt FROM "mx_${tagMatrixId}_data"`)
@@ -181,7 +188,9 @@ test.describe('Tag type creation via autocomplete', () => {
     await page.keyboard.type('newtype')
     await page.waitForTimeout(500)
 
-    const createOption = page.locator('.inlineref-autocomplete-create')
+    const createOption = page
+      .getByTestId('inline-reference-autocomplete')
+      .locator('[data-option-kind="create"]')
     await expect(createOption).toBeVisible({ timeout: 5000 })
     await expect(createOption).toContainText("Create 'newtype' tag type")
   })
@@ -195,7 +204,7 @@ test.describe('Tag type creation via autocomplete', () => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'newtype', true)
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator('[data-testid="inline-reference"][data-kind="own"]')
     await expect(tagBadge).toBeVisible({ timeout: 5000 })
     await expect(tagBadge).toContainText('#newtype')
   })
@@ -204,7 +213,9 @@ test.describe('Tag type creation via autocomplete', () => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'project', true)
 
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(
+      newEditor.locator('[data-testid="inline-reference"][data-kind="own"]'),
+    ).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(500)
 
     await page.keyboard.press(launcherShortcut)
@@ -224,7 +235,7 @@ test.describe('Tag type creation via autocomplete', () => {
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'milestone', true)
 
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(1000)
 
     const aspectExists = await page.evaluate(async () => {
@@ -271,14 +282,14 @@ test.describe('Tag property panel', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator(ownReferenceSelector)
     await tagBadge.click()
 
-    const panel = page.locator('.tag-property-panel')
+    const panel = page.getByTestId('tag-property-panel')
     await expect(panel).toBeVisible({ timeout: 5000 })
-    await expect(panel.locator('.tag-panel-badge')).toContainText('#task')
+    await expect(panel).toContainText('#task')
   })
 
   test('editing a field in the property panel persists the change', async ({ page }) => {
@@ -295,18 +306,15 @@ test.describe('Tag property panel', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator(ownReferenceSelector)
     await tagBadge.click()
 
-    const panel = page.locator('.tag-property-panel')
+    const panel = page.getByTestId('tag-property-panel')
     await expect(panel).toBeVisible({ timeout: 5000 })
 
-    const labelField = panel
-      .locator('.tag-panel-field')
-      .filter({ hasText: 'label' })
-      .locator('.tag-panel-field-input')
+    const labelField = panel.getByLabel('label')
     await expect(labelField).toBeVisible({ timeout: 3000 })
     await labelField.fill('my-task')
     await labelField.blur()
@@ -322,27 +330,18 @@ test.describe('Tag property panel', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator(ownReferenceSelector)
     await tagBadge.click()
 
-    const panel = page.locator('.tag-property-panel')
+    const panel = page.getByTestId('tag-property-panel')
     await expect(panel).toBeVisible({ timeout: 5000 })
-    // Allow the deferred event listeners (setTimeout 0) to attach
-    await page.waitForTimeout(100)
+    await expect(panel).toBeFocused()
 
     await page.keyboard.press('Escape')
     await expect(panel).not.toBeVisible({ timeout: 3000 })
-
-    await newEditor.click()
-    await expect(async () => {
-      const focused = await page.evaluate(() => {
-        const el = document.activeElement
-        return el?.closest('.ProseMirror') !== null
-      })
-      expect(focused).toBe(true)
-    }).toPass({ timeout: 3000 })
+    await expect(tagBadge).toBeFocused()
   })
 
   test('tag data written through the property panel reaches the owned matrix', async ({
@@ -361,17 +360,15 @@ test.describe('Tag property panel', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
 
-    const tagBadge = newEditor.locator('.inlineref-own')
+    const tagBadge = newEditor.locator(ownReferenceSelector)
     await tagBadge.click()
 
-    const panel = page.locator('.tag-property-panel')
+    const panel = page.getByTestId('tag-property-panel')
     await expect(panel).toBeVisible({ timeout: 5000 })
 
-    const fieldInput = panel
-      .locator('.tag-panel-field', { hasText: 'priority' })
-      .locator('.tag-panel-field-input')
+    const fieldInput = panel.getByLabel('priority')
     await expect(fieldInput).toBeVisible({ timeout: 3000 })
     await fieldInput.fill('high')
     await fieldInput.blur()
@@ -405,7 +402,7 @@ test.describe('Tag property panel', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(500)
 
     await page.evaluate(async (tagMatrixId) => {
@@ -421,7 +418,7 @@ test.describe('Tag property panel', () => {
     }, matrixId)
 
     await expect(async () => {
-      const badge = page.locator('.inlineref-own').first()
+      const badge = page.locator(ownReferenceSelector).first()
       const badgeText = await badge.textContent()
       expect(badgeText).toContain('urgent')
     }).toPass({ timeout: 5000 })
@@ -443,7 +440,7 @@ test.describe('Tag lifecycle', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
     // Wait for the debounced save + syncInlineRefs to materialize the join
     await page.waitForTimeout(1000)
 
@@ -482,14 +479,14 @@ test.describe('Tag lifecycle', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own').first()).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector).first()).toBeVisible({ timeout: 5000 })
     await page.waitForTimeout(300)
 
     await page.keyboard.press('End')
     await page.keyboard.type(' ')
     await typeHashTag(page, 'review')
     await expect(async () => {
-      const count = await newEditor.locator('.inlineref-own').count()
+      const count = await newEditor.locator(ownReferenceSelector).count()
       expect(count).toBe(2)
     }).toPass({ timeout: 5000 })
     // Wait for the debounced save to persist the document and materialize joins
@@ -572,7 +569,7 @@ test.describe('Tag lifecycle', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
     // Wait for the debounced save + syncInlineRefs to persist the badge into the
     // host doc and materialize the own-join.
     await page.waitForTimeout(1000)
@@ -640,14 +637,12 @@ test.describe('Tag lifecycle', () => {
     await page.keyboard.press('End')
     await page.keyboard.type('#task')
     await page.waitForTimeout(500)
-    await expect(page.locator('.inlineref-autocomplete-create').first()).toBeVisible({
+    const autocomplete = page.getByTestId('inline-reference-autocomplete')
+    await expect(autocomplete.locator('[data-option-kind="create"]').first()).toBeVisible({
       timeout: 5000,
     })
-    // No *existing* tag item remains (the create option also carries
-    // `.inlineref-autocomplete-item`, so exclude it).
-    await expect(
-      page.locator('.inlineref-autocomplete-item:not(.inlineref-autocomplete-create)'),
-    ).toHaveCount(0)
+    // No existing tag item remains.
+    await expect(autocomplete.locator('[data-option-kind="existing"]')).toHaveCount(0)
   })
 
   test('deleting an aspect row from the table face removes the tag badge from label text', async ({
@@ -657,7 +652,7 @@ test.describe('Tag lifecycle', () => {
 
     const newEditor = await createNewRow(page)
     await typeHashTag(page, 'task')
-    await expect(newEditor.locator('.inlineref-own')).toBeVisible({ timeout: 5000 })
+    await expect(newEditor.locator(ownReferenceSelector)).toBeVisible({ timeout: 5000 })
     // Wait for debounced save to persist the document
     await page.waitForTimeout(1000)
 
@@ -668,6 +663,10 @@ test.describe('Tag lifecycle', () => {
       const rows = await sql.execQuery(`SELECT id FROM "mx_${mid}_data" LIMIT 1`)
       return (rows[0] as { id: number }).id
     }, tagMatrixId)
+
+    // A table-face deletion moves focus away from the source label editor, so
+    // reproduce that boundary before invoking the mutation directly.
+    await newEditor.blur()
 
     // Delete the aspect row via deleteRow (simulates deletion from the identity face)
     await page.evaluate(
@@ -694,7 +693,7 @@ test.describe('Tag lifecycle', () => {
 
     // The reverse lifecycle should remove the inline tag node from the label text
     await expect(async () => {
-      const tagBadges = await page.locator('.inlineref-own:not(.inlineref-ghost)').count()
+      const tagBadges = await newEditor.locator(ownReferenceSelector).count()
       expect(tagBadges).toBe(0)
     }).toPass({ timeout: 10000 })
   })
@@ -717,21 +716,27 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     await page.getByTestId('add-demo-subtree-btn').click()
 
     // The tour root and a plain workspace child render.
-    await expect(page.locator('.outline-row', { hasText: 'feature tour' })).toBeVisible({
-      timeout: 5000,
-    })
-    await expect(page.locator('.outline-row', { hasText: 'a loose own-child' })).toBeVisible({
-      timeout: 5000,
-    })
+    await expect(page.locator('.outline-row', { hasText: 'feature tour' }).first()).toBeVisible(
+      {
+        timeout: 5000,
+      },
+    )
+    await expect(
+      page.locator('.outline-row', { hasText: 'a loose own-child' }).first(),
+    ).toBeVisible({ timeout: 5000 })
 
     // Cross-matrix aspect rows render in the same outline, each with a type chip
     // labelled by its matrix (task / note) — distinct from a plain bullet.
-    await expect(page.locator('.outline-row', { hasText: '#task aspect' })).toBeVisible({
-      timeout: 5000,
-    })
-    await expect(page.locator('.outline-row', { hasText: '#note aspect' })).toBeVisible({
-      timeout: 5000,
-    })
+    await expect(page.locator('.outline-row', { hasText: '#task aspect' }).first()).toBeVisible(
+      {
+        timeout: 5000,
+      },
+    )
+    await expect(page.locator('.outline-row', { hasText: '#note aspect' }).first()).toBeVisible(
+      {
+        timeout: 5000,
+      },
+    )
 
     await expect(
       page
@@ -747,7 +752,7 @@ test.describe('Heterogeneous children (Phase 9.1)', () => {
     ).toBeVisible({ timeout: 5000 })
 
     // A nested host owns its own task — heterogeneous children nest, too.
-    await expect(page.locator('.outline-row', { hasText: 'nested host' })).toBeVisible({
+    await expect(page.locator('.outline-row', { hasText: 'nested host' }).first()).toBeVisible({
       timeout: 5000,
     })
   })

@@ -124,6 +124,7 @@ describe('registered table collection interior', () => {
           }}
           recipe={recipe({ tableTreatment: 'invalid' })}
           rootMatrixId={1}
+          density="wide"
           fidelity="composed"
           services={{
             requestInsert: mocks.requestInsert,
@@ -208,6 +209,7 @@ describe('registered table collection interior', () => {
           }}
           recipe={recipe({ tableTreatment: 'cell-dots' })}
           rootMatrixId={1}
+          density="wide"
           fidelity="substrate"
           services={{}}
         />
@@ -236,6 +238,7 @@ describe('registered table collection interior', () => {
           }}
           recipe={recipe()}
           rootMatrixId={1}
+          density="wide"
           fidelity="composed"
           services={{}}
         />
@@ -280,6 +283,7 @@ describe('registered table collection interior', () => {
           subject={{ mode: 'view', matrixId: 10, rowId: 20, sql: 'SELECT 1' }}
           recipe={recipe()}
           rootMatrixId={1}
+          density="wide"
           fidelity="composed"
           services={{}}
         />

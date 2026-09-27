@@ -5,7 +5,11 @@ import type { ColumnDefinition } from '../core/matrix'
 
 import { PropertyRow } from './PropertyRow'
 
-const col = (name: string, role: 'label' | 'content' | null = null): ColumnDefinition => ({
+const col = (
+  name: string,
+  role: 'label' | 'content' | null = null,
+  overrides: Partial<ColumnDefinition> = {},
+): ColumnDefinition => ({
   id: 0,
   name,
   type: 'TEXT',
@@ -16,6 +20,7 @@ const col = (name: string, role: 'label' | 'content' | null = null): ColumnDefin
   constraints: null,
   managedBy: null,
   role,
+  ...overrides,
 })
 
 describe('PropertyRow readOnly mode (Phase 9.3)', () => {
@@ -80,5 +85,47 @@ describe('PropertyRow readOnly mode (Phase 9.3)', () => {
     expect(readonly).toContain('Buy milk')
     expect(readonly).toContain('3')
     expect(readonly).not.toContain('open')
+  })
+
+  test('keeps dry and formula values read-only', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const columns = [col('label', 'label'), col('score', null, { formula: '1 + 1' })]
+    dispose = render(
+      () => <PropertyRow columns={columns} data={null} density="wide" onSave={() => {}} />,
+      container,
+    )
+
+    expect(
+      container.querySelector('[data-testid="property-row"]')?.getAttribute('data-hydrated'),
+    ).toBe('false')
+    expect(container.querySelector('input')).toBeNull()
+    expect(
+      container.querySelectorAll('[data-testid="property-row-readonly-cell"]'),
+    ).toHaveLength(1)
+    expect(container.textContent).toContain('score')
+  })
+
+  test('keeps a label-like formula read-only when isEditable allows every column', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    const columns = [
+      col('title', null, { formula: "'derived title'" }),
+      col('heading', 'label'),
+      col('status'),
+    ]
+    const data = { title: 'Derived title', heading: 'Task', status: 'open' }
+    dispose = render(
+      () => (
+        <PropertyRow columns={columns} data={data} density="wide" isEditable={() => true} />
+      ),
+      container,
+    )
+
+    expect(container.querySelectorAll('input')).toHaveLength(2)
+    expect(container.querySelectorAll('input')[0]?.value).toBe('Task')
+    expect(container.querySelectorAll('input')[1]?.value).toBe('open')
+    expect(container.textContent?.match(/Derived title/g)).toHaveLength(1)
+    expect(container.textContent).toContain('title')
   })
 })

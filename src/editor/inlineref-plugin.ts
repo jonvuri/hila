@@ -2,7 +2,14 @@ import { Plugin, PluginKey } from 'prosemirror-state'
 import type { EditorView } from 'prosemirror-view'
 
 import { execQuery } from '../core/client/sql-client'
+import {
+  connectListFocusOwner,
+  createListboxId,
+  listboxOptionId,
+  type ListFocusOwnerConnection,
+} from '../design/overlay/list-focus-owner'
 
+import autocompleteStyles from './InlineAutocomplete.module.css'
 import { buildInlineRefInsertion } from './inlineref-insert'
 
 export type AutocompleteOption = { id: number; title: string }
@@ -39,11 +46,13 @@ const getAutocompleteState = (view: EditorView): AutocompleteState =>
     trigger: null,
   }
 
-const DROPDOWN_CLASS = 'inlineref-autocomplete'
-
-const createDropdownElement = (): HTMLDivElement => {
+const createDropdownElement = (id: string): HTMLDivElement => {
   const el = document.createElement('div')
-  el.className = DROPDOWN_CLASS
+  el.id = id
+  el.className = autocompleteStyles.dropdown!
+  el.setAttribute('data-testid', 'inline-reference-autocomplete')
+  el.setAttribute('role', 'listbox')
+  el.setAttribute('aria-label', 'Reference suggestions')
   el.style.display = 'none'
   document.body.appendChild(el)
   return el
@@ -61,20 +70,25 @@ const positionDropdown = (view: EditorView, dropdown: HTMLDivElement, pos: numbe
 
 const renderDropdown = (
   dropdown: HTMLDivElement,
+  listId: string,
   options: AutocompleteOption[],
   selectedIndex: number,
   query: string,
   trigger: TriggerChar | null,
   onSelect: (option: AutocompleteOption | 'create') => void,
-) => {
+): string | null => {
   dropdown.innerHTML = ''
 
   for (let i = 0; i < options.length; i++) {
     const opt = options[i]!
     const item = document.createElement('div')
-    item.className =
-      'inlineref-autocomplete-item' +
-      (i === selectedIndex ? ' inlineref-autocomplete-selected' : '')
+    item.id = listboxOptionId(listId, `existing-${opt.id}`)
+    item.className = `${autocompleteStyles.item}${
+      i === selectedIndex ? ` ${autocompleteStyles.selected}` : ''
+    }`
+    item.setAttribute('role', 'option')
+    item.setAttribute('data-option-kind', 'existing')
+    item.setAttribute('aria-selected', i === selectedIndex ? 'true' : 'false')
     item.textContent = trigger === '#' ? `#${opt.title}` : opt.title
     item.addEventListener('mousedown', (e) => {
       e.preventDefault()
@@ -89,9 +103,14 @@ const renderDropdown = (
       !options.some((o) => o.title.toLowerCase() === query.trim().toLowerCase()))
   if (showCreate) {
     const createItem = document.createElement('div')
-    createItem.className =
-      'inlineref-autocomplete-item inlineref-autocomplete-create' +
-      (selectedIndex === options.length ? ' inlineref-autocomplete-selected' : '')
+    createItem.id = listboxOptionId(listId, 'create')
+    const selected = selectedIndex === options.length
+    createItem.className = `${autocompleteStyles.item} ${autocompleteStyles.create}${
+      selected ? ` ${autocompleteStyles.selected}` : ''
+    }`
+    createItem.setAttribute('role', 'option')
+    createItem.setAttribute('data-option-kind', 'create')
+    createItem.setAttribute('aria-selected', selected ? 'true' : 'false')
     createItem.textContent =
       trigger === '#' ? `Create '${query}' tag type` : `Create "${query}"`
     createItem.addEventListener('mousedown', (e) => {
@@ -102,6 +121,9 @@ const renderDropdown = (
   }
 
   dropdown.style.display = dropdown.children.length > 0 ? '' : 'none'
+  return (
+    dropdown.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')?.id ?? null
+  )
 }
 
 export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => {
@@ -110,6 +132,37 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
   let options: AutocompleteOption[] = []
   let selectedIndex = 0
   let fetchVersion = 0
+  const listId = createListboxId('inline-reference-autocomplete')
+  let focusOwnerConnection: ListFocusOwnerConnection | null = null
+
+  const disconnectFocusOwner = () => {
+    focusOwnerConnection?.restore()
+    focusOwnerConnection = null
+  }
+
+  const syncFocusOwner = (view: EditorView, activeOptionId: string | null) => {
+    if (!dropdown || dropdown.style.display === 'none') {
+      disconnectFocusOwner()
+      return
+    }
+    focusOwnerConnection ??= connectListFocusOwner(view.dom, listId)
+    focusOwnerConnection.setActiveDescendant(activeOptionId)
+  }
+
+  const renderResults = (view: EditorView) => {
+    if (!dropdown) return
+    const state = getAutocompleteState(view)
+    const activeOptionId = renderDropdown(
+      dropdown,
+      listId,
+      options,
+      selectedIndex,
+      state.query,
+      state.trigger,
+      (opt) => handleSelect(view, opt),
+    )
+    syncFocusOwner(view, activeOptionId)
+  }
 
   const defaultSearch = async (query: string): Promise<AutocompleteOption[]> => {
     const escapedQuery = query.replace(/'/g, "''")
@@ -128,14 +181,11 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
       if (version !== fetchVersion) return
       options = results
       selectedIndex = 0
-      if (dropdown) {
-        const state = getAutocompleteState(view)
-        renderDropdown(dropdown, options, selectedIndex, state.query, state.trigger, (opt) =>
-          handleSelect(view, opt),
-        )
-      }
+      renderResults(view)
     } catch {
       options = []
+      selectedIndex = 0
+      renderResults(view)
     }
   }
 
@@ -166,6 +216,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
     if (state.trigger === '#' && onTagSelect) {
       const query = state.query
       if (dropdown) dropdown.style.display = 'none'
+      disconnectFocusOwner()
       try {
         const result = await onTagSelect(option, query, matrixId, rowIdAccessor())
         insertInlinerefNode(view, {
@@ -202,6 +253,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
     if (dropdown) {
       dropdown.style.display = 'none'
     }
+    disconnectFocusOwner()
     options = []
     selectedIndex = 0
     fetchVersion++
@@ -246,6 +298,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
               })
               view.dispatch(tr)
               if (dropdown) dropdown.style.display = 'none'
+              disconnectFocusOwner()
               return true
             }
           }
@@ -325,32 +378,14 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
           case 'ArrowDown':
             event.preventDefault()
             selectedIndex = (selectedIndex + 1) % Math.max(totalItems, 1)
-            if (dropdown) {
-              renderDropdown(
-                dropdown,
-                options,
-                selectedIndex,
-                state.query,
-                state.trigger,
-                (opt) => handleSelect(view, opt),
-              )
-            }
+            renderResults(view)
             return true
 
           case 'ArrowUp':
             event.preventDefault()
             selectedIndex =
               (selectedIndex - 1 + Math.max(totalItems, 1)) % Math.max(totalItems, 1)
-            if (dropdown) {
-              renderDropdown(
-                dropdown,
-                options,
-                selectedIndex,
-                state.query,
-                state.trigger,
-                (opt) => handleSelect(view, opt),
-              )
-            }
+            renderResults(view)
             return true
 
           case 'Enter':
@@ -394,7 +429,7 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
     },
 
     view(view) {
-      dropdown = createDropdownElement()
+      dropdown = createDropdownElement(listId)
 
       const handleClickOutside = (e: MouseEvent) => {
         if (dropdown && !dropdown.contains(e.target as HTMLElement)) {
@@ -411,15 +446,15 @@ export const createInlinerefPlugin = (config: InlinerefPluginConfig): Plugin => 
           const state = getAutocompleteState(view)
           if (!state.active || !dropdown) {
             if (dropdown) dropdown.style.display = 'none'
+            disconnectFocusOwner()
             return
           }
           positionDropdown(view, dropdown, state.from)
-          renderDropdown(dropdown, options, selectedIndex, state.query, state.trigger, (opt) =>
-            handleSelect(view, opt),
-          )
+          renderResults(view)
         },
         destroy() {
           document.removeEventListener('mousedown', handleClickOutside)
+          disconnectFocusOwner()
           if (dropdown) {
             dropdown.remove()
             dropdown = null

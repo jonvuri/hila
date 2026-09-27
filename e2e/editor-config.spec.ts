@@ -274,7 +274,7 @@ test.describe('Content editor configuration', () => {
     expect(text).toContain('@')
 
     // The autocomplete dropdown elements should exist in the DOM
-    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({
+    await expect(page.getByTestId('inline-reference-autocomplete').first()).toBeAttached({
       timeout: 3000,
     })
 
@@ -297,7 +297,7 @@ test.describe('Content editor configuration', () => {
     expect(text).toContain('@')
 
     // The autocomplete dropdown elements should exist in the DOM
-    await expect(page.locator('.inlineref-autocomplete').first()).toBeAttached({
+    await expect(page.getByTestId('inline-reference-autocomplete').first()).toBeAttached({
       timeout: 3000,
     })
   })

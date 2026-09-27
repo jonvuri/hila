@@ -23,7 +23,7 @@ import {
   recognizeUpdatableQuery,
   resolveEditableColumns,
 } from '../sql/recognize-updatable'
-import { FieldEditor } from '../shared/FieldEditor'
+import { FieldEditor, ReadonlyField } from '../shared/FieldEditor'
 import { extractTextFromPmDoc } from '../editor/pm-text'
 import { registerFaceRenderings, type FaceRenderingProps } from '../core/face-runtime'
 import {
@@ -800,9 +800,11 @@ export const ViewCollection: Component<{
                         <Show
                           when={isEditable(column)}
                           fallback={
-                            <span data-testid="property-row-readonly-cell">
-                              {String(row[column.name] ?? '')}
-                            </span>
+                            <ReadonlyField
+                              column={column}
+                              value={String(row[column.name] ?? '')}
+                              testId="property-row-readonly-cell"
+                            />
                           }
                         >
                           <FieldEditor

@@ -1,0 +1,71 @@
+.row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-compact-inset);
+  color: var(--color-text);
+}
+
+.label [data-field-control] {
+  width: 100%;
+  padding-left: 0;
+  color: var(--color-text-strong);
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-large-size);
+  font-weight: var(--font-weight-500);
+}
+
+.fieldName {
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-letter-spacing);
+  line-height: var(--type-label-line-height);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.fieldsWide {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-control-gap) var(--space-content-inset);
+  padding-block: var(--space-label-inset);
+}
+
+.fieldGroup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-label-inset);
+}
+
+.fieldsNarrow {
+  display: grid;
+  align-items: baseline;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--space-control-gap);
+  row-gap: var(--space-compact-inset);
+  padding-block: var(--space-label-inset);
+}
+
+.formulaList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-label-inset);
+}
+
+:global([data-fidelity='substrate']) .row {
+  padding: var(--space-compact-inset) var(--space-control-inset-block);
+  border: var(--border-subtle);
+  background: transparent;
+}
+
+.lineError {
+  min-height: var(--size-row);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  border: var(--border-subtle);
+  color: var(--color-state-invalid);
+  font-size: var(--type-body-small-size);
+}

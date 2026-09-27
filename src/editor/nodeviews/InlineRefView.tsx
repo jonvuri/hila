@@ -4,12 +4,96 @@ import { createEffect, createMemo, createSignal, For, Show, type Component } fro
 import { useQuery } from '../../sql/useQuery'
 import { getColumns } from '../../core/client/matrix-client'
 import type { ColumnDefinition } from '../../core/matrix'
+import { buildAspectPreviewFields } from '../../shared/property-surface'
 import { tagColorFromName, tagBadgeBackground } from '../../tags/tag-color'
 import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../aspect-tether'
 import { extractTextFromPmDoc } from '../pm-text'
 
-const MAX_KEY_PROPS = 2
-const LABEL_COLUMNS = new Set(['id', 'label', 'title', 'name'])
+import styles from './InlineRefView.module.css'
+
+export type InlineReferenceState = 'live' | 'ghost' | 'empty' | 'loading'
+
+export const InlineReferenceBadge: Component<{
+  kind: 'ref' | 'own'
+  state: InlineReferenceState
+  title: string
+  keyProps?: readonly { label: string; value: string }[]
+  tethered?: boolean
+  color?: string
+  backgroundColor?: string
+  targetMatrixId?: number
+  targetRowId?: number
+  onActivate?: (element: HTMLElement) => void
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+}> = (props) => {
+  const interactive = () => props.state === 'live' || props.state === 'empty'
+  const className = () =>
+    [
+      'inlineref',
+      styles.root,
+      props.kind === 'own' ? styles.own : styles.ref,
+      props.state === 'ghost' ? styles.ghost : '',
+      props.state === 'empty' ? styles.empty : '',
+      props.tethered ? styles.tethered : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  const accessibleName = () => {
+    if (props.state === 'ghost') return `Deleted reference: ${props.title}`
+    if (props.state === 'empty') return `Create reference: ${props.title}`
+    if (props.state === 'loading') return `Loading reference: ${props.title}`
+    return props.kind === 'own' ? `Open properties for ${props.title}` : `Open ${props.title}`
+  }
+
+  const activate = (element: HTMLElement) => {
+    if (interactive()) props.onActivate?.(element)
+  }
+
+  return (
+    <span
+      class={className()}
+      data-testid="inline-reference"
+      data-kind={props.kind}
+      data-state={props.state}
+      data-tethered={props.tethered ? 'true' : undefined}
+      data-target-matrix-id={props.targetMatrixId}
+      data-target-row-id={props.targetRowId}
+      role="button"
+      tabindex={interactive() ? 0 : undefined}
+      aria-label={accessibleName()}
+      aria-disabled={!interactive() ? 'true' : undefined}
+      aria-busy={props.state === 'loading' ? 'true' : undefined}
+      style={{ color: props.color, 'background-color': props.backgroundColor }}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        activate(event.currentTarget)
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        event.stopPropagation()
+        activate(event.currentTarget)
+      }}
+      onMouseEnter={() => props.onMouseEnter?.()}
+      onMouseLeave={() => props.onMouseLeave?.()}
+    >
+      {props.title}
+      <Show when={props.kind === 'own' && props.state === 'live' && props.keyProps?.length}>
+        <span class={styles.keyProps}>
+          <For each={props.keyProps}>
+            {(property) => (
+              <span class={styles.keyProp} title={property.label}>
+                {property.value}
+              </span>
+            )}
+          </For>
+        </span>
+      </Show>
+    </span>
+  )
+}
 
 export const InlineRefView: Component = () => {
   const context = useNodeViewContext()
@@ -77,30 +161,25 @@ export const InlineRefView: Component = () => {
   })
   const { result: aspectRowResult } = useQuery(() => aspectRowQueryStr())
 
-  const [keyPropColumns, setKeyPropColumns] = createSignal<ColumnDefinition[]>([])
+  const [aspectColumns, setAspectColumns] = createSignal<ColumnDefinition[]>([])
 
   createEffect(() => {
     const mid = targetMatrixId()
-    if (!isOwn() || mid == null) return
-    void getColumns(mid).then((cols) => {
-      const candidates = cols.filter((c) => !LABEL_COLUMNS.has(c.name) && c.formula == null)
-      setKeyPropColumns(candidates.slice(0, MAX_KEY_PROPS))
-    })
+    if (!isOwn() || mid == null) {
+      setAspectColumns([])
+      return
+    }
+    void getColumns(mid).then(setAspectColumns)
   })
 
   const keyProps = createMemo((): { label: string; value: string }[] => {
     const data = aspectRowResult()
     if (!data || data.length === 0) return []
     const row = data[0] as Record<string, unknown>
-    const cols = keyPropColumns()
-    const result: { label: string; value: string }[] = []
-    for (const col of cols) {
-      const val = row[col.name]
-      if (val != null && val !== '') {
-        result.push({ label: col.name, value: String(val) })
-      }
-    }
-    return result
+    return buildAspectPreviewFields(aspectColumns(), row).map((field) => ({
+      label: field.name,
+      value: field.value,
+    }))
   })
 
   const tagTypeMeta = createMemo(() => {
@@ -139,13 +218,12 @@ export const InlineRefView: Component = () => {
     return '…'
   })
 
-  const stateClass = createMemo(() => {
-    if (isEmpty()) return ' inlineref-empty'
-    if (isGhost()) return ' inlineref-ghost'
-    return ''
+  const state = createMemo<InlineReferenceState>(() => {
+    if (isEmpty()) return 'empty'
+    if (isGhost()) return 'ghost'
+    if (isLive()) return 'live'
+    return 'loading'
   })
-
-  const kindClass = createMemo(() => (isOwn() ? ' inlineref-own' : ' inlineref-ref'))
 
   // Aspect tether: own-kind badges bridge to their row in the focus-panel aspect
   // band (Phase 9.2). Hovering either side highlights the other.
@@ -158,8 +236,6 @@ export const InlineRefView: Component = () => {
     const t = tetherTarget()
     return t != null && isAspectHovered(t.matrixId, t.rowId)
   })
-  const tetherClass = createMemo(() => (isTethered() ? ' inlineref-tethered' : ''))
-
   const badgeStyle = createMemo(() => {
     if (!isOwn() || !isLive()) return undefined
     // Color from the live tag name (falling back to the cached title) so a
@@ -169,25 +245,22 @@ export const InlineRefView: Component = () => {
     return { color: textColor, 'background-color': bgColor }
   })
 
-  const handleClick = (e: MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
+  const handleActivation = (element: HTMLElement) => {
     if (isEmpty()) {
       const pos = context().getPos()
       const event = new CustomEvent('inlineref-create', {
         detail: { cachedTitle: cachedTitle(), pos },
         bubbles: true,
       })
-      ;(e.currentTarget as HTMLElement).dispatchEvent(event)
+      element.dispatchEvent(event)
       return
     }
 
     if (isGhost()) return
+    if (!isLive()) return
 
-    if (isOwn() && isLive()) {
-      const el = e.currentTarget as HTMLElement
-      const rect = el.getBoundingClientRect()
+    if (isOwn()) {
+      const rect = element.getBoundingClientRect()
       const meta = tagTypeMeta()
       const event = new CustomEvent('inlineref-open-tag-panel', {
         detail: {
@@ -205,7 +278,7 @@ export const InlineRefView: Component = () => {
         },
         bubbles: true,
       })
-      el.dispatchEvent(event)
+      element.dispatchEvent(event)
       return
     }
 
@@ -213,38 +286,29 @@ export const InlineRefView: Component = () => {
       detail: { matrixId: targetMatrixId(), rowId: targetRowId() },
       bubbles: true,
     })
-    ;(e.currentTarget as HTMLElement).dispatchEvent(event)
+    element.dispatchEvent(event)
   }
 
   return (
-    <span
-      class={'inlineref' + kindClass() + stateClass() + tetherClass()}
-      data-kind={kind()}
-      data-target-matrix-id={targetMatrixId() ?? undefined}
-      data-target-row-id={targetRowId() ?? undefined}
-      style={badgeStyle()}
-      onClick={handleClick}
+    <InlineReferenceBadge
+      kind={isOwn() ? 'own' : 'ref'}
+      state={state()}
+      title={displayTitle()}
+      keyProps={keyProps()}
+      tethered={isTethered()}
+      color={badgeStyle()?.color}
+      backgroundColor={badgeStyle()?.['background-color']}
+      targetMatrixId={targetMatrixId() ?? undefined}
+      targetRowId={targetRowId() ?? undefined}
+      onActivate={handleActivation}
       onMouseEnter={() => {
-        const t = tetherTarget()
-        if (t) setHoveredAspect(t)
+        const target = tetherTarget()
+        if (target) setHoveredAspect(target)
       }}
       onMouseLeave={() => {
-        const t = tetherTarget()
-        if (t) clearHoveredAspect(t)
+        const target = tetherTarget()
+        if (target) clearHoveredAspect(target)
       }}
-    >
-      {displayTitle()}
-      <Show when={isOwn() && isLive() && keyProps().length > 0}>
-        <span class="tag-panel-key-props">
-          <For each={keyProps()}>
-            {(kp) => (
-              <span class="tag-key-prop" title={kp.label}>
-                {kp.value}
-              </span>
-            )}
-          </For>
-        </span>
-      </Show>
-    </span>
+    />
   )
 }

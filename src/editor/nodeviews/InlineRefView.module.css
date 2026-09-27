@@ -1,0 +1,101 @@
+.root {
+  display: inline-flex;
+  min-height: var(--size-24);
+  align-items: center;
+  gap: var(--space-compact-inset);
+  padding-inline: var(--space-compact-inset);
+  border: var(--width-line) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-accent);
+  font-family: var(--type-body-family);
+  font-weight: var(--font-weight-500);
+  line-height: var(--line-height-control);
+  text-decoration: none;
+  vertical-align: baseline;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-feedback) var(--easing-feedback),
+    border-color var(--duration-feedback) var(--easing-feedback);
+}
+
+.root:hover {
+  background: var(--color-state-hover);
+}
+
+.root:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.ref {
+  background: var(--color-state-selected);
+}
+
+.ref:hover {
+  color: var(--color-text-strong);
+  text-decoration: underline;
+}
+
+.own {
+  padding-inline: var(--space-control-inset-block);
+  border-radius: calc(var(--radius-control) + var(--space-compact-inset));
+  font-size: 0.9em;
+}
+
+.tethered {
+  outline: var(--width-focus-ring) solid currentColor;
+  outline-offset: var(--offset-focus-ring);
+}
+
+.ghost {
+  border-color: var(--color-line-subtle);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  text-decoration: line-through;
+  cursor: default;
+  opacity: var(--opacity-state-disabled);
+}
+
+.ghost:hover {
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  text-decoration: line-through;
+}
+
+.empty {
+  border-style: dotted;
+  border-color: var(--color-line-strong);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.empty:hover {
+  border-color: var(--color-state-focus);
+  background: var(--color-state-hover);
+}
+
+.keyProps {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-compact-inset);
+  margin-left: var(--space-compact-inset);
+  color: currentColor;
+  font-family: var(--type-data-family);
+  font-size: var(--type-label-size);
+  opacity: 0.8;
+}
+
+.keyProp {
+  max-width: 80px;
+  padding-left: var(--space-compact-inset);
+  border-left: var(--width-line) solid currentColor;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    transition: none;
+  }
+}

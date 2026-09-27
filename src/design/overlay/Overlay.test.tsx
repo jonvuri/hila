@@ -260,6 +260,8 @@ describe('shared overlays', () => {
         <Show when={open()}>
           <AnchoredOverlay
             anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            role="dialog"
+            ariaLabel="Menu"
             onDismiss={() => setOpen(false)}
           >
             Menu
@@ -270,6 +272,7 @@ describe('shared overlays', () => {
     )
     target.addEventListener('pointerdown', () => target.focus())
     await Promise.resolve()
+    expect(container.querySelector('[role="dialog"]')).toBe(document.activeElement)
 
     target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
     await Promise.resolve()
@@ -347,6 +350,38 @@ describe('shared overlays', () => {
     expect(invoker.selectionStart).toBe(2)
     expect(invoker.selectionEnd).toBe(8)
     expect(invoker.selectionDirection).toBe('backward')
+    invoker.remove()
+  })
+
+  test('focuses an anchored dialog and restores its invoker after Escape', async () => {
+    const invoker = document.createElement('button')
+    document.body.appendChild(invoker)
+    invoker.focus()
+    const [open, setOpen] = createSignal(true)
+    dispose = render(
+      () => (
+        <Show when={open()}>
+          <AnchoredOverlay
+            anchor={{ left: 10, right: 20, top: 10, bottom: 20 }}
+            role="dialog"
+            ariaLabel="Tag properties"
+            restoreFocusTo={invoker}
+            testId="properties"
+            onDismiss={() => setOpen(false)}
+          >
+            Properties
+          </AnchoredOverlay>
+        </Show>
+      ),
+      container,
+    )
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(container.querySelector('[data-testid="properties"]'))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await Promise.resolve()
+
+    expect(document.activeElement).toBe(invoker)
     invoker.remove()
   })
 
