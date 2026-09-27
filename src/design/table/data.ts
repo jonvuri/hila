@@ -1,5 +1,8 @@
 import type { Column, FlatTableRow, RowDecoration, TableTheme } from './types'
 
+export const tableRowDotColor = (globalRowIndex: number): string =>
+  globalRowIndex % 2 === 0 ? 'var(--color-text-faint)' : 'var(--color-line-strong)'
+
 /**
  * Computes per-row decoration data from a contiguous slice of table rows.
  * Theme-selective: only computes what the active theme needs.
@@ -24,8 +27,7 @@ export const computeTableDecorations = (
 
   return rows.map((_, i) => {
     const globalIndex = startIndex + i
-    const dotColor =
-      globalIndex % 2 === 0 ? 'var(--color-text-faint)' : 'var(--color-line-strong)'
+    const dotColor = tableRowDotColor(globalIndex)
     return {
       cellDecorations: Array.from({ length: colCount }, () => ({ dotColor })),
     }

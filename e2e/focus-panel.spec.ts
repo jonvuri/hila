@@ -378,6 +378,14 @@ test.describe('Focus panel — embedded sub-table (Phase 9.4)', () => {
 
     const bandItem = page.getByTestId('sub-table-band-item')
     await expect(bandItem).toBeVisible({ timeout: 5000 })
+    const hostSlot = bandItem.getByTestId('face-host-slot')
+    await expect(hostSlot).toHaveAttribute('data-face-rendering', 'collection')
+    await expect(hostSlot).toHaveAttribute('data-face-source', 'intentional')
+    await expect(hostSlot).toHaveAttribute('data-subject-mode', 'container')
+    await expect(bandItem.getByTestId('table-face')).toHaveAttribute(
+      'data-table-treatment',
+      'thin-line',
+    )
     const nameInput = page.getByTestId('sub-table-name-input')
     await expect(nameInput).toBeVisible({ timeout: 5000 })
     await nameInput.fill('Groceries')
@@ -436,6 +444,42 @@ test.describe('Focus panel — embedded sub-table (Phase 9.4)', () => {
 
     await expect(page.getByTestId('sub-table-band-item')).toBeVisible({ timeout: 5000 })
   })
+
+  test('a container without an intentional recipe falls back without creating one', async ({
+    page,
+  }) => {
+    const tableMatrixId = await page.evaluate(async () => {
+      // @ts-expect-error -- resolved by the Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      // @ts-expect-error -- resolved by the Vite dev server at runtime
+      const matrix = await import('/src/core/client/matrix-client.ts')
+      const workspace = await sql.execQuery("SELECT id FROM matrix WHERE title = 'Workspace'")
+      const workspaceMatrixId = (workspace[0] as { id: number }).id
+      const rows = await sql.execQuery(
+        `SELECT id FROM "mx_${workspaceMatrixId}_data" ORDER BY id LIMIT 1`,
+      )
+      const ownerRowId = (rows[0] as { id: number }).id
+      return matrix.createOwnedMatrix(
+        { matrixId: workspaceMatrixId, rowId: ownerRowId },
+        'Unconfigured table',
+        [{ name: 'title', type: 'TEXT', role: 'label' }],
+      )
+    })
+
+    await openFocusPanel(page)
+    await expect(page.getByTestId('sub-table-collection-fallback')).toContainText(
+      'No collection face is configured',
+    )
+    const recipeCount = await page.evaluate(async (matrixId) => {
+      // @ts-expect-error -- resolved by the Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery(
+        `SELECT COUNT(*) AS count FROM face_configs WHERE matrix_id = ${matrixId}`,
+      )
+      return (rows[0] as { count: number }).count
+    }, tableMatrixId)
+    expect(recipeCount).toBe(0)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -469,6 +513,7 @@ test.describe('Focus panel — boundary hop (Phase 9.5)', () => {
         { name: 'title', type: 'TEXT', role: 'label' },
         { name: 'content', type: 'TEXT', role: 'content' },
       ])) as number
+      await mc.applyFaceToMatrix('hila.table', subId)
       await mc.createDependentRow(wsId, focalRowId, subId)
     })
 
@@ -553,8 +598,8 @@ test.describe('Focus panel — creation gesture (Phase 9.6)', () => {
     await expect(nameInput).toBeVisible({ timeout: 5000 })
     await expect(nameInput).toBeFocused({ timeout: 3000 })
     await expect(async () => {
-      const shadow = await nameInput.evaluate((el) => getComputedStyle(el).boxShadow)
-      expect(shadow).not.toBe('none')
+      const outline = await nameInput.evaluate((el) => getComputedStyle(el).outlineStyle)
+      expect(outline).not.toBe('none')
     }).toPass({ timeout: 3000 })
 
     // Name it via the (now editable) input; the rename persists through renameMatrix.

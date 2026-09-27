@@ -1,0 +1,58 @@
+.band {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-panel-gap);
+  margin-bottom: var(--space-panel-gap);
+  padding-top: var(--space-control-inset-block);
+  border-top: var(--border-subtle);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nameInput {
+  width: 100%;
+  min-height: var(--size-control);
+  margin-bottom: var(--space-compact-inset);
+  padding: var(--space-label-inset) var(--space-compact-inset);
+  border: var(--width-line) solid transparent;
+  border-radius: var(--radius-control);
+  outline: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-body-small-size);
+  font-weight: var(--type-label-weight);
+  line-height: var(--type-label-line-height);
+}
+
+.nameInput:hover {
+  border-color: var(--color-line-subtle);
+}
+
+.nameInput:focus,
+.nameInput[data-highlighted='true'] {
+  border-color: var(--color-state-focus);
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.collectionHost,
+.collectionHost > :global([data-testid='face-host-slot']) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fallback {
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  border: var(--border-subtle);
+  color: var(--color-text-muted);
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-small-size);
+}

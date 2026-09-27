@@ -1,126 +1,142 @@
 .formulaInput {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
   min-width: 240px;
+  flex-direction: column;
+  gap: var(--space-compact-inset);
+  color: var(--color-text);
 }
 
 .tokenDisplay {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
+  min-height: var(--size-control);
   align-items: center;
-  min-height: 24px;
-  padding: 2px 0;
+  flex-wrap: wrap;
+  gap: var(--space-label-inset);
+  padding-block: var(--space-label-inset);
 }
 
 .textSegment {
-  font-size: 12px;
-  color: #555;
+  color: var(--color-text-muted);
+  font-family: var(--type-data-family);
+  font-size: var(--type-body-small-size);
   white-space: pre;
 }
 
 .refToken {
   display: inline-flex;
+  min-height: var(--size-icon);
   align-items: center;
-  gap: 2px;
-  padding: 1px 6px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 500;
+  gap: var(--space-label-inset);
+  padding: var(--space-label-inset) var(--space-control-inset-block);
+  border-radius: var(--radius-control);
+  background: var(--color-state-selected);
+  color: var(--color-text-strong);
+  font-family: var(--type-label-family);
+  font-size: var(--type-body-small-size);
+  font-weight: var(--type-label-weight);
   white-space: nowrap;
 }
 
 .refTokenRemove {
-  background: none;
+  padding: var(--space-label-inset);
   border: none;
-  cursor: pointer;
-  color: #93c5fd;
-  font-size: 12px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
   line-height: 1;
-  padding: 0 1px;
+  cursor: pointer;
 }
 
-.refTokenRemove:hover {
-  color: #dc2626;
+.refTokenRemove:hover,
+.refTokenRemove:focus-visible {
+  color: var(--color-danger);
 }
 
 .inputRow {
   display: flex;
-  gap: 4px;
   align-items: center;
+  gap: var(--space-compact-inset);
 }
 
 .rawInput {
   flex: 1;
-  font-size: 12px;
-  padding: 4px 6px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  min-height: var(--size-control);
+  padding: var(--space-compact-inset) var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--type-data-family);
+  font-size: var(--type-body-small-size);
 }
 
 .rawInput:focus {
-  outline: none;
-  border-color: #2563eb;
+  border-color: var(--color-state-focus);
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
 }
 
 .columnPickerBtn {
-  padding: 4px 6px;
-  font-size: 11px;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  color: #555;
+  min-height: var(--size-control);
+  padding-inline: var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.columnPickerBtn:hover {
-  background: #e0e0e0;
-  color: #333;
+.columnPickerBtn:hover,
+.columnPickerBtn:focus-visible {
+  border-color: var(--color-state-focus);
+  background: var(--color-state-hover);
+  color: var(--color-text-strong);
 }
 
 .autocomplete {
   position: absolute;
   top: 100%;
-  left: 0;
   right: 0;
+  left: 0;
   z-index: 100;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   max-height: 160px;
   overflow-y: auto;
+  border: var(--border-strong);
+  border-radius: var(--radius-surface);
+  background: var(--color-overlay);
+  box-shadow: var(--elevation-overlay);
 }
 
 .autocompleteItem {
   display: flex;
-  justify-content: space-between;
+  min-height: var(--size-control);
   align-items: center;
-  padding: 5px 8px;
-  font-size: 12px;
+  justify-content: space-between;
+  padding-inline: var(--space-control-inset-block);
+  color: var(--color-text);
+  font-size: var(--type-body-small-size);
   cursor: pointer;
 }
 
 .autocompleteItem:hover {
-  background: #f0f0f0;
+  background: var(--color-state-hover);
 }
 
 .autocompleteItemSelected {
-  background: #eef2ff;
-  color: #3730a3;
+  background: var(--color-state-selected);
+  color: var(--color-text-strong);
 }
 
 .autocompleteColName {
-  font-weight: 500;
+  font-weight: var(--type-label-weight);
 }
 
 .autocompleteColType {
-  font-size: 10px;
-  color: #aaa;
+  color: var(--color-text-faint);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
 }

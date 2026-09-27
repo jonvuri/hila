@@ -17,7 +17,7 @@ import { createViewBlock } from '../core/block-marker'
 import { registerPlugin, getPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
 import { getFaceConfigsForMatrix } from '../core/face-config'
-import { tableFaceTypeDefinition } from '../table/table-plugin'
+import { tableFaceTypeDefinition } from '../table/table-face-type'
 
 import {
   workspaceFaceTypeDefinition,

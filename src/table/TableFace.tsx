@@ -1,18 +1,18 @@
 import {
   createEffect,
   createMemo,
+  createResource,
   createSignal,
   For,
+  on,
   onCleanup,
   Show,
   type Component,
 } from 'solid-js'
 import { Portal } from 'solid-js/web'
 
-import type { TemporaryLegacyFaceComponentProps } from '../core/TemporaryLegacyFaceAdapter'
 import {
   updateRow,
-  insertRow,
   deleteRow,
   addColumn,
   addFormulaColumn,
@@ -24,14 +24,19 @@ import {
   insertJoin,
   deleteJoin,
   deleteOwnedTarget,
-  createDependentRow,
+  getFaceConfigForMatrix,
 } from '../core/client/matrix-client'
+import type { FaceRenderingProps } from '../core/face-runtime'
+import type { FaceConfig, FaceSubject } from '../core/face-types'
+import type { NodeRef } from '../core/tree'
 import { execQuery } from '../core/client/sql-client'
 import { useQuery } from '../sql/useQuery'
 import type { SqlResult } from '../sql/types'
 import type { ColumnDefinition, JoinKind } from '../core/matrix'
-import type { NodeRef } from '../core/tree'
 import { extractTextFromPmDoc } from '../editor/pm-text'
+import { resolveComponentVariant, type TableTreatmentVariant } from '../design/tokens'
+import { tableRowDotColor } from '../design/table/data'
+import { CornerNotchBox } from '../design/CornerNotchBox'
 
 import {
   buildTableQuery,
@@ -42,6 +47,8 @@ import {
 } from './table-query'
 import FormulaInput from './FormulaInput'
 import styles from './TableFace.module.css'
+
+export const TABLE_PAGE_SIZE = 100
 
 // -- Column type system -------------------------------------------------------
 
@@ -139,18 +146,19 @@ const formatValue = (value: unknown, displayType: string): string => {
 
 type CellAddress = { row: number; col: number }
 
-// `insertParent` makes this an *anchored* table band (Phase 9.4): when present,
-// "+ New Row" creates the row as an `own`-child of that node via
-// `createDependentRow`, preserving the dedicated sub-table invariant (every row
-// owned by the focal node). Without it, rows attach to the root sentinel as
-// before — the standalone table-view behavior App.tsx mounts.
-// `onOpenRow` (Phase 9.5) makes the embedded table's rows navigable: clicking a
-// row's open affordance drills into a focus panel for that `(matrix_id, row_id)` —
-// the boundary hop from a dedicated sub-table into the sub-matrix.
-type TableFaceProps = TemporaryLegacyFaceComponentProps & {
-  insertParent?: NodeRef
-  onOpenRow?: (rowId: number) => void
+// The table owns its grid interactions. Its host retains insertion and navigation
+// policy and exposes only the forward runtime capabilities below.
+type TableGridProps = {
+  config: FaceConfig
+  treatment: TableTreatmentVariant
+  services: FaceRenderingProps['services']
 }
+
+export const getTableCollectionMatrixId = (subject: FaceSubject): number | null =>
+  subject.mode === 'container' ? subject.extentMatrixId : null
+
+export const getTableTreatment = (settings: Record<string, unknown>): TableTreatmentVariant =>
+  resolveComponentVariant('tableTreatment', settings.tableTreatment)
 
 export const getTableRowLauncherSubjectLabel = (
   row: Record<string, unknown>,
@@ -160,7 +168,7 @@ export const getTableRowLauncherSubjectLabel = (
   extractTextFromPmDoc(row[columns.find((column) => column.role === 'label')?.name ?? '']) ||
   `Row ${rowIndex + 1}`
 
-const TableFace: Component<TableFaceProps> = (props) => {
+const TableGrid: Component<TableGridProps> = (props) => {
   const matrixId = () => props.config.matrixId
 
   // -- Settings from face config (ID-based) -------
@@ -176,6 +184,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
 
   const [sort, setSort] = createSignal<SortConfig | null>(initialSort())
   const [filters, setFilters] = createSignal<FilterConfig[]>(initialFilters())
+  const [pageIndex, setPageIndex] = createSignal(0)
 
   // -- Reactive queries -------
   const columnsQuery = () =>
@@ -193,16 +202,47 @@ const TableFace: Component<TableFaceProps> = (props) => {
     const colIds = new Set(cols.map((c) => c.id))
     const validSort = sort() && colIds.has(sort()!.columnId) ? sort() : null
     const validFilters = filters().filter((f) => colIds.has(f.columnId))
-    return buildTableQuery(matrixId(), validSort, validFilters, cols)
+    return buildTableQuery(matrixId(), validSort, validFilters, cols, {
+      limit: TABLE_PAGE_SIZE + 1,
+      offset: pageIndex() * TABLE_PAGE_SIZE,
+    })
   }
-  const { result: dataResult } = useQuery(dataQuery)
+  const [dataPending, setDataPending] = createSignal(true)
 
-  const rows = createMemo<SqlResult>(() => dataResult() ?? [])
+  createEffect(on(dataQuery, () => setDataPending(true)))
+  const { result: dataResult } = useQuery(dataQuery)
+  createEffect(on(dataResult, () => setDataPending(false)))
+
+  const rows = createMemo<SqlResult>(() =>
+    dataPending() ? [] : (dataResult() ?? []).slice(0, TABLE_PAGE_SIZE),
+  )
+  const hasNextPage = createMemo(
+    () => !dataPending() && (dataResult()?.length ?? 0) > TABLE_PAGE_SIZE,
+  )
+
+  createEffect(() => {
+    if (!dataPending() && dataResult() !== null && rows().length === 0 && pageIndex() > 0) {
+      setPageIndex((current) => current - 1)
+    }
+  })
 
   // -- Selection and editing state -------
   const [selectedCell, setSelectedCell] = createSignal<CellAddress | null>(null)
   const [editingCell, setEditingCell] = createSignal<CellAddress | null>(null)
   const [editValue, setEditValue] = createSignal<string>('')
+  const [insertedRow, setInsertedRow] = createSignal<NodeRef | null>(null)
+
+  createEffect(
+    on(
+      pageIndex,
+      () => {
+        setSelectedCell(null)
+        setEditingCell(null)
+      },
+      { defer: true },
+    ),
+  )
+
   const [renamingCol, setRenamingCol] = createSignal<string | null>(null)
   const [renameValue, setRenameValue] = createSignal<string>('')
   const [contextMenu, setContextMenu] = createSignal<{
@@ -245,6 +285,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
     } else {
       next = { columnId: col.id, direction: 'ASC' }
     }
+    setPageIndex(0)
     setSort(next)
     await persistSettings(next, filters())
   }
@@ -252,6 +293,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
   const addFilter = async (f: FilterConfig) => {
     const next = [...filters(), { ...f, id: crypto.randomUUID(), order: filters().length }]
     setFilters(next)
+    setPageIndex(0)
     setAddingFilter(false)
     await persistSettings(sort(), next)
   }
@@ -259,6 +301,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
   const removeFilter = async (index: number) => {
     const next = filters().filter((_, i) => i !== index)
     setFilters(next)
+    setPageIndex(0)
     await persistSettings(sort(), next)
   }
 
@@ -330,12 +373,9 @@ const TableFace: Component<TableFaceProps> = (props) => {
 
   // -- Row operations -------
   const addRow = async () => {
-    const parent = props.insertParent
-    if (parent) {
-      await createDependentRow(parent.matrixId, parent.rowId, matrixId())
-    } else {
-      await insertRow(matrixId())
-    }
+    setInsertedRow(null)
+    const row = await props.services.requestInsert?.({})
+    if (row) setInsertedRow(row)
   }
 
   const deleteSelectedRow = async () => {
@@ -626,7 +666,18 @@ const TableFace: Component<TableFaceProps> = (props) => {
   }
 
   return (
-    <div class={styles.tableFace} ref={tableRef} tabindex="-1" data-testid="table-face">
+    <div
+      class={styles.tableFace}
+      classList={{
+        [styles.treatmentThinLine!]: props.treatment === 'thin-line',
+        [styles.treatmentCornerNotch!]: props.treatment === 'corner-notch',
+        [styles.treatmentCellDots!]: props.treatment === 'cell-dots',
+      }}
+      ref={tableRef}
+      tabindex="-1"
+      data-testid="table-face"
+      data-table-treatment={props.treatment}
+    >
       {/* Toolbar / filter bar */}
       <div class={styles.toolbar}>
         <For each={filters()}>
@@ -658,245 +709,315 @@ const TableFace: Component<TableFaceProps> = (props) => {
       </div>
 
       {/* Table */}
-      <div class={styles.tableContainer}>
-        <table class={styles.table}>
-          <thead>
-            <tr>
-              <th class={styles.thRowId}>#</th>
-              <For each={columns()}>
-                {(col) => (
-                  <th
-                    class={styles.th}
-                    classList={{
-                      [styles.dragging!]: dragCol() === col.name,
-                      [styles.dropTarget!]: dropTarget() === col.name,
-                      [styles.thFormula!]: col.formula !== null,
-                    }}
-                    draggable={renamingCol() !== col.name}
-                    onDragStart={(e) => handleColumnDragStart(col.name, e)}
-                    onDragOver={(e) => handleColumnDragOver(col.name, e)}
-                    onDragEnd={() => void handleColumnDragEnd()}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      setContextMenu({ x: e.clientX, y: e.clientY, column: col })
-                    }}
-                  >
-                    <Show
-                      when={renamingCol() !== col.name}
-                      fallback={
-                        <input
-                          class={styles.thInput}
-                          value={renameValue()}
-                          onInput={(e) => setRenameValue(e.currentTarget.value)}
-                          onBlur={() => void handleRenameColumn(col.name)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') void handleRenameColumn(col.name)
-                            if (e.key === 'Escape') setRenamingCol(null)
-                          }}
-                          ref={(el) => setTimeout(() => el.focus())}
-                        />
+      <CornerNotchBox
+        class={props.treatment === 'corner-notch' ? styles.cornerNotchFrame : styles.tableFrame}
+        decorated={props.treatment === 'corner-notch'}
+      >
+        <div class={styles.tableContainer}>
+          <table class={styles.table} aria-label="Table collection">
+            <thead>
+              <tr>
+                <th class={styles.thRowId} scope="col">
+                  #
+                </th>
+                <For each={columns()}>
+                  {(col) => (
+                    <th
+                      class={styles.th}
+                      scope="col"
+                      aria-sort={
+                        sort()?.columnId === col.id ?
+                          sort()?.direction === 'ASC' ?
+                            'ascending'
+                          : 'descending'
+                        : 'none'
                       }
+                      classList={{
+                        [styles.dragging!]: dragCol() === col.name,
+                        [styles.dropTarget!]: dropTarget() === col.name,
+                        [styles.thFormula!]: col.formula !== null,
+                      }}
+                      draggable={renamingCol() !== col.name}
+                      onDragStart={(e) => handleColumnDragStart(col.name, e)}
+                      onDragOver={(e) => handleColumnDragOver(col.name, e)}
+                      onDragEnd={() => void handleColumnDragEnd()}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setContextMenu({ x: e.clientX, y: e.clientY, column: col })
+                      }}
                     >
-                      <div
-                        class={styles.thContent}
-                        onClick={() => void toggleSort(col)}
-                        onDblClick={() => startRenameColumn(col)}
+                      <Show
+                        when={renamingCol() !== col.name}
+                        fallback={
+                          <input
+                            class={styles.thInput}
+                            value={renameValue()}
+                            onInput={(e) => setRenameValue(e.currentTarget.value)}
+                            onBlur={() => void handleRenameColumn(col.name)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') void handleRenameColumn(col.name)
+                              if (e.key === 'Escape') setRenamingCol(null)
+                            }}
+                            ref={(el) => setTimeout(() => el.focus())}
+                          />
+                        }
                       >
-                        <span>{col.name}</span>
-                        <Show when={col.formula !== null}>
-                          <span class={styles.formulaIcon} title={`Formula: ${col.formula}`}>
-                            fx
+                        <button
+                          type="button"
+                          class={styles.thContent}
+                          onClick={() => void toggleSort(col)}
+                          onDblClick={() => startRenameColumn(col)}
+                        >
+                          <span>{col.name}</span>
+                          <Show when={col.formula !== null}>
+                            <span class={styles.formulaIcon} title={`Formula: ${col.formula}`}>
+                              fx
+                            </span>
+                          </Show>
+                          <span class={styles.typeLabel}>
+                            {col.formula !== null ? 'formula' : col.displayType}
                           </span>
-                        </Show>
-                        <span class={styles.typeLabel}>
-                          {col.formula !== null ? 'formula' : col.displayType}
-                        </span>
-                        <Show when={sort()?.columnId === col.id}>
-                          <span class={styles.sortIndicator}>
-                            {sort()?.direction === 'ASC' ? '▲' : '▼'}
-                          </span>
-                        </Show>
+                          <Show when={sort()?.columnId === col.id}>
+                            <span class={styles.sortIndicator}>
+                              {sort()?.direction === 'ASC' ? '▲' : '▼'}
+                            </span>
+                          </Show>
+                        </button>
+                      </Show>
+                    </th>
+                  )}
+                </For>
+                <th class={styles.thAddColumn} scope="col">
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      class={styles.addColumnBtn}
+                      onClick={() => setShowTypePicker(!showTypePicker())}
+                      title="Add column"
+                    >
+                      +
+                    </button>
+                    <Show when={showTypePicker()}>
+                      <div class={styles.typePicker}>
+                        <For each={COLUMN_TYPES}>
+                          {(t) => (
+                            <button
+                              class={styles.typePickerItem}
+                              onClick={() => void handleAddColumn(t.value)}
+                            >
+                              <span class={styles.typePickerIcon}>{t.icon}</span>
+                              <span>{t.label}</span>
+                            </button>
+                          )}
+                        </For>
+                        <button
+                          class={styles.typePickerItem}
+                          onClick={() => {
+                            setShowTypePicker(false)
+                            setShowFormulaDialog(true)
+                            setFormulaError(null)
+                          }}
+                        >
+                          <span class={styles.typePickerIcon}>fx</span>
+                          <span>Formula</span>
+                        </button>
                       </div>
                     </Show>
-                  </th>
-                )}
-              </For>
-              <th class={styles.thAddColumn}>
-                <div style={{ position: 'relative' }}>
-                  <button
-                    class={styles.addColumnBtn}
-                    onClick={() => setShowTypePicker(!showTypePicker())}
-                    title="Add column"
-                  >
-                    +
-                  </button>
-                  <Show when={showTypePicker()}>
-                    <div class={styles.typePicker}>
-                      <For each={COLUMN_TYPES}>
-                        {(t) => (
-                          <button
-                            class={styles.typePickerItem}
-                            onClick={() => void handleAddColumn(t.value)}
-                          >
-                            <span class={styles.typePickerIcon}>{t.icon}</span>
-                            <span>{t.label}</span>
-                          </button>
-                        )}
-                      </For>
-                      <button
-                        class={styles.typePickerItem}
-                        onClick={() => {
-                          setShowTypePicker(false)
-                          setShowFormulaDialog(true)
+                    <Show when={showFormulaDialog()}>
+                      <FormulaDialog
+                        error={formulaError()}
+                        name={formulaName()}
+                        expr={formulaExpr()}
+                        columns={columns()}
+                        onNameInput={setFormulaName}
+                        onExprInput={setFormulaExpr}
+                        onAdd={() => void handleAddFormulaColumn()}
+                        onClose={() => {
+                          setShowFormulaDialog(false)
                           setFormulaError(null)
                         }}
-                      >
-                        <span class={styles.typePickerIcon}>fx</span>
-                        <span>Formula</span>
-                      </button>
-                    </div>
-                  </Show>
-                  <Show when={showFormulaDialog()}>
-                    <FormulaDialog
-                      error={formulaError()}
-                      name={formulaName()}
-                      expr={formulaExpr()}
-                      columns={columns()}
-                      onNameInput={setFormulaName}
-                      onExprInput={setFormulaExpr}
-                      onAdd={() => void handleAddFormulaColumn()}
-                      onClose={() => {
-                        setShowFormulaDialog(false)
-                        setFormulaError(null)
-                      }}
-                    />
-                  </Show>
-                  <Show when={showRefColumnDialog()}>
-                    <ReferenceColumnDialog
-                      matrices={(matricesResult() ?? []) as { id: number; title: string }[]}
-                      onAdd={(targetMatrixId) => void handleAddRefColumn(targetMatrixId)}
-                      onClose={() => setShowRefColumnDialog(false)}
-                    />
-                  </Show>
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <For each={rows()}>
-              {(row, rowIdx) => (
-                <tr
-                  data-launcher-subject
-                  data-launcher-matrix-id={matrixId()}
-                  data-launcher-row-id={row['id'] as number}
-                  data-launcher-subject-label={getTableRowLauncherSubjectLabel(
-                    row,
-                    columns(),
-                    rowIdx(),
-                  )}
-                >
-                  <td class={styles.rowIdCell}>
-                    <Show when={props.onOpenRow} fallback={rowIdx() + 1}>
-                      <button
-                        class={styles.openRowBtn}
-                        data-testid="table-open-row-btn"
-                        aria-label="Open row"
-                        onClick={() => props.onOpenRow!(row['id'] as number)}
-                      >
-                        →
-                      </button>
+                      />
                     </Show>
-                  </td>
-                  <For each={columns()}>
-                    {(col, colIdx) => {
-                      const value = () => row[col.name]
-                      const editing = () => isEditing(rowIdx(), colIdx())
-                      const selected = () => isSelected(rowIdx(), colIdx())
-                      const isFormula = col.formula !== null
-
-                      return (
-                        <td class={styles.td}>
-                          <Show
-                            when={col.displayType !== 'reference'}
-                            fallback={
-                              <ReferenceCellDisplay
-                                value={value()}
-                                options={col.options}
-                                selected={selected()}
-                                matrixId={matrixId()}
-                                rowId={row['id'] as number}
-                                colDef={col}
-                                onClick={() =>
-                                  setSelectedCell({ row: rowIdx(), col: colIdx() })
-                                }
-                                onSetReference={(ref) =>
-                                  void handleSetReference(
-                                    row['id'] as number,
-                                    col,
-                                    value(),
-                                    ref,
-                                  )
-                                }
-                              />
+                    <Show when={showRefColumnDialog()}>
+                      <ReferenceColumnDialog
+                        matrices={(matricesResult() ?? []) as { id: number; title: string }[]}
+                        onAdd={(targetMatrixId) => void handleAddRefColumn(targetMatrixId)}
+                        onClose={() => setShowRefColumnDialog(false)}
+                      />
+                    </Show>
+                  </div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={rows()}>
+                {(row, rowIdx) => {
+                  const globalRowIndex = () => pageIndex() * TABLE_PAGE_SIZE + rowIdx()
+                  return (
+                    <tr
+                      data-launcher-subject
+                      data-launcher-matrix-id={matrixId()}
+                      data-launcher-row-id={row['id'] as number}
+                      data-table-row-index={globalRowIndex()}
+                      data-launcher-subject-label={getTableRowLauncherSubjectLabel(
+                        row,
+                        columns(),
+                        globalRowIndex(),
+                      )}
+                      style={{ '--table-cell-dot-color': tableRowDotColor(globalRowIndex()) }}
+                    >
+                      <td class={styles.rowIdCell}>
+                        <Show
+                          when={props.services.requestNavigation}
+                          fallback={globalRowIndex() + 1}
+                        >
+                          <button
+                            class={styles.openRowBtn}
+                            data-testid="table-open-row-btn"
+                            aria-label="Open row"
+                            onClick={() =>
+                              props.services.requestNavigation?.({
+                                matrixId: matrixId(),
+                                rowId: row['id'] as number,
+                              })
                             }
                           >
-                            <Show
-                              when={editing() && !isFormula}
-                              fallback={
-                                <CellDisplay
-                                  value={value()}
-                                  displayType={col.displayType}
-                                  options={col.options}
-                                  selected={selected()}
-                                  isFormula={isFormula}
-                                  onClick={() =>
-                                    setSelectedCell({ row: rowIdx(), col: colIdx() })
-                                  }
-                                  onDblClick={() => {
-                                    if (isFormula) return
-                                    if (col.displayType === 'boolean') {
-                                      void handleBooleanToggle(rowIdx(), colIdx())
-                                    } else {
-                                      startEditing(rowIdx(), colIdx())
+                            →
+                          </button>
+                        </Show>
+                      </td>
+                      <For each={columns()}>
+                        {(col, colIdx) => {
+                          const value = () => row[col.name]
+                          const editing = () => isEditing(rowIdx(), colIdx())
+                          const selected = () => isSelected(rowIdx(), colIdx())
+                          const isFormula = col.formula !== null
+
+                          return (
+                            <td class={styles.td} aria-selected={selected()}>
+                              <Show
+                                when={col.displayType !== 'reference'}
+                                fallback={
+                                  <ReferenceCellDisplay
+                                    value={value()}
+                                    options={col.options}
+                                    selected={selected()}
+                                    matrixId={matrixId()}
+                                    rowId={row['id'] as number}
+                                    colDef={col}
+                                    onClick={() =>
+                                      setSelectedCell({ row: rowIdx(), col: colIdx() })
                                     }
-                                  }}
-                                  onBooleanToggle={() =>
-                                    void handleBooleanToggle(rowIdx(), colIdx())
+                                    onSetReference={(ref) =>
+                                      void handleSetReference(
+                                        row['id'] as number,
+                                        col,
+                                        value(),
+                                        ref,
+                                      )
+                                    }
+                                  />
+                                }
+                              >
+                                <Show
+                                  when={editing() && !isFormula}
+                                  fallback={
+                                    <CellDisplay
+                                      value={value()}
+                                      displayType={col.displayType}
+                                      options={col.options}
+                                      selected={selected()}
+                                      isFormula={isFormula}
+                                      onClick={() =>
+                                        setSelectedCell({ row: rowIdx(), col: colIdx() })
+                                      }
+                                      onDblClick={() => {
+                                        if (isFormula) return
+                                        if (col.displayType === 'boolean') {
+                                          void handleBooleanToggle(rowIdx(), colIdx())
+                                        } else {
+                                          startEditing(rowIdx(), colIdx())
+                                        }
+                                      }}
+                                      onBooleanToggle={() =>
+                                        void handleBooleanToggle(rowIdx(), colIdx())
+                                      }
+                                    />
                                   }
-                                />
-                              }
-                            >
-                              <CellEditor
-                                value={editValue()}
-                                displayType={col.displayType}
-                                options={col.options}
-                                onInput={(v) => setEditValue(v)}
-                                onCommit={() => void commitEdit()}
-                                onCancel={cancelEdit}
-                                onTab={(shift) => {
-                                  void handleTabFromCell(rowIdx(), colIdx(), shift)
-                                }}
-                              />
-                            </Show>
-                          </Show>
-                        </td>
-                      )
-                    }}
-                  </For>
-                  <td />
+                                >
+                                  <CellEditor
+                                    value={editValue()}
+                                    displayType={col.displayType}
+                                    options={col.options}
+                                    onInput={(v) => setEditValue(v)}
+                                    onCommit={() => void commitEdit()}
+                                    onCancel={cancelEdit}
+                                    onTab={(shift) => {
+                                      void handleTabFromCell(rowIdx(), colIdx(), shift)
+                                    }}
+                                  />
+                                </Show>
+                              </Show>
+                            </td>
+                          )
+                        }}
+                      </For>
+                      <td />
+                    </tr>
+                  )
+                }}
+              </For>
+              <Show when={props.services.requestInsert}>
+                <tr class={styles.addRowTr}>
+                  <td colspan={columns().length + 2}>
+                    <button class={styles.addRowBtn} onClick={() => void addRow()}>
+                      + New Row
+                    </button>
+                  </td>
                 </tr>
-              )}
-            </For>
-            <tr class={styles.addRowTr}>
-              <td colspan={columns().length + 2}>
-                <button class={styles.addRowBtn} onClick={() => void addRow()}>
-                  + New Row
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </Show>
+            </tbody>
+          </table>
+        </div>
+      </CornerNotchBox>
+
+      <Show when={insertedRow()}>
+        {(row) => (
+          <div class={styles.insertNotice} role="status">
+            <span>New row created.</span>
+            <Show when={props.services.requestNavigation}>
+              <button
+                class={styles.insertNoticeButton}
+                type="button"
+                onClick={() => props.services.requestNavigation?.(row())}
+              >
+                Open new row
+              </button>
+            </Show>
+          </div>
+        )}
+      </Show>
+
+      <Show when={pageIndex() > 0 || hasNextPage()}>
+        <nav class={styles.pagination} aria-label="Table pages">
+          <button
+            class={styles.pageButton}
+            type="button"
+            disabled={dataPending() || pageIndex() === 0}
+            onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+          >
+            Previous
+          </button>
+          <span class={styles.pageStatus}>Page {pageIndex() + 1}</span>
+          <button
+            class={styles.pageButton}
+            type="button"
+            disabled={dataPending() || !hasNextPage()}
+            onClick={() => setPageIndex((current) => current + 1)}
+          >
+            Next
+          </button>
+        </nav>
+      </Show>
 
       {/* Context menu */}
       <Show when={contextMenu()}>
@@ -913,7 +1034,7 @@ const TableFace: Component<TableFaceProps> = (props) => {
               Rename
             </button>
             <div class={styles.contextMenuSub}>
-              <div style={{ 'font-size': '11px', color: '#999', padding: '2px 0' }}>Type</div>
+              <div class={styles.popoverLabel}>Type</div>
               <For each={COLUMN_TYPES}>
                 {(t) => (
                   <label>
@@ -938,6 +1059,57 @@ const TableFace: Component<TableFaceProps> = (props) => {
         )}
       </Show>
     </div>
+  )
+}
+
+/** Registered collection interior for intentional table recipes on container subjects. */
+const TableFace: Component<FaceRenderingProps> = (props) => {
+  const collectionMatrixId = createMemo(() => getTableCollectionMatrixId(props.subject))
+  const [config] = createResource<FaceConfig | null, number>(
+    () => collectionMatrixId() ?? false,
+    getFaceConfigForMatrix,
+  )
+  const matchingConfig = createMemo(() => {
+    const current = config()
+    return current?.faceTypeId === props.recipe.faceTypeId ? current : null
+  })
+  const status = () => {
+    if (config.loading) return 'Loading table…'
+    if (config.error) return 'Table collection failed to load.'
+    return 'Table collection unavailable.'
+  }
+
+  return (
+    <Show
+      when={collectionMatrixId() !== null}
+      fallback={
+        <div class={styles.collectionError} role="alert" data-testid="table-collection-error">
+          Table collections require a container subject.
+        </div>
+      }
+    >
+      <Show
+        when={matchingConfig()}
+        fallback={
+          <div
+            class={styles.collectionError}
+            role={config.error ? 'alert' : 'status'}
+            aria-live="polite"
+            data-testid="table-collection-error"
+          >
+            {status()}
+          </div>
+        }
+      >
+        {(resolvedConfig) => (
+          <TableGrid
+            config={resolvedConfig()}
+            treatment={getTableTreatment(props.recipe.settings)}
+            services={props.services}
+          />
+        )}
+      </Show>
+    </Show>
   )
 }
 
@@ -1099,14 +1271,14 @@ const FormulaDialog: Component<{
       onInput={props.onExprInput}
       placeholder="e.g. {{colId}} * 2 + {{colId}}"
     />
-    <button style={{ background: '#2563eb', color: '#fff' }} onClick={() => props.onAdd()}>
+    <button class={styles.popoverPrimary} onClick={() => props.onAdd()}>
       Add
     </button>
-    <button style={{ background: '#f0f0f0', color: '#333' }} onClick={() => props.onClose()}>
+    <button class={styles.popoverSecondary} onClick={() => props.onClose()}>
       Cancel
     </button>
     <Show when={props.error}>
-      <span style={{ color: '#dc2626', 'font-size': '11px' }}>{props.error}</span>
+      <span class={styles.popoverError}>{props.error}</span>
     </Show>
   </div>
 )
@@ -1151,7 +1323,7 @@ const FilterPopover: Component<{
         ref={(el) => setTimeout(() => el.focus())}
       />
       <button
-        style={{ background: '#2563eb', color: '#fff' }}
+        class={styles.popoverPrimary}
         onClick={() => {
           if (columnId() != null)
             props.onAdd({ columnId: columnId()!, operator: operator(), value: value() })
@@ -1159,7 +1331,7 @@ const FilterPopover: Component<{
       >
         Add
       </button>
-      <button style={{ background: '#f0f0f0', color: '#333' }} onClick={() => props.onClose()}>
+      <button class={styles.popoverSecondary} onClick={() => props.onClose()}>
         Cancel
       </button>
     </div>
@@ -1418,7 +1590,7 @@ const ReferenceColumnDialog: Component<{
 
   return (
     <div class={styles.filterPopover} onClick={(e) => e.stopPropagation()}>
-      <div style={{ 'font-size': '12px', color: '#555' }}>Target matrix:</div>
+      <div class={styles.popoverLabel}>Target matrix:</div>
       <select
         value={selectedMatrix() ?? ''}
         onChange={(e) => setSelectedMatrix(Number(e.currentTarget.value))}
@@ -1433,7 +1605,7 @@ const ReferenceColumnDialog: Component<{
         </For>
       </select>
       <button
-        style={{ background: '#2563eb', color: '#fff' }}
+        class={styles.popoverPrimary}
         disabled={selectedMatrix() == null}
         onClick={() => {
           if (selectedMatrix() != null) props.onAdd(selectedMatrix()!)
@@ -1441,7 +1613,7 @@ const ReferenceColumnDialog: Component<{
       >
         Add
       </button>
-      <button style={{ background: '#f0f0f0', color: '#333' }} onClick={() => props.onClose()}>
+      <button class={styles.popoverSecondary} onClick={() => props.onClose()}>
         Cancel
       </button>
     </div>

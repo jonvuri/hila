@@ -7,18 +7,31 @@
  */
 
 const tableFace: string;
+const collectionError: string;
 const toolbar: string;
 const filterTag: string;
 const addFilterBtn: string;
+const addColumnBtn: string;
+const addRowBtn: string;
+const openRowBtn: string;
+const refClearBtn: string;
+const insertNoticeButton: string;
+const pageButton: string;
 const filterPopover: string;
+const popoverPrimary: string;
+const popoverSecondary: string;
+const popoverLabel: string;
+const popoverError: string;
+const tableFrame: string;
+const cornerNotchFrame: string;
 const tableContainer: string;
 const table: string;
 const th: string;
+const thAddColumn: string;
+const thRowId: string;
 const thContent: string;
 const sortIndicator: string;
 const typeLabel: string;
-const thAddColumn: string;
-const addColumnBtn: string;
 const thInput: string;
 const contextMenu: string;
 const contextMenuItem: string;
@@ -31,48 +44,63 @@ const cellEditing: string;
 const cellNumber: string;
 const cellBoolean: string;
 const cellDate: string;
+const cellFormula: string;
 const cellSelect: string;
+const cellReference: string;
 const badge: string;
+const refBadge: string;
 const coercionError: string;
-const thRowId: string;
 const rowIdCell: string;
-const openRowBtn: string;
 const addRowTr: string;
-const addRowBtn: string;
 const typePicker: string;
 const typePickerItem: string;
 const typePickerIcon: string;
 const thFormula: string;
-const cellFormula: string;
 const formulaIcon: string;
-const cellReference: string;
-const refBadge: string;
 const refGhost: string;
 const refEmpty: string;
-const refClearBtn: string;
 const refSearchDropdown: string;
 const refSearchInput: string;
 const refSearchResults: string;
 const refSearchItem: string;
-const refSearchItemSelected: string;
 const refSearchEmpty: string;
+const refSearchItemSelected: string;
 const dragging: string;
 const dropTarget: string;
+const pagination: string;
+const insertNotice: string;
+const pageStatus: string;
+const treatmentThinLine: string;
+const treatmentCornerNotch: string;
+const treatmentCellDots: string;
 
 export {
 	tableFace,
+	collectionError,
 	toolbar,
 	filterTag,
 	addFilterBtn,
+	addColumnBtn,
+	addRowBtn,
+	openRowBtn,
+	refClearBtn,
+	insertNoticeButton,
+	pageButton,
 	filterPopover,
+	popoverPrimary,
+	popoverSecondary,
+	popoverLabel,
+	popoverError,
+	tableFrame,
+	cornerNotchFrame,
 	tableContainer,
 	table,
 	th,
+	thAddColumn,
+	thRowId,
 	thContent,
 	sortIndicator,
 	typeLabel,
-	thAddColumn,
-	addColumnBtn,
 	thInput,
 	contextMenu,
 	contextMenuItem,
@@ -85,49 +113,64 @@ export {
 	cellNumber,
 	cellBoolean,
 	cellDate,
+	cellFormula,
 	cellSelect,
+	cellReference,
 	badge,
+	refBadge,
 	coercionError,
-	thRowId,
 	rowIdCell,
-	openRowBtn,
 	addRowTr,
-	addRowBtn,
 	typePicker,
 	typePickerItem,
 	typePickerIcon,
 	thFormula,
-	cellFormula,
 	formulaIcon,
-	cellReference,
-	refBadge,
 	refGhost,
 	refEmpty,
-	refClearBtn,
 	refSearchDropdown,
 	refSearchInput,
 	refSearchResults,
 	refSearchItem,
-	refSearchItemSelected,
 	refSearchEmpty,
+	refSearchItemSelected,
 	dragging,
-	dropTarget
+	dropTarget,
+	pagination,
+	insertNotice,
+	pageStatus,
+	treatmentThinLine,
+	treatmentCornerNotch,
+	treatmentCellDots
 };
 
 export default {
 	tableFace,
+	collectionError,
 	toolbar,
 	filterTag,
 	addFilterBtn,
+	addColumnBtn,
+	addRowBtn,
+	openRowBtn,
+	refClearBtn,
+	insertNoticeButton,
+	pageButton,
 	filterPopover,
+	popoverPrimary,
+	popoverSecondary,
+	popoverLabel,
+	popoverError,
+	tableFrame,
+	cornerNotchFrame,
 	tableContainer,
 	table,
 	th,
+	thAddColumn,
+	thRowId,
 	thContent,
 	sortIndicator,
 	typeLabel,
-	thAddColumn,
-	addColumnBtn,
 	thInput,
 	contextMenu,
 	contextMenuItem,
@@ -140,31 +183,33 @@ export default {
 	cellNumber,
 	cellBoolean,
 	cellDate,
+	cellFormula,
 	cellSelect,
+	cellReference,
 	badge,
+	refBadge,
 	coercionError,
-	thRowId,
 	rowIdCell,
-	openRowBtn,
 	addRowTr,
-	addRowBtn,
 	typePicker,
 	typePickerItem,
 	typePickerIcon,
 	thFormula,
-	cellFormula,
 	formulaIcon,
-	cellReference,
-	refBadge,
 	refGhost,
 	refEmpty,
-	refClearBtn,
 	refSearchDropdown,
 	refSearchInput,
 	refSearchResults,
 	refSearchItem,
-	refSearchItemSelected,
 	refSearchEmpty,
+	refSearchItemSelected,
 	dragging,
-	dropTarget
+	dropTarget,
+	pagination,
+	insertNotice,
+	pageStatus,
+	treatmentThinLine,
+	treatmentCornerNotch,
+	treatmentCellDots
 };

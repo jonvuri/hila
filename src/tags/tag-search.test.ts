@@ -16,7 +16,7 @@ import {
 import { createTreePosition, getOwnEdge, reparentRow } from '../core/tree'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
-import { tableFaceTypeDefinition } from '../table/table-plugin'
+import { tableFaceTypeDefinition } from '../table/table-face-type'
 import { schema } from '../editor/schema'
 import { extractInlineRefs } from '../editor/inlineref-sync'
 import { workspacePlugin } from '../workspace/workspace-plugin'

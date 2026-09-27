@@ -1,7 +1,7 @@
 ---
 title: Phase 13 Session 3 — Table collection cutover
 kind: phase-session
-state: planned
+state: complete
 updated: 2026-09-25
 ---
 
@@ -56,6 +56,23 @@ fidelity propagation.
 - Exercise all treatments across themes and polarities in Storybook and the live embedded route.
 - Run the relevant system-browser table and focus-panel coverage, including paging and insertion.
 - Run formatter, linter, static types, the full unit suite, and `git diff --check`.
+
+## Shipped outcome
+
+- `hila.table` now contributes one plugin-owned `collection` interior. The embedded container host
+  resolves its existing recipe and supplies generic insertion and navigation services.
+- Rendering no longer provisions a table recipe. Missing recipes and unavailable interiors show a
+  host-owned fallback without changing subject or recipe state.
+- The table keeps native semantics and all editing behavior while bounding live data to 100-row
+  pages with a one-row lookahead and stable global row positions.
+- `tableTreatment` validates through the component registry. Thin line, corner notch, and cell dots
+  share the live interaction boundary and remain independent from theme, polarity, and fidelity.
+- The live table, formula input, and embedded host use canonical semantic roles. The temporary
+  whole-component adapter, application registration, and direct embedded mount are removed.
+
+Focused table, formula, face-runtime, embedded-table, focus-panel, treatment, narrow-width,
+insertion, boundary-hop, and paging coverage passes. Formatter, linter, types, the full unit suite,
+Storybook build, production build, and `git diff --check` pass.
 
 ## Handoff
 

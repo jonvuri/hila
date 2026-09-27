@@ -1,15 +1,18 @@
-import type { FaceTypeDefinition } from '../core/face-types'
-import { registerFaceType as registerFaceTypeLocal } from '../core/face-registry'
-import { registerFaceType as registerFaceTypeWorker } from '../core/client/matrix-client'
+import type { PluginDefinition } from '../core/plugin-types'
 
-export const tableFaceTypeDefinition: FaceTypeDefinition = {
+import TableFace from './TableFace'
+import { tableFaceTypeDefinition } from './table-face-type'
+
+export { tableFaceTypeDefinition } from './table-face-type'
+
+export const tablePlugin: PluginDefinition = {
   id: 'hila.table',
   name: 'Table',
-  slots: [],
-  overflowBehavior: 'none',
-}
-
-export const registerTableFaceType = async (): Promise<void> => {
-  registerFaceTypeLocal(tableFaceTypeDefinition)
-  await registerFaceTypeWorker(tableFaceTypeDefinition)
+  version: '1.0.0',
+  faceTypes: [tableFaceTypeDefinition],
+  faceRenderings: [{ faceTypeId: tableFaceTypeDefinition.id, collection: TableFace }],
+  matrixes: [],
+  namedQueries: {},
+  namedMutations: {},
+  faceBindings: [],
 }

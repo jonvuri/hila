@@ -12,10 +12,8 @@ import {
 import type { FaceConfig } from './core/face-types'
 import { FaceFidelityRoot, useFaceFidelity } from './core/face-runtime'
 import type { PlaceNavigationTarget } from './core/place-navigation'
-import { registerTemporaryLegacyFaceComponent } from './core/TemporaryLegacyFaceAdapter'
 import {
   PluginRegistrationSupersededError,
-  applyFaceToMatrix,
   disposePlugin,
   getFaceConfigs,
   registerPlugin,
@@ -34,7 +32,7 @@ import { setPendingNewTable } from './editor/pending-table'
 import { insertInlineRefFromInvocation } from './editor/active-editor'
 import { tagsPlugin } from './tags/tags-plugin'
 import { workspacePlugin } from './workspace/workspace-plugin'
-import { registerTableFaceType } from './table/table-plugin'
+import { tablePlugin } from './table/table-plugin'
 import { requestGeneratedViewNameFocus } from './workspace/pending-view-name-focus'
 import TagPropertyPanel from './tags/TagPropertyPanel'
 import { createSessionMemoryStore } from './session/session-memory'
@@ -86,10 +84,8 @@ const AppContent: Component = () => {
   }
 
   const focusCreatedTable = (matrixId: number, subject: NodeRef) => {
-    void applyFaceToMatrix('hila.table', matrixId).then(() => {
-      setPendingNewTable(matrixId)
-      setWorkspaceNavigateToPlace({ type: 'node', node: subject })
-    })
+    setPendingNewTable(matrixId)
+    setWorkspaceNavigateToPlace({ type: 'node', node: subject })
   }
 
   const initPlugins = async (isDisposed: () => boolean = () => disposed) => {
@@ -98,11 +94,8 @@ const AppContent: Component = () => {
     setWorkspaceMatrixId(null)
     setWorkspaceFaceConfig(null)
 
-    await registerTableFaceType()
+    await registerPlugin(tablePlugin)
     if (isDisposed()) return
-    const TableFaceComponent = (await import('./table/TableFace')).default
-    if (isDisposed()) return
-    registerTemporaryLegacyFaceComponent('hila.table', TableFaceComponent)
 
     await registerPlugin(inlineReferencesPlugin)
     if (isDisposed()) return
@@ -189,7 +182,9 @@ const AppContent: Component = () => {
       unregisterLauncher()
       shortcuts.uninstall()
       void Promise.all(
-        [inlineReferencesPlugin.id, tagsPlugin.id, workspacePlugin.id].map(disposePlugin),
+        [tablePlugin.id, inlineReferencesPlugin.id, tagsPlugin.id, workspacePlugin.id].map(
+          disposePlugin,
+        ),
       )
       document.removeEventListener('inlineref-open-tag-panel', handleTagPanelEvent)
     })

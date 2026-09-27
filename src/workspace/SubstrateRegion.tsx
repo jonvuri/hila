@@ -280,6 +280,7 @@ const SubstrateRegion: Component<{
 
       {/* container — dedicated sub-tables (matrix bounded here, with its border) */}
       <SubTableBand
+        rootMatrixId={props.rootMatrixId}
         focalMatrixId={props.focalMatrixId}
         focalRowId={props.focalRowId}
         onOpenRowRef={props.onOpenRowRef}

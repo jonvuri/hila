@@ -25,7 +25,16 @@ const waitForRows = async (page: Page) => {
 }
 
 const applyTableFace = async (page: Page) => {
-  await openEmbeddedTable(page)
+  return openEmbeddedTable(page)
+}
+
+const reopenEmbeddedTable = async (page: Page) => {
+  await page.reload()
+  await waitForRows(page)
+  const ownerRow = page.locator('.outline-row').first()
+  await ownerRow.hover()
+  await ownerRow.locator('.nav-row-open-focus').click()
+  await expect(page.getByTestId('table-face')).toBeVisible({ timeout: 5000 })
 }
 
 const addTextColumn = async (page: Page, name?: string) => {
@@ -47,10 +56,12 @@ const addNumberColumn = async (page: Page) => {
 const getCellInput = (page: Page) => page.locator('table tbody td input')
 
 test.describe('Table face', () => {
+  let tableMatrixId: number
+
   test.beforeEach(async ({ page }) => {
     await resetDB(page)
     await waitForRows(page)
-    await applyTableFace(page)
+    tableMatrixId = await applyTableFace(page)
   })
 
   test('click a cell to edit, type a value, press Enter, verify saved', async ({ page }) => {
@@ -138,7 +149,7 @@ test.describe('Table face', () => {
     }
 
     // Click the "New Column" header to sort ascending
-    await page.locator('th', { hasText: 'New Column' }).locator('div').first().click()
+    await page.locator('th', { hasText: 'New Column' }).locator('button').first().click()
 
     // Verify ascending order: Apple, Banana, Cherry
     await expect(async () => {
@@ -152,7 +163,7 @@ test.describe('Table face', () => {
     await expect(thirdCell).toContainText('Cherry')
 
     // Click again to sort descending
-    await page.locator('th', { hasText: 'New Column' }).locator('div').first().click()
+    await page.locator('th', { hasText: 'New Column' }).locator('button').first().click()
 
     await expect(async () => {
       const firstCell = page.locator('table tbody tr').nth(0).locator('td').nth(3)
@@ -213,5 +224,105 @@ test.describe('Table face', () => {
 
     const cell11 = page.locator('table tbody tr').nth(1).locator('td').nth(3)
     await expect(cell11).toContainText('Beta', { timeout: 5000 })
+  })
+
+  test('pages large tables with stable global row positions', async ({ page }) => {
+    await page.evaluate(async (matrixId) => {
+      // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+      const sql = await import('/src/core/client/sql-client.ts')
+      // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+      const matrix = await import('/src/core/client/matrix-client.ts')
+      const rows = await sql.execQuery(
+        `SELECT owner_matrix_id AS matrixId, owner_row_id AS rowId FROM matrix WHERE id = ${matrixId}`,
+      )
+      const owner = rows[0] as { matrixId: number; rowId: number }
+      for (let index = 0; index < 104; index += 1) {
+        await matrix.createDependentRow(owner.matrixId, owner.rowId, matrixId, {
+          title: `Paged row ${index + 2}`,
+        })
+      }
+    }, tableMatrixId)
+
+    const dataRows = page.locator('tbody tr[data-table-row-index]')
+    await expect(dataRows).toHaveCount(100, { timeout: 10_000 })
+    await page.getByRole('button', { name: 'Next' }).click()
+    await expect(dataRows).toHaveCount(5, { timeout: 5000 })
+    await expect(dataRows.first()).toHaveAttribute('data-table-row-index', '100')
+    await expect(page.getByText('Page 2')).toBeVisible()
+  })
+
+  test('keeps every treatment independent from theme, polarity, and narrow width', async ({
+    page,
+  }) => {
+    const treatments = ['thin-line', 'corner-notch', 'cell-dots'] as const
+    const visualThemes = ['ghost', 'null', 'wipeout'] as const
+    const polarities = ['dark', 'light'] as const
+
+    for (const treatment of treatments) {
+      await page.setViewportSize({ width: 1180, height: 844 })
+      await page.evaluate(
+        async ({ matrixId, nextTreatment }) => {
+          // @ts-expect-error -- Vite resolves this browser-only module at runtime.
+          const matrix = await import('/src/core/client/matrix-client.ts')
+          const config = await matrix.getFaceConfigForMatrix(matrixId)
+          if (!config) throw new Error('Missing table recipe')
+          await matrix.saveFaceConfig({
+            ...config,
+            settings: { ...config.settings, tableTreatment: nextTreatment },
+          })
+        },
+        { matrixId: tableMatrixId, nextTreatment: treatment },
+      )
+      await reopenEmbeddedTable(page)
+      const table = page.getByTestId('table-face')
+      await expect(table).toHaveAttribute('data-table-treatment', treatment)
+
+      for (const visualTheme of visualThemes) {
+        for (const polarity of polarities) {
+          await page.evaluate(
+            ([nextVisualTheme, nextPolarity]) => {
+              document.documentElement.dataset.visualTheme = nextVisualTheme
+              document.documentElement.dataset.theme = nextPolarity
+            },
+            [visualTheme, polarity] as const,
+          )
+
+          await expect(page.locator('html')).toHaveAttribute('data-visual-theme', visualTheme)
+          await expect(page.locator('html')).toHaveAttribute('data-theme', polarity)
+          await expect(table).toHaveAttribute('data-table-treatment', treatment)
+          await expect
+            .poll(() =>
+              table.evaluate((element, activeTreatment) => {
+                const tableElement = element.querySelector('table')
+                const header = tableElement?.querySelector('th:nth-child(2)')
+                const cell = tableElement?.querySelector('tbody td:nth-child(2)')
+                const frame = tableElement?.parentElement?.parentElement
+                if (!header || !cell || !frame) return false
+
+                if (activeTreatment === 'thin-line') {
+                  return getComputedStyle(header).textTransform === 'uppercase'
+                }
+                if (activeTreatment === 'corner-notch') {
+                  const notch = getComputedStyle(frame, '::before')
+                  return notch.content !== 'none' && notch.borderTopStyle === 'solid'
+                }
+
+                const dot = getComputedStyle(cell, '::before')
+                return dot.content !== 'none' && dot.width === '3px' && dot.height === '3px'
+              }, treatment),
+            )
+            .toBe(true)
+        }
+      }
+
+      await page.setViewportSize({ width: 500, height: 844 })
+      await expect(page.getByTestId('workspace-shell')).toHaveAttribute(
+        'data-shell-presentation',
+        'single-panel',
+      )
+      await expect(table).toBeVisible()
+      await expect(table).toHaveAttribute('data-table-treatment', treatment)
+      await expect(page.getByRole('button', { name: '+ New Row' })).toBeVisible()
+    }
   })
 })

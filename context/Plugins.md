@@ -70,7 +70,7 @@ The current runtime has:
 - normalized sort/filter configuration;
 - one query-free intentional `FaceConfig` recipe per configured matrix, with face type, bindings,
   and settings;
-- temporary whole-component dispatch through `TemporaryLegacyFaceAdapter`.
+- plugin-owned callable `line` and `collection` dispatch.
 
 New recipe IDs derive from replica-stable matrix identity. Applying the same face preserves the
 existing recipe and normalized presentation state; explicit replacement reuses its ID. Normalized
@@ -90,9 +90,10 @@ Slot resolution is:
 3. preferred type and position;
 4. fallback.
 
-This runtime remains supported only while Phase 13 migrates its embedded table consumer. Its
-whole-component dispatch does not match the approved model below. The retired top-level Table and
-Tag Browser mounts are no longer consumers.
+The embedded table is the first complete live consumer. Its container host resolves the matrix
+recipe, requests the registered `hila.table` collection, and owns title, sizing, insertion, and
+navigation. It never auto-creates a recipe while rendering. The retired top-level Table and Tag
+Browser mounts remain absent.
 
 ## Forward composition model
 
@@ -186,11 +187,11 @@ The migration has mandatory boundaries:
   owner-scoped callable rendering lifecycle, and the host-service capability boundary;
 - Session 2 shipped recursive composed/substrate resolution, transient root-owned x-ray state, and
   the resolved fidelity input passed to interiors;
-- migrate table, tags, workspace participation, and face configuration to `line`/`collection`;
+- Session 3 shipped the plugin-owned table collection, host-owned container dispatch, bounded
+  paging, canonical treatments, and removal of `TemporaryLegacyFaceAdapter` plus the direct mount;
+- migrate tags, workspace participation, and face configuration to `line`/`collection`;
 - move overflow fields into the host scaffold;
 - complete live host recursion and affinity behavior;
-- remove `TemporaryLegacyFaceAdapter` and its registration from `App.tsx`;
-- replace the direct `TableFace` mount in `SubTableBand.tsx`;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
 - migrate inline tag and property surfaces without restoring a Tag Browser application root.
 
@@ -229,9 +230,11 @@ Teardown removes the owner's commands before its `destroy` hook.
 The workspace plugin contributes `hila.table` to slash and launcher, followed by slash-only
 `hila.attach`. The slash adapter supplies the table-name focus and type-picker capabilities, so
 `/table` and `/attach` retain their typed-operation and follow-up behavior. The launcher freezes its
-node subject and capabilities when it opens. `hila.table` creates the owned matrix, applies the table
-face, and selects the existing Table root; without a node it stays visible with a disabled reason.
-Attachment remains slash-only until an app-wide picker capability exists.
+node subject and capabilities when it opens. `hila.table` creates an owned matrix, applies its table
+recipe, and hands focus to the owning node's embedded collection. Slash uses the current node;
+launcher navigates to its frozen node before the same table-name focus handoff. Without a node, the
+command stays visible with a disabled reason. Attachment remains slash-only until an app-wide picker
+capability exists.
 
 The shipped discovery service merges launcher-surface registry entries on the main thread after its
 worker catalog scan without sending callable implementations through the worker boundary. Visible

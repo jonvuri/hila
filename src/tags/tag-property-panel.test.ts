@@ -13,7 +13,7 @@ import {
 import { createTreePosition } from '../core/tree'
 import { registerPlugin } from '../core/plugin'
 import { registerFaceType, clearFaceTypeRegistry } from '../core/face-registry'
-import { tableFaceTypeDefinition } from '../table/table-plugin'
+import { tableFaceTypeDefinition } from '../table/table-face-type'
 import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin } from './tags-plugin'

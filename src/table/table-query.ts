@@ -26,6 +26,11 @@ export type FilterConfig = {
   order?: number
 }
 
+export type TablePage = {
+  limit: number
+  offset: number
+}
+
 export const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`
 
 const escapeString = (value: string): string => `'${value.replace(/'/g, "''")}'`
@@ -39,6 +44,7 @@ export const buildTableQuery = (
   sort: SortConfig | null,
   filters: FilterConfig[],
   columns: ColumnDefinition[],
+  page?: TablePage,
 ): string => {
   const nameById = new Map(columns.map((c) => [c.id, c.name]))
   const formulaCols = columns.filter((c) => c.formula !== null)
@@ -76,11 +82,20 @@ export const buildTableQuery = (
     }
   }
 
+  let hasOrderBy = false
   if (sort) {
     const sortColName = nameById.get(sort.columnId)
     if (sortColName) {
       query += ` ORDER BY ${quoteIdent(sortColName)} ${sort.direction}`
+      hasOrderBy = true
+      if (page && sortColName !== 'id') query += `, "id" ASC`
     }
+  }
+
+  if (page) {
+    if (!hasOrderBy) query += ` ORDER BY "id" ASC`
+    query += ` LIMIT ${Math.max(0, Math.trunc(page.limit))}`
+    if (page.offset > 0) query += ` OFFSET ${Math.trunc(page.offset)}`
   }
 
   return query

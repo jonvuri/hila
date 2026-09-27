@@ -335,13 +335,16 @@ Run with `pnpm storybook`. Configuration:
   decorator.
 
 Token documentation stories (color palette, spacing, typography) are in `src/design/tokens.stories.tsx`.
+The `Design/Table` stories exercise all three shipped table treatments across the shared polarity
+and visual-theme toolbars. The live embedded table uses the same validated keys and shared
+decoration adapter without reusing specimen-only row markup.
 The worker-free `References/Retired top-level surfaces` stories preserve the former Table schema,
 cell, sort, and edit states plus Tags list, count, instance, create, and context states. They are
 historical visual evidence, not current navigation.
 
 ## Migration notes
 
-The existing `src/global.css` contains hardcoded colors and styles for the app shell, sidebar,
-outline face, note face, and matrix browser. These styles are not canonical-token consumers. Each
-planned migration slice replaces its full local style boundary without compatibility aliases. See
-[Design-Faces.md](Design-Faces.md) for the plan.
+The live table collection, formula input, and embedded-table host now consume canonical semantic
+roles. `src/global.css` still contains hardcoded styles for the app shell, sidebar, outline face,
+note face, and matrix browser. Each remaining migration slice replaces its full local style
+boundary without compatibility aliases. See [Design-Faces.md](Design-Faces.md) for the plan.

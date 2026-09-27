@@ -1,10 +1,9 @@
 # Design System — Component Variants
 
 > **Implementation status.** The navigation-outline registry and Guides production treatment ship.
-> Recursive composed/substrate host inputs now ship. Table treatments and the remaining face
-> migrations are design inputs, not shipped runtime variants. Storybook preserves the retired
-> top-level Table and Tags surfaces as fixture-driven references. Future sequencing belongs in
-> [Plan.md](Plan.md).
+> Recursive composed/substrate host inputs and all three live table treatments now ship. The
+> remaining face migrations are design inputs. Storybook preserves the retired top-level Table and
+> Tags surfaces as fixture-driven references. Future sequencing belongs in [Plan.md](Plan.md).
 
 This document plans configurable outline and table treatments. These components build on the
 shared semantic token system. An outline treatment can serve the shell navigation panel and an
@@ -102,7 +101,10 @@ data.
 
 ### Data contract
 
-Each table row is independently renderable given its props, enabling windowed rendering via the virtualizer. The data contract mirrors the outline's `FlatRow` / `RowDecoration` pattern:
+Each table row is independently renderable given its props, enabling bounded paging or windowed
+rendering. The live collection renders 100-row pages with a one-row lookahead and carries the
+global row index across pages. The specimen data contract mirrors the outline's `FlatRow` /
+`RowDecoration` pattern:
 
 - `columns: Column[]` where `Column = { key: string; label: string }` — column definitions, stable across windows
 - `rows: FlatTableRow[]` where `FlatTableRow = { id: string; cells: Record<string, string> }` — row data keyed by column key, with `id` for stable keying across virtualizer window boundaries
@@ -118,16 +120,16 @@ does not require a persisted table recipe on unrelated matrixes.
 
 ### CSS architecture
 
-All variants share one CSS module (`Table.module.css`) with a base `.table` class and
-variant-scoped descendant rules. The current class names are `.themeThinLine`,
-`.themeCornerNotch`, and `.themeCellDots`. Session 4k does not rename this component-local API.
-Treatment B reuses the `CornerNotchBox` primitive as a wrapper.
+The worker-free specimen keeps its variant-scoped rules in `Table.module.css`. The live interactive
+collection owns a separate semantic-token boundary in `TableFace.module.css`; it validates the
+same three keys and shares the global-row dot-color adapter. Both treatment B renderers reuse the
+`CornerNotchBox` primitive. Production does not copy the specimen markup.
 
 ### Implementation phases
 
-**Phase 1: All three variants.** The table treatments have no SVG or cross-row dependencies, so
-all three are implemented together. Treatment A establishes the base. Treatment B composes with
-`CornerNotchBox`. Treatment C adds per-cell dot decorations.
+**Shipped:** All three treatments run over one interaction and accessibility contract. Treatment A
+establishes the base, treatment B composes with `CornerNotchBox`, and treatment C uses global row
+positions for per-cell dot decoration.
 
 ## Shared infrastructure
 
@@ -196,7 +198,8 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
    review.
 7. Phase 12 shipped the shared launcher presentations, captured the retiring Table and Tags roots
    in worker-free Storybook references, and removed their top-level production mounts.
-8. Switch faces and browsers one at a time. Remove old global styles after each replacement passes.
+8. Phase 13 Session 3 migrated the live table collection and its formula input to canonical roles.
+   Continue switching the remaining faces and browsers one at a time.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
 the [Session 4n plan](./archive/phases/Phase-10-Session-4n-plan.md), and the

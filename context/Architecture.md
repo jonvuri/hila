@@ -243,10 +243,12 @@ Callable `line` and `collection` registrations are owned by plugin lifecycle. A 
 navigation and insertion requests plus nested-subject yielding; the contract exposes no shell DOM,
 pixel sizing, or recursive face mount.
 
-The shipped Phase 11 slice keeps SQL on view subjects and lets the focus-panel host request a
-registered `collection` interior. Unmigrated table consumers remain behind the explicitly
-temporary `TemporaryLegacyFaceAdapter`. Phase 13 completes host dispatch and removes every
-enumerated compatibility use before new product faces land. See [Plugins.md](Plugins.md).
+The shipped runtime keeps SQL on view subjects and lets the focus-panel host request a registered
+`collection` interior. The embedded table now supplies a `container` subject and dispatches the
+plugin-owned table collection through the same host slot. Its host retains title, extent, sizing,
+fidelity, insertion ownership, and boundary-hop navigation. Missing recipes or renderings fall
+through visibly without creating recipe state. The former whole-component adapter and direct table
+mount are absent. See [Plugins.md](Plugins.md).
 
 ## Fidelity and design axes
 

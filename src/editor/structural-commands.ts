@@ -1,4 +1,4 @@
-import { createOwnedMatrix } from '../core/client/matrix-client'
+import { applyFaceToMatrix, createOwnedMatrix } from '../core/client/matrix-client'
 import type { CommandDescriptor } from '../command-registry'
 
 export const DEFAULT_TABLE_NAME = 'Untitled table'
@@ -18,6 +18,7 @@ export const structuralCommands: readonly CommandDescriptor[] = [
         { name: 'title', type: 'TEXT', role: 'label' },
         { name: 'content', type: 'TEXT', role: 'content' },
       ])
+      await applyFaceToMatrix('hila.table', matrixId)
       capabilities.focusCreatedTable(matrixId, subject)
     },
   },

@@ -4,38 +4,39 @@ import {
   createResource,
   createSignal,
   For,
-  lazy,
   onCleanup,
   onMount,
   Show,
-  Suspense,
   type Component,
 } from 'solid-js'
 
-import { applyFaceToMatrix, getFaceConfigs, renameMatrix } from '../core/client/matrix-client'
-import type { FaceConfig, SlotBindingResult } from '../core/face-types'
-import TemporaryLegacyFaceAdapter from '../core/TemporaryLegacyFaceAdapter'
+import {
+  createDependentRow,
+  getFaceConfigForMatrix,
+  renameMatrix,
+} from '../core/client/matrix-client'
+import { resolveFaceAffinity } from '../core/face-affinity'
+import { FaceHostSlot, type FaceHostServices } from '../core/face-runtime'
+import type { ContainerSubject } from '../core/face-types'
 import { pendingNewTableMatrixId, clearPendingNewTable } from '../editor/pending-table'
 import { useQuery } from '../sql/useQuery'
 
 import { buildDedicatedSubtablesQuery } from './workspace-plugin'
+import styles from './SubTableBand.module.css'
 
 const RENAME_DEBOUNCE_MS = 300
-
-const TableFace = lazy(() => import('../table/TableFace'))
 
 /**
  * Sub-table band (Phase 9.4; see context/Phase-9.md §9.4).
  *
  * The *composed* cousin of the §9.3 query band: a focal node's dedicated,
  * homogeneous own-matrixes (private sub-tables, Phase 8c §3) rendered through
- * the real matrix-bound `TableFace` — not the schema-adaptive `PropertyRow`.
+ * registered collection dispatch — not the schema-adaptive `PropertyRow`.
  *
  * It is an **anchored** band: ownership is the source of truth (live-derived
  * from `matrix.owner` via `buildDedicatedSubtablesQuery`, like the aspect band,
- * not persisted in `bands`), so it can node-insert — the embedded `TableFace`
- * gets `insertParent` = the focal node, routing "+ New Row" through
- * `createDependentRow` so every row stays owned by the node.
+ * not persisted in `bands`), so its host can route insertion through
+ * `createDependentRow` and keep every row owned by the node.
  *
  * The band is render-only: dedicated sub-tables are *created* through the §9.6
  * `/table` slash command (see `src/editor/slash-commands.ts`), which supersedes
@@ -44,28 +45,43 @@ const TableFace = lazy(() => import('../table/TableFace'))
 
 type SubTableRow = { id: number; title: string }
 
-const EMBED_BINDINGS: SlotBindingResult = { bindings: [], overflowColumns: [] }
-
 /**
- * One embedded sub-table: ensures a `hila.table` face config exists for the
- * matrix (reusing it if present, else creating one), then mounts `TableFace`.
- * The resource keys on the matrix id so the config is resolved once per table.
+ * One embedded sub-table. The host resolves the matrix's intentional recipe and
+ * falls through visibly when none exists; rendering never creates recipe state.
  */
 const EmbeddedSubTable: Component<{
+  rootMatrixId: number
   matrixId: number
   title: string
   focalMatrixId: number
   focalRowId: number
   onOpenRowRef: (matrixId: number, rowId: number) => void
 }> = (props) => {
-  const [config] = createResource<FaceConfig, number>(
-    () => props.matrixId,
-    async (mid) => {
-      const configs = await getFaceConfigs(mid)
-      const existing = configs.find((c) => c.faceTypeId === 'hila.table')
-      return existing ?? (await applyFaceToMatrix('hila.table', mid))
-    },
-  )
+  const [config] = createResource(() => props.matrixId, getFaceConfigForMatrix)
+  const subject = createMemo<ContainerSubject>(() => ({
+    mode: 'container',
+    matrixId: props.focalMatrixId,
+    rowId: props.focalRowId,
+    extentMatrixId: props.matrixId,
+  }))
+  const affinity = createMemo(() => resolveFaceAffinity(config()))
+  const services: FaceHostServices = {
+    requestInsert: async (request) => ({
+      matrixId: props.matrixId,
+      rowId: await createDependentRow(
+        props.focalMatrixId,
+        props.focalRowId,
+        props.matrixId,
+        request.values ? { ...request.values } : undefined,
+      ),
+    }),
+    requestNavigation: (target) => props.onOpenRowRef(target.matrixId, target.rowId),
+  }
+  const fallbackMessage = () => {
+    if (config.loading) return 'Loading table…'
+    if (config.error) return 'Table recipe failed to load.'
+    return 'No collection face is configured for this table.'
+  }
 
   // Editable sub-table name (Phase 9 §9.6). Writes through `renameMatrix`; safe
   // for a plain node's sub-table since `syncOwnedMatrixTitles` is scoped to
@@ -112,55 +128,42 @@ const EmbeddedSubTable: Component<{
   })
 
   return (
-    <div class="sub-table-band-item" data-testid="sub-table-band-item">
+    <section class={styles.item} data-testid="sub-table-band-item">
       <input
         ref={nameInput}
-        class="sub-table-name-input"
+        class={styles.nameInput}
         data-testid="sub-table-name-input"
+        aria-label="Table name"
         placeholder="Untitled table"
         onInput={(e) => scheduleRename(e.currentTarget.value)}
         onBlur={() => setHighlight(false)}
-        style={{
-          'font-size': '12px',
-          'font-weight': 600,
-          color: 'var(--text-muted)',
-          'margin-bottom': '6px',
-          background: 'transparent',
-          border: '1px solid transparent',
-          'border-radius': '3px',
-          padding: '1px 3px',
-          width: '100%',
-          outline: 'none',
-          'box-shadow': highlight() ? '0 0 0 2px var(--accent)' : 'none',
-        }}
+        data-highlighted={highlight() ? 'true' : undefined}
       />
-      <Suspense
-        fallback={
-          <div style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>Loading table…</div>
-        }
-      >
-        <Show when={config()}>
-          {(c) => (
-            <TemporaryLegacyFaceAdapter
-              config={c()}
-              columns={[]}
-              render={() => (
-                <TableFace
-                  config={c()}
-                  bindings={EMBED_BINDINGS}
-                  insertParent={{ matrixId: props.focalMatrixId, rowId: props.focalRowId }}
-                  onOpenRow={(rowId) => props.onOpenRowRef(props.matrixId, rowId)}
-                />
-              )}
-            />
-          )}
-        </Show>
-      </Suspense>
-    </div>
+      <div class={styles.collectionHost} data-testid="sub-table-collection-host">
+        <FaceHostSlot
+          host="embedded-table"
+          kind="collection"
+          subject={subject()}
+          affinity={affinity()}
+          rootMatrixId={props.rootMatrixId}
+          services={services}
+          substrate={
+            <div
+              class={styles.fallback}
+              role={config.error ? 'alert' : 'status'}
+              data-testid="sub-table-collection-fallback"
+            >
+              {fallbackMessage()}
+            </div>
+          }
+        />
+      </div>
+    </section>
   )
 }
 
 const SubTableBand: Component<{
+  rootMatrixId: number
   focalMatrixId: number
   focalRowId: number
   onOpenRowRef: (matrixId: number, rowId: number) => void
@@ -176,21 +179,11 @@ const SubTableBand: Component<{
 
   return (
     <Show when={subTables().length > 0}>
-      <div
-        class="sub-table-band"
-        data-testid="sub-table-band"
-        style={{
-          'margin-bottom': '16px',
-          'border-top': '1px solid hsl(230, 15%, 18%)',
-          'padding-top': '12px',
-          display: 'flex',
-          'flex-direction': 'column',
-          gap: '12px',
-        }}
-      >
+      <div class={styles.band} data-testid="sub-table-band">
         <For each={subTables()}>
           {(t) => (
             <EmbeddedSubTable
+              rootMatrixId={props.rootMatrixId}
               matrixId={t.id}
               title={t.title}
               focalMatrixId={props.focalMatrixId}

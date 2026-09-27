@@ -4,11 +4,17 @@ import styles from './CornerNotchBox.module.css'
 
 export type CornerNotchBoxProps = {
   children?: JSX.Element
+  class?: string
+  decorated?: boolean
   maxWidth?: string
 }
 
 export const CornerNotchBox = (props: CornerNotchBoxProps) => (
-  <div class={styles.box} style={{ 'max-width': props.maxWidth }}>
+  <div
+    class={props.class}
+    classList={{ [styles.box!]: props.decorated !== false }}
+    style={{ 'max-width': props.maxWidth }}
+  >
     {props.children}
   </div>
 )

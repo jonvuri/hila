@@ -30,12 +30,15 @@ import {
   type FilterConfig,
 } from './table-query'
 import {
+  getTableCollectionMatrixId,
+  getTableTreatment,
   getColumnTypeInfo,
   getTableRowLauncherSubjectLabel,
+  TABLE_PAGE_SIZE,
   type ReferenceCellValue,
   type ReferenceColumnConfig,
 } from './TableFace'
-import { tableFaceTypeDefinition } from './table-plugin'
+import { tableFaceTypeDefinition, tablePlugin } from './table-plugin'
 
 afterEach(() => {
   clearFaceTypeRegistry()
@@ -127,6 +130,30 @@ describe('buildTableQuery', () => {
     const q = buildTableQuery(42, sort, filters, cols)
     expect(q).toBe('SELECT * FROM "mx_42_data"')
   })
+
+  test('pages with stable row identity and one-row lookahead', () => {
+    expect(buildTableQuery(42, null, [], cols, { limit: 101, offset: 100 })).toBe(
+      'SELECT * FROM "mx_42_data" ORDER BY "id" ASC LIMIT 101 OFFSET 100',
+    )
+    expect(
+      buildTableQuery(42, { columnId: 1, direction: 'DESC' }, [], cols, {
+        limit: 101,
+        offset: 0,
+      }),
+    ).toBe('SELECT * FROM "mx_42_data" ORDER BY "name" DESC, "id" ASC LIMIT 101')
+    expect(TABLE_PAGE_SIZE).toBe(100)
+  })
+
+  test('does not mistake a formula alias for the pagination order', () => {
+    const formulaCols = [
+      makeCol(1, 'name'),
+      { ...makeCol(2, 'rank ORDER BY label'), formula: 'length("name")' },
+    ]
+
+    expect(buildTableQuery(42, null, [], formulaCols, { limit: 101, offset: 0 })).toBe(
+      'SELECT *, (length("name")) AS "rank ORDER BY label" FROM "mx_42_data" ORDER BY "id" ASC LIMIT 101',
+    )
+  })
 })
 
 // -- Column type rendering dispatch -------------------------------------------
@@ -184,6 +211,35 @@ describe('table row launcher subjects', () => {
         0,
       ),
     ).toBe('Planning')
+  })
+})
+
+describe('table collection contract', () => {
+  test('registers one plugin-owned collection interior', () => {
+    expect(tablePlugin.faceTypes).toEqual([tableFaceTypeDefinition])
+    expect(tablePlugin.faceRenderings).toHaveLength(1)
+    expect(tablePlugin.faceRenderings?.[0]).toMatchObject({ faceTypeId: 'hila.table' })
+    expect(tablePlugin.faceRenderings?.[0]?.collection).toBeTypeOf('function')
+  })
+
+  test('renders a container extent without moving extent into the recipe', () => {
+    expect(
+      getTableCollectionMatrixId({
+        mode: 'container',
+        matrixId: 10,
+        rowId: 20,
+        extentMatrixId: 30,
+      }),
+    ).toBe(30)
+    expect(
+      getTableCollectionMatrixId({ mode: 'view', matrixId: 10, rowId: 20, sql: 'SELECT 1' }),
+    ).toBeNull()
+  })
+
+  test('resolves treatment from recipe settings with the canonical fallback', () => {
+    expect(getTableTreatment({ tableTreatment: 'cell-dots' })).toBe('cell-dots')
+    expect(getTableTreatment({ tableTreatment: 'unknown' })).toBe('thin-line')
+    expect(getTableTreatment({})).toBe('thin-line')
   })
 })
 

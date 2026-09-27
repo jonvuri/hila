@@ -2,7 +2,11 @@ import type { EditorView } from 'prosemirror-view'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { commandRegistry } from '../command-registry'
-import { createOwnedMatrix, createDependentRow } from '../core/client/matrix-client'
+import {
+  applyFaceToMatrix,
+  createOwnedMatrix,
+  createDependentRow,
+} from '../core/client/matrix-client'
 
 import { setPendingNewTable } from './pending-table'
 import { matchCommands, runSlashCommand } from './slash-commands'
@@ -12,6 +16,7 @@ import { DEFAULT_TABLE_NAME, structuralCommands } from './structural-commands'
 vi.mock('../core/client/matrix-client', () => ({
   createOwnedMatrix: vi.fn(async () => 123),
   createDependentRow: vi.fn(async () => 456),
+  applyFaceToMatrix: vi.fn(async () => undefined),
 }))
 
 vi.mock('./pending-table', () => ({
@@ -30,6 +35,7 @@ describe('slash command adapter', () => {
     commandRegistry.replaceOwner('hila.workspace', structuralCommands)
     vi.mocked(createOwnedMatrix).mockClear()
     vi.mocked(createDependentRow).mockClear()
+    vi.mocked(applyFaceToMatrix).mockClear()
     vi.mocked(setPendingNewTable).mockClear()
     vi.mocked(openSlashTypePicker).mockClear()
   })
@@ -67,6 +73,7 @@ describe('slash command adapter', () => {
       { name: 'title', type: 'TEXT', role: 'label' },
       { name: 'content', type: 'TEXT', role: 'content' },
     ])
+    expect(applyFaceToMatrix).toHaveBeenCalledWith('hila.table', 123)
     expect(setPendingNewTable).toHaveBeenCalledWith(123, node)
     expect(createDependentRow).not.toHaveBeenCalled()
     expect(openSlashTypePicker).not.toHaveBeenCalled()

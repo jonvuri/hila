@@ -4,38 +4,39 @@ kind: status
 state: active
 updated: 2026-09-25
 phase: 13
-session: 3
+session: 4
 ---
 
 # Now
 
-Phase 13 Sessions 1–2 are complete. Build and development startup now validate
-`VITE_HILA_VISUAL_THEME` and emit Ghost, Null, or Wipeout on the initial document. Missing or
-invalid input emits Ghost before paint. Polarity and isolated preview scopes remain independent.
+Phase 13 Sessions 1–3 are complete. The embedded table is the first live registered collection.
+Its container host owns title, insertion, navigation, extent, and fidelity while the face owns the
+table interior. The direct mount and `TemporaryLegacyFaceAdapter` are gone.
 
-Face hosts now resolve active x-ray, explicit local fidelity, inherited fidelity, then composed
-fallback. Resolved composed/substrate state reaches interiors and descendant hosts. The application
-root owns transient x-ray state; reload clears it without changing the environment-selected theme.
-No design axis selects or mutates another.
+Table editing, insertion, sort, filter, formula, reference, reorder, boundary-hop, and bounded
+100-row paging remain available. Thin line, corner notch, and cell dots use canonical semantic
+roles and stay independent from visual theme, polarity, and fidelity. Missing recipes and
+unavailable renderings fail visibly without changing subject or recipe state.
 
-No live surface migrated. Embedded tables, inline tags, property editing, rooted navigation, and
-the system edge retain their compatibility paths. X-ray has no system-edge control yet. The
-database remains reset-only at schema version 0. All 1,271 unit tests pass.
+Inline tags and property editing retain their current paths for Session 4. X-ray has no system-edge
+control yet. No schema changed; the database remains reset-only at schema version 0. All 1,280 unit
+tests pass.
 
 ## Read next
 
 1. [Phase 13 front door](phases/Phase-13.md).
-2. [Session 3](phases/Phase-13/Session-3-table-collection-cutover.md).
+2. [Session 4](phases/Phase-13/Session-4-inline-tags-and-property-line-surfaces.md).
 3. [Architecture](Architecture.md), [Plugins](Plugins.md), [Design](Design.md), and
-   [Design Faces](Design-Faces.md) for the host, table, treatment, and fidelity contracts.
+   [Design Faces](Design-Faces.md) for the host, line, semantic-role, and fidelity contracts.
 
 ## Boundary
 
-Session 3 is the first live face-runtime cutover. It migrates the embedded table collection and its
-complete style boundary without restoring a top-level Table root or moving subject and host
-responsibilities into the recipe.
+Session 4 migrates inline references, tag properties, shared fields, and aspect-row interiors. It
+must preserve their data lifecycle and host ownership without restoring a Tag Browser root, adding
+Phase 14 product semantics, or turning property popovers into collection faces.
 
 ## Next action
 
-Execute Phase 13 Session 3. Register the embedded table collection, preserve its interactions, and
-retire the direct mount plus temporary compatibility adapter.
+Execute Phase 13 Session 4. Add host-consumable line interiors and canonicalize the complete
+inline/property style boundary while preserving editing, ghosting, discovery, reconciliation, and
+hover behavior.

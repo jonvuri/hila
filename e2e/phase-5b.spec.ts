@@ -41,7 +41,7 @@ const addTextColumn = async (page: Page) => {
     await page.waitForTimeout(200)
   }
   await expect(
-    page.locator('th').filter({ has: page.locator('div', { hasText: 'New Column' }) }),
+    page.locator('th').filter({ has: page.locator('button', { hasText: 'New Column' }) }),
   ).toBeVisible({ timeout: 5000 })
 }
 
@@ -55,7 +55,7 @@ const addNumberColumn = async (page: Page) => {
     await page.waitForTimeout(200)
   }
   await expect(
-    page.locator('th').filter({ has: page.locator('div', { hasText: 'New Column' }) }),
+    page.locator('th').filter({ has: page.locator('button', { hasText: 'New Column' }) }),
   ).toBeVisible({ timeout: 5000 })
 }
 
@@ -95,7 +95,7 @@ const renameColumnViaUI = async (page: Page, currentName: string, newName: strin
 
   // Now find the column header and right-click to open context menu
   const header = page.locator('th').filter({
-    has: page.locator('div', { hasText: currentName }),
+    has: page.locator('button', { hasText: currentName }),
   })
   await header.click({ button: 'right' })
   await page.getByRole('button', { name: 'Rename' }).click()
@@ -105,7 +105,7 @@ const renameColumnViaUI = async (page: Page, currentName: string, newName: strin
   await renameInput.fill(newName)
   await page.keyboard.press('Enter')
   await expect(
-    page.locator('th').filter({ has: page.locator('div', { hasText: newName }) }),
+    page.locator('th').filter({ has: page.locator('button', { hasText: newName }) }),
   ).toBeVisible({
     timeout: 5000,
   })
@@ -331,7 +331,9 @@ test.describe('Plugin column ownership', () => {
     // The "New Column" is user-added, so rename should succeed
     await renameColumnViaUI(page, 'New Column', 'My Custom Col')
     await expect(
-      page.locator('th').filter({ has: page.locator('div', { hasText: 'My Custom Col' }) }),
+      page.locator('th').filter({
+        has: page.locator('button', { hasText: 'My Custom Col' }),
+      }),
     ).toBeVisible({ timeout: 5000 })
   })
 
@@ -572,7 +574,7 @@ test.describe('Sort and filter survive column rename', () => {
     }
 
     // Apply sort ascending by clicking the column header
-    await page.locator('th', { hasText: 'fruit' }).locator('div').first().click()
+    await page.locator('th', { hasText: 'fruit' }).locator('button').first().click()
     await page.waitForTimeout(500)
 
     // Verify ascending order
@@ -663,7 +665,7 @@ test.describe('Sort and filter survive column rename', () => {
     await page.waitForTimeout(300)
 
     // Apply sort
-    await page.locator('th', { hasText: 'sortcol' }).locator('div').first().click()
+    await page.locator('th', { hasText: 'sortcol' }).locator('button').first().click()
     await page.waitForTimeout(500)
 
     // Verify sort indicator is visible
