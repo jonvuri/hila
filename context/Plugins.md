@@ -194,9 +194,10 @@ The migration has mandatory boundaries:
 - Session 4 shipped the plugin-owned table line, shared substrate fallback, host density input, and
   canonical inline-reference, autocomplete, tag-property, field-editor, and property-row
   boundaries;
+- Session 5 shipped one recursive focus-panel collection host for loose, container, and view
+  subjects, host-owned panel regions and insertion policy, nested-subject yielding, and the local
+  canonical panel/query/gesture style boundary;
 - migrate workspace participation and face configuration to `line`/`collection`;
-- move overflow fields into the host scaffold;
-- complete live host recursion and affinity behavior;
 - move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
 - keep the migrated inline tag and property lifecycle without restoring a Tag Browser application
   root.

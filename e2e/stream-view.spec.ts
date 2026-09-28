@@ -805,7 +805,7 @@ test.describe('Stream view: focus panel headers + collapse', () => {
 
     // The two non-active panels render their header as a clickable collapse
     // target (a button, not an editor) titled with their own label.
-    const collapseHeaders = page.locator('.focus-panel-label-collapse')
+    const collapseHeaders = page.locator('[data-collapsible="true"]')
     await expect(collapseHeaders).toHaveCount(2)
     const texts = await collapseHeaders.allTextContents()
     expect(texts.join(' | ')).toContain('Alpha')
@@ -818,13 +818,13 @@ test.describe('Stream view: focus panel headers + collapse', () => {
     await buildChainAndDrill(page)
 
     // Click Alpha's (non-active) header -> collapse everything to its right.
-    await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Alpha' }).click()
+    await page.locator('[data-collapsible="true"]').filter({ hasText: 'Alpha' }).click()
 
     await expect(focusColumns(page)).toHaveCount(1)
     // Alpha is now active: its header is the editable editor and no collapse
     // targets remain. (The collapse click itself does not enter edit mode --
     // the non-active header has no editor to focus.)
-    await expect(page.locator('.focus-panel-label-collapse')).toHaveCount(0)
+    await expect(page.locator('[data-collapsible="true"]')).toHaveCount(0)
     await expect(page.getByTestId('focus-label-editor')).toHaveCount(1)
     await expect(async () => {
       const text = await page.getByTestId('focus-label-editor').textContent()
@@ -836,11 +836,11 @@ test.describe('Stream view: focus panel headers + collapse', () => {
     await buildChainAndDrill(page)
 
     // Click Bravo's (non-active, middle) header -> collapse only Charlie.
-    await page.locator('.focus-panel-label-collapse').filter({ hasText: 'Bravo' }).click()
+    await page.locator('[data-collapsible="true"]').filter({ hasText: 'Bravo' }).click()
 
     await expect(focusColumns(page)).toHaveCount(2)
     // Bravo is now active and editable; Alpha remains a collapse target.
-    await expect(page.locator('.focus-panel-label-collapse')).toHaveCount(1)
+    await expect(page.locator('[data-collapsible="true"]')).toHaveCount(1)
     await expect(async () => {
       const text = await page.getByTestId('focus-label-editor').textContent()
       expect(text).toContain('Bravo')

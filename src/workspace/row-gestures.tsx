@@ -11,6 +11,8 @@ import {
 import type { ColumnDefinition } from '../core/matrix'
 import { partitionPropertyColumns } from '../shared/property-surface'
 
+import styles from './row-gestures.module.css'
+
 /**
  * Shared substrate row gestures (Phase 9.7 Stage C; see context/Phase-9.7.md §5).
  *
@@ -43,19 +45,11 @@ const GestureButton: Component<{
   <button
     type="button"
     data-testid={props.testid}
+    class={styles.gestureButton}
+    data-danger={props.danger ? 'true' : undefined}
     onClick={(e) => {
       e.stopPropagation()
       props.onClick()
-    }}
-    style={{
-      background: 'none',
-      border: 'none',
-      cursor: 'pointer',
-      'text-align': 'left',
-      'font-size': '12px',
-      padding: '3px 6px',
-      'border-radius': '3px',
-      color: props.danger ? 'var(--danger, #d66)' : 'var(--text-dim)',
     }}
   >
     {props.label}
@@ -81,10 +75,10 @@ export const RowGestureMenu: Component<{
   }
 
   return (
-    <span style={{ position: 'relative', 'flex-shrink': 0 }}>
+    <span class={styles.menuRoot}>
       <button
         type="button"
-        class="substrate-gesture-toggle"
+        class={styles.toggle}
         data-testid="substrate-gesture-toggle"
         aria-label="Row actions"
         title="Row actions (portal, move-owner, delete)"
@@ -92,38 +86,11 @@ export const RowGestureMenu: Component<{
           e.stopPropagation()
           setOpen((o) => !o)
         }}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--text-muted)',
-          'font-size': '14px',
-          padding: '0 4px',
-          'line-height': '1',
-        }}
       >
         ⋯
       </button>
       <Show when={open()}>
-        <div
-          class="substrate-gesture-menu"
-          data-testid="substrate-gesture-menu"
-          style={{
-            position: 'absolute',
-            right: '0',
-            top: '18px',
-            'z-index': 20,
-            background: 'var(--color-overlay)',
-            border: 'var(--border-strong)',
-            'border-radius': 'var(--radius-control)',
-            padding: '4px',
-            display: 'flex',
-            'flex-direction': 'column',
-            gap: '2px',
-            'min-width': '160px',
-            'box-shadow': 'var(--elevation-overlay)',
-          }}
-        >
+        <div class={styles.menu} data-testid="substrate-gesture-menu">
           {/* Position-anchored gestures need a destination host. A root-level
               loose outline row has none, so they hide there. */}
           <Show when={props.host}>
@@ -205,19 +172,7 @@ export const RowGestureMenu: Component<{
 // ---------------------------------------------------------------------------
 
 export const OwnerAffix: Component<{ label: string; title: string }> = (props) => (
-  <span
-    class="substrate-owner-affix"
-    data-testid="substrate-owner-affix"
-    title={props.title}
-    style={{
-      'font-size': '9px',
-      'font-weight': 600,
-      'letter-spacing': '0.4px',
-      'text-transform': 'uppercase',
-      color: 'var(--c-fg-3, #888)',
-      'user-select': 'none',
-    }}
-  >
+  <span class={styles.ownerAffix} data-testid="substrate-owner-affix" title={props.title}>
     {props.label}
   </span>
 )
@@ -234,32 +189,8 @@ export const CoalescedHeader: Component<{ columns: ColumnDefinition[] }> = (prop
   )
   return (
     <Show when={fieldNames().length > 0}>
-      <div
-        class="substrate-grid-header"
-        data-testid="substrate-grid-header"
-        style={{
-          display: 'flex',
-          'flex-wrap': 'wrap',
-          gap: '6px 16px',
-          'padding-left': '23px',
-          'margin-bottom': '2px',
-        }}
-      >
-        <For each={fieldNames()}>
-          {(name) => (
-            <span
-              style={{
-                'font-size': '9px',
-                'font-weight': 600,
-                'letter-spacing': '0.4px',
-                'text-transform': 'uppercase',
-                color: 'var(--c-fg-3, #888)',
-              }}
-            >
-              {name}
-            </span>
-          )}
-        </For>
+      <div class={styles.gridHeader} data-testid="substrate-grid-header">
+        <For each={fieldNames()}>{(name) => <span class={styles.gridLabel}>{name}</span>}</For>
       </div>
     </Show>
   )

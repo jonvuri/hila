@@ -1,17 +1,30 @@
-import { createEffect, createMemo, createSignal, For, Show, type Component } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  Show,
+  type Component,
+  type JSX,
+} from 'solid-js'
 
-import { getColumns, updateRow } from '../core/client/matrix-client'
+import { getColumns, getFaceConfigForMatrix } from '../core/client/matrix-client'
+import { resolveFaceAffinity } from '../core/face-affinity'
+import { FaceHostSlot } from '../core/face-runtime'
+import type { LooseSubject } from '../core/face-types'
 import type { ColumnDefinition } from '../core/matrix'
 import { useQuery } from '../sql/useQuery'
-import { useRowData } from '../sql/useRowData'
 import { buildTagsForRowQuery } from '../tags/tag-queries'
 import { tagColorFromName, tagBadgeBackground } from '../tags/tag-color'
 import { setHoveredAspect, clearHoveredAspect, isAspectHovered } from '../editor/aspect-tether'
-import { PropertyRow } from '../shared/PropertyRow'
+import { PropertyLine } from '../shared/PropertyLine'
 
 import { QueryBandsSection } from './QueryBand'
 import SubTableBand from './SubTableBand'
 import { RowGestureMenu, OwnerAffix, CoalescedHeader } from './row-gestures'
+import type { RenderSubjectCollection } from './focus-subject'
+import styles from './SubstrateRegion.module.css'
 
 /**
  * Substrate region (Phase 9.7 Stage C; see context/Phase-9.7.md §3, §5).
@@ -59,49 +72,38 @@ type AspectBlock = { tagType: string; matrixId: number; items: AspectDescriptor[
 /** Square type-badge bullet: type color background, first letter of the name. */
 const TypeBadge: Component<{ typeName: string }> = (props) => (
   <div
-    class="aspect-type-badge"
+    class={styles.typeBadge}
     data-testid="aspect-type-badge"
     title={`#${props.typeName}`}
     aria-label={`#${props.typeName}`}
-    style={{
-      width: '15px',
-      height: '15px',
-      'border-radius': '3px',
-      background: tagColorFromName(props.typeName),
-      color: '#fff',
-      'font-size': '9px',
-      'font-weight': 700,
-      display: 'flex',
-      'align-items': 'center',
-      'justify-content': 'center',
-      'flex-shrink': 0,
-      'user-select': 'none',
-      'margin-top': '3px',
-    }}
+    style={{ '--aspect-color': tagColorFromName(props.typeName) } as JSX.CSSProperties}
   >
     {props.typeName[0]?.toUpperCase() ?? '?'}
   </div>
 )
 
-const AspectRowItem: Component<{ matrixId: number; rowId: number }> = (props) => {
-  const [columns, setColumns] = createSignal<ColumnDefinition[]>([])
-
-  createEffect(() => {
-    const mid = props.matrixId
-    void getColumns(mid).then(setColumns)
-  })
-
-  const data = useRowData(
-    () => props.matrixId,
-    () => props.rowId,
-  )
+const AspectRowItem: Component<{
+  rootMatrixId: number
+  matrixId: number
+  rowId: number
+}> = (props) => {
+  const [config] = createResource(() => props.matrixId, getFaceConfigForMatrix)
+  const subject = createMemo<LooseSubject>(() => ({
+    mode: 'loose',
+    matrixId: props.matrixId,
+    rowId: props.rowId,
+  }))
 
   return (
-    <PropertyRow
-      columns={columns()}
-      data={data()}
+    <FaceHostSlot
+      host="focus-panel-aspect"
+      kind="line"
+      subject={subject()}
+      affinity={resolveFaceAffinity(config())}
+      rootMatrixId={props.rootMatrixId}
       density="wide"
-      onSave={(col, value) => void updateRow(props.matrixId, props.rowId, { [col]: value })}
+      services={{}}
+      substrate={<PropertyLine matrixId={props.matrixId} rowId={props.rowId} density="wide" />}
     />
   )
 }
@@ -116,6 +118,7 @@ const BlockHeader: Component<{ matrixId: number }> = (props) => {
 }
 
 const LooseRegion: Component<{
+  rootMatrixId: number
   focal: Focal
   /** "matrixId:rowId" keys of aspects anchored to an inline `#`-ref in the host
    *  prose. Those rows show a tether indicator and bridge to their badge. */
@@ -145,39 +148,17 @@ const LooseRegion: Component<{
 
   return (
     <Show when={aspects().length > 0}>
-      <div
-        class="focus-aspect-band"
-        data-testid="focus-aspect-band"
-        style={{
-          'margin-bottom': '16px',
-          display: 'flex',
-          'flex-direction': 'column',
-          gap: '6px',
-        }}
-      >
+      <div class={styles.looseRegion} data-testid="focus-aspect-band">
         <For each={blocks()}>
           {(block) => {
             const color = tagColorFromName(block.tagType)
             return (
               <div
-                class="aspect-block substrate-block"
+                class={styles.aspectBlock}
                 data-testid="substrate-block"
-                style={{
-                  'border-left': `2px solid ${color}`,
-                  'padding-left': '8px',
-                  display: 'flex',
-                  'flex-direction': 'column',
-                  gap: '4px',
-                }}
+                style={{ '--aspect-color': color } as JSX.CSSProperties}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    'align-items': 'center',
-                    'justify-content': 'space-between',
-                    gap: '8px',
-                  }}
-                >
+                <div class={styles.blockHeader}>
                   <BlockHeader matrixId={block.matrixId} />
                   <OwnerAffix
                     label="owned here"
@@ -196,22 +177,22 @@ const LooseRegion: Component<{
                       isAspectHovered(item.target_matrix_id, item.target_row_id)
                     return (
                       <div
-                        class="aspect-row"
+                        class={styles.aspectRow}
                         data-testid="aspect-row"
+                        data-hovered={hovered() ? 'true' : undefined}
                         onMouseEnter={() => anchored() && setHoveredAspect(target)}
                         onMouseLeave={() => anchored() && clearHoveredAspect(target)}
-                        style={{
-                          display: 'flex',
-                          'align-items': 'flex-start',
-                          gap: '8px',
-                          'border-radius': '4px',
-                          background: hovered() ? tagBadgeBackground(color) : 'transparent',
-                          transition: 'background-color 0.12s',
-                        }}
+                        style={
+                          {
+                            '--aspect-color': color,
+                            '--aspect-background': tagBadgeBackground(color),
+                          } as JSX.CSSProperties
+                        }
                       >
                         <TypeBadge typeName={block.tagType} />
-                        <div style={{ flex: 1, 'min-width': 0 }}>
+                        <div class={styles.aspectInterior}>
                           <AspectRowItem
+                            rootMatrixId={props.rootMatrixId}
                             matrixId={item.target_matrix_id}
                             rowId={item.target_row_id}
                           />
@@ -220,19 +201,10 @@ const LooseRegion: Component<{
                             inline #-ref in the host prose; brightens on hover. */}
                         <Show when={anchored()}>
                           <span
-                            class="aspect-tether-indicator"
+                            class={styles.tether}
                             data-testid="aspect-tether-indicator"
+                            data-hovered={hovered() ? 'true' : undefined}
                             title="Anchored to an inline #tag in the content"
-                            style={{
-                              'align-self': 'center',
-                              'flex-shrink': 0,
-                              width: '6px',
-                              height: '6px',
-                              'border-radius': '50%',
-                              background: color,
-                              opacity: hovered() ? '1' : '0.35',
-                              transition: 'opacity 0.12s',
-                            }}
                           />
                         </Show>
                         <RowGestureMenu host={props.focal} target={target} />
@@ -255,35 +227,41 @@ const LooseRegion: Component<{
 
 const SubstrateRegion: Component<{
   rootMatrixId: number
-  focalMatrixId: number
-  focalRowId: number
+  subject: LooseSubject
   contentAnchoredKeys?: Set<string>
   onOpenRowRef: (matrixId: number, rowId: number) => void
+  renderCollection: RenderSubjectCollection
 }> = (props) => {
   const focal = createMemo<Focal>(() => ({
-    matrixId: props.focalMatrixId,
-    rowId: props.focalRowId,
+    matrixId: props.subject.matrixId,
+    rowId: props.subject.rowId,
   }))
 
   return (
-    <div class="substrate-region" data-testid="substrate-region">
+    <div class={styles.region} data-testid="substrate-region">
       {/* loose — owned aspects (per-cell editable; grid-coalesced; gestures) */}
-      <LooseRegion focal={focal()} contentAnchoredKeys={props.contentAnchoredKeys} />
+      <LooseRegion
+        rootMatrixId={props.rootMatrixId}
+        focal={focal()}
+        contentAnchoredKeys={props.contentAnchoredKeys}
+      />
 
       {/* view — persisted SQL blocks (owns nothing; the firewall) */}
       <QueryBandsSection
         rootMatrixId={props.rootMatrixId}
-        matrixId={props.focalMatrixId}
-        rowId={props.focalRowId}
+        matrixId={props.subject.matrixId}
+        rowId={props.subject.rowId}
         onOpenView={props.onOpenRowRef}
+        renderCollection={props.renderCollection}
       />
 
       {/* container — dedicated sub-tables (matrix bounded here, with its border) */}
       <SubTableBand
         rootMatrixId={props.rootMatrixId}
-        focalMatrixId={props.focalMatrixId}
-        focalRowId={props.focalRowId}
+        focalMatrixId={props.subject.matrixId}
+        focalRowId={props.subject.rowId}
         onOpenRowRef={props.onOpenRowRef}
+        renderCollection={props.renderCollection}
       />
     </div>
   )

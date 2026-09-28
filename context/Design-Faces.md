@@ -200,8 +200,10 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
 7. Phase 12 shipped the shared launcher presentations, captured the retiring Table and Tags roots
    in worker-free Storybook references, and removed their top-level production mounts.
 8. Phase 13 Session 3 migrated the live table collection and its formula input to canonical roles.
-   Session 4 migrated the table line and shared inline/property surface boundary. Continue
-   switching the remaining faces and browsers one at a time.
+   Session 4 migrated the table line and shared inline/property surface boundary. Session 5 moved
+   the focus-panel, query-band, substrate-region, and row-gesture boundary to local canonical
+   styles and one recursive collection host. Continue switching the workspace, editor, and system
+   edge one boundary at a time.
 
 The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
 the [Session 4n plan](./archive/phases/Phase-10-Session-4n-plan.md), and the

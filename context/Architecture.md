@@ -243,12 +243,18 @@ Callable `line` and `collection` registrations are owned by plugin lifecycle. A 
 navigation and insertion requests plus nested-subject yielding; the contract exposes no shell DOM,
 pixel sizing, or recursive face mount.
 
-The shipped runtime keeps SQL on view subjects and lets the focus-panel host request a registered
-`collection` interior. The embedded table now supplies a `container` subject and dispatches the
-plugin-owned table collection through the same host slot. Its host retains title, extent, sizing,
-fidelity, insertion ownership, and boundary-hop navigation. Missing recipes or renderings fall
-through visibly without creating recipe state. The former whole-component adapter and direct table
-mount are absent.
+The focus panel routes loose, container, and view subjects through one recursive collection host.
+Loose subjects render the substrate region. Container subjects request the intentional recipe for
+their extent and otherwise use a bounded substrate collection. View subjects keep SQL on their
+marker and use it only as collection input. Missing recipes or renderings fall through visibly
+without creating recipe state.
+
+Nested interiors yield subjects back through `FaceHostSlot`; the host then resolves and renders the
+next collection under the inherited fidelity scope. Faces never mount another face. The panel host
+retains identity, intrinsic and overflow fields, relations, sizing, navigation, and insertion
+policy. Container fallback insertion creates owned rows, while view results retain recognized
+source-cell write-back and never acquire structural insertion, drag, reparenting, or inferred
+ownership. The former whole-component adapter and direct table mount are absent.
 
 `hila.table` also supplies the first registered `line` interior. It renders one row through the
 shared property adapter; the substrate fallback uses that same adapter instead of acquiring a

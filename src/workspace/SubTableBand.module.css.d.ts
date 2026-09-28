@@ -10,20 +10,17 @@ const band: string;
 const item: string;
 const nameInput: string;
 const collectionHost: string;
-const fallback: string;
 
 export {
 	band,
 	item,
 	nameInput,
-	collectionHost,
-	fallback
+	collectionHost
 };
 
 export default {
 	band,
 	item,
 	nameInput,
-	collectionHost,
-	fallback
+	collectionHost
 };

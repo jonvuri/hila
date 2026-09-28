@@ -42,12 +42,9 @@ import {
 import { createTagSearchProvider, handleTagSelection } from '../tags/tag-search-provider'
 import { FieldEditor } from '../shared/FieldEditor'
 import type { NavigationOutlineVariant } from '../design/tokens'
-import { EMPTY_FACE_HOST_SERVICES, FaceHostSlot } from '../core/face-runtime'
-import { resolveFaceAffinity } from '../core/face-affinity'
-import type { FaceRecipe, ViewSubject } from '../core/face-types'
+import type { LooseSubject, ViewSubject } from '../core/face-types'
 
-import SubstrateRegion from './SubstrateRegion'
-import { registerViewCollectionRendering } from './QueryBand'
+import FocusCollectionHost from './FocusCollectionHost'
 import {
   buildSingleRowQuery,
   buildBacklinksQuery,
@@ -59,6 +56,7 @@ import {
   hasGeneratedViewNameFocusRequest,
 } from './pending-view-name-focus'
 import { updateEditableRowLabel } from './row-label-mutations'
+import styles from './FocusPanel.module.css'
 
 export { requestGeneratedViewNameFocus } from './pending-view-name-focus'
 
@@ -132,16 +130,6 @@ type ViewSourceData = {
   marker_row_id: number
   sql: string
 }
-
-const SUBSTRATE_COLLECTION_RECIPE: FaceRecipe = {
-  faceTypeId: 'hila.substrate',
-  slotBindings: {},
-  settings: {},
-}
-
-const SUBSTRATE_COLLECTION_AFFINITY = resolveFaceAffinity(SUBSTRATE_COLLECTION_RECIPE)
-
-registerViewCollectionRendering(SUBSTRATE_COLLECTION_RECIPE.faceTypeId)
 
 // ---------------------------------------------------------------------------
 // Focus panel keymaps (Escape to close, schema-aware marks)
@@ -318,7 +306,7 @@ const FocusLabelEditorInner = (props: FocusLabelEditorProps) => {
 
   return (
     <div
-      class="focus-label-editor label-heading"
+      class={styles.labelEditor}
       data-testid="focus-label-editor"
       ref={(el) => mountEditor(el)}
     />
@@ -467,15 +455,9 @@ const FocusContentEditorInner = (props: FocusContentEditorProps) => {
 
   return (
     <div
-      class="focus-content-editor"
+      class={styles.contentEditor}
       data-testid="focus-content-editor"
       ref={(el) => mountEditor(el)}
-      style={{
-        'font-size': '15px',
-        color: 'var(--text-dim)',
-        'line-height': '1.6',
-        'min-height': '100px',
-      }}
     />
   )
 }
@@ -523,6 +505,11 @@ const FocusPanel = (props: FocusPanelProps) => {
       sql: source.sql,
     }
   })
+  const looseSubject = createMemo<LooseSubject>(() => ({
+    mode: 'loose',
+    matrixId: props.matrixId,
+    rowId: props.rowId,
+  }))
 
   // Backlinks query
   const backlinksQuery = createMemo(() => buildBacklinksQuery(props.matrixId, props.rowId))
@@ -640,40 +627,24 @@ const FocusPanel = (props: FocusPanelProps) => {
 
   return (
     <div
-      class="focus-panel"
+      class={styles.panel}
       data-testid="focus-panel"
       data-launcher-subject
       data-launcher-matrix-id={props.matrixId}
       data-launcher-row-id={props.rowId}
+      data-panel-subject-mode={viewSubject() ? 'view' : 'loose'}
       data-launcher-provenance={Array.from(props.rowKey)
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('')}
       data-launcher-subject-label={extractTextFromPmDoc(labelValue()) || 'Untitled'}
-      style={{
-        display: 'flex',
-        'flex-direction': 'column',
-        height: '100%',
-        overflow: 'hidden',
-        'min-width': '360px',
-        'background-color': 'var(--color-surface)',
-      }}
     >
-      <div
-        style={{
-          display: 'flex',
-          'flex-direction': 'column',
-          flex: 1,
-          'min-height': 0,
-          padding: '16px 24px',
-          overflow: 'auto',
-        }}
-      >
+      <div class={styles.scroll}>
         <Show
           when={rowData()}
           fallback={
             <div
+              class={styles.stateMessage}
               data-testid={rowResult() === null ? 'focus-loading' : 'focus-place-unavailable'}
-              style={{ padding: '16px', color: 'var(--color-text-muted)' }}
             >
               {rowResult() === null ? 'Loading…' : 'This place is no longer available.'}
             </div>
@@ -688,15 +659,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                   a fuller teleport-aware breadcrumb is a possible future
                   evolution if this notice proves insufficient). */}
               <Show when={props.foldedOrigin}>
-                <div
-                  data-testid="focus-panel-folded-origin"
-                  style={{
-                    'font-size': '11px',
-                    color: 'var(--text-muted)',
-                    'font-style': 'italic',
-                    'padding-bottom': '6px',
-                  }}
-                >
+                <div class={styles.foldedOrigin} data-testid="focus-panel-folded-origin">
                   Opened from a folded view — showing this row's real position.
                 </div>
               </Show>
@@ -711,28 +674,29 @@ const FocusPanel = (props: FocusPanelProps) => {
                 fallback={
                   <button
                     type="button"
-                    class="focus-panel-label focus-panel-label-collapse"
+                    class={styles.collapseButton}
                     data-testid="focus-panel-label"
+                    data-collapsible="true"
                     aria-label="Collapse to this panel"
                     onClick={() => props.onCollapse?.()}
                   >
-                    <span class="label-heading focus-panel-collapse-title">
+                    <span class={`${styles.displayTitle} ${styles.collapseTitle}`}>
                       {extractTextFromPmDoc(labelValue()) || 'Untitled'}
                     </span>
-                    <span class="focus-panel-collapse-chevron" aria-hidden="true">
+                    <span class={styles.collapseChevron} aria-hidden="true">
                       ‹
                     </span>
                   </button>
                 }
               >
-                <div class="focus-panel-label" data-testid="focus-panel-label">
+                <div class={styles.label} data-testid="focus-panel-label">
                   {/* Active panel: an editable title when the matrix has a label
                       column; otherwise a read-only identity header (Phase 9.5
                       role-adaptive far side — never write to a missing column). */}
                   <Show
                     when={labelCol()}
                     fallback={
-                      <span class="label-heading focus-panel-collapse-title">
+                      <span class={`${styles.displayTitle} ${styles.collapseTitle}`}>
                         {extractTextFromPmDoc(labelValue()) || `Untitled (#${props.rowId})`}
                       </span>
                     }
@@ -753,6 +717,7 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               <Show when={viewSource()}>
                 <section
+                  class={styles.collectionRegion}
                   aria-label="View collection"
                   data-testid="view-place-collection"
                   onKeyDown={(event) => {
@@ -760,52 +725,30 @@ const FocusPanel = (props: FocusPanelProps) => {
                     event.preventDefault()
                     props.onClose()
                   }}
-                  style={{
-                    display: 'flex',
-                    'flex-direction': 'column',
-                    gap: 'var(--space-control-gap)',
-                    'margin-bottom': 'var(--space-section-gap)',
-                  }}
                 >
                   <div
+                    class={styles.collectionChrome}
                     data-testid="view-collection-host-chrome"
-                    style={{
-                      display: 'flex',
-                      'align-items': 'center',
-                      'justify-content': 'space-between',
-                      gap: '8px',
-                    }}
                   >
-                    <span style={{ color: 'var(--text-muted)', 'font-size': '12px' }}>
-                      Collection
-                    </span>
+                    <span class={styles.regionLabel}>Collection</span>
                     <button
                       type="button"
+                      class={styles.dangerButton}
                       data-testid="query-band-delete"
                       aria-label="Delete view"
                       onClick={() => {
                         void deleteViewBlock(props.matrixId, props.rowId).then(props.onClose)
                       }}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--color-danger)',
-                        'font-size': '13px',
-                      }}
                     >
                       ×
                     </button>
                   </div>
-                  <FaceHostSlot
+                  <FocusCollectionHost
                     host="focus-panel"
-                    kind="collection"
                     subject={viewSubject()!}
-                    affinity={SUBSTRATE_COLLECTION_AFFINITY}
                     rootMatrixId={props.rootMatrixId}
                     fidelity="substrate"
-                    services={EMPTY_FACE_HOST_SERVICES}
-                    substrate={<div data-testid="view-collection-unavailable" />}
+                    onOpenRowRef={props.onOpenRowRef}
                   />
                 </section>
               </Show>
@@ -813,16 +756,7 @@ const FocusPanel = (props: FocusPanelProps) => {
               {/* Content section: only when the matrix has a content column. */}
               <Show when={!viewSource() && contentCol()}>
                 {(col) => (
-                  <div
-                    class="focus-panel-content"
-                    data-testid="focus-panel-content"
-                    style={{
-                      'margin-bottom': '16px',
-                      'border-top': '1px solid hsl(230, 15%, 18%)',
-                      'padding-top': '12px',
-                      position: 'relative',
-                    }}
-                  >
+                  <div class={styles.section} data-testid="focus-panel-content">
                     <Show
                       when={contentValue()}
                       fallback={
@@ -849,27 +783,8 @@ const FocusPanel = (props: FocusPanelProps) => {
               {/* Properties section: intrinsic overflow columns. The owned-aspect
                   half of the property surface renders as an aspect band (Phase 9.2). */}
               <Show when={!viewSource() && overflowColumns().length > 0}>
-                <div
-                  class="focus-panel-overflow"
-                  data-testid="focus-panel-overflow"
-                  style={{
-                    'margin-bottom': '16px',
-                    'border-top': '1px solid hsl(230, 15%, 18%)',
-                    'padding-top': '12px',
-                  }}
-                >
-                  <div
-                    style={{
-                      'font-size': '12px',
-                      'font-weight': 600,
-                      color: 'var(--text-muted)',
-                      'text-transform': 'uppercase',
-                      'letter-spacing': '0.5px',
-                      'margin-bottom': '8px',
-                    }}
-                  >
-                    Properties
-                  </div>
+                <div class={styles.section} data-testid="focus-panel-overflow">
+                  <div class={styles.sectionHeading}>Properties</div>
                   <For each={overflowColumns()}>
                     {(col) => (
                       <FieldEditor
@@ -888,10 +803,10 @@ const FocusPanel = (props: FocusPanelProps) => {
                   with the portal / move-owner / two-tier-delete gestures), view
                   blocks, and dedicated containers. */}
               <Show when={!viewSource()}>
-                <SubstrateRegion
+                <FocusCollectionHost
+                  host="focus-panel"
                   rootMatrixId={props.rootMatrixId}
-                  focalMatrixId={props.matrixId}
-                  focalRowId={props.rowId}
+                  subject={looseSubject()}
                   contentAnchoredKeys={contentAnchoredKeys()}
                   onOpenRowRef={props.onOpenRowRef}
                 />
@@ -899,54 +814,21 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               {/* Backlinks section */}
               <Show when={backlinks().length > 0}>
-                <div
-                  class="focus-panel-backlinks"
-                  data-testid="focus-panel-backlinks"
-                  style={{
-                    'margin-bottom': '16px',
-                    'border-top': '1px solid hsl(230, 15%, 18%)',
-                    'padding-top': '12px',
-                  }}
-                >
+                <div class={styles.section} data-testid="focus-panel-backlinks">
                   <button
-                    class="focus-backlinks-toggle"
+                    class={styles.backlinksToggle}
                     data-testid="focus-backlinks-toggle"
                     onClick={() => setBacklinksOpen((o) => !o)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      'font-size': '13px',
-                      color: 'var(--text-dim)',
-                      padding: '4px 0',
-                      display: 'flex',
-                      'align-items': 'center',
-                      gap: '4px',
-                    }}
                   >
                     {backlinksOpen() ? '▾' : '▸'} Backlinks ({backlinks().length})
                   </button>
                   <Show when={backlinksOpen()}>
-                    <div
-                      class="focus-backlinks-list"
-                      data-testid="focus-backlinks-list"
-                      style={{ 'padding-left': '8px', 'margin-top': '4px' }}
-                    >
+                    <div class={styles.backlinksList} data-testid="focus-backlinks-list">
                       <For each={backlinks()}>
                         {(bl) => (
                           <button
-                            class="focus-backlink-item"
-                            style={{
-                              display: 'block',
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              'font-size': '13px',
-                              color: 'var(--accent)',
-                              padding: '2px 0',
-                              'text-align': 'left',
-                              width: '100%',
-                            }}
+                            class={styles.backlinkItem}
+                            data-testid="focus-backlink-item"
                             onClick={() =>
                               props.onReplaceFocus(
                                 props.matrixId,
@@ -956,7 +838,7 @@ const FocusPanel = (props: FocusPanelProps) => {
                               )
                             }
                           >
-                            <span style={{ color: 'var(--text-muted)', 'margin-right': '4px' }}>
+                            <span class={styles.backlinkKind}>
                               {bl.kind === 'own' ? '⊙' : '↗'}
                             </span>
                             {extractTextFromPmDoc(bl.label) || 'Untitled'}
@@ -970,29 +852,11 @@ const FocusPanel = (props: FocusPanelProps) => {
 
               {/* Children section */}
               <Show when={!viewSource()}>
-                <div
-                  class="focus-panel-children"
-                  data-testid="focus-panel-children"
-                  style={{
-                    'border-top': '1px solid hsl(230, 15%, 18%)',
-                    'padding-top': '12px',
-                    flex: 1,
-                    'min-height': '120px',
-                    overflow: 'hidden',
-                  }}
-                >
+                <div class={styles.children} data-testid="focus-panel-children">
                   <Show
                     when={!props.unresolvedPosition}
                     fallback={
-                      <div
-                        data-testid="focus-no-position"
-                        style={{
-                          color: 'var(--text-muted)',
-                          'font-size': '13px',
-                          'font-style': 'italic',
-                          padding: '8px 0',
-                        }}
-                      >
+                      <div class={styles.emptyState} data-testid="focus-no-position">
                         This row isn't placed in the outline, so it has no separate children
                         view here.
                       </div>
@@ -1001,25 +865,13 @@ const FocusPanel = (props: FocusPanelProps) => {
                     <Show
                       when={hasChildren()}
                       fallback={
-                        <div
-                          data-testid="focus-no-children"
-                          style={{
-                            color: 'var(--text-muted)',
-                            'font-size': '13px',
-                            'font-style': 'italic',
-                            padding: '8px 0',
-                          }}
-                        >
+                        <div class={styles.emptyState} data-testid="focus-no-children">
                           No children. Press Enter in the outline to add items.
                         </div>
                       }
                     >
                       <Suspense
-                        fallback={
-                          <div style={{ color: 'var(--text-muted)', padding: '8px' }}>
-                            Loading children...
-                          </div>
-                        }
+                        fallback={<div class={styles.loadingState}>Loading children...</div>}
                       >
                         <NavigationPanel
                           matrixId={props.matrixId}
@@ -1060,16 +912,17 @@ const ContentPlaceholder = (props: ContentPlaceholderProps) => {
       when={editing()}
       fallback={
         <div
+          class={styles.placeholder}
           data-testid="focus-content-placeholder"
-          style={{
-            color: 'var(--text-muted)',
-            'font-size': '15px',
-            'font-style': 'italic',
-            cursor: 'text',
-            padding: '4px 0',
-            'min-height': '24px',
-          }}
+          role="button"
+          tabindex={0}
           onClick={() => {
+            void updateRow(props.matrixId, props.rowId, { [props.column]: EMPTY_CONTENT_JSON })
+            setEditing(true)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return
+            event.preventDefault()
             void updateRow(props.matrixId, props.rowId, { [props.column]: EMPTY_CONTENT_JSON })
             setEditing(true)
           }}

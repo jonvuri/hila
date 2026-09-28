@@ -215,10 +215,11 @@ use elevation to imply hidden structure. X-ray applies the substrate rules at ev
 the identity-face conformance check.
 
 The Phase 13 runtime applies this cascade recursively through face hosts and passes the resolved
-value to each interior. The workspace root owns transient x-ray state and exposes the inspection
-setter for the later system-edge control. Reload recreates the state with x-ray off. Non-face
-editor, browser, and system-edge controls still migrate to canonical semantic roles, but they do
-not need parallel composed and substrate renderings.
+value to each interior. The focus-panel collection host preserves the scope when a nested subject
+yields back through a host slot. The workspace root owns transient x-ray state and exposes the
+inspection setter for the later system-edge control. Reload recreates the state with x-ray off.
+Non-face editor, browser, and system-edge controls still migrate to canonical semantic roles, but
+they do not need parallel composed and substrate renderings.
 
 ### Accessibility ownership
 
@@ -252,7 +253,8 @@ The approved roadmap owns their future order.
    5 and Deep in Session 6. Keep evaluating the Wipeout expression through dogfooding.
 7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
-   independent axis.
+   independent axis. Phase 13 Sessions 3–5 migrated the table, shared inline/property, and
+   focus-panel/query boundaries. Workspace, editor, and system-edge boundaries remain.
 
 ### Sticky navigation
 

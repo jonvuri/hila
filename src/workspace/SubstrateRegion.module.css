@@ -1,0 +1,82 @@
+.region,
+.looseRegion {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-control-gap);
+}
+
+.looseRegion {
+  margin-bottom: var(--space-panel-gap);
+}
+
+.aspectBlock {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-compact-inset);
+  padding-left: var(--space-control-gap);
+  border-left: var(--width-line) solid var(--aspect-color);
+}
+
+.blockHeader,
+.aspectRow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-control-gap);
+}
+
+.blockHeader {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aspectRow {
+  border-radius: var(--radius-control);
+  transition: background-color var(--duration-feedback) var(--easing-feedback);
+}
+
+.aspectRow[data-hovered='true'] {
+  background: var(--aspect-background);
+}
+
+.typeBadge {
+  display: flex;
+  width: var(--size-icon);
+  height: var(--size-icon);
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--space-label-inset);
+  border-radius: var(--radius-control);
+  background: var(--aspect-color);
+  color: var(--color-inverse-text);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-700);
+  user-select: none;
+}
+
+.aspectInterior {
+  min-width: 0;
+  flex: 1;
+}
+
+.aspectInterior > :global([data-testid='face-host-slot']) {
+  min-width: 0;
+}
+
+.tether {
+  width: var(--space-8);
+  height: var(--space-8);
+  flex: none;
+  align-self: center;
+  border-radius: 50%;
+  background: var(--aspect-color);
+  opacity: 0.35;
+  transition: opacity var(--duration-feedback) var(--easing-feedback);
+}
+
+.tether[data-hovered='true'] {
+  opacity: 1;
+}

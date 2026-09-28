@@ -273,7 +273,7 @@ test.describe('Focus panel', () => {
     await expect(list).toBeVisible({ timeout: 3000 })
 
     // The backlink item should contain the source row's label text
-    const backlinkItem = list.locator('.focus-backlink-item').first()
+    const backlinkItem = list.getByTestId('focus-backlink-item').first()
     await expect(backlinkItem).toBeVisible({ timeout: 3000 })
     const itemText = (await backlinkItem.textContent()) ?? ''
     expect(itemText).toContain('Linking row')
@@ -467,9 +467,26 @@ test.describe('Focus panel — embedded sub-table (Phase 9.4)', () => {
     })
 
     await openFocusPanel(page)
-    await expect(page.getByTestId('sub-table-collection-fallback')).toContainText(
-      'No collection face is configured',
-    )
+    const fallbackBand = page.getByTestId('sub-table-band-item')
+    const fallbackHost = fallbackBand.getByTestId('face-host-slot')
+    await expect(fallbackHost).toHaveAttribute('data-face-source', 'substrate')
+    await expect(fallbackHost).toHaveAttribute('data-subject-mode', 'container')
+    const substrate = fallbackBand.getByTestId('substrate-collection')
+    await expect(substrate).toBeVisible()
+    await expect(substrate).toContainText('No rows.')
+
+    await substrate.getByRole('button', { name: 'New row' }).click()
+    await expect(substrate.getByTestId('property-line')).toHaveCount(1, { timeout: 5000 })
+    const ownedRows = await page.evaluate(async (matrixId) => {
+      // @ts-expect-error -- resolved by the Vite dev server at runtime
+      const sql = await import('/src/core/client/sql-client.ts')
+      const rows = await sql.execQuery(
+        `SELECT COUNT(*) AS count FROM joins WHERE target_matrix_id = ${matrixId} AND kind = 'own'`,
+      )
+      return (rows[0] as { count: number }).count
+    }, tableMatrixId)
+    expect(ownedRows).toBe(1)
+
     const recipeCount = await page.evaluate(async (matrixId) => {
       // @ts-expect-error -- resolved by the Vite dev server at runtime
       const sql = await import('/src/core/client/sql-client.ts')

@@ -1,0 +1,73 @@
+.host,
+.host > :global([data-testid='face-host-slot']) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.substrateCollection {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-control-gap);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-compact-inset);
+}
+
+.row {
+  display: grid;
+  min-width: 0;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) var(--size-control);
+  gap: var(--space-control-gap);
+}
+
+.rowAction,
+.actions button {
+  min-width: var(--size-control);
+  min-height: var(--size-control);
+  padding: var(--space-compact-inset) var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rowAction:hover,
+.actions button:hover {
+  background: var(--color-state-hover);
+  color: var(--color-text-strong);
+}
+
+.rowAction:focus-visible,
+.actions button:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-control-gap);
+}
+
+.status,
+.empty,
+.error {
+  min-height: var(--size-row);
+  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
+  border: var(--border-subtle);
+  color: var(--color-text-muted);
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-small-size);
+}
+
+.error {
+  color: var(--color-state-invalid);
+}

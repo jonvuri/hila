@@ -35,9 +35,12 @@ import { materializeQuerySpec } from '../sql/query-spec/materialize'
 import { recognizeQuerySpec } from '../sql/query-spec/recognize'
 import { isReadOnlySelect, parseSingleStatement } from '../sql/sql-statement'
 import type { NormalizedQuerySpec } from '../sql/query-spec/types'
+import type { ViewSubject } from '../core/face-types'
 
 import { buildViewBlocksForNodeQuery } from './block-marker-queries'
 import { SavedViewStructuredAuthoring } from './SavedViewStructuredAuthoring'
+import type { RenderSubjectCollection } from './focus-subject'
+import styles from './QueryBand.module.css'
 
 /**
  * View blocks (Phase 9.7 Stage B; successor to the Phase 9.3 query band).
@@ -402,29 +405,22 @@ export const SavedViewAuthoring: Component<{
   })
 
   return (
-    <div
-      data-testid="saved-view-authoring"
-      style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}
-    >
+    <div class={styles.authoring} data-testid="saved-view-authoring">
       <Show when={catalogMatrices() === null}>
-        <span data-testid="saved-view-catalog-loading" style={{ 'font-size': '11px' }}>
+        <span class={styles.status} data-testid="saved-view-catalog-loading">
           Loading query fields…
         </span>
       </Show>
       <Show when={catalogError()}>
         {(message) => (
-          <span data-testid="saved-view-catalog-error" style={{ color: 'var(--color-danger)' }}>
+          <span class={styles.error} data-testid="saved-view-catalog-error">
             {message()}
           </span>
         )}
       </Show>
       <Show when={structuredWriteError()}>
         {(message) => (
-          <span
-            data-testid="saved-view-structured-error"
-            role="alert"
-            style={{ color: 'var(--color-danger)', 'font-size': '11px' }}
-          >
+          <span data-testid="saved-view-structured-error" role="alert" class={styles.error}>
             {message()}
           </span>
         )}
@@ -436,11 +432,11 @@ export const SavedViewAuthoring: Component<{
             fallback={
               <span
                 data-testid="saved-view-custom-chip"
+                class={styles.customChip}
                 title={(() => {
                   const current = recognized()
                   return current.type === 'custom-sql' ? current.message : undefined
                 })()}
-                style={{ 'font-size': '11px', color: 'var(--color-text-muted)' }}
               >
                 ≔ custom SQL
               </span>
@@ -469,32 +465,25 @@ export const SavedViewAuthoring: Component<{
         fallback={
           <button
             type="button"
+            class={styles.disclosureButton}
             data-testid="saved-view-sql-disclosure"
             onClick={() => openSql()}
-            style={{
-              border: 'none',
-              background: 'none',
-              color: 'var(--color-text-muted)',
-              cursor: 'pointer',
-              padding: 0,
-              'font-size': '11px',
-              'align-self': 'flex-start',
-            }}
           >
             view SQL ▸
           </button>
         }
       >
         <div
+          class={styles.sqlEditor}
           onKeyDown={(event) => {
             if (event.key !== 'Escape') return
             event.preventDefault()
             event.stopPropagation()
             cancelSql()
           }}
-          style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}
         >
           <textarea
+            class={styles.textarea}
             data-testid="saved-view-sql-editor"
             aria-label="View SQL"
             value={sqlDraft()}
@@ -503,32 +492,21 @@ export const SavedViewAuthoring: Component<{
               setSqlDraft(draft)
               validateDraft(draft)
             }}
-            style={{
-              'font-family': 'monospace',
-              'font-size': '11px',
-              'min-height': '76px',
-              width: '100%',
-              'box-sizing': 'border-box',
-            }}
           />
           <Show when={validation().type === 'checking'}>
-            <span data-testid="saved-view-sql-checking" style={{ 'font-size': '11px' }}>
+            <span class={styles.status} data-testid="saved-view-sql-checking">
               Checking…
             </span>
           </Show>
           <Show when={validation().type === 'invalid'}>
-            <span
-              data-testid="saved-view-sql-invalid"
-              role="alert"
-              style={{ color: 'var(--color-danger)', 'font-size': '11px' }}
-            >
+            <span data-testid="saved-view-sql-invalid" role="alert" class={styles.error}>
               {(() => {
                 const current = validation()
                 return current.type === 'invalid' ? current.message : ''
               })()}
             </span>
           </Show>
-          <div style={{ display: 'flex', gap: '6px' }}>
+          <div class={styles.actionRow}>
             <button
               type="button"
               data-testid="saved-view-sql-apply"
@@ -630,37 +608,15 @@ export const ViewCollection: Component<{
 
   return (
     <div
-      class="query-band"
+      class={styles.collection}
       data-testid="query-band"
       data-fidelity="substrate"
       data-marker-matrix-id={props.block.marker_matrix_id}
       data-marker-row-id={props.block.marker_row_id}
-      style={{
-        border: '1px solid hsl(230, 15%, 18%)',
-        'border-radius': '4px',
-        padding: '8px',
-        display: 'flex',
-        'flex-direction': 'column',
-        gap: '4px',
-      }}
     >
       <Show when={!props.interiorOnly}>
-        <div
-          style={{
-            display: 'flex',
-            'align-items': 'center',
-            'justify-content': 'space-between',
-            gap: '8px',
-          }}
-        >
-          <span
-            style={{
-              'font-size': '11px',
-              'font-weight': 600,
-              color: 'var(--text-muted)',
-              'font-family': 'monospace',
-            }}
-          >
+        <div class={styles.viewHeader}>
+          <span class={styles.viewLabel}>
             <Show
               when={props.onOpen}
               fallback={<span>{props.focused ? '≔ view' : 'query:'}</span>}
@@ -668,18 +624,9 @@ export const ViewCollection: Component<{
               {(open) => (
                 <button
                   type="button"
+                  class={styles.openButton}
                   data-testid="view-place-open"
                   onClick={() => open()()}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--color-text-strong)',
-                    cursor: 'pointer',
-                    padding: 0,
-                    'font-family': 'inherit',
-                    'font-size': 'inherit',
-                    'font-weight': 'inherit',
-                  }}
                 >
                   ≔ {extractTextFromPmDoc(props.block.name ?? '') || 'Untitled view'}
                 </button>
@@ -687,9 +634,9 @@ export const ViewCollection: Component<{
             </Show>
             <Show when={editable().size > 0}>
               <span
+                class={styles.editableBadge}
                 data-testid="query-band-editable-badge"
                 title="Recognized updatable view — passthrough cells are editable"
-                style={{ 'margin-left': '6px', color: 'var(--accent)' }}
               >
                 editable
               </span>
@@ -697,19 +644,10 @@ export const ViewCollection: Component<{
             <Show when={canEnableWithId()}>
               <button
                 type="button"
+                class={styles.enableButton}
                 data-testid="query-band-enable-edit"
                 title="This view's columns become editable once the result set includes id"
                 onClick={() => enableEditing()}
-                style={{
-                  'margin-left': '6px',
-                  background: 'none',
-                  border: '1px solid var(--accent)',
-                  'border-radius': '3px',
-                  color: 'var(--accent)',
-                  cursor: 'pointer',
-                  'font-size': '10px',
-                  padding: '0 5px',
-                }}
               >
                 + id to edit
               </button>
@@ -719,17 +657,10 @@ export const ViewCollection: Component<{
             {(remove) => (
               <button
                 type="button"
-                class="query-band-delete"
+                class={styles.deleteButton}
                 data-testid="query-band-delete"
                 aria-label="Delete view"
                 onClick={() => remove()()}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: 'var(--color-danger)',
-                  'font-size': '13px',
-                }}
               >
                 ×
               </button>
@@ -743,14 +674,7 @@ export const ViewCollection: Component<{
       <Show
         when={!error()}
         fallback={
-          <div
-            data-testid="query-band-error"
-            style={{
-              color: 'var(--danger, #d66)',
-              'font-size': '12px',
-              'font-family': 'monospace',
-            }}
-          >
+          <div class={styles.error} data-testid="query-band-error">
             {error()?.message}
           </div>
         }
@@ -758,45 +682,19 @@ export const ViewCollection: Component<{
         <Show
           when={rows().length > 0}
           fallback={
-            <div
-              data-testid="query-band-empty"
-              style={{
-                color: 'var(--text-muted)',
-                'font-size': '12px',
-                'font-style': 'italic',
-              }}
-            >
+            <div class={styles.empty} data-testid="query-band-empty">
               No results.
             </div>
           }
         >
-          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
+          <div class={styles.rows}>
             <For each={rows()}>
               {(row) => (
-                <div
-                  class="query-band-row"
-                  data-testid="query-band-row"
-                  role="row"
-                  style={{
-                    display: 'grid',
-                    'grid-template-columns': 'repeat(auto-fit, minmax(120px, 1fr))',
-                    gap: 'var(--space-control-gap)',
-                    border: 'var(--width-line) solid var(--color-line-subtle)',
-                    padding: 'var(--space-8)',
-                  }}
-                >
+                <div class={styles.resultRow} data-testid="query-band-row" role="row">
                   <For each={columns()}>
                     {(column) => (
                       <div role="cell" data-result-column={column.name}>
-                        <div
-                          style={{
-                            color: 'var(--color-text-muted)',
-                            'font-size': '10px',
-                            'font-family': 'var(--type-data-family)',
-                          }}
-                        >
-                          {column.name}
-                        </div>
+                        <div class={styles.cellLabel}>{column.name}</div>
                         <Show
                           when={isEditable(column)}
                           fallback={
@@ -853,6 +751,7 @@ export const QueryBandsSection: Component<{
   matrixId: number
   rowId: number
   onOpenView?: (matrixId: number, rowId: number) => void
+  renderCollection: RenderSubjectCollection
 }> = (props) => {
   const [labelColumn, setLabelColumn] = createSignal<string | null>(null)
   createEffect(() => {
@@ -870,32 +769,36 @@ export const QueryBandsSection: Component<{
   })
 
   return (
-    <div
-      class="query-bands-section"
-      data-testid="query-bands-section"
-      style={{
-        'margin-bottom': '16px',
-        'border-top': '1px solid hsl(230, 15%, 18%)',
-        'padding-top': '12px',
-        display: 'flex',
-        'flex-direction': 'column',
-        gap: '8px',
-      }}
-    >
+    <div class={styles.section} data-testid="query-bands-section">
       <Show when={blocks().length > 0}>
         <For each={blocks()}>
-          {(block) => (
-            <ViewCollection
-              rootMatrixId={props.rootMatrixId}
-              block={block}
-              onOpen={
-                props.onOpenView ?
-                  () => props.onOpenView?.(block.marker_matrix_id, block.marker_row_id)
-                : undefined
-              }
-              onDelete={() => void deleteViewBlock(block.marker_matrix_id, block.marker_row_id)}
-            />
-          )}
+          {(block) => {
+            const subject: ViewSubject = {
+              mode: 'view',
+              matrixId: block.marker_matrix_id,
+              rowId: block.marker_row_id,
+              sql: block.sql,
+            }
+            return (
+              <div class={styles.inlineView} data-testid="query-band-host">
+                {props.renderCollection(subject, {
+                  host: 'focus-panel-view',
+                  fidelity: 'substrate',
+                  view: {
+                    name: block.name,
+                    onDelete: () =>
+                      void deleteViewBlock(block.marker_matrix_id, block.marker_row_id),
+                    ...(props.onOpenView ?
+                      {
+                        onOpen: () =>
+                          props.onOpenView?.(block.marker_matrix_id, block.marker_row_id),
+                      }
+                    : {}),
+                  },
+                })}
+              </div>
+            )
+          }}
         </For>
       </Show>
     </div>

@@ -1,0 +1,89 @@
+.gestureButton,
+.toggle {
+  min-height: var(--size-control);
+  padding: var(--space-compact-inset) var(--space-control-gap);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--type-body-small-size);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gestureButton:hover,
+.toggle:hover {
+  background: var(--color-state-hover);
+  color: var(--color-text-strong);
+}
+
+.gestureButton:focus-visible,
+.toggle:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.gestureButton[data-danger='true'] {
+  color: var(--color-danger);
+}
+
+.menuRoot {
+  position: relative;
+  flex: none;
+}
+
+.toggle {
+  min-width: var(--size-control);
+  padding-inline: var(--space-compact-inset);
+  font-size: var(--type-body-large-size);
+  line-height: 1;
+  text-align: center;
+}
+
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(var(--size-icon) + var(--space-label-inset));
+  right: 0;
+  display: flex;
+  min-width: 160px;
+  flex-direction: column;
+  gap: var(--space-label-inset);
+  padding: var(--space-compact-inset);
+  border: var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-overlay);
+  box-shadow: var(--elevation-overlay);
+}
+
+.ownerAffix,
+.gridLabel {
+  color: var(--color-text-faint);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-letter-spacing);
+  line-height: var(--type-label-line-height);
+  text-transform: uppercase;
+}
+
+.ownerAffix {
+  user-select: none;
+}
+
+.gridHeader {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-compact-inset) var(--space-content-inset);
+  margin-bottom: var(--space-label-inset);
+  padding-left: calc(var(--size-icon) + var(--space-control-gap));
+}
+
+@media (pointer: coarse) {
+  .gestureButton,
+  .toggle {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

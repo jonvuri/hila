@@ -1,5 +1,6 @@
 import {
   createContext,
+  createEffect,
   createMemo,
   createSignal,
   Show,
@@ -62,6 +63,17 @@ export type FaceRenderingContribution = FaceRenderRegistration & {
 
 const renderingKey = (faceTypeId: string, kind: FaceRenderingKind): string =>
   `${faceTypeId}:${kind}`
+
+const stableValueKey = (value: unknown): string => {
+  if (Array.isArray(value)) return `[${value.map(stableValueKey).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableValueKey(entry)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? String(value)
+}
 
 const copyContribution = (contribution: FaceRenderingContribution): FaceRenderingContribution =>
   Object.freeze({
@@ -295,8 +307,10 @@ export const FaceHostSlot: Component<{
   fidelity?: RenderingFidelity
   services: FaceHostServices
   substrate: JSX.Element
+  renderYieldedSubject?: (subject: FaceSubject) => JSX.Element
 }> = (props) => {
   const inheritedFidelity = useFaceFidelity()
+  const [yieldedSubject, setYieldedSubject] = createSignal<FaceSubject>()
   const fidelity = createMemo(() =>
     resolveFidelity({
       fidelity: props.fidelity,
@@ -315,6 +329,66 @@ export const FaceHostSlot: Component<{
       getFaceRendering(props.affinity.recipe.faceTypeId, props.kind)
     : undefined,
   )
+  const subjectKey = createMemo(() => {
+    const subject = props.subject
+    return (
+      subject.mode === 'container' ?
+        `${subject.mode}:${subject.matrixId}:${subject.rowId}:${subject.extentMatrixId}`
+      : subject.mode === 'view' ?
+        `${subject.mode}:${subject.matrixId}:${subject.rowId}:${subject.sql}`
+      : `${subject.mode}:${subject.matrixId}:${subject.rowId}`
+    )
+  })
+  const affinityKey = createMemo(() =>
+    props.affinity.source === 'intentional' ?
+      `intentional:${stableValueKey(props.affinity.recipe)}`
+    : 'substrate',
+  )
+  let activeSubjectKey: string | undefined
+  let activeAffinityKey: string | undefined
+  let activeRendering: Component<FaceRenderingProps> | undefined
+
+  createEffect(() => {
+    const nextSubjectKey = subjectKey()
+    const nextAffinityKey = affinityKey()
+    const nextRendering = Rendering()
+    if (activeSubjectKey === undefined) {
+      activeSubjectKey = nextSubjectKey
+      activeAffinityKey = nextAffinityKey
+      activeRendering = nextRendering
+      return
+    }
+    if (
+      nextSubjectKey === activeSubjectKey &&
+      nextAffinityKey === activeAffinityKey &&
+      nextRendering === activeRendering
+    ) {
+      return
+    }
+    activeSubjectKey = nextSubjectKey
+    activeAffinityKey = nextAffinityKey
+    activeRendering = nextRendering
+    setYieldedSubject(undefined)
+  })
+
+  const services = createMemo<FaceHostServices>(() => {
+    const forwardYield = props.services.yieldSubject
+    const renderYieldedSubject = props.renderYieldedSubject
+    return {
+      ...(props.services.requestNavigation ?
+        { requestNavigation: props.services.requestNavigation }
+      : {}),
+      ...(props.services.requestInsert ? { requestInsert: props.services.requestInsert } : {}),
+      ...(forwardYield || renderYieldedSubject ?
+        {
+          yieldSubject: (subject: FaceSubject) => {
+            forwardYield?.(subject)
+            if (renderYieldedSubject) setYieldedSubject(subject)
+          },
+        }
+      : {}),
+    }
+  })
 
   return (
     <FaceFidelityContext.Provider value={fidelityContext}>
@@ -336,9 +410,12 @@ export const FaceHostSlot: Component<{
               rootMatrixId={props.rootMatrixId}
               density={density()}
               fidelity={fidelity()}
-              services={props.services}
+              services={services()}
             />
           )}
+        </Show>
+        <Show when={yieldedSubject()}>
+          {(subject) => props.renderYieldedSubject?.(subject())}
         </Show>
       </div>
     </FaceFidelityContext.Provider>

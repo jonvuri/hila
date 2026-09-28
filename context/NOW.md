@@ -4,40 +4,41 @@ kind: status
 state: active
 updated: 2026-09-27
 phase: 13
-session: 5
+session: 6
 ---
 
 # Now
 
-Phase 13 Sessions 1–4 are complete. `hila.table` supplies registered collection and line interiors.
-The shared property adapter also supplies the substrate fallback, so registered and fallback paths
-do not duplicate field ownership. Hosts pass density and retain labels, grouping, relations, and
-gestures.
+Phase 13 Sessions 1–5 are complete. The focus panel routes loose, container, and view subjects
+through one recursive collection host. It retains identity, fields, relations, sizing, navigation,
+and insertion policy while registered interiors and the substrate floor own collection rendering.
+Nested subjects return through host slots under inherited fidelity; x-ray still forces substrate
+through the descendant tree.
 
-Inline references, autocomplete, tag properties, shared fields, property rows, and aspect previews
-now use canonical roles and local style boundaries. Editing, promoted-type discovery, owned-aspect
-lifecycle, source reconciliation, ghost and empty states, and hover tethering remain available.
-Formula and dry cells remain read-only.
+Saved-view SQL remains on the marker subject. Recognized result cells retain write-back, while view
+results cannot insert, drag, reparent, or infer ownership. Missing recipes fall through without
+creating state, and container fallback insertion creates owned rows. The panel, query, substrate,
+and gesture boundaries now use local canonical styles.
 
-The focus panel has not yet adopted the complete host-owned scaffold or recursive collection path.
-X-ray has no system-edge control yet. No schema changed; the database remains reset-only at schema
-version 0. All 1,304 unit tests pass.
+X-ray has no system-edge control yet. Workspace rows and expanded blocks have not adopted the
+forward host runtime. No schema changed; the database remains reset-only at schema version 0. All
+1,310 unit tests and 169 E2E tests pass.
 
 ## Read next
 
 1. [Phase 13 front door](phases/Phase-13.md).
-2. [Session 5](phases/Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md).
+2. [Session 6](phases/Phase-13/Session-6-workspace-line-host-and-editor-migration.md).
 3. [Architecture](Architecture.md), [Plugins](Plugins.md), [Design](Design.md), and
    [Design Faces](Design-Faces.md) for the host, line, semantic-role, and fidelity contracts.
 
 ## Boundary
 
-Session 5 composes identity, fields, collection, and relations in the focus-panel host. It must
-preserve rooted navigation, saved-view identity, query semantics, and insertion firewalls without
-adding a general region-layout API or moving recursion into faces.
+Session 6 moves workspace row and expanded-block participation onto host dispatch. It must preserve
+editor identity, virtualized paging, rooted navigation, responsive retained panels, drag/drop,
+folding, portals, ghosts, and pending saves while keeping tree and editor ownership in the host.
 
 ## Next action
 
-Execute Phase 13 Session 5. Route loose, container, and view subjects through one host scaffold,
-complete nested host recursion and fidelity inheritance, and migrate the panel's local style
-boundary to canonical roles.
+Execute Phase 13 Session 6. Route workspace line and expanded collection participation through the
+forward host runtime, resolve workspace settings through recipe affinity, and migrate the remaining
+workspace/editor style boundary without changing row or editor identity.

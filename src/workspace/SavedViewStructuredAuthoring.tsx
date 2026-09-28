@@ -33,6 +33,8 @@ import {
   type QueryAuthoringOperatorId,
 } from '../launcher/query-grammar'
 
+import styles from './QueryBand.module.css'
+
 type StructuredEditor =
   | { readonly type: 'kind'; readonly query: string }
   | { readonly type: 'scope'; readonly query: string }
@@ -172,16 +174,7 @@ const Chip: ParentComponent<{
     title={props.title}
     disabled={props.disabled || !props.onClick}
     onClick={() => props.onClick?.()}
-    style={{
-      border: '1px solid var(--color-line-subtle)',
-      'border-radius': '999px',
-      background: 'var(--color-surface-raised, transparent)',
-      color: 'var(--color-text-strong)',
-      cursor: props.onClick && !props.disabled ? 'pointer' : 'default',
-      padding: '2px 7px',
-      'font-size': '11px',
-      opacity: props.disabled ? 0.65 : 1,
-    }}
+    class={styles.chip}
   >
     {props.children}
   </button>
@@ -211,13 +204,7 @@ const EditorInput: Component<{
         props.onCommit()
       }
     }}
-    style={{
-      border: '1px solid var(--color-line-subtle)',
-      'border-radius': '5px',
-      padding: '4px 6px',
-      'font-size': '12px',
-      'min-width': '180px',
-    }}
+    class={styles.input}
   />
 )
 
@@ -234,14 +221,7 @@ const MenuButton: ParentComponent<{
     disabled={props.disabled}
     title={props.title}
     onClick={() => props.onClick()}
-    style={{
-      border: 'none',
-      background: 'transparent',
-      color: 'var(--color-text-strong)',
-      cursor: props.disabled ? 'not-allowed' : 'pointer',
-      padding: '4px 6px',
-      'text-align': 'left',
-    }}
+    class={styles.menuButton}
   >
     {props.children}
   </button>
@@ -412,10 +392,7 @@ export const SavedViewStructuredAuthoring: Component<{
 
   return (
     <>
-      <div
-        data-testid="saved-view-chips"
-        style={{ display: 'flex', 'flex-wrap': 'wrap', gap: '4px' }}
-      >
+      <div class={styles.chips} data-testid="saved-view-chips">
         <Show when={matrix()}>
           {(currentMatrix) => (
             <Chip
@@ -556,17 +533,7 @@ export const SavedViewStructuredAuthoring: Component<{
 
       <Show when={current()}>
         {(active) => (
-          <div
-            data-testid="saved-view-chip-editor"
-            style={{
-              display: 'flex',
-              'flex-direction': 'column',
-              gap: '5px',
-              padding: '6px',
-              border: '1px solid var(--color-line-subtle)',
-              'border-radius': '6px',
-            }}
-          >
+          <div class={styles.chipEditor} data-testid="saved-view-chip-editor">
             <Show when={active().type === 'kind'}>
               <EditorInput
                 label="Find a row kind"
@@ -575,7 +542,7 @@ export const SavedViewStructuredAuthoring: Component<{
                 onInput={(query) => setEditor({ type: 'kind', query })}
                 onCancel={closeEditor}
               />
-              <div role="listbox" style={{ display: 'flex', 'flex-direction': 'column' }}>
+              <div class={styles.optionList} role="listbox">
                 <For
                   each={props.catalog.matrices.filter((candidate) =>
                     queryMatches(
@@ -615,7 +582,7 @@ export const SavedViewStructuredAuthoring: Component<{
                 onInput={(query) => setEditor({ type: 'scope', query })}
                 onCancel={closeEditor}
               />
-              <div role="listbox" style={{ display: 'flex', 'flex-direction': 'column' }}>
+              <div class={styles.optionList} role="listbox">
                 <For each={scopeChoices()}>
                   {(choice) => {
                     const target = choice.target.type === 'node' ? choice.target.node : null
@@ -660,7 +627,7 @@ export const SavedViewStructuredAuthoring: Component<{
               {(() => {
                 return (
                   <>
-                    <div style={{ display: 'flex', gap: '4px' }}>
+                    <div class={styles.predicateControls}>
                       <Chip
                         testId="saved-view-predicate-column"
                         onClick={() => {
@@ -682,10 +649,7 @@ export const SavedViewStructuredAuthoring: Component<{
                       </Chip>
                     </div>
                     <Show when={predicateEditor()?.stage === 'column'}>
-                      <div
-                        role="listbox"
-                        style={{ display: 'flex', 'flex-direction': 'column' }}
-                      >
+                      <div class={styles.optionList} role="listbox">
                         <For each={columns()}>
                           {(column) => (
                             <MenuButton
@@ -714,10 +678,7 @@ export const SavedViewStructuredAuthoring: Component<{
                       </div>
                     </Show>
                     <Show when={predicateEditor()?.stage === 'operator'}>
-                      <div
-                        role="listbox"
-                        style={{ display: 'flex', 'flex-direction': 'column' }}
-                      >
+                      <div class={styles.optionList} role="listbox">
                         <For
                           each={
                             predicateEditor()?.column ?
@@ -784,10 +745,7 @@ export const SavedViewStructuredAuthoring: Component<{
                 return (
                   <>
                     <Show when={orderEditor()?.stage === 'column'}>
-                      <div
-                        role="listbox"
-                        style={{ display: 'flex', 'flex-direction': 'column' }}
-                      >
+                      <div class={styles.optionList} role="listbox">
                         <For each={columns()}>
                           {(column) => (
                             <MenuButton
@@ -808,10 +766,7 @@ export const SavedViewStructuredAuthoring: Component<{
                       </div>
                     </Show>
                     <Show when={orderEditor()?.stage === 'operator'}>
-                      <div
-                        role="listbox"
-                        style={{ display: 'flex', 'flex-direction': 'column' }}
-                      >
+                      <div class={styles.optionList} role="listbox">
                         <For
                           each={
                             orderEditor()?.column ?
@@ -861,16 +816,12 @@ export const SavedViewStructuredAuthoring: Component<{
 
             <Show when={error()}>
               {(message) => (
-                <span
-                  role="alert"
-                  data-testid="saved-view-chip-error"
-                  style={{ color: 'var(--color-danger)', 'font-size': '11px' }}
-                >
+                <span role="alert" class={styles.error} data-testid="saved-view-chip-error">
                   {message()}
                 </span>
               )}
             </Show>
-            <div style={{ display: 'flex', gap: '6px' }}>
+            <div class={styles.actionRow}>
               <Show
                 when={
                   active().type === 'text' ||

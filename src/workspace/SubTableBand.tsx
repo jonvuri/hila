@@ -1,7 +1,6 @@
 import {
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   For,
   onCleanup,
@@ -10,18 +9,13 @@ import {
   type Component,
 } from 'solid-js'
 
-import {
-  createDependentRow,
-  getFaceConfigForMatrix,
-  renameMatrix,
-} from '../core/client/matrix-client'
-import { resolveFaceAffinity } from '../core/face-affinity'
-import { FaceHostSlot, type FaceHostServices } from '../core/face-runtime'
+import { renameMatrix } from '../core/client/matrix-client'
 import type { ContainerSubject } from '../core/face-types'
 import { pendingNewTableMatrixId, clearPendingNewTable } from '../editor/pending-table'
 import { useQuery } from '../sql/useQuery'
 
 import { buildDedicatedSubtablesQuery } from './workspace-plugin'
+import type { RenderSubjectCollection } from './focus-subject'
 import styles from './SubTableBand.module.css'
 
 const RENAME_DEBOUNCE_MS = 300
@@ -56,33 +50,14 @@ const EmbeddedSubTable: Component<{
   focalMatrixId: number
   focalRowId: number
   onOpenRowRef: (matrixId: number, rowId: number) => void
+  renderCollection: RenderSubjectCollection
 }> = (props) => {
-  const [config] = createResource(() => props.matrixId, getFaceConfigForMatrix)
   const subject = createMemo<ContainerSubject>(() => ({
     mode: 'container',
     matrixId: props.focalMatrixId,
     rowId: props.focalRowId,
     extentMatrixId: props.matrixId,
   }))
-  const affinity = createMemo(() => resolveFaceAffinity(config()))
-  const services: FaceHostServices = {
-    requestInsert: async (request) => ({
-      matrixId: props.matrixId,
-      rowId: await createDependentRow(
-        props.focalMatrixId,
-        props.focalRowId,
-        props.matrixId,
-        request.values ? { ...request.values } : undefined,
-      ),
-    }),
-    requestNavigation: (target) => props.onOpenRowRef(target.matrixId, target.rowId),
-  }
-  const fallbackMessage = () => {
-    if (config.loading) return 'Loading table…'
-    if (config.error) return 'Table recipe failed to load.'
-    return 'No collection face is configured for this table.'
-  }
-
   // Editable sub-table name (Phase 9 §9.6). Writes through `renameMatrix`; safe
   // for a plain node's sub-table since `syncOwnedMatrixTitles` is scoped to
   // promoted owners (so the owner's label no longer clobbers this title).
@@ -140,23 +115,7 @@ const EmbeddedSubTable: Component<{
         data-highlighted={highlight() ? 'true' : undefined}
       />
       <div class={styles.collectionHost} data-testid="sub-table-collection-host">
-        <FaceHostSlot
-          host="embedded-table"
-          kind="collection"
-          subject={subject()}
-          affinity={affinity()}
-          rootMatrixId={props.rootMatrixId}
-          services={services}
-          substrate={
-            <div
-              class={styles.fallback}
-              role={config.error ? 'alert' : 'status'}
-              data-testid="sub-table-collection-fallback"
-            >
-              {fallbackMessage()}
-            </div>
-          }
-        />
+        {props.renderCollection(subject(), { host: 'embedded-table' })}
       </div>
     </section>
   )
@@ -167,6 +126,7 @@ const SubTableBand: Component<{
   focalMatrixId: number
   focalRowId: number
   onOpenRowRef: (matrixId: number, rowId: number) => void
+  renderCollection: RenderSubjectCollection
 }> = (props) => {
   const { result } = useQuery(() =>
     buildDedicatedSubtablesQuery(props.focalMatrixId, props.focalRowId),
@@ -189,6 +149,7 @@ const SubTableBand: Component<{
               focalMatrixId={props.focalMatrixId}
               focalRowId={props.focalRowId}
               onOpenRowRef={props.onOpenRowRef}
+              renderCollection={props.renderCollection}
             />
           )}
         </For>

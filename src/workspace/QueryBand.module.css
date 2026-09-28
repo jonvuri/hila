@@ -1,0 +1,245 @@
+.authoring,
+.sqlEditor,
+.collection,
+.rows,
+.section,
+.chipEditor,
+.optionList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.authoring {
+  gap: var(--space-control-gap);
+}
+
+.status,
+.error,
+.customChip,
+.cellLabel,
+.viewLabel {
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line-height);
+}
+
+.status,
+.customChip,
+.cellLabel,
+.viewLabel {
+  color: var(--color-text-muted);
+}
+
+.error {
+  color: var(--color-state-invalid);
+}
+
+.disclosureButton,
+.openButton,
+.deleteButton,
+.enableButton,
+.actionRow button,
+.chip,
+.menuButton {
+  min-height: var(--size-control);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.disclosureButton,
+.openButton,
+.menuButton {
+  text-align: left;
+}
+
+.disclosureButton {
+  align-self: flex-start;
+  padding: var(--space-compact-inset) 0;
+  font-size: var(--type-body-small-size);
+}
+
+.openButton {
+  padding: var(--space-compact-inset);
+  color: var(--color-text-strong);
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+}
+
+.deleteButton {
+  min-width: var(--size-control);
+  color: var(--color-danger);
+}
+
+.enableButton {
+  min-height: var(--size-24);
+  margin-left: var(--space-control-gap);
+  padding: 0 var(--space-control-gap);
+  border: var(--width-line) solid var(--color-accent);
+  color: var(--color-accent);
+  font-size: var(--type-label-size);
+}
+
+.disclosureButton:hover,
+.openButton:hover,
+.deleteButton:hover,
+.enableButton:hover,
+.actionRow button:hover,
+.chip:hover,
+.menuButton:hover {
+  background: var(--color-state-hover);
+  color: var(--color-text-strong);
+}
+
+.disclosureButton:focus-visible,
+.openButton:focus-visible,
+.deleteButton:focus-visible,
+.enableButton:focus-visible,
+.actionRow button:focus-visible,
+.chip:focus-visible,
+.menuButton:focus-visible,
+.input:focus-visible,
+.textarea:focus-visible {
+  outline: var(--width-focus-ring) solid var(--color-state-focus);
+  outline-offset: var(--offset-focus-ring);
+}
+
+.sqlEditor {
+  gap: var(--space-compact-inset);
+}
+
+.textarea,
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--size-control);
+  padding: var(--space-compact-inset) var(--space-control-gap);
+  border: var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--type-data-family);
+  font-size: var(--type-body-small-size);
+}
+
+.textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.actionRow,
+.viewHeader,
+.chips,
+.predicateControls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-compact-inset);
+}
+
+.actionRow button {
+  padding: var(--space-compact-inset) var(--space-control-gap);
+  border: var(--border-subtle);
+}
+
+.collection {
+  gap: var(--space-compact-inset);
+  padding: var(--space-control-inset-block);
+  border: var(--border-subtle);
+  border-radius: var(--radius-surface);
+  background: transparent;
+}
+
+.viewHeader {
+  justify-content: space-between;
+}
+
+.viewLabel {
+  font-weight: var(--type-label-weight);
+}
+
+.editableBadge {
+  margin-left: var(--space-control-gap);
+  color: var(--color-accent);
+}
+
+.empty {
+  color: var(--color-text-muted);
+  font-size: var(--type-body-small-size);
+  font-style: italic;
+}
+
+.rows {
+  gap: var(--space-compact-inset);
+}
+
+.resultRow {
+  display: grid;
+  gap: var(--space-control-gap);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  padding: var(--space-control-inset-block);
+  border: var(--border-subtle);
+}
+
+.section {
+  gap: var(--space-control-gap);
+  margin-bottom: var(--space-panel-gap);
+  padding-top: var(--space-control-inset-block);
+  border-top: var(--border-subtle);
+}
+
+.inlineView {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.chips {
+  flex-wrap: wrap;
+}
+
+.chip {
+  min-height: var(--size-24);
+  padding: var(--space-label-inset) var(--space-control-gap);
+  border: var(--border-subtle);
+  border-radius: 999px;
+  color: var(--color-text-strong);
+  font-size: var(--type-body-small-size);
+}
+
+.chip:disabled,
+.menuButton:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-state-disabled);
+}
+
+.input {
+  min-width: 180px;
+}
+
+.menuButton {
+  padding: var(--space-compact-inset) var(--space-control-gap);
+}
+
+.chipEditor {
+  gap: var(--space-compact-inset);
+  padding: var(--space-control-gap);
+  border: var(--border-subtle);
+  border-radius: var(--radius-surface);
+}
+
+@media (pointer: coarse) {
+  .disclosureButton,
+  .openButton,
+  .deleteButton,
+  .enableButton,
+  .actionRow button,
+  .chip,
+  .menuButton {
+    min-height: 44px;
+  }
+}

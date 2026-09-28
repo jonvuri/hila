@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { render } from 'solid-js/web'
+import { createSignal, type Component } from 'solid-js'
 
 import { resolveFaceAffinity, SUBSTRATE_FACE_AFFINITY } from './face-affinity'
 import type { FaceRecipe, FaceSubject } from './face-types'
@@ -151,6 +152,220 @@ describe('forward face runtime', () => {
       rowId: 40,
       extentMatrixId: 50,
     })
+    dispose()
+  })
+
+  test('advertises yielding only when the host can forward or render it', () => {
+    const forwardingYield = vi.fn()
+    registerFaceRenderings(recipe.faceTypeId, {
+      collection: (props) => (
+        <button
+          type="button"
+          data-testid={`yield-capability-${props.subject.rowId}`}
+          data-can-yield={props.services.yieldSubject ? 'true' : 'false'}
+          onClick={() =>
+            props.services.yieldSubject?.({ mode: 'loose', matrixId: 30, rowId: 40 })
+          }
+        >
+          Yield
+        </button>
+      ),
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const dispose = render(
+      () => (
+        <>
+          <FaceHostSlot
+            host="without-yield"
+            kind="collection"
+            subject={{ ...subject, rowId: 20 }}
+            affinity={resolveFaceAffinity(recipe)}
+            rootMatrixId={1}
+            services={EMPTY_FACE_HOST_SERVICES}
+            substrate={<span>substrate</span>}
+          />
+          <FaceHostSlot
+            host="forwarding-yield"
+            kind="collection"
+            subject={{ ...subject, rowId: 21 }}
+            affinity={resolveFaceAffinity(recipe)}
+            rootMatrixId={1}
+            services={{ yieldSubject: forwardingYield }}
+            substrate={<span>substrate</span>}
+          />
+          <FaceHostSlot
+            host="rendering-yield"
+            kind="collection"
+            subject={{ ...subject, rowId: 22 }}
+            affinity={resolveFaceAffinity(recipe)}
+            rootMatrixId={1}
+            services={EMPTY_FACE_HOST_SERVICES}
+            substrate={<span>substrate</span>}
+            renderYieldedSubject={(nested) => (
+              <span data-testid="rendered-yield">{nested.rowId}</span>
+            )}
+          />
+        </>
+      ),
+      container,
+    )
+
+    expect(
+      container.querySelector<HTMLElement>('[data-testid="yield-capability-20"]')?.dataset
+        .canYield,
+    ).toBe('false')
+
+    const forwarding = container.querySelector<HTMLButtonElement>(
+      '[data-testid="yield-capability-21"]',
+    )!
+    expect(forwarding.dataset.canYield).toBe('true')
+    forwarding.click()
+    expect(forwardingYield).toHaveBeenCalledWith({ mode: 'loose', matrixId: 30, rowId: 40 })
+    expect(container.querySelector('[data-testid="rendered-yield"]')).toBeNull()
+
+    const rendering = container.querySelector<HTMLButtonElement>(
+      '[data-testid="yield-capability-22"]',
+    )!
+    expect(rendering.dataset.canYield).toBe('true')
+    rendering.click()
+    expect(container.querySelector('[data-testid="rendered-yield"]')?.textContent).toBe('40')
+    dispose()
+  })
+
+  test('returns yielded subjects to recursively rendered host slots', () => {
+    const recursiveRecipe: FaceRecipe = {
+      faceTypeId: 'test.recursive',
+      slotBindings: {},
+      settings: {},
+    }
+    registerFaceRenderings(recursiveRecipe.faceTypeId, {
+      collection: (props) => (
+        <button
+          type="button"
+          data-testid={`yield-${props.subject.mode}`}
+          data-fidelity={props.fidelity}
+          onClick={() => {
+            if (props.subject.mode === 'loose') {
+              props.services.yieldSubject?.({
+                mode: 'container',
+                matrixId: 10,
+                rowId: 20,
+                extentMatrixId: 30,
+              })
+            } else if (props.subject.mode === 'container') {
+              props.services.yieldSubject?.({
+                mode: 'view',
+                matrixId: 10,
+                rowId: 40,
+                sql: 'SELECT 1',
+              })
+            }
+          }}
+        >
+          {props.subject.mode}
+        </button>
+      ),
+    })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+
+    const RecursiveHost: Component<{ subject: FaceSubject }> = (props) => (
+      <FaceHostSlot
+        host="recursive"
+        kind="collection"
+        subject={props.subject}
+        affinity={resolveFaceAffinity(recursiveRecipe)}
+        rootMatrixId={1}
+        fidelity="composed"
+        services={EMPTY_FACE_HOST_SERVICES}
+        substrate={<span>substrate</span>}
+        renderYieldedSubject={(nested) => <RecursiveHost subject={nested} />}
+      />
+    )
+
+    const dispose = render(
+      () => (
+        <FaceFidelityRoot initialXray>
+          <RecursiveHost subject={{ mode: 'loose', matrixId: 10, rowId: 20 }} />
+        </FaceFidelityRoot>
+      ),
+      container,
+    )
+
+    container.querySelector<HTMLButtonElement>('[data-testid="yield-loose"]')!.click()
+    container.querySelector<HTMLButtonElement>('[data-testid="yield-container"]')!.click()
+
+    expect(
+      [...container.querySelectorAll<HTMLElement>('[data-testid="face-host-slot"]')].map(
+        (host) => [host.dataset.subjectMode, host.dataset.fidelity],
+      ),
+    ).toEqual([
+      ['loose', 'substrate'],
+      ['container', 'substrate'],
+      ['view', 'substrate'],
+    ])
+    expect(container.querySelector('[data-testid="yield-view"]')).not.toBeNull()
+    dispose()
+  })
+
+  test('clears a yielded subject when the effective recipe changes', () => {
+    const initialRecipe: FaceRecipe = {
+      faceTypeId: 'test.recipe-reset',
+      slotBindings: { secondary: null, primary: 1 },
+      settings: { treatment: 'thin-line', layout: { dense: true, gap: 2 } },
+    }
+    registerFaceRenderings(initialRecipe.faceTypeId, {
+      collection: (props) => (
+        <button
+          type="button"
+          data-testid="yield-child"
+          onClick={() =>
+            props.services.yieldSubject?.({ mode: 'loose', matrixId: 30, rowId: 40 })
+          }
+        >
+          Yield child
+        </button>
+      ),
+    })
+    const [affinity, setAffinity] = createSignal(resolveFaceAffinity(initialRecipe))
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const dispose = render(
+      () => (
+        <FaceHostSlot
+          host="recipe-reset"
+          kind="collection"
+          subject={subject}
+          affinity={affinity()}
+          rootMatrixId={1}
+          services={EMPTY_FACE_HOST_SERVICES}
+          substrate={<span>substrate</span>}
+          renderYieldedSubject={() => <span data-testid="yielded-child">child</span>}
+        />
+      ),
+      container,
+    )
+
+    container.querySelector<HTMLButtonElement>('[data-testid="yield-child"]')!.click()
+    expect(container.querySelector('[data-testid="yielded-child"]')).not.toBeNull()
+
+    setAffinity(
+      resolveFaceAffinity({
+        faceTypeId: initialRecipe.faceTypeId,
+        slotBindings: { primary: 1, secondary: null },
+        settings: { layout: { gap: 2, dense: true }, treatment: 'thin-line' },
+      }),
+    )
+    expect(container.querySelector('[data-testid="yielded-child"]')).not.toBeNull()
+
+    setAffinity(
+      resolveFaceAffinity({
+        ...initialRecipe,
+        settings: { ...initialRecipe.settings, treatment: 'cell-dots' },
+      }),
+    )
+    expect(container.querySelector('[data-testid="yielded-child"]')).toBeNull()
     dispose()
   })
 

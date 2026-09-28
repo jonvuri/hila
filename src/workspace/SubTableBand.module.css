@@ -48,11 +48,3 @@
   min-width: 0;
   min-height: 0;
 }
-
-.fallback {
-  padding: var(--space-control-inset-block) var(--space-control-inset-inline);
-  border: var(--border-subtle);
-  color: var(--color-text-muted);
-  font-family: var(--type-body-family);
-  font-size: var(--type-body-small-size);
-}

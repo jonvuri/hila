@@ -62,7 +62,7 @@ product faces begin in Phase 14.
 | [2 — Theme and fidelity inputs](Phase-13/Session-2-theme-and-fidelity-inputs.md)                                         | Environment-selected visual theme and recursive transient fidelity inputs                     | 1          | Complete |
 | [3 — Table collection cutover](Phase-13/Session-3-table-collection-cutover.md)                                           | Registered table collection, canonical treatments, and compatibility-adapter retirement       | 1–2        | Complete |
 | [4 — Inline tags and property-line surfaces](Phase-13/Session-4-inline-tags-and-property-line-surfaces.md)               | Canonical inline/property editing and host-consumable line interiors                          | 1–3        | Complete |
-| [5 — Focus-panel scaffold and collection recursion](Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md) | Host-owned panel regions, recursion, affinity, and fidelity                                   | 1–4        | Planned  |
+| [5 — Focus-panel scaffold and collection recursion](Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md) | Host-owned panel regions, recursion, affinity, and fidelity                                   | 1–4        | Complete |
 | [6 — Workspace line host and editor migration](Phase-13/Session-6-workspace-line-host-and-editor-migration.md)           | Workspace rows participate in the runtime without losing editor or navigation continuity      | 1–5        | Planned  |
 | [7 — Source/sticky continuity review](Phase-13/Session-7-source-sticky-continuity-review.md)                             | Reviewed compact-row projection and explicit production handoff                               | 6          | Planned  |
 | [7A — Source/sticky continuity implementation](Phase-13/Session-7a-source-sticky-continuity-implementation.md)           | Approved row continuity ships without duplicating tree or editor ownership                    | 7          | Planned  |
@@ -103,4 +103,4 @@ boundary here and route `NOW.md` to Phase 14 only after the compatibility-remova
 
 ## Next action
 
-Execute [Session 5](Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md).
+Execute [Session 6](Phase-13/Session-6-workspace-line-host-and-editor-migration.md).

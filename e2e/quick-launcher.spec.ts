@@ -630,21 +630,24 @@ test('Wipeout keeps one aligned path origin when the root is hidden, clipped, or
   await drillIntoChild(page, 'Bravo')
   await drillIntoChild(page, 'Charlie')
   const rail = page.locator('.workspace-shell-rail')
-  const partialIntersection = await rail.evaluate((element) => {
-    element.scrollLeft = 64
-    element.dispatchEvent(new Event('scroll'))
-    const root = element.querySelector<HTMLElement>(
-      '[data-testid="workspace-shell-column"][data-panel-kind="navigation"]',
-    )!
-    const rootBounds = root.getBoundingClientRect()
-    const railBounds = element.getBoundingClientRect()
-    return rootBounds.left < railBounds.left && rootBounds.right > railBounds.left
-  })
+  await expect(rail).toBeVisible()
+  await expect(async () => {
+    const partialIntersection = await rail.evaluate((element) => {
+      element.scrollLeft = 64
+      element.dispatchEvent(new Event('scroll'))
+      const root = element.querySelector<HTMLElement>(
+        '[data-testid="workspace-shell-column"][data-panel-kind="navigation"]',
+      )!
+      const rootBounds = root.getBoundingClientRect()
+      const railBounds = element.getBoundingClientRect()
+      return rootBounds.left < railBounds.left && rootBounds.right > railBounds.left
+    })
+    expect(partialIntersection).toBe(true)
+  }).toPass({ timeout: 5_000 })
   const retainedRootColumn = page.locator(
     '[data-testid="workspace-shell-column"][data-panel-kind="navigation"]',
   )
   await expect(retainedRootColumn).toHaveCount(1)
-  expect(partialIntersection).toBe(true)
   await expect(breadcrumb).toBeVisible()
   await expect(page.locator('[data-launcher-origin="true"]')).toHaveCount(1)
   await page.keyboard.press(launcherShortcut)
