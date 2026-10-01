@@ -2,7 +2,7 @@
 title: Phase 13 — Live design-system and face-runtime completion
 kind: phase-plan
 state: active
-updated: 2026-09-27
+updated: 2026-09-30
 ---
 
 # Phase 13 — Live design-system and face-runtime completion
@@ -63,7 +63,7 @@ product faces begin in Phase 14.
 | [3 — Table collection cutover](Phase-13/Session-3-table-collection-cutover.md)                                           | Registered table collection, canonical treatments, and compatibility-adapter retirement       | 1–2        | Complete |
 | [4 — Inline tags and property-line surfaces](Phase-13/Session-4-inline-tags-and-property-line-surfaces.md)               | Canonical inline/property editing and host-consumable line interiors                          | 1–3        | Complete |
 | [5 — Focus-panel scaffold and collection recursion](Phase-13/Session-5-focus-panel-scaffold-and-collection-recursion.md) | Host-owned panel regions, recursion, affinity, and fidelity                                   | 1–4        | Complete |
-| [5A — Concept ledger and vocabulary reconciliation](Phase-13/Session-5a-concept-ledger-and-vocabulary.md)                | One greppable concept ledger, decision log, and short narrative with single-meaning names     | 5          | Planned  |
+| [5A — Concept ledger and vocabulary reconciliation](Phase-13/Session-5a-concept-ledger-and-vocabulary.md)                | One greppable concept ledger, decision log, and short narrative with single-meaning names     | 5          | Complete |
 | [5B — Workspace host decision revisit](Phase-13/Session-5b-workspace-host-decision-revisit.md)                           | Recorded row and folded-block participation decisions and an executable Session 6 plan        | 5A         | Planned  |
 | [6 — Workspace line host and editor migration](Phase-13/Session-6-workspace-line-host-and-editor-migration.md)           | Workspace rows participate in the runtime without losing editor or navigation continuity      | 1–5B       | Planned  |
 | [7 — Source/sticky continuity review](Phase-13/Session-7-source-sticky-continuity-review.md)                             | Reviewed compact-row projection and explicit production handoff                               | 6          | Planned  |
@@ -100,11 +100,12 @@ must pass its preservation and visual gates before its compatibility path or leg
 Phase completion requires every session to be complete in order, all affected canonical topics to
 match shipped behavior, and schema/durability documentation to match any reset-era schema rewrite.
 Run formatter, linter, static types, the full unit suite, Storybook build, focused system-browser
-coverage, the full E2E suite, link verification, and `git diff --check`. Record the final shipped
+coverage, the full E2E suite, `npm run check:concepts` for ledger anchors, aliases, and links, and
+`git diff --check`. Record the final shipped
 boundary here and route `NOW.md` to Phase 14 only after the compatibility-removal gate passes.
 
 ## Next action
 
-Execute [Session 5A](Phase-13/Session-5a-concept-ledger-and-vocabulary.md). Session 6 execution
-paused on 2026-09-28 because its plan admits two readings of row participation; Sessions 5A and 5B
-settle the vocabulary and the decision before it resumes.
+Execute [Session 5B](Phase-13/Session-5b-workspace-host-decision-revisit.md). Session 5A produced the
+[concept ledger](../Concepts.md) and [decision log](../Decisions.md) that 5B decides against. Session
+6 stays paused until 5B rewrites its plan.

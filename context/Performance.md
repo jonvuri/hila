@@ -19,8 +19,8 @@ These are the primary CI gates because they identify structural regressions with
 
 1. **Query plans:** hot queries use intended indexes, avoid large-table scans, temporary sorts, and
    automatic indexes.
-2. **Work counts:** bound statements, stepped rows, rows written, cache rows touched, and hydration
-   gathers per operation.
+2. **Work counts:** bound statements, stepped rows, rows written, cache rows touched, and gathers
+   per operation.
 3. **Scaling ratios:** compare seeded fixtures at `N` and `kN`; work must follow its documented
    constant or linear order and never become accidentally super-linear.
 4. **Invalidation fan-out:** an edit recomputes only subscriptions whose table or structural range
@@ -53,19 +53,19 @@ is a regression signal. They supplement rather than replace deterministic guards
 ### Current browser reference
 
 The bounded browser backstop is `e2e/performance-contract.spec.ts`. Its fixed fixture contains a
-72-row deep branch with a 10-level spine, 12 cross-matrix rows, one portal appearance, and a
-120-row folded view. It warms two fold transitions, measures seven, then traces a 48-frame
+72-row deep branch with a 10-level spine, 12 cross-matrix rows, one portal position, and a view with
+120 inline results. It warms two collapse/expand transitions, measures seven, then traces a 48-frame
 bidirectional scroll. The acceptance bounds are:
 
-- large fold-transition p95 at or below 3,500 milliseconds at 20× CPU slowdown;
+- large collapse/expand transition p95 at or below 3,500 milliseconds at 20× CPU slowdown;
 - no 50-millisecond `RunTask` in the reviewed scroll trace;
 - no `Layout` or `UpdateLayoutTree` initiated from a script stack in that trace;
-- no editor churn while the traced rows remain resident;
-- no more than 400 mounted outline rows.
+- no editor churn while the traced stream items remain resident;
+- no more than 400 mounted stream items.
 
-The fold limit is a generous constant-factor backstop for a large synchronous presentation change,
-not the budget for an ordinary row edit. Exact churn and the deterministic guards remain the CI
-authority for structural regressions.
+The collapse/expand limit is a generous constant-factor backstop for a large synchronous
+presentation change, not the budget for an ordinary row edit. Exact churn and the deterministic
+guards remain the CI authority for structural regressions.
 
 The 2026-09-03 reference host was a 14-core Apple M4 Pro MacBook Pro with 24 GB memory. The working
 downmarket-target estimate is 6× slower, based on Chrome's documented low-end mobile preset. Chrome
@@ -73,7 +73,9 @@ also documents 20× as its maximum standard CPU slowdown and recommends it for l
 fast development machines. Because 20× is more severe than the 6× estimate, the suite uses 20×
 without adjusting the threshold. Chrome notes that throttling is relative and cannot reproduce all
 mobile hardware differences, so this remains a conservative browser backstop rather than a device
-certification. See Chrome's [device-mode throttling reference](https://developer.chrome.com/docs/devtools/device-mode#throttle) and [runtime performance guide](https://developer.chrome.com/docs/devtools/performance).
+certification. See Chrome's
+[device-mode throttling reference](https://developer.chrome.com/docs/devtools/device-mode#throttle)
+and [runtime performance guide](https://developer.chrome.com/docs/devtools/performance).
 
 The recorded Chromium 145 run at 1280×720 produced a warmed median of 2,258 milliseconds and p95 of
 2,552 milliseconds. The scroll trace contained zero long tasks and zero script-forced layout
@@ -87,9 +89,9 @@ changes materially.
   target-equivalent throttle unless the operation explicitly runs in a background slice.
 - Scroll-linked work: no repeated forced layout and no long task attributable to one frame update.
 - Reactive writes: no recomputation outside the affected table/range contract.
-- Windowed rendering: mounted rows stay within the configured retained-window bound.
-- Query gathers: work is bounded by the requested window and distinct schemas it touches, not total
-  forest or block size.
+- Paged rendering: mounted stream items stay within the retained range bound.
+- Query gathers: work is bounded by the requested page and distinct schemas it touches, not total
+  forest or view size.
 
 Budgets should be tightened when measured headroom proves stable. Do not loosen them to accommodate
 an unexplained regression.
@@ -113,7 +115,7 @@ Equivalent counters or stable-instance assertions should protect future expensiv
 
 - Prefer work/plan assertions for algorithmic complexity.
 - Prefer browser traces and lifecycle counters for layout, rendering, and editor ownership.
-- Seed representative cross-matrix, deep-tree, portal, and folded-view cases.
+- Seed representative cross-matrix, deep-tree, portal, and inline-results cases.
 - Include a failure control when adding a new harness family so the test proves it can catch the
   intended regression.
 - Keep stress fixtures large enough to expose scale dependence but bounded enough for repeatable

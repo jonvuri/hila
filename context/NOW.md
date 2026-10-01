@@ -2,35 +2,32 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-09-30
+updated: 2026-10-01
 phase: 13
-session: 5A
+session: 5B
 ---
 
 # Now
 
-Phase 13 Sessions 1–5 are complete. The focus panel routes loose, container, and view subjects
-through one recursive collection host. Workspace rows and expanded blocks have not adopted the
-forward host runtime. No schema changed; the database remains reset-only at schema version 0. All
-1,310 unit tests and 169 E2E tests pass.
+Phase 13 Sessions 1–5 and 5A are complete. Session 5A replaced the architecture vocabulary with a
+[concept ledger](Concepts.md) and a [decision log](Decisions.md). Architecture is now a short
+narrative, and canonical topics use the ledger's names. No code or schema changed; the database
+remains reset-only at schema version 0.
 
-Session 6 execution paused on 2026-09-28. Its plan admits two readings of how workspace rows and
-folded blocks participate in the runtime, and the architecture vocabulary made the disagreement
-hard to see. Two documentation sessions now precede it.
+Session 6 stays paused. Session 5B decides how stream items and inline results join the host
+runtime, then rewrites the Session 6 plan.
 
 ## Read next
 
 1. [Phase 13 front door](phases/Phase-13.md).
-2. [Session 5A](phases/Phase-13/Session-5a-concept-ledger-and-vocabulary.md).
-3. [Architecture](Architecture.md), [Plugins](Plugins.md), and
-   [Documentation](Documentation.md) as the documents Session 5A restructures.
+2. [Session 5B](phases/Phase-13/Session-5b-workspace-host-decision-revisit.md). Its preliminary
+   assessment uses pre-ledger terms; translate them through the deprecated-terms table.
+3. [Concepts](Concepts.md), [Decisions](Decisions.md), and [Architecture](Architecture.md).
 
 ## Boundary
 
-Session 5A changes documentation only. It renames nothing in code and re-decides nothing. Stage 3
-stops for the user to choose names. Session 5B then revisits the Session 6 decision against the new
-ledger.
+Session 5B changes no code. It records decisions and rewrites plans only.
 
 ## Next action
 
-Execute Phase 13 Session 5A from Stage 1. Stop at Stage 3 and present the naming table.
+Execute Phase 13 Session 5B.

@@ -77,19 +77,19 @@ Derived cache rows do not replicate.
 
 ## Repaired current coverage
 
-Stage 2 added matrix ownership, promoted nodes, saved-view SQL, normalized face state, and all
-plugin metadata to manifest-driven tracking. `face_configs.slot_bindings` remains an untracked
-derived compatibility copy; normalized slot bindings are authoritative. Face filters use stable
-UUID identity and explicit order.
+Stage 2 added matrix ownership, type nodes, view SQL, normalized face choice state, and all plugin
+metadata to manifest-driven tracking. `face_configs.slot_bindings` remains an untracked derived
+compatibility copy; normalized column slot bindings are authoritative. Filter rows use stable UUID
+identity and explicit order.
 
 Remote apply now materializes new matrix data tables, evolves columns, installs complete triggers,
-and rebuilds derived state inside the no-echo apply transaction. Reference joins restore their
+and rebuilds derived state inside the no-echo apply transaction. `ref` edges restore their
 serialized empty BLOB representation to SQL `NULL` during apply.
 
 Stage 4's complete fixture reconstructs workspace content, hierarchy, cross-matrix ownership,
-portals, promoted types, owned matrixes, inline references and tags, face recipes, and saved-view
-SQL on a fresh replica. It compares source truth by logical identity, rebuilds and compares rendered
-position and ancestry state, retains concurrent promoted/view/owner conflicts, and proves remote
+portals, type nodes, owned matrixes, inline references and aspects, face choices, and view SQL on a
+fresh replica. It compares source truth by logical identity, rebuilds and compares rendered position
+and ancestry state, retains concurrent type node, view, and owner conflicts, and proves remote
 delete lifecycles for every composite fixture entity.
 
 The schema-policy audit introspects live tables, columns, and installed trigger SQL. It compares
@@ -103,9 +103,9 @@ Phase 11 completed the current-schema boundary:
 1. The durability manifest classifies the entire current schema.
 2. Tracking covers all current replicated source-of-truth columns.
 3. Composite-key tables have logical apply/delete rules.
-4. Saved-view SQL replicates with marker identity and position.
-5. A two-replica fixture covers content, ownership, portals, promoted types, owned
-   matrixes, face recipes, and saved views.
+4. View SQL replicates with the view's node identity and position.
+5. A two-replica fixture covers content, ownership, portals, type nodes, owned matrixes, face
+   choices, and views.
 6. Schema-policy tests protect future changes.
 7. The durable dogfooding gate defines the reset-to-versioned-migration milestone.
 

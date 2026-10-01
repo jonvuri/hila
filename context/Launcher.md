@@ -8,9 +8,50 @@
 
 ## The one-sentence model
 
-**One surface, two tempos, and the tempo is a fact about the spec:** a text-only spec renders the quick switcher; the moment any chip commits, the same surface is in deep tempo — chip row, result preview, save affordance — and deleting the last chip is the way back. No mode state exists apart from the spec (the surface analog of "a block's mode is a fact about its SQL").
+**One surface, two tempos, and the tempo is a fact about the spec:** a text-only spec renders the quick switcher; the moment any chip commits, the same surface is in deep tempo — chip row, result preview, save affordance — and deleting the last chip is the way back. No mode state exists apart from the spec (the surface analog of "a view's escalation tier is a fact about its SQL").
 
-The launcher is a **gesture, never a place** (session 2). Depth changes what it _shows_, never what it _is_: its only persistent exit is save-as-node, and its ceiling (below) keeps everything past previewing exactly one save away.
+The launcher is a **gesture, never a place** (session 2). Depth changes what it _shows_, never what it _is_: its only persistent exit is save-as-view, and its ceiling (below) keeps everything past previewing exactly one save away.
+
+## Places and navigation
+
+This section owns places, provenance, ancestry resolution, and the stream root. It was moved here
+from Architecture in Phase 13 Session 5A.
+
+The interface has three kinds of thing:
+
+- **Places:** nodes at rooted positions in the one tree. Ordinary nodes, container nodes, type
+  nodes, and views are places.
+- **Gestures:** transient keyboard-first actions. `/` makes locally; `⌘K` goes or acts globally.
+- **Admin surfaces:** settings and development tools that sit above the database.
+
+The stream root is the primary surface ([Decision 7](Decisions.md#decision-7)). Local navigation
+uses focus panels and rooted ancestry. Global identity navigation reconstructs a rooted focus
+instead of creating a second root.
+
+The production shell mounts one stream root. Phase 12 retired the temporary Workspace, Table, and
+Tags tabs after launcher and rooted-place parity passed. `[` browses container nodes and the
+workspace root; `#` browses type nodes and reaches their matrixes through Deep or the type node's
+place. The admin surfaces keep matrix schema and face choice administration; the matrix browser is
+an inspection tool, not a second product root. URLs, deep links, and saved stream states remain
+deferred.
+
+### Ancestry resolution
+
+When identity navigation needs a place, resolve in this order
+([Decision 22](Decisions.md#decision-22)):
+
+1. the traversed provenance position;
+2. the home position;
+3. a deterministic membership fallback when no live position exists.
+
+A portal position is never selected silently. Placeless creation homes under the node focused when
+the gesture began.
+
+The shipped stream keeps a traversed position key when one is available and derives ancestry from
+that position. The typed resolver validates explicit provenance, then tries the home. If neither is
+live, it reconstructs a positionless focus through the row's matrix-owner chain or the workspace
+root. It reports surviving portal positions for a future chooser but never selects one from
+identity alone. Orphaned positions are not focusable.
 
 ## Anatomy and geometry (D20)
 
@@ -53,7 +94,7 @@ dismiss one at a time from the top.
 
 ## One list, one ranking (D21 · D23)
 
-**Scope.** The launcher searches all named objects — nodes of every stripe (docs, containers, views, type-nodes; matrixes via their 1-to-1 subject nodes) plus commands — and all `label`-role and `content`-role columns (the spec's `text` dimension, `LIKE` now / FTS later).
+**Scope.** The launcher searches all named objects — nodes of every kind (documents, container nodes, views, type nodes; matrixes via their owning container nodes) plus commands — and all `label`-role and `content`-role columns (the spec's `text` dimension, `LIKE` now / FTS later).
 
 **Layout.** One flat list ordered by relevance. No sections, no family caps, no explicit name-vs-content split — family legibility rides the objects' app-wide line renderings and glyphs (`[]` `≔` `#` `›`), and each result carries a right-aligned ancestry breadcrumb resolved down the session-2 ladder (provenance → home → membership).
 
@@ -74,29 +115,36 @@ structural order, and stable identity finish the deterministic order. On-screen 
 from numeric viewport intersections, not the virtualizer's retained buffer, and include visible
 focus-panel subjects.
 
+Discovery runs as one typed worker request over current matrix and column-role metadata. It
+classifies ordinary rows, views, type nodes, per-matrix container subjects, and the workspace root
+before merging main-thread commands. The scan stays linear until FTS; subscriptions, retained
+candidates, excerpts, and breadcrumbs are bounded. Ranking is pure and deterministic. The
+virtualizer reports numeric intersections upward from its existing geometry; retained off-screen
+pages do not receive the on-screen boost, and no observer exists per stream item.
+
 ## Family narrowing: sigil filter tokens (D31)
 
 Passive sectioning is replaced by an active, one-keystroke gesture. A sigil at the start of the input applies a **filter token** — rendered as a visibly distinct hollow token (treatment: §4 placeholder), deleted by `⌫` at input start:
 
-| sigil | narrows to                                                              |
-| ----- | ----------------------------------------------------------------------- |
-| `@`   | named things only (drops content matches)                               |
-| `#`   | promoted types                                                          |
-| `>`   | commands                                                                |
-| `[`   | containers & matrixes (typing the `[]` family symbol's opening bracket) |
+| sigil | narrows to                                                                   |
+| ----- | ---------------------------------------------------------------------------- |
+| `@`   | named things only (drops content matches)                                    |
+| `#`   | type nodes                                                                   |
+| `>`   | commands                                                                     |
+| `[`   | container nodes & matrixes (typing the `[]` family symbol's opening bracket) |
 
-- **Surface channel, not spec channel.** A filter token narrows what the _finder_ shows; it never compiles, never saves, never appears in a saved node. Committing an object out of the narrowed family (`⇥`) consumes the token into the resulting chip — the sigil is also the fast on-ramp into chip authoring.
-- **Sigil alone = browse the family.** `#` lists every type, `[` every container — the "browse all" lenses as gestures, replacing any lens furniture.
-- **Discoverability: families are findable by name** (D15's "names are the only grammar," extended). Typing `types` surfaces a family-filter suggestion row that displays and teaches its sigil — the D16 mastery-ladder shape (menu → typeahead → sigil), applied to families. Clicking any result's family glyph is the pointer path to the same filter. This name+sigil pairing deliberately rhymes with how chip ops pair prose names with glyphs.
+- **Surface channel, not spec channel.** A filter token narrows what the _finder_ shows; it never compiles, never saves, never appears in a saved view. Committing an object out of the narrowed family (`⇥`) consumes the token into the resulting chip — the sigil is also the fast on-ramp into chip authoring.
+- **Sigil alone = browse the family.** `#` lists every type node, `[` every container node — family browse as a gesture, replacing any browse furniture.
+- **Discoverability: families are findable by name** (D15's "names are the only grammar," extended). Typing `types` surfaces a family-filter suggestion that displays and teaches its sigil — the D16 mastery-ladder shape (menu → typeahead → sigil), applied to families. Clicking any result's family glyph is the pointer path to the same filter. This name+sigil pairing deliberately rhymes with how chip ops pair prose names with glyphs.
 - Sigils are recognized at input start only; elsewhere they are literal text. No dedicated view sigil (views ride `@`, identified by `≔`) until proven need. Family-filter hotkeys — local or global — are deferred: inside the launcher the sigil already _is_ a single-keystroke hotkey, and globally `⌘`-digit is the browser's tab-switching range.
 
-Quick ships browse-on-sigil, family-name suggestion rows, pointer activation through result marks,
+Quick ships family browse, family-name suggestions, pointer activation through result marks,
 and backspace removal. Tokens remain launcher state outside query text and `QuerySpec`; Tab consumes
-types, containers, roots, or navigable nodes into kind or scope chips.
+type nodes, container nodes, roots, or navigable nodes into query kind or query scope chips.
 
 ## Commands in the list (D22)
 
-Commands (registry entries with `'launcher'` in `surfaces` — [Plugins.md](Plugins.md#commands)) rank on merit in the one list; `>` narrows to them. A command row shows its subject inline when `subject: 'required'` ("New table — under ⟨Planning⟩"), with the **provenance node** — the node focused when `⌘K` fired — resolved at open time (the session-2 homing rule). A command whose required subject is absent disables with a stated reason.
+Commands (registry entries with `'launcher'` in `surfaces` — [Plugins.md](Plugins.md#commands)) rank on merit in the one list; `>` narrows to them. A command result shows its command target inline when `subject: 'required'` ("New table — under ⟨Planning⟩"). The target is the **provenance** node, focused when `⌘K` fired and resolved at open time (the session-2 homing rule). A command whose required target is absent disables with a stated reason.
 
 `hila.table` is the first concrete launcher command. It captures the invoking node, creates the
 owned matrix through the shared command implementation, applies the table face, reconstructs the
@@ -114,12 +162,14 @@ Three fixed parts; never a directory, never a home surface (session 2):
   successful go, run, save, and insert-ref exits do not enter this list. Those exits already have an
   outcome, and successful navigation is represented by Jump back. If cancellation happens during a
   chip edit, recovery keeps the last committed spec and ordinary query text, not the transient
-  operator/value draft. `⏎` **restores** chips, text, and Deep tempo without executing or navigating.
-  This intentionally narrow recovery role keeps Recents from becoming a shadow bookmark or general
-  search-history system; the durable form of a keeper is save-as-node.
+  operator/value draft. `⏎` **restores** chips, text, and Deep tempo without executing or
+  navigating. This intentionally narrow recovery role keeps Recents from becoming a shadow bookmark
+  or general search-history system; the durable form of a keeper is save-as-view.
 - **Help footer** — one static line of the load-bearing gestures; `?` (on empty input only) opens a one-screen keyboard guide covering the launcher and the app's global gestures, sourced from the command/shortcut registries so it cannot drift. Rotating hints rejected.
 
 Quick ships the bounded Jump back and recent-Deep sections, help footer, and generated guide. The
+session memory store holds four planes: focus history, the current focus-panel chain, canceled
+Deep searches, and on-screen identities ([Decision 27](Decisions.md#decision-27)). The
 entire session store resets on reload and plugin/database reset and never enters schema,
 replication, or user-data classification.
 
@@ -132,7 +182,7 @@ rendering plus **spec-touched columns** (label role + every column referenced by
 surface — a host concern, like fetch-narrowing — not a projection dimension in the spec (D2 stands:
 compiled SQL is always `SELECT d.*`).
 
-**The ceiling:** the preview never mounts a face, never edits a cell, never offers add-row (the `view` firewall applies even to a preview), and `⏎` on a row still means _go_. Everything past the ceiling — editing, a real grid, a recipe — is one `⌘S` away.
+**The ceiling:** the preview never mounts a rendering, never edits a field, never offers add-row (the no-ownership rule applies even to a preview), and `⏎` on a result still means _go_. Everything past the ceiling — editing, a real grid, a face choice — is one `⌘S` away.
 
 The transient preview has a semantic limit of 1,000 rows. It uses 100-row virtual pages and retains
 at most six contiguous pages. Loading, empty, invalid, and execution-error states share the same
@@ -143,15 +193,15 @@ remain prepared while stale count or range results are ignored.
 
 | key             | context         | action                                                                                                                                                                                                                               |
 | --------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `⌘K`            | everywhere (I1) | open, seeded with the provenance node; `⌘K` again or `Esc` dismisses. The former editor-local insert-link binding is retired.                                                                                                        |
-| `⏎`             | on a result     | **go** (reconstruct a focus state at the place/row) or **run** (a command); dismisses. On a recent-deep-search row: restore.                                                                                                         |
-| `⌘⏎`            | on a result     | **insert a ref at the invoking cursor** (D28) — the launcher as link dialog. Enabled only when invoked from an editor with a cursor; disabled with a stated reason otherwise; ignored on command rows.                               |
+| `⌘K`            | everywhere (I1) | open, seeded with the provenance; `⌘K` again or `Esc` dismisses. The former editor-local insert-link binding is retired.                                                                                                             |
+| `⏎`             | on a result     | **go** (reconstruct a focus state at the place/row) or **run** (a command); dismisses. On a recent-deep-search result: restore.                                                                                                      |
+| `⌘⏎`            | on a result     | **insert a ref at the invoking cursor** (D28) — the launcher as link dialog. Enabled only when invoked from an editor with a cursor; disabled with a stated reason otherwise; ignored on command results.                            |
 | `↑` `↓`         | list            | move selection (one flat sequence).                                                                                                                                                                                                  |
-| `⇥`             | on a suggestion | the object-first commit (D15/D16): commit the object and open its op menu — chip authoring. On a family row: apply the filter token.                                                                                                 |
+| `⇥`             | on a suggestion | the object-first commit (D15/D16): commit the object and open its op menu — chip authoring. On a family suggestion: apply the filter token.                                                                                          |
 | `⌫`             | input empty     | pop the newest chip back into editing; again deletes it. At input start with a filter token: delete the token.                                                                                                                       |
 | `←` `→`         | at input edges  | walk chip focus (focused chip: `⏎` edits, `⌫` deletes — the D14 grammar).                                                                                                                                                            |
 | `Esc`           | layered         | op/value menu open → close it; otherwise dismiss immediately, discarding the spec (recoverable via recent deep searches — the two are one design).                                                                                   |
-| `⌘S`            | concrete spec   | save-as-node (D30). Requires a committed concrete matrix/type kind and valid provenance. Heterogeneous searches and absent provenance keep the action visible with a stated reason and a path to commit a kind or return to a place. |
+| `⌘S`            | concrete spec   | save-as-view (D30). Requires a committed concrete matrix/type kind and valid provenance. Heterogeneous searches and absent provenance keep the action visible with a stated reason and a path to commit a kind or return to a place. |
 | `@` `#` `>` `[` | input start     | family filter tokens (D31).                                                                                                                                                                                                          |
 | `?`             | empty input     | the one-screen keyboard guide (D32).                                                                                                                                                                                                 |
 | typed ops       | input           | the D16 fluent path unchanged (`due<`, `status!=` … commit chips directly).                                                                                                                                                          |
@@ -164,22 +214,22 @@ Token-based, one physics, per column type — menu → typeahead → typed, per 
 
 ## Save flow (D30)
 
-`⌘S` compiles a concrete-matrix spec, stores the SQL as a `view` node via the existing block path,
-homes by provenance, and focuses it — with the **name input pre-selected** holding the default name:
-the chip row's prose rendering ("task · due < this week · ↓ due"). Save-then-name, the `/table`
+`⌘S` compiles a concrete-matrix spec, stores the SQL as a view through the existing view path, homes
+by provenance, and focuses it — with the **name input pre-selected** holding the default name: the
+chip row's prose rendering ("task · due < this week · ↓ due"). Save-then-name, the `/table`
 pending-handoff precedent — zero prompts inside the gesture. Nudges render in the save bar before
-commit: a heterogeneous lens must commit a matrix/type kind first; absent provenance must return to
-a valid place; relative dates save as literal ranges.
+commit: a heterogeneous search must commit a matrix/type kind first; absent provenance must return
+to a valid place; relative dates save as literal ranges.
 
-## Stage-4 build items
+## Stage-4 build list
 
-Every item now ships.
+Every entry now ships.
 
 1. **Command registry extraction — shipped.** `slash-commands.ts` → core registry with `surfaces`; the `/` menu consumes it unchanged (session 3 D6).
-2. **Query-spec compiler + recognizer — shipped.** `src/sql/query-spec/` beside `recognize-updatable.ts`, round-trip conformance suite (3b-i; shared with view blocks).
-3. **Launcher shell — shipped.** Overlay, input, flat ranked results, sigil filter tokens + family rows, ranking blend, reserved jump-back + recents, and generated help; name/content match over places + commands. `Mod-k` has left `keymap.ts` (I1).
+2. **Query-spec compiler + recognizer — shipped.** `src/sql/query-spec/` beside `recognize-updatable.ts`, round-trip conformance suite (3b-i; shared with views).
+3. **Launcher shell — shipped.** Overlay, input, flat ranked results, sigil filter tokens + family suggestions, ranking blend, reserved jump-back + recents, and generated help; name/content match over places + commands. `Mod-k` has left `keymap.ts` (I1).
 4. **Chips + deep tempo — shipped.** Chip authoring (menu/typeahead/typed), per-keystroke compiled runs, viewport expansion, and spec-touched bounded preview.
-5. **Save-as-node + `⌘⏎` insert-ref — shipped.** Concrete specs save through the existing view-block
+5. **Save-as-view + `⌘⏎` insert-ref — shipped.** Concrete specs save through the existing view
    identity and focus/name handoff. Quick discovery and Deep preview insert through the invoking
    live editor selection; stale or absent editors state a reason.
 6. **Session memory wiring — shipped.** Bounded in-memory focus history, canceled-Deep recovery,
@@ -187,12 +237,12 @@ Every item now ships.
    separate deferred change.
 7. **Tab retirement — shipped.** Fixture-driven Storybook references preserve the Table and Tags
    manager states without a worker. The production shell now mounts one stream root; `[` and `#`
-   browse containers and promoted types, and the development system edge retains schema and face
+   browse container nodes and type nodes, and the admin surfaces retain schema and face
    administration.
 
 ## Deferred
 
-- **Frecency** — persist the session-recency signal; slots into the ranking blend unchanged.
+- **Frecency** — persist the session-recency signal; fits into the ranking blend unchanged.
 - **Relevance tuning** — coefficients of the ranking blend, during implementation and use.
 - **Live-relative date tokens** — the runtime-parameter dialect extension above, on a second consumer or proven need.
 - **Family-filter hotkeys** (local or global) · **a view-family sigil** · **filter-strip counts** (a count can ride the filter token) — each on proven need.

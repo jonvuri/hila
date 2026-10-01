@@ -2,11 +2,11 @@
 
 > **Implementation status.** Canonical tokens, theme values, the component-variant registry, the
 > production workspace/sticky slice, shared overlay/selectable-list primitives, production Quick
-> and Deep launcher presentations, startup visual-theme selection, and recursive face-host
-> fidelity inputs ship. The live table, inline-reference, autocomplete, tag-property, shared-field,
-> and property-row boundaries use canonical roles. Fixture-driven Storybook references preserve
+> and Deep launcher presentations, startup visual-theme selection, and recursive fidelity scopes
+> ship. The live table, inline-reference, autocomplete, aspect field, shared-field, and
+> property-row boundaries use semantic tokens. Fixture-driven Storybook references preserve
 > the retired Table and Tags roots across themes, polarities, and narrow widths. The remaining
-> face, browser, and system-edge migrations do not ship yet. Future sequencing belongs in
+> face, browser, and admin surface migrations do not ship yet. Future sequencing belongs in
 > [Plan.md](Plan.md), not this topic contract.
 
 The hila design system provides a set of design tokens, structural primitives, and interactive components that define the visual language of the application. Everything is built on SolidJS with CSS Modules and documented in Storybook.
@@ -14,12 +14,13 @@ The hila design system provides a set of design tokens, structural primitives, a
 ## Design principles
 
 - **One interface, multiple expressions.** Themes share state, content, behavior, targets,
-  accessibility, and semantic meaning. A documented presentation adapter may vary geometry and
+  accessibility, and semantic meaning. A documented theme geometry adapter may vary geometry and
   chrome without forking product capability or interaction logic.
-- **Explicit semantic states.** Hover, keyboard focus, selection, disabled, invalid, and armed danger
-  stay distinct. Accent identifies focus, selection, and live paths. Red identifies risk only.
-- **Readable density.** Long-form copy keeps the shared body face. Display and data faces can identify
-  headings, labels, and data without entering prose.
+- **Explicit semantic states.** Hover, keyboard focus, selection, disabled, invalid, and armed
+  danger stay distinct. Accent identifies focus, selection, and live paths. Red identifies risk
+  only.
+- **Readable density.** Long-form copy keeps the shared body face. Display and data faces can
+  identify headings, labels, and data without entering prose.
 - **Theme-contained chrome.** Ghost uses the least visible treatment that preserves comprehension.
   Null uses conventional radius, fills, and elevation. Wipeout uses hard brightness steps, square
   geometry, aligned low-poly chrome, and no glow.
@@ -60,7 +61,7 @@ it for their reviewed dark launcher surface instead of a component-local black l
 
 ### Canonical atom groups
 
-| Group               | Fundamental token families                                                                               | Semantic roles                                                                                                                                                                                                                                                              |
+| Group               | Fundamental token families                                                                               | Semantic tokens                                                                                                                                                                                                                                                             |
 | ------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Color               | `--palette-neutral-*`, `--palette-blue-*`, `--palette-violet-*`, `--palette-red-*`, `--palette-shadow-*` | `--color-canvas`, `--color-surface`, `--color-overlay`, `--color-overlay-strong`, `--color-scrim`, `--color-text-strong`, `--color-text`, `--color-text-muted`, `--color-text-faint`, `--color-inverse-surface`, `--color-inverse-text`, `--color-accent`, `--color-danger` |
 | Type                | `--font-family-*`, `--font-size-*`, `--font-weight-*`, `--line-height-*`, `--letter-spacing-*`           | `--type-body-*`, `--type-label-*`, `--type-data-*`, `--type-display-*`                                                                                                                                                                                                      |
@@ -94,28 +95,30 @@ Density is a host-computed `wide` or `narrow` input. It is not stored as a visua
 32-pixel interaction target stays fixed in both tiers. Density can change text scale, content
 inset, and gaps. It must not change state meaning or hide data.
 
-### Responsive workspace presentation
+### Shell layout
 
-The shipped shell-presentation axis is separate from density, theme, polarity, and fidelity. At a
-719px-or-narrower workspace host, the shell shows only the active existing panel at full width. At
-720px or wider, it keeps the current bounded rail. A host-local `ResizeObserver` selects the runtime
-presentation; no global window size or durable state participates. The resolved value is exposed as
+The shipped shell layout is separate from density, theme, polarity, and fidelity
+([Decision 26](Decisions.md#decision-26)). At a shell width of 719px or less, the single-panel
+layout shows only the active panel at full width. At 720px or wider, the rail layout keeps the
+current bounded rail. The code values are `single-panel` and `bounded-rail`. A host-local
+`ResizeObserver` selects the runtime layout; no global window size or durable state participates.
+The resolved value is exposed as
 `data-shell-presentation` for styling, accessibility checks, and deterministic tests.
 
-The controller's retained panels stay mounted across presentation changes so editor selection,
-pending saves, focus, scroll, virtualizer, and outline state survive. Hidden panels use the HTML
+The controller's retained panels stay mounted across layout changes so editor selection, pending
+saves, focus, scroll, virtualizer, and navigation panel state survive. Hidden panels use the HTML
 hidden state, `aria-hidden`, and `inert`, removing them from layout, hit testing, tab order, and the
 accessibility tree without destroying their component state. If focus would become hidden, it moves
 to the active panel landmark and a polite status message announces the change. Focus already inside
 the active panel is not moved.
 
-Narrow mode reuses the active panel's ancestry and root recovery plus existing Back, Jump back, and
-launcher gestures. When the root panel is offscreen, a shell-level path header reuses the root
-indicator and adds ancestry segments. It stays outside the horizontally scrolling panel rail and
-becomes the shell's sole launcher origin. Deep ancestry scrolls horizontally, and its controls use
-coarse-pointer target sizing independently of density. The projection adds no persistent toolbar,
-path rail, switcher, history, or durable state. No explicit focused workflow exists for wide
-viewports.
+The single-panel layout reuses the active panel's ancestry and root recovery plus existing Back,
+Jump back, and launcher gestures. When the root panel is offscreen, a shell-level path header
+reuses the root indicator and adds ancestry segments. It stays outside the horizontally scrolling
+panel rail and becomes the shell's sole launcher origin. Deep ancestry scrolls horizontally, and its
+controls use coarse-pointer target sizing independently of density. The layout adds no persistent
+toolbar, path rail, switcher, history, or durable state. No explicit focused workflow exists for
+wide viewports.
 
 The reduced-motion media query sets nonessential duration roles to `0ms`. It keeps scroll-linked
 position continuity and final states. No component can use motion to carry information that is
@@ -124,8 +127,8 @@ otherwise absent.
 ### Adding new tokens
 
 1. Add a fundamental token only when no existing building block can express the value.
-2. Add or update a semantic role in `src/design/tokens.css`.
-3. Make the semantic role reference fundamental tokens.
+2. Add or update a semantic token in `src/design/tokens.css`.
+3. Make the semantic token reference fundamental tokens.
 4. Add the typed name or axis value to `src/design/tokens.ts`.
 5. Update the token stories and contract tests.
 6. Update all current consumers in the same change. Do not add an old-name alias.
@@ -136,7 +139,7 @@ Visual theme, polarity, component variant, and rendering fidelity are separate a
 
 - **Polarity** is `dark` or `light`. The `data-theme` attribute controls this axis.
 - **Visual theme** is Ghost, Null, or Wipeout. All three are approved to ship.
-- **Component variant** selects one local visual treatment, such as a navigation outline or table
+- **Component variant** selects one local look, such as the outline variant or the table
   treatment. It does not create a new global theme. An explicit component value stays unchanged
   when the visual theme changes.
 - **Rendering fidelity** is composed or substrate, with x-ray as an orthogonal inspection state. It
@@ -150,7 +153,7 @@ Visual theme, polarity, component variant, and rendering fidelity are separate a
 
 Null and Wipeout preserve Ghost's interface contract, content behavior, state meaning, and target
 sizes. Themes normally vary through fundamental values, semantic references, and optional
-decoration. A component may also expose an explicit theme-selected presentation adapter when its
+decoration. A component may also expose an explicit theme geometry adapter when its
 canonical contract documents the allowed geometry and all behavior remains shared. The launcher is
 the first approved use of this seam.
 
@@ -178,7 +181,7 @@ adapter boundary; it must not spread into data, state, or interaction logic.
 
 Storybook exposes separate `polarity` and `visualTheme` toolbar values through one decorator.
 The focused theme preview can keep its local `visualTheme` control. The forward navigation
-specimen uses the approved Guides treatment and does not expose a single-option outline control.
+specimen uses the approved Guides outline variant and does not expose a single-option control.
 
 Phase 13's shipped build/development-startup input is
 `VITE_HILA_VISUAL_THEME=ghost|null|wipeout`. Missing or invalid input resolves to Ghost before the
@@ -206,20 +209,22 @@ The host resolves fidelity in this order:
 
 `data-fidelity="composed|substrate"` exposes the resolved value to CSS. `data-x-ray="true"` records
 the global inspection state at the workspace root. X-ray does not change polarity, visual theme,
-component variants, or stored face recipes.
+component variants, or stored face choices.
 
 Composed rendering can use `--color-surface`, `--color-overlay`, and the semantic elevation roles.
 Substrate rendering uses explicit line and label roles and selects `--elevation-none`. It must
 expose all fields and relationship metadata. It can use surface brightness steps, but it must not
-use elevation to imply hidden structure. X-ray applies the substrate rules at every scope and is
-the identity-face conformance check.
+use elevation to imply hidden structure. X-ray applies the substrate rules at every scope. The
+fallback rendering, which always draws at substrate, is the conformance reference
+([Decision 18](Decisions.md#decision-18)).
 
-The Phase 13 runtime applies this cascade recursively through face hosts and passes the resolved
-value to each interior. The focus-panel collection host preserves the scope when a nested subject
-yields back through a host slot. The workspace root owns transient x-ray state and exposes the
-inspection setter for the later system-edge control. Reload recreates the state with x-ray off.
-Non-face editor, browser, and system-edge controls still migrate to canonical semantic roles, but
-they do not need parallel composed and substrate renderings.
+The Phase 13 runtime applies this cascade recursively through fidelity scopes and passes the
+resolved value to each rendering. The focus-panel collection host preserves the scope when a nested
+subject yields back through a rendering mount. The shell root owns transient x-ray state and
+exposes the inspection setter for a later admin surface control. Reload recreates the state with
+x-ray off ([Decision 25](Decisions.md#decision-25)). Editor, browser, and admin surface controls
+that are not renderings still migrate to semantic tokens, but they do not need parallel composed
+and substrate forms.
 
 ### Accessibility ownership
 
@@ -242,7 +247,7 @@ The approved roadmap owns their future order.
 1. Implement both token layers and migrate all current design-system and approved specimen
    consumers in one change. Delete the old token names and the temporary ThemeCard role layer.
 2. Rebuild sticky navigation as a bounded, VS Code-inspired widget in Storybook. Disable boundary
-   rubber-band for this view.
+   rubber-band for this widget.
 3. Adapt the approved widget to paged production data and the production virtualizer.
 4. Migrate the live shell and stream to the approved workspace, themes, sticky model, and
    navigation-outline configuration.
@@ -251,28 +256,29 @@ The approved roadmap owns their future order.
 6. The shared overlay/selectable-list primitives shipped in Phase 12 Session 4. Session 4A approved
    provisional theme-specific launcher shells over one interface contract. Quick shipped in Session
    5 and Deep in Session 6. Keep evaluating the Wipeout expression through dogfooding.
-7. Capture the retiring Table and Tags views in Storybook. Then remove their top-level tabs.
+7. Capture the retiring Table and Tags surfaces in Storybook. Then remove their top-level tabs.
 8. Migrate faces and browsers one at a time. Apply composed, substrate, and x-ray fidelity as an
    independent axis. Phase 13 Sessions 3–5 migrated the table, shared inline/property, and
-   focus-panel/query boundaries. Workspace, editor, and system-edge boundaries remain.
+   focus-panel/query boundaries. Workspace, editor, and admin surface boundaries remain.
 
 ### Sticky navigation
 
 The approved navigation uses one bounded sticky widget inside its native vertical scrollport. The
-source outline remains the only tree. Sticky copies expose named actions, but they do not own tree
-items, editors, drag behavior, or selection state.
+navigation panel remains the only tree. Sticky items expose named actions, but they do not own
+tree semantics, editors, drag behavior, or selection state
+([Decision 32](Decisions.md#decision-32)).
 
-The primary sticky stack is the expanded ancestry of the first visible nested position. Each row
-uses a canonical 32-pixel slot and its visible-subtree end for push-off. One secondary drill dock
-represents the focused target when normal flow or the primary stack does not represent it. The
-dock yields to the same tree appearance in the primary stack and takes its canonical slot on the
+The primary sticky stack is the expanded ancestry of the first visible nested position. Each sticky
+item uses the canonical 32-pixel height and its visible-subtree end for push-off. One secondary
+drill dock represents the focused target when normal flow or the primary stack does not represent
+it. The dock yields to the same position in the primary stack and takes its canonical place on the
 first push pixel.
 
-Production paging uses `global_lexkey` as the ordered appearance identity and `(matrix_id,
-row_id)` as logical row identity. A bounded metadata plane supplies ancestry, subtree ends,
-post-window continuation, and drill resolution when source rows are not mounted. It does not widen
+Production paging uses `global_lexkey` as the ordered position identity and `(matrix_id,
+row_id)` as row identity. A bounded metadata plane supplies ancestry, subtree ends,
+post-range continuation, and drill resolution when stream items are not mounted. It does not widen
 the rendered range. The virtualizer supplies scroll and retained geometry values. Scroll handlers
-must not read row layout.
+must not read item layout.
 
 The widget stops at the content viewport and cannot cover the native scrollbar. The workspace
 title masks outgoing rows. `overscroll-behavior: none` belongs only to the navigation scrollport.
@@ -337,18 +343,19 @@ Run with `pnpm storybook`. Configuration:
 - `.storybook/preview.ts` — imports tokens and reset, then applies the polarity and visual-theme
   decorator.
 
-Token documentation stories (color palette, spacing, typography) are in `src/design/tokens.stories.tsx`.
-The `Design/Table` stories exercise all three shipped table treatments across the shared polarity
-and visual-theme toolbars. The live embedded table uses the same validated keys and shared
-decoration adapter without reusing specimen-only row markup.
-The worker-free `References/Retired top-level surfaces` stories preserve the former Table schema,
-cell, sort, and edit states plus Tags list, count, instance, create, and context states. They are
+Token documentation stories (color palette, spacing, typography) are in
+`src/design/tokens.stories.tsx`. The `Design/Table` stories exercise all three shipped table
+treatments across the shared polarity and visual-theme toolbars. The live embedded table uses the
+same validated keys and shared decoration adapter without reusing specimen-only row markup. The
+worker-free `References/Retired top-level surfaces` stories preserve the former Table schema, cell,
+sort, and edit states plus Tags list, count, instance, create, and context states. They are
 historical visual evidence, not current navigation.
 
 ## Migration notes
 
-The live table collection, table line, inline references, autocomplete, tag properties, shared
-fields, property rows, formula input, and embedded-table host now consume canonical semantic roles.
-`src/global.css` still contains hardcoded styles for the app shell, sidebar, outline face, note
-face, and matrix browser. Each remaining migration slice replaces its full local style boundary
-without compatibility aliases. See [Design-Faces.md](Design-Faces.md) for the plan.
+The live table collection rendering, table line rendering, inline references, autocomplete, aspect
+fields, shared fields, property row components, formula input, and embedded-table host now consume
+semantic tokens. `src/global.css` still contains hardcoded styles for the app shell, sidebar,
+legacy outline and note faces, and matrix browser. Each remaining migration slice replaces its full
+local style boundary without compatibility aliases. See [Design-Faces.md](Design-Faces.md) for the
+plan.

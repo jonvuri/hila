@@ -2,20 +2,20 @@
 
 > **Status: executable v1 runtime and transient and durable chip surfaces shipped.** Session 2
 > delivered the compiler, recognizer, bound runtime, deterministic paging, and rename healing.
-> Session 6 added launcher authoring and preview. Session 7 added recognition-backed saved-view
-> editing and raw SQL x-ray/custom mode.
+> Session 6 added launcher authoring and preview. Session 7 added recognition-backed view
+> editing and raw SQL mode.
 
-> Decided in [Phase 10 §3b](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (session 3b-i; visual companion + round-by-round reasoning: [Phase-10-Session-3b-visuals.html](./archive/visuals/Phase-10-Session-3b-visuals.html), determinations D1–D19). This is the shared model behind the `⌘K` launcher's filtered search, persisted `view` nodes/blocks, and result-surface gestures — the higher-level authoring layer above raw SQL anticipated by [Phase 9 §9.3](./archive/phases/Phase-9.md#93-embedded-collections--live-views), designed once and spoken by every surface.
+> Decided in [Phase 10 §3b](./archive/phases/Phase-10.md#3b-launcher-deep-dive--the-query-spec) (session 3b-i; visual companion + round-by-round reasoning: [Phase-10-Session-3b-visuals.html](./archive/visuals/Phase-10-Session-3b-visuals.html), determinations D1–D19). This is the shared model behind the `⌘K` launcher's filtered search, persisted views, and result-surface gestures — the higher-level authoring layer above raw SQL anticipated by [Phase 9 §9.3](./archive/phases/Phase-9.md#93-embedded-collections--live-views), designed once and spoken by every surface.
 
 ## The one-sentence model
 
-**Gestures edit a spec; the spec compiles to canonical SQL; SQL is what is stored and run; a recognizer lifts stored SQL back into the spec.** The spec is a derived, in-memory view over SQL — never a second source of truth.
+**Gestures edit a spec; the spec compiles to canonical SQL; SQL is what is stored and run; a recognizer lifts stored SQL back into the spec.** The spec is a derived, in-memory form of SQL — never a second source of truth.
 
 This inverts Metabase's arrangement (structured spec canonical, SQL an irreversible escape hatch) and generalizes a pattern hila already ships: [`recognize-updatable.ts`](../src/sql/recognize-updatable.ts) lifts write-back structure out of stored SQL today. Because recognition is **recomputed on read, never stored**, there is no conversion moment and no one-way door inside the dialect. The door exists only at the dialect's edge — and it is marked (see [Escalation tiers](#escalation-tiers)).
 
 Consequences that fall out:
 
-- **§9.3's _executed == stored_ is unbroken.** One storage story for view blocks: SQL. Sync, x-ray, and the MCP write path all see the truth.
+- **§9.3's _executed == stored_ is unbroken.** One storage story for views: SQL. Sync, raw SQL mode, and the MCP write path all see the truth.
 - **Agents write plain SQL and users get chips.** An MCP agent that emits dialect-shaped SQL produces views whose gesture chrome lights up; off-dialect SQL degrades honestly, exactly like a power user's. The dialect is documented agent-facing guidance, never enforced.
 - **The compiler and recognizer will be a matched pair** in `src/sql/query-spec/` beside
   `recognize-updatable.ts`, sharing the parser and kept honest by a round-trip conformance suite
@@ -99,7 +99,7 @@ compiled or durable spec therefore has one concrete matrix.
 ### Catalog boundary and invalid states
 
 Compilation and recognition receive a catalog containing matrix IDs, current physical table
-names, ordered column definitions, semantic roles, and any node identities needed by scope. They
+names, ordered column definitions, column roles, and any node identities needed by scope. They
 fail with a typed reason when:
 
 - the matrix, scope node, column, or physical name no longer exists;
@@ -111,14 +111,14 @@ fail with a typed reason when:
 
 A trailing semicolon and SQL whitespace/comments are harmless. A second statement or any trailing
 token that is not part of the parsed statement is rejected. Development mutation SQL stays on its
-existing separate system-edge path.
+existing separate admin surface path.
 
 ### Canonical SQL
 
 One normalized concrete-matrix spec has two renderings:
 
-1. A transient plan: `{ template, bindings }`. Values, scope-node IDs, text, and the limit are bound.
-   Resolved table and column identifiers are the only interpolated parts.
+1. A transient plan: `{ template, bindings }`. Values, scope-node IDs, text, and the limit are
+   bound. Resolved table and column identifiers are the only interpolated parts.
 2. Persistent SQL: the same clauses with SQLite literals materialized in place. It is
    self-contained and is the only stored truth.
 
@@ -168,34 +168,34 @@ scope/text/limit; it treats harmless SQL formatting and identifier quoting as eq
 Recognition has three results: `chips`, `chips-with-leaves`, or `custom-sql`. Invalid SQL is still
 a valid named place: execution may show its error, but recognition never deletes or rewrites it.
 
-- **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so hydration and write-back editability hold by construction. Column _visibility_ is the face recipe's business ([Plugins.md — composition model](Plugins.md#forward-composition-model)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
+- **No projection dimension — permanently.** Compiled SQL is always `SELECT d.*` + `id`, so row identity and writable fields hold by construction. Column _visibility_ is the face choice's business ([Plugins.md — face choices](Plugins.md#face-choices)); fetch _narrowing_ is a host execution concern (wrapping, like windowing).
 - **Text is the residue; chips are the commitments.** The launcher's bare typed words are the
   `text` dimension. It searches label- and content-role fields, while launcher ranking favors label
   matches by default. When FTS lands
   ([Plan.md — deferred decisions](Plan.md#deferred-decisions)), only the compile rule changes —
   every surface, saved node, and gesture is untouched.
-- **`kind: everything`** (the launcher's zero-chip cross-matrix search) and `containers` are transient
-  discovery lenses in v1. Saving requires a concrete matrix/type kind. A durable heterogeneous lens
-  would otherwise freeze the current runtime matrix set; it waits for a dynamic global-search
-  substrate.
+- **`kind: everything`** (the launcher's zero-chip cross-matrix search) and `containers` are
+  transient discovery modes in v1. Saving requires a concrete matrix/type kind. A durable
+  heterogeneous search would otherwise freeze the current runtime matrix set; it waits for a dynamic
+  global-search foundation.
 
 ## Surfaces and lifetimes
 
 The same spec is designed to drive three surfaces at three tempos:
 
 - **`⌘K` launcher** — transient. The spec lives in memory; compiled SQL runs per keystroke (bound parameters re-bind rather than re-prepare); nothing is stored.
-- **View blocks / `view` nodes** — persisted. Chips are derived by recognizing the block's stored SQL on mount; editing a chip recompiles and stores new SQL. "view SQL ▸" (the query's x-ray) is always one keystroke away and editable in place.
-- **Result surfaces** — in place. Substrate/grid column headers offer sort (v1) and filter-on-value (fast-follow), emitting the same spec ops against the enclosing subject's query.
+- **Views** — persisted. Chips are derived by recognizing the view's stored SQL on mount; editing a chip recompiles and stores new SQL. Raw SQL mode ("view SQL ▸") is always one keystroke away and editable in place.
+- **Result surfaces** — in place. Fallback collection and table column headers offer sort (v1) and filter-on-value (fast-follow), emitting the same spec ops against the enclosing subject's query.
 
-**Save-search-as-node** is the escalation between lifetimes after a concrete matrix/type kind is
-committed: compile the launcher's spec → store the SQL as a `view` node via the existing block path
-→ home by provenance ([ancestry contract](Architecture.md#ancestry)) → focus it. No new storage; a
-saved search is indistinguishable from a hand-made block, and because its SQL was compiler-emitted,
+**Save-as-view** is the escalation between lifetimes after a concrete matrix/type kind is committed:
+compile the launcher's spec → store the SQL as a view through the existing view path → home by
+provenance ([ancestry resolution](Launcher.md#ancestry-resolution)) → focus it. No new storage; a
+saved search is indistinguishable from a hand-made view, and because its SQL was compiler-emitted,
 it recognizes back into chips by construction.
 
 ## Escalation tiers
 
-A block's "mode" is a fact about its SQL, recomputed on read:
+A view's escalation tier is a fact about its SQL, recomputed on read:
 
 | tier             | when                                                               | surface shows                               |
 | ---------------- | ------------------------------------------------------------------ | ------------------------------------------- |
@@ -203,7 +203,7 @@ A block's "mode" is a fact about its SQL, recomputed on read:
 | **chips + leaf** | dialect shape, plus terms the recognizer can't type                | normal chips + an opaque leaf chip per term |
 | **custom SQL**   | outside the dialect (joins, aggregates, unions, hand-restructured) | a single custom-query chip + the SQL        |
 
-The middle tier is load-bearing: one exotic condition never evicts a block from gesture-land. **No silent rewriting** (§9.3's rule) carries over: gestures never reformat hand-written SQL unless a gesture is actually used, and then only the terms the recognizer owns are recompiled — opaque leaves are preserved verbatim.
+The middle tier is load-bearing: one exotic condition never evicts a view from gesture-land. **No silent rewriting** (§9.3's rule) carries over: gestures never reformat hand-written SQL unless a gesture is actually used, and then only the terms the recognizer owns are recompiled — opaque leaves are preserved verbatim.
 
 ## The leaf taxonomy
 
@@ -213,14 +213,14 @@ Every clause position gets either a canonical chip grammar or an opaque leaf:
 | -------- | ---------------- | ----------------------------------------------- |
 | WHERE    | fragment         | one opaque boolean term                         |
 | FROM     | **source (CTE)** | a full opaque SELECT the outer query reads from |
-| SELECT   | computed         | one opaque expression column (dry)              |
+| SELECT   | computed         | one opaque expression column (read-only)        |
 
 **The source chip** — canonical shape `WITH name AS (…opaque…) SELECT d.* FROM name d …dialect…`:
 
 - Recognition stays cheap: a balanced-blob CTE prefix + a dialect outer query. The body is never parsed by the recognizer; the AST machinery (tables-visited invalidation, sandbox authorization) already walks full statements.
 - Column vocabulary by introspection (result keys — the existing `QueryBand` pattern). Chips needing columns the output lacks (scope needs position identity; text needs a label role) **disable with a stated reason**.
-- **Write-back composes recursively:** if the CTE body itself lifts as a passthrough of a base table, updatability chases through; opaque body → dry, honestly. (`recognize-updatable` rejecting `WITH` today is a v1 restriction, not doctrine — this is its designed growth.)
-- One inline CTE per query for now. _Referencing another view node as source_ is the deferred flavor (it rides the ref/ghost machinery); the chip's shape already fits it.
+- **Write-back composes recursively:** if the CTE body itself lifts as a passthrough of a base table, updatability chases through; opaque body → read-only, honestly. (`recognize-updatable` rejecting `WITH` today is a v1 restriction, not doctrine — this is its designed growth.)
+- One inline CTE per query for now. _Referencing another view as source_ is the deferred flavor (it rides the reference and dangling-reference machinery); the chip's shape already fits it.
 
 ## Write-back by construction
 
@@ -228,7 +228,7 @@ The compiler's output shape is exactly what the existing machinery trusts:
 
 - **Single base table + `d.*` + `id` always** — every compiled view passes `recognize-updatable`; the "+ id to edit" affordance remains only for hand-written SQL.
 - **Subtree scope via single-table `EXISTS`** — the form §9.3 already proved keeps updatability recognition sound.
-- **Insert stays anchoring-governed** (the [`view` firewall](./archive/phases/Phase-9.7.md#3-three-child-sourcing-modes-the-unification)): gestures change what you _see_, never what owns; the host still omits add-row for `view` subjects.
+- **Insert stays anchoring-governed** (the [no-ownership rule](./archive/phases/Phase-9.7.md#3-three-child-sourcing-modes-the-unification)): gestures change what you _see_, never what owns; the host still omits add-row for `view` subjects.
 - **Plain SELECT output** — the invalidation engine and prepared-statement reuse apply unchanged.
 - **Rename healing:** dialect SQL can be recognize→recompiled against the catalog when a column is renamed, healing every chip-built view; stranded opaque leaves go invalid _individually_, with the old name stated.
 
@@ -242,15 +242,15 @@ The compiler's output shape is exactly what the existing machinery trusts:
 
 ## Glyph vocabulary (v1)
 
-| glyph                   | means                                                                                                                                                    | borrowed from                         |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `[]` · `[name]`         | matrix (the membership plane) — standalone as the family symbol, wrapping names as the object mark. Supersedes the informal `▣`                          | math matrix notation · array literals |
-| `#name`                 | a promoted type — its app-wide identity, color and icon included                                                                                         | in-app prose                          |
-| `≔ name`                | defined by a query — view node/block, CTE/source chip, custom-query chip; one concept at every granularity (typed `:=`; the SQL layer shows `WITH … AS`) | math definition · Pascal/Go `:=`      |
-| `name ›`                | scope — this node and below                                                                                                                              | the app's breadcrumb chevron          |
-| `ƒ name`                | formula — a computed, dry value; app-wide, covering matrix formula columns and view computed items (alias required on commit)                            | Excel _fx_                            |
-| `=` `≠` `<` `>` `∈` `∅` | predicate ops (predicate _fragments_ carry no glyph — their comparison ops self-signal)                                                                  | math                                  |
-| `↓` `↑`                 | order                                                                                                                                                    | sort convention                       |
+| glyph                   | means                                                                                                                                         | borrowed from                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `[]` · `[name]`         | matrix (the membership plane) — standalone as the family symbol, wrapping names as the object mark. Supersedes the informal `▣`               | math matrix notation · array literals |
+| `#name`                 | a type node — its app-wide identity, color and icon included                                                                                  | in-app prose                          |
+| `≔ name`                | defined by a query — view, CTE/source chip, custom-query chip; one concept at every granularity (typed `:=`; the SQL layer shows `WITH … AS`) | math definition · Pascal/Go `:=`      |
+| `name ›`                | scope — this node and below                                                                                                                   | the app's breadcrumb chevron          |
+| `ƒ name`                | formula — a computed, read-only value; app-wide, covering matrix formula columns and view computed columns (alias required on commit)         | Excel _fx_                            |
+| `=` `≠` `<` `>` `∈` `∅` | predicate ops (predicate _fragments_ carry no glyph — their comparison ops self-signal)                                                       | math                                  |
+| `↓` `↑`                 | order                                                                                                                                         | sort convention                       |
 
 Rejected candidates, recorded: `∈` for CTE (collides with the IN op; membership test ≠ definition) · `φ` (visual collision with `∅` at chip size) · `P` (reads as an identifier) · `↦` (implies always-visible alias) · `WITH` as chip label (demoted to the SQL layer, paired with `≔` by the mastery ladder).
 
@@ -262,13 +262,13 @@ Rejected candidates, recorded: `∈` for CTE (collides with the IN op; membershi
 
 ## Growth path
 
-Stress-tested against everything deferred (visuals §10). The design holds for structural reasons, not because the v1 subset is small: growth is **per-clause** (complexity additive, recognition compositional); the flat chip row **mirrors SQL's own clause spine** (hierarchy lives inside clauses — exactly where leaves and the compound chip go); and hierarchy/write-back pressure concentrates in features the view layer already owns by other means (scaffold fields, recipes, the launcher).
+Stress-tested against everything deferred (visuals §10). The design holds for structural reasons, not because the v1 subset is small: growth is **per-clause** (complexity additive, recognition compositional); the flat chip row **mirrors SQL's own clause spine** (hierarchy lives inside clauses — exactly where leaves and the compound chip go); and hierarchy/write-back pressure concentrates in features the interface already owns by other means (panel region fields, face choices, the launcher).
 
 Sequence, by value:
 
 1. **`IN`/`BETWEEN` predicate sugar** — trivial; collapses most disjunctions.
 2. **Relationship traversal predicates** (`has #urgent`, `aspect.status ≠ done`, backlinks) — canonical EXISTS templates over the joins/position tables; the app's soul.
-3. **Aggregation/group-by** — flat `group:`/`measure:` chips (the MBQL precedent); results turn dry honestly.
+3. **Aggregation/group-by** — flat `group:`/`measure:` chips (the MBQL precedent); results turn read-only honestly.
 4. **Multi-kind union** — multi-select on the kind chip; predicates restricted to shared columns.
 5. **OR-groups** — CNF only (AND of OR-groups), one nesting level, rendered by the **compound chip** — the single new UI primitive the whole path needs (shared with traversal inner-predicates).
 
@@ -280,6 +280,6 @@ Sequence, by value:
 - **Live-relative date tokens** (a saved "today" view that is always today) — the designed dialect extension, deferred on need: the compile rule emits a reserved **runtime parameter** (`:today`-family) that the recognizer lifts back to the token; the executor binds an environment at run time; the invalidation engine gains clock-based invalidation (re-run at date rollover). In v1 relative tokens freeze to literal ranges at compile (stated by a save nudge — [Launcher.md](Launcher.md) D29). No second runtime-parameter consumer exists in the immediate plan (host execution params are a different, already-general layer; Phase 11's `date('now')` column defaults evaluate at write time); identity (`:me`) and context (`:here`) are the eventual siblings that would justify extracting the general environment mechanism.
 - ~~**Saved-view chip chrome.**~~ **Resolved:** recognized view SQL now uses the shared kind, scope,
   text, predicate, order, and limit grammar. Structured commits rewrite only the sole stored SQL and
-  retain opaque WHERE leaves byte-for-byte. Raw SQL remains explicit x-ray/custom mode with live
+  retain opaque WHERE leaves byte-for-byte. Raw SQL remains explicit raw SQL mode with live
   recognition and validation.
-- **FTS** (compile-rule swap; Phase 11+) · **frecency ranking** (slots into launcher ranking only; the spec is untouched) · **view-node-as-source** · the growth items above, each on proven need.
+- **FTS** (compile-rule swap; Phase 11+) · **frecency ranking** (fits into launcher ranking only; the spec is untouched) · **view-as-source** · the growth steps above, each on proven need.

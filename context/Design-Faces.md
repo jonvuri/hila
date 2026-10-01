@@ -1,44 +1,44 @@
 # Design System — Component Variants
 
-> **Implementation status.** The navigation-outline registry and Guides production treatment ship.
-> Recursive composed/substrate host inputs and all three live table treatments now ship. The
-> table line and shared inline/property surfaces now use canonical roles. The remaining face
+> **Implementation status.** The outline variant registry and the Guides production variant ship.
+> Recursive fidelity scopes and all three live table treatments now ship. The table line rendering
+> and shared inline and aspect field surfaces now use semantic tokens. The remaining face
 > migrations are design inputs. Storybook preserves the retired top-level Table and Tags surfaces
 > as fixture-driven references. Future sequencing belongs in [Plan.md](Plan.md).
 
-This document plans configurable outline and table treatments. These components build on the
-shared semantic token system. An outline treatment can serve the shell navigation panel and an
-outline face without changing either host's behavior.
+This document plans two component variants: the outline variant and the table treatment. Both
+build on the shared semantic token system. The outline variant can serve the navigation panel and a
+future outline face without changing either host's behavior.
 
 ## Theme axes
 
 Ghost, Null, and Wipeout are the approved global visual themes. They share one interface and
-semantic state contract. A documented presentation adapter may vary geometry and chrome while
-state, content, behavior, accessibility, and target sizes remain shared. The outline and table
-treatments in this document are component variants beneath that global theme layer. They can change
-local rendering, but not app-level theme identity, interaction meaning, or data contracts. An
-explicit component variant stays unchanged when the visual theme changes.
+semantic state contract. A documented theme geometry adapter may vary geometry and chrome while
+state, content, behavior, accessibility, and target sizes remain shared. The outline variant and
+table treatment in this document are component variants beneath that global theme layer. They
+can change local rendering, but not app-level theme identity, interaction meaning, or data
+contracts. An explicit component variant stays unchanged when the visual theme changes.
 
 Dark and light polarity is independent of both layers. Composed or substrate fidelity and the
-x-ray inspection state are also orthogonal. Do not multiply face renderers across the Cartesian
+x-ray inspection state are also orthogonal. Do not multiply renderings across the Cartesian
 product of these axes. Face styles must consume semantic tokens supplied by the active visual theme
 and polarity.
 
-The responsive workspace presentation is another independent host axis. Its `bounded-rail` and
-`single-panel` values change only which retained shell panels are exposed at the host width. A
+The shell layout is another independent axis. Its single-panel and rail values (`single-panel`
+and `bounded-rail` in code) change only which retained panels are exposed at the shell width. A
 theme, polarity, fidelity, or component variant cannot select it or change its state meaning.
 
 ## Navigation outline
 
-Session 4m reviewed seven treatments and approved Guides as the only forward navigation outline.
+Session 4m reviewed seven candidates and approved Guides as the only forward navigation outline.
 The old `Design/Outline` stories preserve the five original renderers as historical references.
 The rejected forward adapters are not part of the registry.
 
-### Approved treatment
+### Approved variant
 
-| Variant    | Visual metaphor      | Key elements                                                                                                                     |
-| ---------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| **Guides** | Traditional outliner | Dim ancestry rails, optional leaf bullets, compact disclosure controls, and one text axis for each depth in flow and sticky rows |
+| Variant    | Visual metaphor      | Key elements                                                                                                                      |
+| ---------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **Guides** | Traditional outliner | Dim ancestry rails, optional leaf bullets, compact disclosure controls, and one text axis for each depth in flow and sticky items |
 
 Each guide aligns with the left edge of its parent heading text. A terminal guide ends at the
 bottom edge of its last child's text. The disclosure control uses the space immediately left of
@@ -58,15 +58,15 @@ decoration adapter:
 
 - Stable global row identity and depth.
 - Expanded and collapsed state.
-- Ancestry before the virtual window.
-- Continuation state and one-row look-ahead after the window.
+- Ancestry before the retained range.
+- Continuation state and one-item look-ahead after the range.
 
 The decoration adapter returns paint data only. It must not add disclosure, editing, selection,
 disabled, drill, drag, or focus behavior. Decorative marks are hidden from assistive technology.
 
 ### Rendering architecture
 
-The navigation row owns one fixed geometry and exposes decoration slots. A registry maps the
+The stream item owns one fixed geometry and exposes decoration areas. A registry maps the
 `navigationOutline` key to calculation and paint adapters. Each adapter consumes canonical semantic
 tokens from the active visual theme and polarity.
 
@@ -74,11 +74,11 @@ The forward Storybook specimen has visual-theme and polarity controls. It does n
 single-option outline control. Production uses the approved Guides adapter through the independent
 `navigationOutline` setting. The old renderer remains historical reference material.
 
-### Windowing contract
+### Paging contract
 
-Guides need explicit context outside a rendered window. Do not treat the last loaded row as the
-visual end of a branch. The adapter input carries ancestry before the window, continuation after
-the window, and one-row look-ahead. Deterministic tests compare full and windowed results.
+Guides need explicit context outside the retained range. Do not treat the last loaded item as the
+visual end of a branch. The adapter input carries ancestry before the range, continuation after
+the range, and one-item look-ahead. Deterministic tests compare full and paged results.
 
 ### Implementation phases
 
@@ -87,7 +87,7 @@ Session 4n rebuilt sticky navigation as a bounded widget integrated with its scr
 Session 4o adapted that widget and Guides renderer to paged production data. Sessions 4p–4q moved
 it into the live shell and removed the retired renderer.
 
-## Table face treatments
+## Table treatments
 
 The design exploration (`design-demo.html` section 6) defines three visual treatments for tabular
 data.
@@ -102,22 +102,22 @@ data.
 
 ### Data contract
 
-Each table row is independently renderable given its props, enabling bounded paging or windowed
-rendering. The live collection renders 100-row pages with a one-row lookahead and carries the
-global row index across pages. The specimen data contract mirrors the outline's `FlatRow` /
+Each table row is independently renderable given its props, enabling bounded paged rendering. The
+live collection renders 100-row pages with a one-row lookahead and carries the global row index
+across pages. The specimen data contract mirrors the outline's `FlatRow` /
 `RowDecoration` pattern:
 
-- `columns: Column[]` where `Column = { key: string; label: string }` — column definitions, stable across windows
-- `rows: FlatTableRow[]` where `FlatTableRow = { id: string; cells: Record<string, string> }` — row data keyed by column key, with `id` for stable keying across virtualizer window boundaries
-- `computeTableDecorations(variant, columns, rows, startIndex?)` returns a `RowDecoration[]` with per-cell decoration data. The `startIndex` parameter supports windowed rendering — row index parity (for cell-dot color alternation) must reflect the row's global position, not its position within the window.
+- `columns: Column[]` where `Column = { key: string; label: string }` — column definitions, stable across pages
+- `rows: FlatTableRow[]` where `FlatTableRow = { id: string; cells: Record<string, string> }` — row data keyed by column key, with `id` for stable keying across page boundaries
+- `computeTableDecorations(variant, columns, rows, startIndex?)` returns a `RowDecoration[]` with per-cell decoration data. The `startIndex` parameter supports paged rendering — row index parity (for cell-dot color alternation) must reflect the row's global position, not its position within the page.
 - `TableRowProps` bundles everything needed to render a single row in isolation: `variant`, `columns`, `row`, `decoration`, and an optional `renderCell` callback.
 
 The variant renderer receives a flat array of these rows and renders them with the selected visual
 treatment. The header row (`TableHeaderRow`) is separate and always visible. It is not virtualized.
 
-The Phase 13 live table resolves `tableTreatment` from its intentional recipe and falls back to
-`thin-line` for missing or invalid values. The implicit substrate floor is host infrastructure and
-does not require a persisted table recipe on unrelated matrixes.
+The Phase 13 live table resolves `tableTreatment` from its face choice and falls back to
+`thin-line` for missing or invalid values. The fallback rendering is host infrastructure and does
+not require a stored table face choice on unrelated matrixes.
 
 ### CSS architecture
 
@@ -171,23 +171,23 @@ The rendering host can expose a resolved value with a component-specific data at
 
 ### Host integration
 
-The navigation panel and outline face use the registered outline treatment independently of visual
-theme and polarity. Integration requires:
+The navigation panel and a future outline face use the registered outline variant independently of
+visual theme and polarity. Integration requires:
 
-1. Add a `navigationOutline` value to the applicable component configuration.
+1. Add a `navigationOutline` value to the applicable face choice settings.
 2. Resolve the registered value before it reaches CSS.
 3. Pass the resolved key to the decoration adapter.
 4. Do not show a configuration control while the registry has one value.
 
-### Slot system composition
+### Column slot composition
 
-Each component variant renders the same bound data. The outline face binds a matrix column to its
-title slot. The table face binds multiple columns to column slots. Variant rendering is visual and
-does not affect slot bindings.
+Each component variant renders the same bound data. An outline face binds a matrix column to its
+title column slot. The table face binds multiple columns. Variant rendering is visual and does not
+affect column slot bindings.
 
 ## Migration record
 
-The existing `src/global.css` still contains face-specific and system-surface styles. Phase 10
+The existing `src/global.css` still contains face-specific and admin surface styles. Phase 10
 completed steps 1–6. The remaining work is re-homed by the phase-boundary reconciliation.
 
 1. Define and implement canonical tokens in Sessions 4j–4k.
@@ -199,13 +199,14 @@ completed steps 1–6. The remaining work is re-homed by the phase-boundary reco
    review.
 7. Phase 12 shipped the shared launcher presentations, captured the retiring Table and Tags roots
    in worker-free Storybook references, and removed their top-level production mounts.
-8. Phase 13 Session 3 migrated the live table collection and its formula input to canonical roles.
-   Session 4 migrated the table line and shared inline/property surface boundary. Session 5 moved
-   the focus-panel, query-band, substrate-region, and row-gesture boundary to local canonical
-   styles and one recursive collection host. Continue switching the workspace, editor, and system
-   edge one boundary at a time.
+8. Phase 13 Session 3 migrated the live table collection rendering and its formula input to
+   semantic tokens. Session 4 migrated the table line rendering and shared inline and aspect field
+   boundary. Session 5 moved the focus panel, query band, aspect region, and row gesture boundary
+   to local semantic styles and one recursive collection host. Continue switching the navigation
+   panel, editor, and admin surfaces one boundary at a time.
 
-The detailed order is in the [Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
+The detailed order is in the
+[Sessions 4j–4m plan](./archive/phases/Phase-10-Sessions-4j-4m-plan.md#follow-on-migration-order),
 the [Session 4n plan](./archive/phases/Phase-10-Session-4n-plan.md), and the
-[Session 4o plan](./archive/phases/Phase-10-Session-4o-plan.md). Live migration and removal are in the
-[Sessions 4p–4q plan](./archive/phases/Phase-10-Sessions-4p-4q-plan.md).
+[Session 4o plan](./archive/phases/Phase-10-Session-4o-plan.md). Live migration and removal are in
+the [Sessions 4p–4q plan](./archive/phases/Phase-10-Sessions-4p-4q-plan.md).

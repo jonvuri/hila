@@ -15,8 +15,8 @@ or interactively testing the live app. The general verification commands remain 
 
 ### Running tests
 
-- Full suite: `pnpm test:e2e`. Functional spec files run with up to four workers. The timing-sensitive
-  performance contract runs afterward with one worker.
+- Full suite: `pnpm test:e2e`. Functional spec files run with up to four workers. The
+  timing-sensitive performance contract runs afterward with one worker.
 - Single test by name: `pnpm test:e2e --grep "test name substring"`.
 - Always run outside the sandbox so Playwright can use the system-installed browsers.
   Sandboxed browser binaries do not persist and can trigger a large download.
@@ -55,14 +55,16 @@ before the outline finishes updating. Wait for the expected minimum with
 **Test responsive workspace behavior at the host boundary.** Resize the viewport with the dev
 sidebar closed, then wait for `data-shell-presentation`. At 719px, assert that only the active panel
 is visible while every retained panel remains attached, and that hidden panels carry `hidden`,
-`aria-hidden`, and `inert`. At 720px, assert that the same panel and editor nodes return to the rail.
-Capture editor focus and DOM selection before both transitions. If focus begins in a panel that
-becomes hidden, assert transfer to the active panel landmark and the polite status announcement.
+`aria-hidden`, and `inert`. At 720px, assert that the same panel and editor nodes return to the
+rail. Capture editor focus and DOM selection before both transitions. If focus begins in a panel
+that becomes hidden, assert transfer to the active panel landmark and the polite status
+announcement.
 
 **Enter production surfaces through current routes.** The app has one stream root and no
 Workspace/Table/Tags test tabs. Wait for `workspace-shell` instead of clicking a root tab. Exercise
 tables through an owned node's embedded table, tags through inline/property and launcher type
-routes, and face/schema administration through Dev Tools → Matrix Browser.
+routes, and face choice and schema administration through the admin surfaces (Dev Tools → Matrix
+Browser in the UI).
 
 ### Debugging failures
 
@@ -84,8 +86,9 @@ operation, then decide on the proper production handling.
 
 ### Known pitfalls
 
-- **Global rank-key uniqueness.** The `rank` table has a `key BLOB PRIMARY KEY` shared
-  across matrixes. New keys for insert and reparent operations must be checked globally.
+- **Sibling keys are parent-local.** `joins.edge_key` orders a child among the siblings that share
+  its parent; owned and portal children share one key space there. New keys for insert and
+  reparent operations must be unique among those siblings.
 - **`<Show>` guards remove UI.** Solid's `<Show when={...}>` removes children from the DOM.
   A test must first satisfy the guard, or the control must live outside it when that better
   matches the product behavior.
@@ -101,7 +104,7 @@ The Playwright suite remains the regression source of truth.
   rejected and can wipe the row.
 - A fresh automation profile has its own persistent OPFS database and may contain an old
   schema. If the app hangs on “Loading…”, capture `unhandledrejection` and `error` reasons.
-  If the cause is stale schema, open dev tools, choose **Reset DB**, and confirm. This
+  If the cause is stale schema, open **Dev Tools**, choose **Reset DB**, and confirm. This
   affects only the automation profile.
 - Prefer accessibility snapshots for stable element identities. Use DOM evaluation for
   exact dimensions or computed colors when a screenshot is ambiguous.
@@ -128,15 +131,16 @@ The Playwright suite remains the regression source of truth.
   post-facto echoes, and the reduced-motion state without echoes.
 - Test Deep through the same semantic preview locators in every theme and width. Large fixtures must
   assert the 1,000-row semantic cap indirectly through the last reachable row, no more than six
-  100-row windows in the DOM, reusable prepared templates during input changes, and zero editor
-  churn. Keep unloaded virtual windows at estimated height so a far scroll cannot collapse paging.
+  100-row pages in the DOM, reusable prepared templates during input changes, and zero editor
+  churn. Keep unloaded virtual pages at estimated height so a far scroll cannot collapse paging.
 - Save-view browser checks must wait until the visible save action enables, then assert one existing
-  marker/source identity, focused and selected generated name, recognition after reload, a
+  view identity (its node and SQL), focused and selected generated name, recognition after reload, a
   structured edit followed by another reload, and raw custom SQL Apply/Cancel behavior. Invalid raw
   drafts must classify immediately and keep Apply disabled.
 - Run `Mod-Enter` from a real registered ProseMirror editor through both Quick discovery and Deep
   preview rows. Assert insertion at the invoking selection, normal `joins(kind = 'ref')` sync, focus
-  return, and reload persistence. Component tests own changed-selection and unmounted-editor refusal.
+  return, and reload persistence. Component tests own changed-selection and unmounted-editor
+  refusal.
 
 ## Performance and churn
 

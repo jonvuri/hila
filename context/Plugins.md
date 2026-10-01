@@ -2,117 +2,93 @@
 title: Plugins and face composition
 kind: canonical
 state: active
-updated: 2026-09-27
+updated: 2026-10-01
 ---
 
 # Plugins and face composition
 
-This document separates the shipped plugin runtime from the approved forward face and command
-contracts.
+This document owns plugin registration, faces, face choices, hosts, and commands. Terms follow the
+[concept ledger](Concepts.md); rationale lives in the [decision log](Decisions.md).
 
 ## Current plugin runtime
 
-A `PluginDefinition` currently declares:
+A `PluginDefinition` declares:
 
 - stable ID, name, and version;
 - matrix schemas;
-- optional face types;
-- face bindings;
+- optional faces and their renderings;
+- default face choices;
 - named queries and mutations;
+- optional commands;
 - `init` and `destroy` hooks.
 
 Registration is transactional and idempotent:
 
-1. Register declared face-type metadata.
+1. Register declared face metadata.
 2. Upsert the plugin row.
-3. Recover or create declared matrixes without inventing a fallback recipe.
+3. Recover or create declared matrixes without inventing a face choice.
 4. Persist the plugin's matrix-key-to-ID mapping.
-5. Initialize a declared face binding when its matrix has no intentional recipe.
+5. Apply a declared default face choice only when its matrix has no face choice.
 6. Commit, then run `init` on the main thread.
 
-Unregistering removes the plugin row and runs `destroy`; user data and matrixes persist.
+Unregistering removes the plugin row and runs `destroy`; user data and matrixes persist
+([Decision 31](Decisions.md#decision-31)).
 
-Named queries and mutations remain a declaration-only compatibility surface: the runtime neither
-stores nor dispatches them. Phase 15 owns the general typed/batch operation system and must either
-implement that contribution surface or narrow the declaration type.
+Named queries and mutations remain a declaration-only surface: the runtime neither stores nor
+dispatches them. Phase 15 owns the general typed and batch operation system and must either
+implement that contribution surface or narrow the declaration type
+([Decision 42](Decisions.md#decision-42)).
 
 ## Plugin boundaries
 
 Plugins extend shared data and presentation. They do not create independent application roots.
 
 - Matrixes outlive the plugin registration that created them.
-- Cross-plugin composition happens through matrixes, relationships, SQL, faces, and commands—not
-  direct plugin-to-plugin service APIs.
-- The stream, launcher, system edge, and universal substrate/table floor are fixed infrastructure.
+- Cross-plugin composition happens through matrixes, edges, SQL, faces, and commands, not direct
+  plugin-to-plugin service APIs.
+- The stream root, launcher, admin surfaces, and fallback rendering are fixed infrastructure.
 - Core structural operations enforce ownership, portal, cascade, and schema invariants.
 
-Current real consumers are workspace, inline references, tags, and the table face. Older separate
-outline/notes and tag-registry models are historical.
+Current real consumers are the workspace plugin, inline references, tags, and the table plugin.
+Older separate outline and notes plugins and the tag-registry model are historical.
 
 ## Matrix declarations
 
 A plugin matrix declaration supplies a local key, title, and columns. Columns can specify SQLite
-type, constraints, and optional `label` or `content` role. The runtime records `managed_by` so
-plugin-required columns cannot be removed accidentally.
+type, constraints, and an optional `label` or `content` column role. The runtime records
+`managed_by` so plugin-required columns cannot be removed accidentally.
 
-Plugin matrix creation does not create a table recipe. A declared face binding initializes the one
-intentional matrix recipe only when none exists. Actual table subjects and explicit table choices
-keep table recipes; every other host receives the implicit substrate floor. Matrix ownership and
-promoted type-nodes remain data-model concerns, not plugin lifecycle shortcuts. See
+Creating a plugin matrix does not create a face choice ([Decision 14](Decisions.md#decision-14)).
+Matrix ownership and type nodes remain data-model concerns, not plugin lifecycle shortcuts. See
 [Data-Model.md](Data-Model.md).
 
-## Shipped face slots
+## Faces
 
-The current runtime has:
+A face is a plugin's named way to present rows. Its declaration is a `FaceTypeDefinition` with an
+ID, a display name, column slots, and overflow behavior. Its renderings are registered under the
+same ID.
 
-- `FaceTypeDefinition` with named slots and overflow behavior;
-- stable-ID slot bindings;
-- normalized sort/filter configuration;
-- one query-free intentional `FaceConfig` recipe per configured matrix, with face type, bindings,
-  and settings;
-- plugin-owned callable `line` and `collection` dispatch.
+Two faces ship:
 
-New recipe IDs derive from replica-stable matrix identity. Applying the same face preserves the
-existing recipe and normalized presentation state; explicit replacement reuses its ID. Normalized
-slot bindings are authoritative; the JSON copy on `face_configs` is derived compatibility state.
-Filter rows use stable UUID identity and an explicit order field.
+- `hila.table` declares no column slots and registers a line rendering and a collection rendering.
+- `hila.workspace` declares `label` and `content` column slots and registers no rendering. Its face
+  choice carries the outline variant setting. Session 5B decides what this face choice is.
 
-Callable `line` and `collection` contributions stay on the main thread. They are reserved and
-committed by plugin owner only after worker registration and initialization succeed. Complete-set
-replacement removes omitted renderings, and plugin disposal or database reset removes the owner's
-renderings before `destroy`. Hosts pass navigation and insertion requests plus nested-subject
-yielding without exposing shell DOM or face-mounting callbacks.
+## Column slots
 
-Slot resolution is:
+Column slot resolution is:
 
-1. explicit stable column binding;
-2. slot/column name match;
+1. explicit stable column slot binding;
+2. slot name and column name match;
 3. preferred type and position;
 4. fallback.
 
-The embedded table is the first complete live collection consumer. Its container host resolves the
-matrix recipe, requests the registered `hila.table` collection, and owns title, sizing, insertion,
-and navigation. `hila.table` also registers a line interior over the shared property adapter. The
-same adapter serves substrate fallback, so field ownership does not fork between registered and
-fallback paths. Neither rendering auto-creates a recipe. The retired top-level Table and Tag
-Browser mounts remain absent.
+Normalized column slot bindings are authoritative. The JSON copy on `face_configs` is a derived
+compatibility copy.
 
-## Forward composition model
+## Face choices
 
-The governing rule is:
-
-> Hosts own chrome and recursion; faces own interiors; subjects own their data; a fixed ladder
-> chooses the recipe.
-
-### Subjects source rows
-
-A subject is a node plus one child-sourcing mode:
-
-- `loose` — direct owned/portal positions;
-- `container` — one matrix extent;
-- `view` — one stored SQL result.
-
-The subject owns the query or extent. A forward face recipe is therefore:
+A matrix stores at most one face choice ([Decision 14](Decisions.md#decision-14)):
 
 ```ts
 type FaceRecipe = {
@@ -122,87 +98,125 @@ type FaceRecipe = {
 }
 ```
 
-SQL is not part of the recipe. Shipped view subjects own it through `block_sources`.
+The stored `FaceConfig` adds an ID, the matrix ID, the creating plugin, and sort and filter state.
+SQL is not part of a face choice; a view owns its SQL in `block_sources`
+([Decision 16](Decisions.md#decision-16)).
 
-Normalized table sort and filter rows remain durable collection presentation state associated with
-the intentional table recipe. They use stable column IDs and do not become subject SQL or untyped
-recipe settings.
+New face choice IDs derive from replica-stable matrix identity. Applying the same face preserves
+the existing face choice and its sort and filter state. Explicit replacement reuses the ID and
+resets incompatible sort and filter state.
 
-### Faces provide line and collection renderings
+Sort and filter state uses stable column IDs. Filter rows have stable UUID identity and an explicit
+order field. It remains durable presentation state attached to the face choice and never becomes
+subject SQL or untyped settings ([Decision 37](Decisions.md#decision-37)).
 
-A face type may declare at most two interior renderings:
+Multiple stored face choices and a preferred-choice pointer remain deferred until a real consumer
+needs alternate faces for one matrix.
 
-- **line** — one row participating in a parent's region;
-- **collection** — a row-set arrangement such as outline, grid, kanban, calendar, gallery, or
-  review stack.
+## Subjects
 
-A missing rendering falls back to substrate for that host presentation. A face never owns a whole
-panel layout.
+A subject is a node plus one child source ([Decision 8](Decisions.md#decision-8)):
 
-### Hosts own presentation structure
+- `loose`: direct owned and portal positions;
+- `container`: one matrix extent;
+- `view`: one stored SQL result.
 
-| Host presentation       | Requested rendering      |
-| ----------------------- | ------------------------ |
-| row slot                | `line`                   |
-| expanded block          | `line` plus `collection` |
-| panel collection region | `collection`             |
-| property popover        | host scaffold only       |
+The subject owns its query or extent. Faces never define which rows a subject has.
 
-The panel scaffold contains identity, fields, collection, and relations. Hosts own:
+## Renderings
 
-- bullets, handles, guides, block/container frames, headers, breadcrumbs, and drill actions;
-- recursion and nested subject slots;
-- width, density, and expanded-region height budgets;
-- composed/substrate fidelity and x-ray cascade;
-- insert affordances and the `view` ownership firewall.
+A face may register at most two renderings:
 
-Faces do not mount faces. They return nested subjects to a host slot.
+- **line rendering:** one row's fields inside a host's area;
+- **collection rendering:** an arrangement of a row set, such as a table, outline, kanban, calendar,
+  gallery, or review stack.
 
-### Recipe affinity
+A missing rendering falls back to the fallback rendering for that host context. A rendering never
+owns a whole panel layout and never mounts another rendering
+([Decision 17](Decisions.md#decision-17)).
 
-Hosts resolve a recipe in this order:
+Renderings stay on the main thread. They are reserved and committed by plugin owner only after
+worker registration and initialization succeed. Complete-set replacement removes omitted
+renderings. Plugin disposal or database reset removes the owner's renderings before `destroy`
+([Decision 30](Decisions.md#decision-30)).
 
-1. appearance override—modeled but unstored until a real consumer needs it;
-2. preferred subject/matrix recipe;
-3. universal substrate floor.
+The table plugin is the first complete consumer. Its container host resolves the extent's face
+choice, requests the `hila.table` collection rendering, and owns title, sizing, insertion, and
+navigation. Its line rendering wraps the same property row component that the fallback line uses,
+so field editing has one owner. Neither rendering creates a face choice.
 
-The preferred recipe follows the subject everywhere it appears. Fidelity is view state, not stored
-inside the recipe. The shipped Phase 13 foundation stores at most one intentional matrix recipe
-and uses the substrate floor when none exists. Multiple saved recipes and appearance overrides
-remain deferred until a real consumer requires selection among them.
+## Face resolution
 
-## Runtime migration
+Hosts resolve a face in this order:
 
-The migration has mandatory boundaries:
+1. per-position face choice, designed but unstored until a real consumer needs it;
+2. the matrix face choice;
+3. the fallback rendering.
 
-### Shipped Phase 11 boundary
+The matrix face choice follows its matrix everywhere it appears. A container subject resolves
+against its owned matrix. Loose and view subjects in a focus panel collection resolve straight to
+the fallback. Fidelity is runtime state, not part of the face choice
+([Decision 25](Decisions.md#decision-25)).
 
-- SQL is absent from the forward recipe and `face_configs` persistence;
-- the existing view subject owns its SQL through `block_sources`;
-- the focus-panel host requests the substrate `collection` registration;
-- unmigrated whole-component table behavior is isolated behind
-  `TemporaryLegacyFaceAdapter`.
+Every rendering mount supplies a fallback rendering, and the fallback always draws at substrate
+fidelity ([Decision 18](Decisions.md#decision-18)). The fallback line is `PropertyLine`. The
+fallback collection is host-owned: the aspect region for loose subjects and a bounded field list for
+container and view subjects.
 
-### Phase 13
+## Hosts
 
-- Session 1 shipped singular recipe creation and replacement, the implicit substrate affinity,
-  owner-scoped callable rendering lifecycle, and the host-service capability boundary;
-- Session 2 shipped recursive composed/substrate resolution, transient root-owned x-ray state, and
-  the resolved fidelity input passed to interiors;
-- Session 3 shipped the plugin-owned table collection, host-owned container dispatch, bounded
-  paging, canonical treatments, and removal of `TemporaryLegacyFaceAdapter` plus the direct mount;
-- Session 4 shipped the plugin-owned table line, shared substrate fallback, host density input, and
-  canonical inline-reference, autocomplete, tag-property, field-editor, and property-row
-  boundaries;
-- Session 5 shipped one recursive focus-panel collection host for loose, container, and view
-  subjects, host-owned panel regions and insertion policy, nested-subject yielding, and the local
-  canonical panel/query/gesture style boundary;
-- migrate workspace participation and face configuration to `line`/`collection`;
-- move workspace recipe settings and `FaceConfigPanel` onto host recipe resolution;
-- keep the migrated inline tag and property lifecycle without restoring a Tag Browser application
-  root.
+Hosts own:
 
-Phase 14 cannot add task/review renderers until Phase 13 completes this contract.
+- bullets, handles, guides, block and container frames, headers, breadcrumbs, and drill actions;
+- nesting and yielded subjects;
+- width, density, and height budgets;
+- fidelity scopes and the x-ray cascade;
+- insertion affordances and the no-ownership rule.
+
+A rendering mount (`FaceHostSlot`) resolves the face, mounts the registered rendering or the
+fallback, applies the fidelity scope, and catches yielded subjects. Host services pass only
+navigation requests, insertion requests, and yield. They never expose shell DOM, pixel sizing, or a
+mount callback.
+
+| Host context                     | Requested rendering      | Status                          |
+| -------------------------------- | ------------------------ | ------------------------------- |
+| stream item                      | `line`                   | designed                        |
+| expanded block                   | `line` plus `collection` | designed; Session 5B reviews it |
+| focus panel collection region    | `collection`             | shipped                         |
+| aspect line in the aspect region | `line`                   | shipped                         |
+| property popover                 | host-owned only          | shipped                         |
+
+"Expanded block" is the pre-ledger name of this row. Session 5B decides whether it describes inline
+results in the stream or the focus panel case.
+
+The focus panel is a host with four panel regions: identity, fields, collection, and relations. It
+routes loose, container, and view subjects through one collection host:
+
+- A loose subject shows the aspect region. Each aspect line is a rendering mount resolved against
+  the aspect's matrix.
+- A container subject requests the owned matrix's face choice and otherwise shows a bounded
+  fallback collection.
+- A view subject keeps its SQL on the view and uses it only as collection input.
+
+Missing face choices or renderings fall through visibly without creating stored state. A nested
+subject yields back to the host, which resolves and renders the next collection under the inherited
+fidelity scope.
+
+The panel host keeps identity, intrinsic and overflow fields, relations, sizing, navigation, and
+insertion policy. Container fallback insertion creates owned rows. View results keep recognized
+field write-back and never gain structural insertion, drag, reparenting, or inferred ownership
+([Decision 19](Decisions.md#decision-19)). Property popovers remain host-owned rather than
+renderings. Formula and read-only fields stay read-only.
+
+## Remaining migration
+
+- Move stream item and inline results participation onto hosts and rendering mounts. Session 5B
+  decides the form, and Session 6 implements it.
+- Move workspace face choice settings and `FaceConfigPanel` onto face resolution.
+- Keep the migrated inline tag and property lifecycle without restoring a Tag Browser root.
+
+Phase 14 cannot add task or review renderings until Phase 13 completes this contract. Shipped
+session detail lives in the [Phase 13 plan](phases/Phase-13.md).
 
 ## Commands
 
@@ -221,62 +235,65 @@ type CommandDescriptor = {
 }
 ```
 
-The invocation context carries the surface, an optional `NodeRef`, and explicit capability
+The `subject` field declares whether the command needs a command target. The invocation context
+carries the command surface, an optional `NodeRef` command target, and explicit capability
 callbacks. It never exposes `EditorView`. Enumeration and matching preserve registration order,
-filter by surface, and return immutable registry-owned snapshots. Subject-required commands remain
-discoverable without a subject and report a concrete disabled reason. Invocation rejects
+filter by command surface, and return immutable registry-owned snapshots. Commands that require a
+target remain discoverable without one and report a concrete disabled reason. Invocation rejects
 unavailable commands and preserves asynchronous failures.
 
-Plugin command functions stay on the main thread. `PluginRegistration` omits commands and lifecycle
-hooks from the structured-clone-safe worker payload. Contributions are owned by plugin ID. A
-registration reserves its complete command set before worker or initialization effects, so
-cross-owner duplicate IDs fail without partially installing the plugin. Replacing an owner's set
-preserves its order, and generation checks prevent stale or disposed registrations from committing.
-Teardown removes the owner's commands before its `destroy` hook.
+Plugin command functions stay on the main thread ([Decision 29](Decisions.md#decision-29)).
+`PluginRegistration` omits commands, renderings, and lifecycle hooks from the structured-clone-safe
+worker payload. Contributions are owned by plugin ID. A registration reserves its complete command
+set before worker or initialization effects, so cross-owner duplicate IDs fail without partially
+installing the plugin. Replacing an owner's set preserves its order, and generation checks prevent
+stale or disposed registrations from committing. Teardown removes the owner's commands before its
+`destroy` hook ([Decision 30](Decisions.md#decision-30)).
 
 The workspace plugin contributes `hila.table` to slash and launcher, followed by slash-only
 `hila.attach`. The slash adapter supplies the table-name focus and type-picker capabilities, so
-`/table` and `/attach` retain their typed-operation and follow-up behavior. The launcher freezes its
-node subject and capabilities when it opens. `hila.table` creates an owned matrix, applies its table
-recipe, and hands focus to the owning node's embedded collection. Slash uses the current node;
-launcher navigates to its frozen node before the same table-name focus handoff. Without a node, the
-command stays visible with a disabled reason. Attachment remains slash-only until an app-wide picker
-capability exists.
+`/table` and `/attach` keep their typed-operation and follow-up behavior. The launcher freezes its
+command target and capabilities when it opens. `hila.table` creates an owned matrix, applies the
+table face, and hands focus to the owning node's embedded collection. Slash uses the current node;
+the launcher navigates to its frozen target before the same table-name focus handoff. Without a
+target, the command stays visible with a disabled reason. Attachment remains slash-only until an
+app-wide picker capability exists.
 
-The shipped discovery service merges launcher-surface registry entries on the main thread after its
-worker catalog scan without sending callable implementations through the worker boundary. Visible
-labels match at the command-label weight; stable IDs and keywords match at the lower
-command-keyword weight. Registration order is a deterministic structural-order tie-break. Disabled
-reasons travel with results for presentation but do not affect matching or score.
+The discovery service merges launcher-surface entries on the main thread after its worker catalog
+scan, without sending callable implementations through the worker boundary. Visible labels match
+at the command-label weight; stable IDs and keywords match at the lower command-keyword weight.
+Registration order is a deterministic tie-break. Disabled reasons travel with results for
+presentation but do not affect matching or score.
 
 Global shortcuts use self-describing registrations with stable IDs, titles, keys, and optional
 contexts. The manager listens during capture so a registered global gesture wins before an editor
-can stop propagation. `Mod-k` now belongs to the application launcher and no longer appears in the
-ProseMirror keymap. Other editor-local handlers expose parallel handler-free descriptors. The Quick
-guide combines both descriptor collections and formats normalized keys for the active platform
-without copying prose.
+can stop propagation. `Mod-k` belongs to the launcher and no longer appears in the ProseMirror
+keymap. Other editor-local handlers expose parallel handler-free descriptors. The Quick guide
+combines both descriptor collections and formats normalized keys for the active platform.
 
 ## Inline references and tags
 
-Inline references are plugin-provided presentation and editing over core relations:
+Inline references are plugin-provided presentation and editing over core edges:
 
 - `@` creates or resolves non-owning `ref` associations;
-- `#` creates owned aspects or applies existing type/label relationships;
-- live, empty, and ghost states use cached rich-text metadata when the target is absent;
-- joins provide forward/reverse lookup and lifecycle indexing;
-- type discovery reads promoted type-nodes, not a tag registry matrix.
+- `#` creates owned aspects or applies existing type nodes;
+- live, empty, and dangling references use cached rich-text metadata when the target is absent;
+- edges provide forward and reverse lookup and lifecycle indexing;
+- type discovery reads type nodes, not a tag registry matrix.
 
-The core owns relationship and cascade semantics. Plugins own ProseMirror nodes, autocomplete,
-rendering, and source-document reconciliation.
+The core owns edge and cascade semantics. Plugins own ProseMirror nodes, autocomplete, rendering,
+and source-document reconciliation.
 
 ## Growth rules
 
+These apply [Decision 42](Decisions.md#decision-42):
+
 - Add registration or lifecycle surface only after a real consumer requires it.
-- Do not add plugin top-level application views.
-- Do not expose pixel sizing or shell DOM to face implementations.
+- Do not add plugin top-level application surfaces.
+- Do not expose pixel sizing or shell DOM to renderings.
 - Do not let a query result infer ownership or insertion.
-- Keep stable column IDs in persisted recipes.
-- Do not add multiple stored recipes or a preferred-recipe pointer until a real consumer needs
-  alternate recipes for one matrix.
-- Extract a richer region-services contract only when a genuine whole-interior consumer proves that
-  line/collection is insufficient.
+- Keep stable column IDs in stored face choices.
+- Do not add multiple stored face choices or a preferred-choice pointer until a real consumer needs
+  alternate faces for one matrix.
+- Extract a richer host services contract only when a genuine whole-area consumer proves that line
+  and collection renderings are insufficient.

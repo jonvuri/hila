@@ -2,10 +2,14 @@
 title: Architecture
 kind: canonical
 state: active
-updated: 2026-09-27
+updated: 2026-10-01
 ---
 
 # Architecture
+
+This is the short narrative. Concepts are defined once in the [concept ledger](Concepts.md), and
+rationale lives in the [decision log](Decisions.md). Detailed contracts live in the topic documents
+linked below.
 
 ## Objectives
 
@@ -16,310 +20,96 @@ updated: 2026-09-27
 - Make user-authored structure inspectable and safely editable by people, plugins, and future agent
   interfaces.
 - Keep interactions within the [performance contract](Performance.md).
-- Evolve incrementally from real consumers while preserving architectural coherence.
-
-## Current platform
-
-The shipped app is a browser application built with Solid.js. SQLite-WASM runs in a worker and
-persists structured data in OPFS. UI writes go through typed worker messages and SQL operations;
-reactive queries re-run from SQLite update notifications.
-
-The trigger-based sync-readiness layer ships locally. Remote transport, attachments, and file
-storage do not. See [Sync.md](Sync.md).
+- Evolve incrementally from real consumers while keeping the whole coherent.
 
 ## Layers
 
 ```text
-shell and system edge
-  ├─ stream hosts, navigation, overlays, dev tools
-  └─ fixed infrastructure: table floor, launcher target
+shell and admin surfaces
+  ├─ stream root: navigation panel and retained focus panels
+  ├─ hosts, rendering mounts, overlays, launcher
+  └─ admin surfaces: matrix browser, face choice administration, debug tools
 
-plugins and faces
-  ├─ plugin declarations and lifecycle
-  ├─ face recipes and render registrations
+plugins
+  ├─ faces: declarations and renderings
+  ├─ default face choices
   └─ commands
 
 core
-  ├─ matrix/schema operations
-  ├─ ownership/ref/portal operations
-  ├─ view subjects and SQL recognition
-  ├─ derived closure and scroll-index caches
-  └─ typed worker/client boundary
+  ├─ matrixes, columns, and typed schema operations
+  ├─ edges, nodes, positions, and views
+  ├─ query spec, compiler, and recognizer
+  ├─ derived closure and scroll index
+  └─ typed worker and client boundary
 
 storage and replication
-  ├─ SQLite in OPFS
-  ├─ changelog, changesets, conflicts
+  ├─ SQLite in OPFS, in a worker
+  ├─ changelog, changesets, and conflicts
   └─ future transport and file providers
 ```
 
-The shell and table floor are fixed core infrastructure. Not every user-visible surface must be a
-plugin. Plugins extend the system through declared data, faces, and commands; hosts keep navigation
-and composition invariants centralized.
-
-## Data boundary
-
-Matrixes contain user-meaningful values that can be inspected and edited safely through standard
-data surfaces. System tables contain relations, invariants, and derived indexes that require typed
-operations.
-
-Examples:
-
-- Matrixes: workspace prose, task fields, review ratings, user-defined schema.
-- System truth: `own`/`ref`/`portal` relations, matrix ownership, promoted-node identity, view SQL,
-  face recipes.
-- Derived system state: closure and scroll index.
-- Device-local state: device identity and sync cursors.
-- Runtime-only state: bounded focus history, canceled Deep recovery, current focus chain, and
-  on-screen identities. These reset on reload and plugin/database reset.
-
-The exact model and invariants live in [Data-Model.md](Data-Model.md).
-
-## Execution model
-
-SQLite is both persistence and the primary relational computation engine.
-
-1. **Custom SQLite functions** implement byte-level algorithms such as Lexorank key calculation.
-2. **Prepared SQL and transactions** implement queries, schema mutations, row writes, structural
-   operations, and cache maintenance.
-3. **TypeScript orchestration** selects operations, binds parameters, routes worker messages, and
-   manages UI state. It should not reimplement relational work in application loops.
-
-Operations that maintain invariants are exposed through typed core functions and the worker/client
-boundary. User query SQL runs through the read-only bounded query edge; writes remain typed. A
-future batch executor composes typed operations in one transaction; it does not bypass their
-validation.
-
-The unreleased app remains at reset-only schema version 0. The
-[durable dogfooding gate](Plan.md#durable-dogfooding-gate) establishes version 1 when development
-first promises to preserve data across upgrades. Later versions advance through contiguous forward
-migrations in one transaction. The detailed migration and backup contract lives in
-[Sync.md](Sync.md#migration-policy).
-
-## Matrix and row identity
-
-Matrix and row IDs are random positive integers safe for JavaScript serialization and cross-device
-creation. Column IDs are stable independently of names. Durable column references use IDs and
-resolve current names at execution.
-
-Matrix membership defines extent and schema. The ownership forest defines lifecycle and rooted
-position. They are independent axes.
-
-## Queries and write-back
-
-Stored SQL is the canonical query representation. The current runtime recognizes simple
-updatable-query shapes so hydrated cells can write back to their source.
-
-The higher-level authoring contract is [Query-Spec.md](Query-Spec.md): gestures edit a derived spec,
-the spec compiles to canonical SQL, and a recognizer lifts supported SQL back into gesture state.
-The compiler, recognizer, bounded transient runtime, and durable SQL round trip ship. Gesture
-authoring begins with Phase 12 Session 6.
-
-Write-back is per cell:
-
-- hydrated values trace to a source cell and can edit it;
-- computed or structurally opaque values are dry;
-- view results never imply ownership or insertion position.
-
-## Places, gestures, and the system edge
-
-The target view layer has three kinds:
-
-- **Places:** rooted positions in the one forest. Nodes, containers, and saved views are places.
-- **Gestures:** transient keyboard-first actions. `/` makes locally; `⌘K` goes or acts globally.
-- **System edge:** settings and development/operations surfaces that live above the database.
-
-The stream is the primary surface. Local navigation uses focus panels and rooted ancestry. Global
-identity navigation reconstructs a rooted focus state rather than creating a second root.
-
-The production stream has one host-computed, runtime-only presentation axis. A workspace host at
-719px or below projects the controller's active panel at full width; at 720px or above it shows the
-existing bounded rail. All panels in the retained four-panel window remain mounted and keyed in
-both presentations. Hidden panels are inert and absent from layout and the accessibility tree, but
-their editor, scroll, virtualizer, pending-save, and disclosure state remains live. This axis is not
-density, theme, navigation state, or user data, and it is never persisted or replicated.
-
-Single-panel mode renders the active focus panel's rooted ancestry, or the existing navigation
-panel when root is active. Ancestor selection collapses to a retained panel instance when possible
-and otherwise uses the established root/ancestry reconstruction path. Back, Jump back, and the
-launcher retain their existing meanings. No narrow route, history, toolbar, or wide focused mode
-exists.
-
-The shell owns one transient Quick launcher. It captures the focused node and optional appearance
-provenance when global `Mod-k` opens, then freezes that command context until dismissal. Search,
-selection, focus, keyboard, pointer, and accessibility state stay shared while the presentation
-boundary selects centered Ghost/Null or anchored Wipeout geometry. Committed chips expand the same
-surface into Deep preview; save and insert-ref remain explicit exits.
-
-Saved views now participate in this contract. Their marker label is discoverable like another
-named row, their inline block opens the marker identity, and their focus panel renders the marker's
-stored SQL as a substrate collection. Empty and invalid collections remain places. Query result
-rows retain source-cell write-back where recognized, but never expose structural insertion,
-reparenting, drag, or ownership gestures.
-
-The production shell mounts one stream root. Phase 12 retired the temporary Workspace, Table, and
-Tags tabs after launcher and rooted-place parity passed. `[` browses containers and the existing
-root; `#` browses promoted types and reaches their matrices through Deep or their type-node place.
-The development system edge retains matrix schema and face administration. URLs, deep links, and
-saved stream states remain deferred.
-
-### Two planes
-
-- The **position plane** is the rooted own/portal forest and has ancestry and order.
-- The **membership plane** is matrix extent and schema. It has no navigable ancestry and appears
-  through containers, views, and launcher lenses.
-
-Matrix browsers are administrative lenses, not a second product root.
-
-### Ancestry
-
-When identity navigation needs a place, resolve in order:
-
-1. the traversed provenance position;
-2. the ownership home;
-3. a deterministic membership/container fallback when no live position exists.
-
-An arbitrary portal is never silently selected. Placeless creation homes under the node focused
-when the gesture began.
-
-The shipped stream preserves a traversed appearance key when one is available and derives ancestry
-from that position. The typed place resolver validates explicit provenance, then tries the ownership
-home. If neither is live, it reconstructs a positionless focus through the row's matrix-owner chain
-or the existing workspace root. It reports surviving portal appearances for a future chooser but
-never selects one from identity alone. A deleted home can leave ghost portal positions, but those
-ghosts are not focusable subjects.
-
-Global discovery now runs as one typed worker request over current matrix and semantic-role
-metadata. It classifies ordinary rows, view markers, promoted types, per-matrix container subjects,
-and the existing workspace root before merging main-thread commands. The scan remains linear until
-FTS; subscriptions, retained candidates, excerpts, and breadcrumbs are bounded. Ranking is pure and
-deterministic. One app-scoped session store supplies bounded focus recency and actual viewport
-identities. The virtualizer reports numeric row intersections upward from its existing geometry;
-retained off-screen windows do not receive the on-screen boost, and no observer exists per row.
-
-The same store keeps at most six successful focus destinations and six deduplicated canceled Deep
-specs. Current focus panels are filtered from Jump back. Recent Deep restores committed chips and
-text without running or navigating. Successful exits do not enter Recents because focus history
-already represents successful navigation and the list is recovery, not durable history. All four
-store planes reset on reload and plugin/database reset and never cross the worker persistence,
-replication, or schema boundaries.
-
-Quick publishes at most 12 place, command, and family-suggestion rows. Go results use the typed
-place resolver above. Commands run with the captured subject; unavailable subject-required commands
-remain visible with a reason. Family tokens narrow discovery only and do not enter query specs or
-stored state.
-
-## Subjects, recipes, faces, and hosts
-
-The approved composition model is:
-
-> Subjects own data. Recipes own rendering choices. Faces draw interiors. Hosts own chrome,
-> recursion, sizing, fidelity, and navigation.
-
-A subject is a node plus its `loose`, `container`, or `view` child-sourcing mode. A forward face
-recipe contains face type, stable column bindings, and settings. It does not contain SQL.
-
-A face type may provide:
-
-- `line` — one row participating in a host region;
-- `collection` — a row-set arrangement such as outline, grid, kanban, calendar, or review stack.
-
-Hosts request those renderings. Faces never mount other faces directly; nested subjects yield slots
-back to the host. The panel scaffold—identity, fields, collection, relations—is shell-owned.
-
-The resolution ladder is:
-
-1. appearance override, modeled but unstored until needed;
-2. subject or matrix preferred recipe;
-3. substrate floor.
-
-The shipped Phase 13 foundation keeps at most one intentional recipe per matrix. It does not store
-an automatic table recipe merely to represent rung 3: the substrate floor is host infrastructure.
-Actual table subjects and explicit table choices retain table recipes. Applying the same face is
-idempotent; replacement reuses the replica-stable config identity and resets incompatible
-presentation state. Multiple saved recipes and a preferred-recipe pointer remain deferred until a
-real consumer needs them.
-
-Callable `line` and `collection` registrations are owned by plugin lifecycle. A host accepts only
-navigation and insertion requests plus nested-subject yielding; the contract exposes no shell DOM,
-pixel sizing, or recursive face mount.
-
-The focus panel routes loose, container, and view subjects through one recursive collection host.
-Loose subjects render the substrate region. Container subjects request the intentional recipe for
-their extent and otherwise use a bounded substrate collection. View subjects keep SQL on their
-marker and use it only as collection input. Missing recipes or renderings fall through visibly
-without creating recipe state.
-
-Nested interiors yield subjects back through `FaceHostSlot`; the host then resolves and renders the
-next collection under the inherited fidelity scope. Faces never mount another face. The panel host
-retains identity, intrinsic and overflow fields, relations, sizing, navigation, and insertion
-policy. Container fallback insertion creates owned rows, while view results retain recognized
-source-cell write-back and never acquire structural insertion, drag, reparenting, or inferred
-ownership. The former whole-component adapter and direct table mount are absent.
-
-`hila.table` also supplies the first registered `line` interior. It renders one row through the
-shared property adapter; the substrate fallback uses that same adapter instead of acquiring a
-second field owner. Hosts provide density and keep labels, grouping, relations, and gestures.
-Formula and dry source cells remain read-only. Property popovers remain host scaffold rather than
-faces. See [Plugins.md](Plugins.md).
-
-## Fidelity and design axes
-
-Rendering fidelity is independent of theme and density:
-
-- **Composed:** optimized presentation with schema details implied.
-- **Substrate:** explicit fields, roles, relationships, and structure.
-- **X-ray:** a shell inspection state that forces substrate through descendants.
-
-The tokens, resolver, and recursive face-host cascade ship. Each host resolves active x-ray, then
-local fidelity, inherited fidelity, and the composed root fallback. X-ray remains separate from the
-resolved value so it forces substrate through descendant hosts even when one requests composed
-fidelity. Non-face system and editor controls consume canonical design roles without acquiring
-alternate face renderings. Visual theme, polarity, component variants, density, and fidelity do
-not select or mutate one another. See [Design.md](Design.md).
-
-## Plugins and commands
-
-Plugins currently register metadata, matrixes, face types, face bindings, and lifecycle hooks.
-Named queries/mutations are declared but not yet persisted. The target contribution surface is
-faces plus commands; the shell remains fixed infrastructure.
-
-Commands use one shipped main-thread registry with explicit slash and launcher surfaces, subject
-requirements, immutable discovery entries, and callable implementations that never cross the
-worker boundary. Slash and Quick consume the same entries. See [Plugins.md](Plugins.md).
-
-## Replication boundary
-
-Every table and column must declare one of:
-
-- replicated source of truth;
-- derived/rebuildable state;
-- deliberately device-local state.
-
-The schema-complete durability policy drives tracking and remote apply. Current-schema
-two-replica tests cover user-visible state, and contract tests prevent new tables or columns from
-silently bypassing replication. Remote transport remains deferred. See [Sync.md](Sync.md).
-
-## Operations and external interfaces
-
-Read access can use sandboxed SQL. Write access must use typed operations so ownership, cascades,
-schema dependencies, and replication invariants remain intact.
-
-Future operations work will add:
-
-- a registry-backed typed dispatcher;
-- atomic batches with result references;
-- Markdown import/export;
-- cascade previews and safety gates;
-- an agent interface after the access topology for browser-owned OPFS is decided.
-
-An external process cannot assume direct access to browser OPFS. Phase 15 must choose an in-app
-bridge, exported database, or different persistence host before implementing MCP.
-
-## Deferred cross-cutting work
-
-- Structural and data undo.
-- Full-text-search timing.
-- Labeled `ref` relations.
-- Saved stream states and URL/deep-link behavior.
-- Guaranteed closed-app notification delivery.
-- Remote transport and file mirroring.
+The app is a Solid.js browser application. SQLite-WASM runs in a worker and persists to OPFS. UI
+writes go through typed worker messages; reactive queries re-run from SQLite update notifications.
+
+SQLite is both the store and the relational engine. Custom SQLite functions implement byte-level
+algorithms such as sibling keys. Prepared SQL and transactions implement queries, structural
+operations, and cache maintenance. TypeScript selects operations, binds parameters, and manages UI
+state, and does not reimplement relational work in loops. User query SQL runs through a read-only
+bounded edge; writes stay typed so their invariants hold ([Decision 2](Decisions.md#decision-2)).
+
+The shell and the fallback rendering are fixed infrastructure. Plugins extend the system with
+faces and commands ([Decision 8](Decisions.md#decision-8)).
+
+## Where to look
+
+| Concern                                        | Ledger concepts                                           | Topic                                                |
+| ---------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------- |
+| Matrixes, edges, nodes, positions, views       | Matrix, Row, Node, Edge, Position, View, Child source     | [Data-Model](Data-Model.md)                          |
+| Queries and write-back                         | Query spec, Recognizer, Writable field, Raw SQL mode      | [Query-Spec](Query-Spec.md)                          |
+| Faces, face choices, hosts, renderings         | Face, Face choice, Face resolution, Host, Rendering mount | [Plugins](Plugins.md)                                |
+| Navigation, places, launcher, discovery        | Place, Provenance, Ancestry resolution, Launcher          | [Launcher](Launcher.md)                              |
+| Paging and inline results                      | Page, Stream item, Inline results                         | [Virtualization](Virtualization.md)                  |
+| Tokens, themes, fidelity, shell layout, sticky | Visual theme, Fidelity, Shell layout, Sticky item         | [Design](Design.md), [Design-Faces](Design-Faces.md) |
+| Replication and migration                      | Durability class, Schema version                          | [Sync](Sync.md)                                      |
+| Budgets and guards                             | Performance guards                                        | [Performance](Performance.md), [Testing](Testing.md) |
+| Future phases and deferred decisions           | none                                                      | [Plan](Plan.md)                                      |
+
+## Trace: a stream item from SQLite to pixels
+
+1. A workspace **row** lives in the workspace **matrix** table. Its **home** is an `own` **edge**
+   whose **sibling key** orders it under its parent **node**.
+2. The derived **scroll index** holds one **position** for each place the node appears, keyed by
+   concatenated sibling keys, so each subtree is one contiguous key range.
+3. The **navigation panel** asks for the **pages** around the viewport. The worker counts the
+   filtered sequence, splices **inline results** after each recognized **view**, and gathers only
+   the requested pages ([Decision 23](Decisions.md#decision-23)).
+4. Each gathered position becomes one **stream item**, keyed by position
+   ([Decision 24](Decisions.md#decision-24)). The item mounts ProseMirror editors for the row's
+   **label** and **content** columns. A row from another matrix also shows a **field strip**.
+5. The **outline variant** paints guides from row depth and continuation facts. **Sticky items**
+   pin ancestors without owning editors ([Decision 32](Decisions.md#decision-32)).
+6. **Semantic tokens** resolved from **polarity** and **visual theme** style the result.
+7. An edit writes through a typed worker operation to the **row**. SQLite update notifications
+   re-run only overlapping page queries, and the editor stays mounted.
+
+## Trace: a view from launcher to focus panel
+
+1. `⌘K` opens the **launcher** in Quick and captures **provenance**: the focused node and
+   position.
+2. Committing a **chip** moves to Deep. The **query spec** compiles to canonical SQL and a bounded
+   read-only preview runs ([Decision 28](Decisions.md#decision-28)).
+3. `⌘S` stores the SQL as a new **view**: a node homed under the provenance node plus one
+   `block_sources` row ([Decision 9](Decisions.md#decision-9),
+   [Decision 16](Decisions.md#decision-16)).
+4. **Ancestry resolution** gives the view's node a rooted **place**, and the stream opens a **focus
+   panel** for it ([Decision 22](Decisions.md#decision-22)).
+5. The focus panel is a **host**. It builds a **subject** with child source **view** and lays out
+   its **panel regions**.
+6. The collection region holds a **rendering mount**. **Face resolution** finds no face choice for a
+   view subject, so the mount shows the **fallback collection**
+   ([Decision 18](Decisions.md#decision-18)).
+7. The **recognizer** classifies each result value as a **writable field** or **read-only field**.
+   The **no-ownership rule** removes add-row and structural gestures
+   ([Decision 19](Decisions.md#decision-19)).
+8. Reopening the view later recognizes its SQL back into chips. **Raw SQL mode** edits the same
+   stored statement.
