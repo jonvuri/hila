@@ -10,8 +10,41 @@ import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import { createMatrix, insertRow, deleteRow, initMatrixSchema } from './matrix'
-import { getAncestors, getDepth, isAncestor, rebuildClosure } from './closure'
+import { getAncestors, rebuildClosure } from './closure'
+import type { NodeRef } from './tree'
 import { reparentRow, deleteSubtree } from './tree'
+
+// Closure assertions. Production reads depth from the scroll index and
+// checks ancestry through own-edges, so these stay test-local.
+/** Get the depth of a node (max depth in closure = distance from its highest ancestor). */
+const getDepth = (db: Database, node: NodeRef): number => {
+  const stmt = db.prepare(
+    `SELECT MAX(depth) AS max_depth FROM closure
+     WHERE descendant_matrix_id = ? AND descendant_row_id = ?`,
+  )
+  stmt.bind([node.matrixId, node.rowId])
+  let depth = 0
+  if (stmt.step()) {
+    const row = stmt.get({}) as { max_depth: number | null }
+    depth = row.max_depth ?? 0
+  }
+  stmt.finalize()
+  return depth
+}
+
+/** Check if `ancestor` is an ancestor of `descendant` in the closure. */
+const isAncestor = (db: Database, ancestor: NodeRef, descendant: NodeRef): boolean => {
+  const stmt = db.prepare(
+    `SELECT 1 FROM closure
+     WHERE ancestor_matrix_id = ? AND ancestor_row_id = ?
+       AND descendant_matrix_id = ? AND descendant_row_id = ?
+     LIMIT 1`,
+  )
+  stmt.bind([ancestor.matrixId, ancestor.rowId, descendant.matrixId, descendant.rowId])
+  const found = stmt.step()
+  stmt.finalize()
+  return found
+}
 
 describe('Global closure cache', () => {
   let db: Database

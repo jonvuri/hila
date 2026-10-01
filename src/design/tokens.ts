@@ -102,8 +102,6 @@ export const fundamentalTokenNames = [
 
 export type FundamentalTokenName = (typeof fundamentalTokenNames)[number]
 
-export const fundamentalVar = (name: FundamentalTokenName) => `var(--${name})` as const
-
 export const polarityValues = ['dark', 'light'] as const
 export type Polarity = (typeof polarityValues)[number]
 

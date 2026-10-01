@@ -8,6 +8,7 @@ import {
   getColumns,
   initMatrixSchema,
   insertDataRow,
+  insertRow,
 } from '../../core/matrix'
 import { recognizeUpdatableQuery } from '../recognize-updatable'
 
@@ -109,6 +110,29 @@ describe('query-spec SQLite integration', () => {
         }),
       ),
     ).toEqual([rowIds.beta])
+  })
+
+  test('node scope covers rows hosted by the node and its descendants', () => {
+    // Closure has no self-pairs, so the scope must union direct hosts with descendants.
+    const focal = insertRow(db, hostMatrixId, { values: { label: 'Focal' } })
+    const child = insertRow(db, hostMatrixId, {
+      values: { label: 'Child' },
+      parent: { matrixId: hostMatrixId, rowId: focal.rowId },
+    })
+    const outside = insertRow(db, hostMatrixId, { values: { label: 'Outside' } })
+    const onFocal = createDependentRow(db, hostMatrixId, focal.rowId, resultMatrixId)
+    const onChild = createDependentRow(db, hostMatrixId, child.rowId, resultMatrixId)
+    createDependentRow(db, hostMatrixId, outside.rowId, resultMatrixId)
+    catalog = createQueryCatalog({
+      matrices: [{ id: resultMatrixId, columns: getColumns(db, resultMatrixId) }],
+      nodes: [{ matrixId: hostMatrixId, rowId: focal.rowId }],
+    })
+
+    expect(
+      executeBoth(
+        spec({ scope: { type: 'node', matrixId: hostMatrixId, rowId: focal.rowId } }),
+      ),
+    ).toEqual([onFocal, onChild].sort((a, b) => a - b))
   })
 
   test('escapes LIKE wildcard characters as literal text', () => {

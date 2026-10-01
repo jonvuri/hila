@@ -293,8 +293,7 @@ Field rules:
 ### Aspect
 
 - **Name:** aspect
-- **Also called:** tag, tag aspect, tag property, attachment, owned aspect, `AspectPreview`,
-  `createHostlessAspectRow`
+- **Also called:** tag, tag aspect, tag property, attachment, owned aspect, `AspectPreview`
 - **Kind:** data
 - **Owner:** [Data-Model](Data-Model.md#matrix-ownership-and-type-nodes)
 - **Definition:** A row in a type node's matrix that describes another node. Typing `#Task` or

@@ -63,9 +63,6 @@ export const buildDeepPreviewRangeRequest = (
   }
 }
 
-export const buildDeepPreviewPageRequest = (plan: QueryPlan, pageIndex: number): SqlQuery =>
-  buildDeepPreviewRangeRequest(plan, pageIndex, pageIndex)
-
 export const computeDeepPreviewWindowRange = (
   totalRows: number,
   retainedPages: ReadonlySet<number>,

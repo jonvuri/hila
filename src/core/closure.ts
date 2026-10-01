@@ -220,22 +220,6 @@ export const removeNodeFromClosure = (db: Database, node: NodeRef): void => {
 
 // -- Queries ------------------------------------------------------------------
 
-/** Get the depth of a node (max depth in closure = distance from its highest ancestor). */
-export const getDepth = (db: Database, node: NodeRef): number => {
-  const stmt = db.prepare(
-    `SELECT MAX(depth) AS max_depth FROM closure
-     WHERE descendant_matrix_id = ? AND descendant_row_id = ?`,
-  )
-  stmt.bind([node.matrixId, node.rowId])
-  let depth = 0
-  if (stmt.step()) {
-    const row = stmt.get({}) as { max_depth: number | null }
-    depth = row.max_depth ?? 0
-  }
-  stmt.finalize()
-  return depth
-}
-
 /** Get all ancestors of a node, ordered from closest (depth 1) to farthest. */
 export const getAncestors = (db: Database, node: NodeRef): (NodeRef & { depth: number })[] => {
   const stmt = db.prepare(
@@ -278,18 +262,4 @@ export const getDescendants = (db: Database, node: NodeRef): NodeRef[] => {
   }
   stmt.finalize()
   return result
-}
-
-/** Check if `ancestor` is an ancestor of `descendant` in the closure. */
-export const isAncestor = (db: Database, ancestor: NodeRef, descendant: NodeRef): boolean => {
-  const stmt = db.prepare(
-    `SELECT 1 FROM closure
-     WHERE ancestor_matrix_id = ? AND ancestor_row_id = ?
-       AND descendant_matrix_id = ? AND descendant_row_id = ?
-     LIMIT 1`,
-  )
-  stmt.bind([ancestor.matrixId, ancestor.rowId, descendant.matrixId, descendant.rowId])
-  const found = stmt.step()
-  stmt.finalize()
-  return found
 }

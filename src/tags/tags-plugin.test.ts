@@ -13,8 +13,6 @@ import { tagsPlugin } from './tags-plugin'
 import {
   createTagType,
   getTagType,
-  getTagTypeById,
-  getTagTypeByMatrixId,
   getAllTagTypes,
   updateTagType,
   deleteTagType,
@@ -172,32 +170,6 @@ describe('Tag type registry (type-node model)', () => {
     expect(getTagType(db, 'nonexistent')).toBeNull()
   })
 
-  test('getTagTypeById retrieves a tag type by ID', () => {
-    const created = createTagType(db, 'task')
-
-    const tagType = getTagTypeById(db, created.id)
-    expect(tagType).not.toBeNull()
-    expect(tagType!.name).toBe('task')
-    expect(tagType!.matrixId).toBe(created.matrixId)
-  })
-
-  test('getTagTypeById returns null for nonexistent ID', () => {
-    expect(getTagTypeById(db, 999999)).toBeNull()
-  })
-
-  test('getTagTypeByMatrixId retrieves a tag type by matrix ID', () => {
-    const created = createTagType(db, 'task')
-
-    const tagType = getTagTypeByMatrixId(db, created.matrixId)
-    expect(tagType).not.toBeNull()
-    expect(tagType!.name).toBe('task')
-    expect(tagType!.id).toBe(created.id)
-  })
-
-  test('getTagTypeByMatrixId returns null for nonexistent matrix ID', () => {
-    expect(getTagTypeByMatrixId(db, 999999)).toBeNull()
-  })
-
   test('getAllTagTypes returns all registered tag types', () => {
     createTagType(db, 'task')
     createTagType(db, 'movie-review')
@@ -229,8 +201,8 @@ describe('Tag type registry (type-node model)', () => {
     const created = createTagType(db, 'task')
     updateTagType(db, created.id, { name: 'todo' })
 
-    const updated = getTagTypeById(db, created.id)
-    expect(updated!.name).toBe('todo')
+    expect(getTagType(db, 'todo')!.id).toBe(created.id)
+    expect(getTagType(db, 'task')).toBeNull()
   })
 
   test('renaming the type-node label via plain updateRow renames the tag type', () => {
@@ -267,8 +239,7 @@ describe('Tag type registry (type-node model)', () => {
     const created = createTagType(db, 'task')
     updateTagType(db, created.id, {})
 
-    const unchanged = getTagTypeById(db, created.id)
-    expect(unchanged!.name).toBe('task')
+    expect(getTagType(db, 'task')!.id).toBe(created.id)
   })
 
   test('deleteTagType removes the type-node and cascades the owned matrix', () => {
@@ -276,7 +247,7 @@ describe('Tag type registry (type-node model)', () => {
     const matrixId = created.matrixId
     deleteTagType(db, created.id)
 
-    expect(getTagTypeById(db, created.id)).toBeNull()
+    expect(getAllTagTypes(db)).toEqual([])
     expect(getTagType(db, 'task')).toBeNull()
 
     // The owned matrix is cascade-dropped

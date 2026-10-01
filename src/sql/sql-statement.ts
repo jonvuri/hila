@@ -110,11 +110,6 @@ export const splitTopLevelAnd = (node: SqlAstNode | undefined): SqlAstNode[] => 
   return [node]
 }
 
-export const unwrapSingleParenthesis = (node: SqlAstNode): SqlAstNode => {
-  if (node?.type === 'ParenthesizedExpr' && node.exprs?.length === 1) return node.exprs[0]
-  return node
-}
-
 export const quoteSqlIdentifier = (identifier: string): string =>
   `"${identifier.replaceAll('"', '""')}"`
 

@@ -68,9 +68,6 @@ const COLUMN_TYPES: {
   { value: 'reference', label: 'Reference', icon: '→', sqliteType: 'TEXT' },
 ]
 
-export const getColumnTypeInfo = (displayType: string) =>
-  COLUMN_TYPES.find((t) => t.value === displayType) ?? COLUMN_TYPES[0]!
-
 // -- Reference cell value helpers ---------------------------------------------
 
 export type ReferenceCellValue = {

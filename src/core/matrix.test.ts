@@ -10,7 +10,6 @@ import {
   insertRow,
   deleteRow,
   updateRow,
-  ensureRootMatrix,
   insertJoin,
   deleteJoin,
   getTargets,
@@ -50,89 +49,6 @@ const createMatrixWithTraits = (
 ): number => {
   return createMatrix(db, title, columns)
 }
-
-describe('Root Matrix Initialization', () => {
-  let db: Database
-
-  beforeEach(async () => {
-    const sqlite3 = await initSqliteWasm({
-      print: () => {}, // Suppress logs in tests
-      printErr: () => {},
-    })
-
-    // Use in-memory database for tests
-    db = new sqlite3.oo1.DB(':memory:', 'c')
-
-    // Initialize the matrix schema
-    initMatrixSchema(db)
-  })
-
-  test('ensureRootMatrix should create root matrix with ID = 1', () => {
-    const rootId = ensureRootMatrix(db)
-
-    // Verify root matrix has ID = 1
-    expect(rootId).toBe(1)
-
-    // Verify the matrix exists in the database
-    const checkStmt = db.prepare('SELECT id, title FROM matrix WHERE id = 1')
-    expect(checkStmt.step()).toBe(true)
-    const result = checkStmt.get({}) as { id: number; title: string }
-    expect(result.id).toBe(1)
-    expect(result.title).toBe('Root')
-    checkStmt.finalize()
-  })
-
-  test('ensureRootMatrix should create data table with content column', () => {
-    ensureRootMatrix(db)
-
-    // Verify data table exists
-    const dataTableExists = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_1_data'`,
-    )
-    expect(dataTableExists.step()).toBe(true)
-    dataTableExists.finalize()
-
-    // Verify data table schema has 'id' and 'content' columns
-    const schemaStmt = db.prepare(`PRAGMA table_info(mx_1_data)`)
-    const columns: { name: string; type: string }[] = []
-    while (schemaStmt.step()) {
-      const col = schemaStmt.get({}) as { name: string; type: string }
-      columns.push({ name: col.name, type: col.type })
-    }
-    schemaStmt.finalize()
-
-    expect(columns).toHaveLength(2)
-    expect(columns[0]).toEqual({ name: 'id', type: 'INTEGER' })
-    expect(columns[1]).toEqual({ name: 'content', type: 'TEXT' })
-  })
-
-  test('ensureRootMatrix does not create a per-matrix closure table (closure is global)', () => {
-    ensureRootMatrix(db)
-
-    const closureTableExists = db.prepare(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='mx_1_closure'`,
-    )
-    expect(closureTableExists.step()).toBe(false)
-    closureTableExists.finalize()
-  })
-
-  test('ensureRootMatrix should be idempotent', () => {
-    // Call ensureRootMatrix twice
-    const rootId1 = ensureRootMatrix(db)
-    const rootId2 = ensureRootMatrix(db)
-
-    // Both should return ID = 1
-    expect(rootId1).toBe(1)
-    expect(rootId2).toBe(1)
-
-    // Verify only one matrix with ID = 1 exists
-    const countStmt = db.prepare('SELECT COUNT(*) as count FROM matrix WHERE id = 1')
-    countStmt.step()
-    const count = (countStmt.get({}) as { count: number }).count
-    expect(count).toBe(1)
-    countStmt.finalize()
-  })
-})
 
 describe('Matrix Operations', () => {
   let db: Database
@@ -1297,22 +1213,6 @@ describe('Column schema management', () => {
     ])
   })
 
-  test('ensureRootMatrix stores column definitions', () => {
-    ensureRootMatrix(db)
-    const cols = getColumns(db, 1)
-    expect(cols).toEqual([
-      expect.objectContaining({
-        name: 'content',
-        type: 'TEXT',
-        displayType: 'text',
-        order: 0,
-        options: null,
-        formula: null,
-      }),
-    ])
-    expect(cols[0]!.id).toBeGreaterThan(0)
-  })
-
   test('getColumns throws for non-existent matrix', () => {
     expect(() => getColumns(db, 999)).toThrow('Matrix 999 not found')
   })
@@ -2057,6 +1957,7 @@ describe('updateRow', () => {
 
 describe('Content column and row data model', () => {
   let db: Database
+  let matrixId: number
 
   beforeEach(async () => {
     const sqlite3 = await initSqliteWasm({
@@ -2065,15 +1966,15 @@ describe('Content column and row data model', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    ensureRootMatrix(db)
+    matrixId = createMatrix(db, 'Content', [{ name: 'content', type: 'TEXT' }])
   })
 
   const EMPTY_DOC = JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] })
 
   test('insertDataRow with no content produces null content', () => {
-    const rowId = insertDataRow(db, 1)
+    const rowId = insertDataRow(db, matrixId)
 
-    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    const stmt = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(true)
     expect((stmt.get({}) as { content: string | null }).content).toBeNull()
@@ -2085,9 +1986,9 @@ describe('Content column and row data model', () => {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }],
     }
-    const rowId = insertDataRow(db, 1, { content: JSON.stringify(doc) })
+    const rowId = insertDataRow(db, matrixId, { content: JSON.stringify(doc) })
 
-    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    const stmt = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(true)
     const stored = (stmt.get({}) as { content: string }).content
@@ -2097,15 +1998,15 @@ describe('Content column and row data model', () => {
   })
 
   test('updateRow on content column persists JSON and round-trips', () => {
-    const rowId = insertDataRow(db, 1)
+    const rowId = insertDataRow(db, matrixId)
     const doc = {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Updated' }] }],
     }
 
-    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc) } })
+    updateRow(db, { matrixId, rowId, values: { content: JSON.stringify(doc) } })
 
-    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    const stmt = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(true)
     const stored = (stmt.get({}) as { content: string }).content
@@ -2115,14 +2016,14 @@ describe('Content column and row data model', () => {
   })
 
   test('updateRow with invalid column throws, leaving content unchanged', () => {
-    const rowId = insertDataRow(db, 1, { content: EMPTY_DOC })
+    const rowId = insertDataRow(db, matrixId, { content: EMPTY_DOC })
 
-    expect(() => updateRow(db, { matrixId: 1, rowId, values: { badcol: 'x' } })).toThrow(
+    expect(() => updateRow(db, { matrixId, rowId, values: { badcol: 'x' } })).toThrow(
       'Column "badcol" does not exist in matrix',
     )
 
     // Content should be unchanged
-    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    const stmt = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(true)
     expect((stmt.get({}) as { content: string }).content).toBe(EMPTY_DOC)
@@ -2130,7 +2031,7 @@ describe('Content column and row data model', () => {
   })
 
   test('multiple update round-trips preserve latest value', () => {
-    const rowId = insertDataRow(db, 1, { content: EMPTY_DOC })
+    const rowId = insertDataRow(db, matrixId, { content: EMPTY_DOC })
     const doc1 = {
       type: 'doc',
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'v1' }] }],
@@ -2140,10 +2041,10 @@ describe('Content column and row data model', () => {
       content: [{ type: 'paragraph', content: [{ type: 'text', text: 'v2' }] }],
     }
 
-    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc1) } })
-    updateRow(db, { matrixId: 1, rowId, values: { content: JSON.stringify(doc2) } })
+    updateRow(db, { matrixId, rowId, values: { content: JSON.stringify(doc1) } })
+    updateRow(db, { matrixId, rowId, values: { content: JSON.stringify(doc2) } })
 
-    const stmt = db.prepare('SELECT content FROM "mx_1_data" WHERE id = ?')
+    const stmt = db.prepare(`SELECT content FROM "mx_${matrixId}_data" WHERE id = ?`)
     stmt.bind([rowId])
     expect(stmt.step()).toBe(true)
     expect(JSON.parse((stmt.get({}) as { content: string }).content)).toEqual(doc2)
@@ -2482,14 +2383,6 @@ describe('Globally unique random IDs', () => {
     const count = (dataStmt.get({}) as { count: number }).count
     expect(count).toBeGreaterThanOrEqual(2)
     dataStmt.finalize()
-  })
-
-  test('ensureRootMatrix still works with explicit ID 1', () => {
-    const rootId = ensureRootMatrix(db)
-    expect(rootId).toBe(1)
-
-    const rowId = insertDataRow(db, 1, { content: 'test' })
-    expect(rowId).toBeGreaterThan(0)
   })
 })
 

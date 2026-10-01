@@ -10,7 +10,6 @@ import {
   getTargets,
   getSources,
   createDependentRow,
-  createHostlessAspectRow,
   createRefJoin,
 } from '../core/matrix'
 import { createTreePosition, getOwnEdge, reparentRow } from '../core/tree'
@@ -22,7 +21,7 @@ import { extractInlineRefs } from '../editor/inlineref-sync'
 import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin } from './tags-plugin'
-import { createTagType, getTagType, getTagTypeByMatrixId, getAllTagTypes } from './tag-types'
+import { createTagType, getTagType, getAllTagTypes } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
 const testWorkspacePlugin = { ...workspacePlugin, init: undefined }
@@ -276,22 +275,6 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       expect(attrs['data-kind']).toBe('ref')
     })
 
-    test('tag type metadata can be resolved by matrix ID', () => {
-      const tagType = createTagType(db, 'task')
-
-      const resolved = getTagTypeByMatrixId(db, tagType.matrixId)
-      expect(resolved).not.toBeNull()
-      expect(resolved!.name).toBe('task')
-      expect(resolved!.matrixId).toBe(tagType.matrixId)
-    })
-
-    test('non-tag-type matrix ID returns null from getTagTypeByMatrixId', () => {
-      const plainMatrixId = createMatrix(db, 'Notes', [{ name: 'title', type: 'TEXT' }])
-
-      const resolved = getTagTypeByMatrixId(db, plainMatrixId)
-      expect(resolved).toBeNull()
-    })
-
     test('own-kind node with deleted target produces ghost state attrs', () => {
       const tagType = createTagType(db, 'task')
       const node = schema.nodes.inlineref!.create({
@@ -355,7 +338,13 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       const wsMatrixId = getWsMatrixId()
       const typeNode = { matrixId: wsMatrixId, rowId: tagType.id }
 
-      const rowId = createHostlessAspectRow(db, typeNode, tagType.matrixId, {})
+      const rowId = createDependentRow(
+        db,
+        typeNode.matrixId,
+        typeNode.rowId,
+        tagType.matrixId,
+        {},
+      )
 
       const edge = getOwnEdge(db, tagType.matrixId, rowId)
       expect(edge).not.toBeNull()
@@ -368,7 +357,13 @@ describe('Tag search, insertion, and inline tag type creation', () => {
       const outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
       const wsMatrixId = getWsMatrixId()
       const typeNode = { matrixId: wsMatrixId, rowId: tagType.id }
-      const rowId = createHostlessAspectRow(db, typeNode, tagType.matrixId, {})
+      const rowId = createDependentRow(
+        db,
+        typeNode.matrixId,
+        typeNode.rowId,
+        tagType.matrixId,
+        {},
+      )
 
       const hostRowId = insertDataRow(db, outlineMatrixId, { content: 'host' })
       createTreePosition(db, outlineMatrixId, hostRowId)

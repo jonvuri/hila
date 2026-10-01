@@ -4,7 +4,6 @@ import type { QueryPlan } from '../sql/query-spec/types'
 
 import {
   buildDeepPreviewCountRequest,
-  buildDeepPreviewPageRequest,
   buildDeepPreviewRangeRequest,
   computeDeepPreviewWindowRange,
   DEEP_PREVIEW_MAX_RETAINED_PAGES,
@@ -33,7 +32,7 @@ describe('Deep preview paging', () => {
   })
 
   test('builds 100-row slices outside the semantic limit and order', () => {
-    const request = buildDeepPreviewPageRequest(plan(), 4)
+    const request = buildDeepPreviewRangeRequest(plan(), 4, 4)
 
     expect(request.sql).toContain('ORDER BY d."score" DESC, d.id ASC\nLIMIT ?2')
     expect(request.sql).toMatch(/\) AS deep_results\nLIMIT \?3\nOFFSET \?4$/)
@@ -84,13 +83,14 @@ describe('Deep preview paging', () => {
   })
 
   test('rejects invalid and oversized request ranges without interpolating values', () => {
-    expect(() => buildDeepPreviewPageRequest(plan(), -1)).toThrow(RangeError)
+    expect(() => buildDeepPreviewRangeRequest(plan(), -1, -1)).toThrow(RangeError)
     expect(() =>
       buildDeepPreviewRangeRequest(plan(), 0, DEEP_PREVIEW_MAX_RETAINED_PAGES),
     ).toThrow(RangeError)
 
-    const hostile = buildDeepPreviewPageRequest(
+    const hostile = buildDeepPreviewRangeRequest(
       plan([`open'; DROP TABLE matrix; --`, 1_000]),
+      0,
       0,
     )
     expect(hostile.sql).not.toContain('DROP TABLE')

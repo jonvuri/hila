@@ -24,17 +24,6 @@ export const addQueryPredicate = (spec: QuerySpec, predicate: QueryPredicate): Q
   where: [...spec.where, predicate],
 })
 
-export const replaceQueryPredicate = (
-  spec: QuerySpec,
-  index: number,
-  predicate: QueryPredicate,
-): QuerySpec => ({
-  ...spec,
-  where: spec.where.map((current, currentIndex) =>
-    currentIndex === index ? predicate : current,
-  ),
-})
-
 export const removeQueryPredicate = (spec: QuerySpec, index: number): QuerySpec => ({
   ...spec,
   where: spec.where.filter((_, currentIndex) => currentIndex !== index),

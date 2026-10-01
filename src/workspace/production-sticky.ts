@@ -171,54 +171,6 @@ export const createProductionStickyContext = (input: {
   }
 }
 
-export type ProductionStickyContextChange = 'none' | 'content' | 'structure'
-
-export type ProductionStickyDrillRepresentation = 'none' | 'primary' | 'dock' | 'unresolved'
-
-/** Tell the widget whether the primary chain already represents the drill target. */
-export const getProductionStickyDrillRepresentation = (
-  context: ProductionStickyContext,
-): ProductionStickyDrillRepresentation => {
-  if (!context.drill) return 'none'
-  if (context.drill.state === 'unresolved') return 'unresolved'
-  return context.ancestry.some((row) => row.identity.pk === context.drill!.pk) ?
-      'primary'
-    : 'dock'
-}
-
-/** Compare the stable data plane before geometry and push-off are applied. */
-export const classifyProductionStickyContextChange = (
-  previous: ProductionStickyContext,
-  next: ProductionStickyContext,
-): ProductionStickyContextChange => {
-  if (
-    previous.ancestry.length !== next.ancestry.length ||
-    previous.ancestry.some((row, index) => {
-      const other = next.ancestry[index]!
-      return (
-        row.identity.pk !== other.identity.pk ||
-        row.subtreeEnd.pk !== other.subtreeEnd.pk ||
-        row.depth !== other.depth
-      )
-    }) ||
-    previous.drill?.state !== next.drill?.state ||
-    previous.drill?.ck !== next.drill?.ck ||
-    previous.drill?.pk !== next.drill?.pk
-  ) {
-    return 'structure'
-  }
-
-  if (
-    previous.ancestry.some(
-      (row, index) => row.contentKey !== next.ancestry[index]!.contentKey,
-    ) ||
-    previous.drill?.label !== next.drill?.label
-  ) {
-    return 'content'
-  }
-  return 'none'
-}
-
 export const PRODUCTION_STICKY_ROW_HEIGHT = 32
 export const PRODUCTION_STICKY_FLOW_GAP = 4
 export const PRODUCTION_STICKY_MAX_VIEWPORT_RATIO = 0.4

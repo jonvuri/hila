@@ -17,7 +17,7 @@ import { tableFaceTypeDefinition } from '../table/table-face-type'
 import { workspacePlugin } from '../workspace/workspace-plugin'
 
 import { tagsPlugin } from './tags-plugin'
-import { createTagType, getTagTypeByMatrixId } from './tag-types'
+import { createTagType } from './tag-types'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
 const testWorkspacePlugin = { ...workspacePlugin, init: undefined }
@@ -168,14 +168,6 @@ describe('Tag property panel data layer', () => {
 
     expect(editableColumns.every((c) => c.name !== 'id')).toBe(true)
     expect(editableColumns.some((c) => c.name === 'status')).toBe(true)
-  })
-
-  test('tag type metadata can be resolved for panel rendering', () => {
-    const tagType = createTagType(db, 'task')
-
-    const meta = getTagTypeByMatrixId(db, tagType.matrixId)
-    expect(meta).not.toBeNull()
-    expect(meta!.name).toBe('task')
   })
 
   test('multiple column types are supported for property panel', () => {

@@ -21,9 +21,6 @@ import {
   buildTagsForRowQuery,
   buildTaggedRowsQuery,
   buildAspectForRowQuery,
-  buildTagTypesWithCountsQuery,
-  buildTagInstancesQuery,
-  buildSourceRowSnippetQuery,
 } from './tag-queries'
 
 const testTagsPlugin = { ...tagsPlugin, init: undefined }
@@ -42,15 +39,13 @@ const execAll = (db: Database, sql: string): Record<string, unknown>[] => {
 describe('Tag lookup queries', () => {
   let db: Database
   let outlineMatrixId: number
-  let wsMatrixId: number
 
   beforeEach(async () => {
     const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
     registerFaceType(tableFaceTypeDefinition)
-    const wsCtx = await registerPlugin(db, testWorkspacePlugin)
-    wsMatrixId = wsCtx.matrixIds['root']!
+    await registerPlugin(db, testWorkspacePlugin)
     await registerPlugin(db, testTagsPlugin)
 
     outlineMatrixId = createMatrix(db, 'Outline', [{ name: 'content', type: 'TEXT' }])
@@ -249,181 +244,6 @@ describe('Tag lookup queries', () => {
       expect(results).toHaveLength(1)
       expect(results[0]!.id).toBe(reviewAspectId)
       expect(results[0]!.rating).toBe('5')
-    })
-  })
-
-  describe('Tag types with counts (tag browser query)', () => {
-    test('returns all tag types with instance counts', () => {
-      const taskTag = createTagType(db, 'task')
-      const reviewTag = createTagType(db, 'review')
-
-      const row1 = createSourceRow()
-      const row2 = createSourceRow()
-      createDependentRow(db, outlineMatrixId, row1, taskTag.matrixId)
-      createDependentRow(db, outlineMatrixId, row2, taskTag.matrixId)
-      createDependentRow(db, outlineMatrixId, row1, reviewTag.matrixId)
-
-      const sql = buildTagTypesWithCountsQuery(wsMatrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(2)
-      const byName = Object.fromEntries(results.map((r) => [r.name, r]))
-      expect(byName['task']!.instance_count).toBe(2)
-      expect(byName['review']!.instance_count).toBe(1)
-    })
-
-    test('returns zero instance count for tag types with no instances', () => {
-      createTagType(db, 'empty-tag')
-
-      const sql = buildTagTypesWithCountsQuery(wsMatrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(1)
-      expect(results[0]!.name).toBe('empty-tag')
-      expect(results[0]!.instance_count).toBe(0)
-    })
-
-    test('returns empty array when no tag types exist', () => {
-      const sql = buildTagTypesWithCountsQuery(wsMatrixId)
-      const results = execAll(db, sql)
-      expect(results).toHaveLength(0)
-    })
-
-    test('returns results sorted by name', () => {
-      createTagType(db, 'zebra')
-      createTagType(db, 'alpha')
-      createTagType(db, 'middle')
-
-      const sql = buildTagTypesWithCountsQuery(wsMatrixId)
-      const results = execAll(db, sql)
-      const names = results.map((r) => r.name)
-      expect(names).toEqual(['alpha', 'middle', 'zebra'])
-    })
-
-    test('includes matrix_id in results', () => {
-      const tag = createTagType(db, 'task')
-
-      const sql = buildTagTypesWithCountsQuery(wsMatrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(1)
-      expect(results[0]!.matrix_id).toBe(tag.matrixId)
-    })
-
-    test('count updates when instances are added', () => {
-      const tag = createTagType(db, 'task')
-      const row1 = createSourceRow()
-
-      const sqlBefore = buildTagTypesWithCountsQuery(wsMatrixId)
-      const before = execAll(db, sqlBefore)
-      expect(before[0]!.instance_count).toBe(0)
-
-      createDependentRow(db, outlineMatrixId, row1, tag.matrixId)
-
-      const sqlAfter = buildTagTypesWithCountsQuery(wsMatrixId)
-      const after = execAll(db, sqlAfter)
-      expect(after[0]!.instance_count).toBe(1)
-    })
-  })
-
-  describe('Tag instances with context (cross-matrix)', () => {
-    test('returns all instances with source matrix name', () => {
-      const taskTag = createTagType(db, 'task')
-
-      const row1 = createSourceRow('row 1')
-      const row2 = createSourceRow('row 2')
-      const target1 = createDependentRow(db, outlineMatrixId, row1, taskTag.matrixId)
-      const target2 = createDependentRow(db, outlineMatrixId, row2, taskTag.matrixId)
-
-      const sql = buildTagInstancesQuery(taskTag.matrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(2)
-      expect(results[0]!.source_matrix_name).toBe('Outline')
-      const targetIds = results.map((r) => r.target_row_id)
-      expect(targetIds).toContain(target1)
-      expect(targetIds).toContain(target2)
-    })
-
-    test('returns instances from multiple source matrixes', () => {
-      const taskTag = createTagType(db, 'task')
-
-      const notesMatrixId = createMatrix(db, 'Notes', [
-        { name: 'title', type: 'TEXT' },
-        { name: 'body', type: 'TEXT' },
-      ])
-
-      const outlineRow = createSourceRow('outline content')
-      createDependentRow(db, outlineMatrixId, outlineRow, taskTag.matrixId)
-
-      const noteRowId = insertDataRow(db, notesMatrixId, { title: 'note', body: '{}' })
-      createTreePosition(db, notesMatrixId, noteRowId)
-      createDependentRow(db, notesMatrixId, noteRowId, taskTag.matrixId)
-
-      const sql = buildTagInstancesQuery(taskTag.matrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(2)
-      const matrixNames = results.map((r) => r.source_matrix_name)
-      expect(matrixNames).toContain('Outline')
-      expect(matrixNames).toContain('Notes')
-    })
-
-    test('returns empty when no instances exist', () => {
-      const taskTag = createTagType(db, 'task')
-
-      const sql = buildTagInstancesQuery(taskTag.matrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(0)
-    })
-
-    test('excludes ref-kind joins', () => {
-      const taskTag = createTagType(db, 'task')
-      const sourceRowId = createSourceRow()
-      createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
-
-      const otherMatrixId = createMatrix(db, 'Other', [{ name: 'title', type: 'TEXT' }])
-      const otherRowId = insertDataRow(db, otherMatrixId, { title: 'ref' })
-      insertJoin(db, outlineMatrixId, sourceRowId, otherMatrixId, otherRowId, 'ref')
-
-      const sql = buildTagInstancesQuery(taskTag.matrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(1)
-    })
-
-    test('includes source_row_id and target_row_id', () => {
-      const taskTag = createTagType(db, 'task')
-      const sourceRowId = createSourceRow()
-      const targetRowId = createDependentRow(db, outlineMatrixId, sourceRowId, taskTag.matrixId)
-
-      const sql = buildTagInstancesQuery(taskTag.matrixId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(1)
-      expect(results[0]!.source_row_id).toBe(sourceRowId)
-      expect(results[0]!.target_row_id).toBe(targetRowId)
-      expect(results[0]!.source_matrix_id).toBe(outlineMatrixId)
-    })
-  })
-
-  describe('Source row snippet query', () => {
-    test('returns the source row data', () => {
-      const sourceRowId = createSourceRow('hello world')
-
-      const sql = buildSourceRowSnippetQuery(outlineMatrixId, sourceRowId)
-      const results = execAll(db, sql)
-
-      expect(results).toHaveLength(1)
-      expect(results[0]!.id).toBe(sourceRowId)
-      expect(results[0]!.content).toBe('hello world')
-    })
-
-    test('returns empty for nonexistent row', () => {
-      const sql = buildSourceRowSnippetQuery(outlineMatrixId, 999999)
-      const results = execAll(db, sql)
-      expect(results).toHaveLength(0)
     })
   })
 })

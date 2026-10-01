@@ -21,7 +21,6 @@ import {
   createMatrix,
   createOwnedMatrix,
   createRefJoin,
-  demoteNode,
   getColumns,
   getOrCreateDeviceId,
   initMatrixSchema,
@@ -355,8 +354,8 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
   test('detects and retains concurrent promoted, view, and owner mutations', () => {
     const { a, b, ids, initialChanges } = fixture
 
-    demoteNode(a, ids.typeNode)
-    demoteNode(b, ids.typeNode)
+    dbDemoteNode(a, ids.typeNode)
+    dbDemoteNode(b, ids.typeNode)
     dbUpdateViewSql(a, ids.marker, 'SELECT 1 AS source')
     dbUpdateViewSql(b, ids.marker, 'SELECT 2 AS local')
     dbUpdateOwner(a, ids.ownedMatrixId, ids.project)
@@ -404,7 +403,7 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
   test('applies the remote lifecycle for every composite fixture entity', () => {
     const { a, b, ids, initialChanges } = fixture
 
-    demoteNode(a, ids.typeNode)
+    dbDemoteNode(a, ids.typeNode)
     dbDeleteView(a, ids.marker)
     a.exec(
       `DELETE FROM face_slot_bindings
@@ -683,6 +682,12 @@ describe('Phase 11 Stage 4 two-replica current-schema round trip', () => {
     expect(getFaceConfigsForMatrix(b, ids.ownedMatrixId)).toEqual([])
   })
 })
+
+const dbDemoteNode = (db: Database, node: Node): void => {
+  db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ? AND row_id = ?', {
+    bind: [node.matrixId, node.rowId],
+  })
+}
 
 const dbUpdateViewSql = (db: Database, marker: Node, sql: string): void => {
   db.exec('UPDATE block_sources SET sql = ? WHERE marker_matrix_id = ? AND marker_row_id = ?', {

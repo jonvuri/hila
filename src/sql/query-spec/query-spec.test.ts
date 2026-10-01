@@ -10,7 +10,6 @@ import { normalizeQuerySpec } from './normalize'
 import {
   addQueryPredicate,
   removeQueryPredicate,
-  replaceQueryPredicate,
   setQueryLimit,
   setQueryText,
 } from './operations'
@@ -411,14 +410,12 @@ describe('query-spec operations', () => {
     const second: QueryPredicate = { type: 'predicate', columnId: 13, op: 'gt', value: 1 }
     const initial = baseSpec({ where: [first] })
     const added = addQueryPredicate(initial, second)
-    const replacement: QueryPredicate = { type: 'predicate', columnId: 13, op: 'gte', value: 2 }
-    const replaced = replaceQueryPredicate(added, 1, replacement)
-    const removed = removeQueryPredicate(replaced, 1)
+    const removed = removeQueryPredicate(added, 1)
     const updated = setQueryLimit(setQueryText(removed, 'find'), 10)
 
     expect(initial.where).toEqual([first])
     expect(added.where[0]).toBe(first)
-    expect(replaced.where).toEqual([first, replacement])
+    expect(added.where).toEqual([first, second])
     expect(removed.where).toEqual([first])
     expect(updated).toMatchObject({ text: 'find', limit: 10 })
   })

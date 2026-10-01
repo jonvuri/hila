@@ -13,8 +13,8 @@ import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import {
+  createMatrix,
   initMatrixSchema,
-  ensureRootMatrix,
   insertDataRow,
   updateRow,
   ROOT_MATRIX_ID,
@@ -97,7 +97,7 @@ beforeEach(async () => {
   const sqlite3 = await initSqliteWasm({ print: () => {}, printErr: () => {} })
   db = new sqlite3.oo1.DB(':memory:', 'c')
   initMatrixSchema(db)
-  matrixId = ensureRootMatrix(db)
+  matrixId = createMatrix(db, 'Root', [{ name: 'content', type: 'TEXT' }])
 })
 
 // ---------------------------------------------------------------------------

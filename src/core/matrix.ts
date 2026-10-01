@@ -614,49 +614,6 @@ export const createMatrix = (
   })
 }
 
-// Ensure the root matrix exists (creates it if it doesn't)
-export const ensureRootMatrix = (db: Database): number => {
-  // Check if matrix with ID = 1 exists
-  const checkStmt = db.prepare('SELECT id FROM matrix WHERE id = 1')
-  const exists = checkStmt.step()
-  checkStmt.finalize()
-
-  if (exists) {
-    const deviceId = getOrCreateDeviceId(db)
-    const columns = getColumns(db, 1)
-    installDataTableTriggers(db, 1, deviceId, getPhysicalTrackedColumns(columns))
-    return 1
-  }
-
-  return withTransaction(db, () => {
-    const insertStmt = db.prepare('INSERT INTO matrix (id, title) VALUES (1, ?) RETURNING id')
-    insertStmt.bind(['Root'])
-    if (!insertStmt.step()) {
-      insertStmt.finalize()
-      throw new Error('Failed to insert root matrix record')
-    }
-    insertStmt.finalize()
-
-    db.exec(
-      `INSERT INTO matrix_columns (matrix_id, name, type, display_type, "order") VALUES (1, 'content', 'TEXT', 'text', 0)`,
-    )
-
-    const matrixId = 1
-
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS "mx_${matrixId}_data" (
-        id INTEGER PRIMARY KEY DEFAULT (${SQL_RANDOM_ID}),
-        content TEXT
-      ) STRICT;
-    `)
-
-    const deviceId = getOrCreateDeviceId(db)
-    installDataTableTriggers(db, matrixId, deviceId, [{ name: 'content', type: 'TEXT' }])
-
-    return matrixId
-  })
-}
-
 /**
  * Create a new matrix owned by a node. Sets the `matrix.owner` columns and
  * optionally seeds root rows attached via own-edges to the owner node.
@@ -894,15 +851,6 @@ export const getMatrixOwner = (db: Database, matrixId: number): NodeRef | null =
  */
 export const promoteNode = (db: Database, node: NodeRef): void => {
   db.exec('INSERT OR IGNORE INTO promoted_nodes (matrix_id, row_id) VALUES (?, ?)', {
-    bind: [node.matrixId, node.rowId],
-  })
-}
-
-/**
- * Remove promotion from a node. It will no longer appear in # autocomplete.
- */
-export const demoteNode = (db: Database, node: NodeRef): void => {
-  db.exec('DELETE FROM promoted_nodes WHERE matrix_id = ? AND row_id = ?', {
     bind: [node.matrixId, node.rowId],
   })
 }
@@ -1395,17 +1343,6 @@ export const renameMatrix = (db: Database, matrixId: number, title: string): voi
   db.exec('UPDATE matrix SET title = ? WHERE id = ?', { bind: [title, matrixId] })
 }
 
-// Get all matrices for the debug UI
-export const getAllMatrices = (db: Database) => {
-  const stmt = db.prepare('SELECT id, title FROM matrix ORDER BY id')
-  const matrices: { id: number; title: string }[] = []
-  while (stmt.step()) {
-    matrices.push(stmt.get({}) as unknown as { id: number; title: string })
-  }
-  stmt.finalize()
-  return matrices
-}
-
 // -- Column schema management -------------------------------------------------
 
 /** Return the ordered column definitions for a matrix. */
@@ -1831,22 +1768,6 @@ export const createDependentRow = (
 
     return targetRowId
   })
-}
-
-/**
- * Create a hostless aspect row: a row in the tag-type's matrix owned by the
- * type-node itself (not by any host). This is a "task unto itself" — a record
- * in the Tasks table not contextualized in any outline bullet.
- *
- * Contextualizing later = reparenting its own-edge from the type-node to a host.
- */
-export const createHostlessAspectRow = (
-  db: Database,
-  typeNode: NodeRef,
-  targetMatrixId: number,
-  columnValues: Record<string, unknown> = {},
-): number => {
-  return createDependentRow(db, typeNode.matrixId, typeNode.rowId, targetMatrixId, columnValues)
 }
 
 /** Insert a ref-kind join (explicit alias for insertJoin with kind='ref'). */

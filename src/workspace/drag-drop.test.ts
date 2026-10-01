@@ -12,8 +12,8 @@ import initSqliteWasm from '@sqlite.org/sqlite-wasm'
 import type { Database } from '@sqlite.org/sqlite-wasm'
 
 import {
+  createMatrix,
   initMatrixSchema,
-  ensureRootMatrix,
   insertDataRow,
   ROOT_MATRIX_ID,
   ROOT_ROW_ID,
@@ -246,7 +246,7 @@ describe('drag-and-drop data integration', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    matrixId = ensureRootMatrix(db)
+    matrixId = createMatrix(db, 'Root', [{ name: 'content', type: 'TEXT' }])
   })
 
   test('reorder within parent: move last sibling to first position', () => {

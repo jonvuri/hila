@@ -24,7 +24,6 @@ import type { ColumnDefinition } from '../core/matrix'
 import {
   buildTableQuery,
   compileFormula,
-  compileFaceQuery,
   parseFormulaRefs,
   type SortConfig,
   type FilterConfig,
@@ -32,7 +31,6 @@ import {
 import {
   getTableCollectionMatrixId,
   getTableTreatment,
-  getColumnTypeInfo,
   getTableRowLauncherSubjectLabel,
   TABLE_PAGE_SIZE,
   type ReferenceCellValue,
@@ -157,45 +155,6 @@ describe('buildTableQuery', () => {
 })
 
 // -- Column type rendering dispatch -------------------------------------------
-
-describe('getColumnTypeInfo', () => {
-  test('returns correct info for text type', () => {
-    const info = getColumnTypeInfo('text')
-    expect(info.value).toBe('text')
-    expect(info.label).toBe('Text')
-    expect(info.sqliteType).toBe('TEXT')
-  })
-
-  test('returns correct info for number type', () => {
-    const info = getColumnTypeInfo('number')
-    expect(info.value).toBe('number')
-    expect(info.label).toBe('Number')
-    expect(info.sqliteType).toBe('REAL')
-  })
-
-  test('returns correct info for date type', () => {
-    const info = getColumnTypeInfo('date')
-    expect(info.value).toBe('date')
-    expect(info.sqliteType).toBe('TEXT')
-  })
-
-  test('returns correct info for boolean type', () => {
-    const info = getColumnTypeInfo('boolean')
-    expect(info.value).toBe('boolean')
-    expect(info.sqliteType).toBe('INTEGER')
-  })
-
-  test('returns correct info for select type', () => {
-    const info = getColumnTypeInfo('select')
-    expect(info.value).toBe('select')
-    expect(info.sqliteType).toBe('TEXT')
-  })
-
-  test('falls back to text for unknown type', () => {
-    const info = getColumnTypeInfo('unknown')
-    expect(info.value).toBe('text')
-  })
-})
 
 describe('table row launcher subjects', () => {
   test('uses the semantic label column for launcher invocation', () => {
@@ -343,18 +302,6 @@ describe('Table face schema', () => {
     const loaded = getFaceConfig(db, config.id)
     expect(loaded).not.toBeNull()
     expect(loaded!.faceTypeId).toBe('hila.table')
-  })
-})
-
-// -- Reference column type tests ----------------------------------------------
-
-describe('getColumnTypeInfo reference', () => {
-  test('returns correct info for reference type', () => {
-    const info = getColumnTypeInfo('reference')
-    expect(info.value).toBe('reference')
-    expect(info.label).toBe('Reference')
-    expect(info.icon).toBe('→')
-    expect(info.sqliteType).toBe('TEXT')
   })
 })
 
@@ -853,27 +800,5 @@ describe('Formula column deps (DB integration)', () => {
     expect(results).toHaveLength(2)
     const subtotals = results.map((r) => r.subtotal as number).sort((a, b) => a - b)
     expect(subtotals).toEqual([31.5, 100])
-  })
-})
-
-// -- Face query compilation (compileFaceQuery) --------------------------------
-
-describe('compileFaceQuery', () => {
-  const cols: ColumnDefinition[] = [makeCol(10, 'price', 'REAL'), makeCol(20, 'status')]
-
-  test('resolves {{id}} references in a face query', () => {
-    const query = "SELECT * FROM t WHERE {{10}} > 100 AND {{20}} = 'active'"
-    expect(compileFaceQuery(query, cols)).toBe(
-      'SELECT * FROM t WHERE "price" > 100 AND "status" = \'active\'',
-    )
-  })
-
-  test('passes through queries with no refs unchanged', () => {
-    const query = 'SELECT * FROM "mx_42_data" ORDER BY title'
-    expect(compileFaceQuery(query, cols)).toBe(query)
-  })
-
-  test('is the same function as compileFormula', () => {
-    expect(compileFaceQuery).toBe(compileFormula)
   })
 })

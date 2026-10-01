@@ -1,10 +1,6 @@
 import type { FaceTypeDefinition } from '../core/face-types'
 import type { PluginDefinition } from '../core/plugin-types'
-import { registerFaceType as registerFaceTypeLocal } from '../core/face-registry'
-import {
-  registerFaceType as registerFaceTypeWorker,
-  seedRow,
-} from '../core/client/matrix-client'
+import { seedRow } from '../core/client/matrix-client'
 import { structuralCommands } from '../editor/structural-commands'
 
 const WELCOME_LABEL_JSON = JSON.stringify({
@@ -44,11 +40,6 @@ export const workspaceFaceTypeDefinition: FaceTypeDefinition = {
     { name: 'content', preferredType: 'richtext', required: false },
   ],
   overflowBehavior: 'property-panel',
-}
-
-export const registerWorkspaceFaceType = async (): Promise<void> => {
-  registerFaceTypeLocal(workspaceFaceTypeDefinition)
-  await registerFaceTypeWorker(workspaceFaceTypeDefinition)
 }
 
 // -- Query builders -----------------------------------------------------------
@@ -151,11 +142,6 @@ SELECT d.*,
        ) THEN 1 ELSE 0 END AS __hila_is_type_node
 FROM "mx_${matrixId}_data" d
 WHERE d.id = ${rowId}
-`
-
-// The global key for a single row: read directly from the scroll index.
-export const buildRowGlobalKeyQuery = (matrixId: number, rowId: number): string => `
-SELECT global_lexkey AS key FROM scroll_index WHERE matrix_id = ${matrixId} AND row_id = ${rowId}
 `
 
 /**

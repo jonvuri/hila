@@ -19,7 +19,6 @@ import {
   insertRow,
   deleteRow,
   createDependentRow,
-  createHostlessAspectRow,
   promoteNode,
   isSharedMatrix,
 } from '../core/matrix'
@@ -234,7 +233,9 @@ describe('Part C guards: type-node delete is bounded (drop-before-cascade, §8.2
       { name: 'label', type: 'TEXT' },
     ])
     for (let i = 0; i < count; i++) {
-      createHostlessAspectRow(db, typeNode, tagMatrixId, { label: `row-${i}` })
+      createDependentRow(db, typeNode.matrixId, typeNode.rowId, tagMatrixId, {
+        label: `row-${i}`,
+      })
     }
     return { wsMatrixId, typeNodeId }
   }

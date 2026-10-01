@@ -16,11 +16,9 @@ import {
   assignProductionRenderKeys,
   calculateProductionStickyDockState,
   calculateProductionStickyWidgetState,
-  classifyProductionStickyContextChange,
   classifyProductionStickyWidgetStateChange,
   createProductionStickyContext,
   createProductionStickyDrill,
-  getProductionStickyDrillRepresentation,
   productionStickyRowFromQuery,
   type ProductionStickyQueryRow,
   type ProductionStickyRow,
@@ -238,79 +236,26 @@ describe('production sticky data contract', () => {
     expect(resolved.pk).not.toBe(syntheticPk)
   })
 
-  test('classifies threshold, reverse, collapse, mutation, and drill changes', () => {
-    const makeRow = (
-      appearancePk: string,
-      depth: number,
-      options: Partial<ProductionStickyRow> = {},
-    ): ProductionStickyRow => ({
-      identity: { pk: appearancePk, ck: `1:${appearancePk}`, rk: null },
+  test('drops collapsed ancestors from the sticky context', () => {
+    const a: ProductionStickyRow = {
+      identity: { pk: 'a', ck: '1:a', rk: null },
       matrixId: 1,
-      rowId: depth + 1,
-      depth,
-      visibleIndex: depth,
-      label: appearancePk,
-      contentKey: appearancePk,
+      rowId: 1,
+      depth: 0,
+      visibleIndex: 0,
+      label: 'a',
+      contentKey: 'a',
       hasChildren: true,
-      expanded: true,
-      subtreeEnd: { pk: `${appearancePk}-end` },
+      expanded: false,
+      subtreeEnd: { pk: 'a-end' },
       continuation: 'unknown',
-      ...options,
-    })
-    const a = makeRow('a', 0)
-    const nested = makeRow('nested', 1)
-    const b = makeRow('b', 0)
-    const atA = createProductionStickyContext({
-      firstVisiblePk: 'leaf-a',
-      ancestry: [a, nested],
-      retained: [],
-    })
-    const atB = createProductionStickyContext({
-      firstVisiblePk: 'leaf-b',
-      ancestry: [b],
-      retained: [],
-    })
-
-    expect(classifyProductionStickyContextChange(atA, atA)).toBe('none')
-    expect(classifyProductionStickyContextChange(atA, atB)).toBe('structure')
-    expect(classifyProductionStickyContextChange(atB, atA)).toBe('structure')
-
-    const nextVisibleRow = createProductionStickyContext({
-      ...atA,
-      firstVisiblePk: 'next-leaf-in-same-window',
-    })
-    expect(classifyProductionStickyContextChange(atA, nextVisibleRow)).toBe('none')
-
+    }
     const collapsed = createProductionStickyContext({
       firstVisiblePk: 'a',
-      ancestry: [{ ...a, expanded: false }],
+      ancestry: [a],
       retained: [],
     })
     expect(collapsed.ancestry).toEqual([])
-    expect(classifyProductionStickyContextChange(atA, collapsed)).toBe('structure')
-
-    const renamed = createProductionStickyContext({
-      firstVisiblePk: atA.firstVisiblePk,
-      ancestry: [{ ...a, contentKey: 'a:renamed' }, nested],
-      retained: [],
-    })
-    expect(classifyProductionStickyContextChange(atA, renamed)).toBe('content')
-
-    const drillInPrimary = createProductionStickyContext({
-      ...atA,
-      drill: { state: 'resolved', ck: a.identity.ck, label: 'A', pk: 'a', isHome: true },
-    })
-    const drillDock = createProductionStickyContext({
-      ...atA,
-      drill: { state: 'resolved', ck: '1:b', label: 'B', pk: 'b', isHome: true },
-    })
-    const unresolvedDrill = createProductionStickyContext({
-      ...atA,
-      drill: { state: 'unresolved', ck: '1:missing', label: 'Missing', pk: null },
-    })
-    expect(getProductionStickyDrillRepresentation(drillInPrimary)).toBe('primary')
-    expect(getProductionStickyDrillRepresentation(drillDock)).toBe('dock')
-    expect(getProductionStickyDrillRepresentation(unresolvedDrill)).toBe('unresolved')
   })
 
   test('keeps unmounted ancestry while attaching rk only to retained sources', () => {

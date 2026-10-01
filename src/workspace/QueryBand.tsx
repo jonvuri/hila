@@ -25,7 +25,6 @@ import {
 } from '../sql/recognize-updatable'
 import { FieldEditor, ReadonlyField } from '../shared/FieldEditor'
 import { extractTextFromPmDoc } from '../editor/pm-text'
-import { registerFaceRenderings, type FaceRenderingProps } from '../core/face-runtime'
 import {
   createQueryCatalog,
   type QueryCatalog,
@@ -722,24 +721,6 @@ export const ViewCollection: Component<{
       </Show>
     </div>
   )
-}
-
-const ViewCollectionRendering: Component<FaceRenderingProps> = (props) => (
-  <Show when={props.subject.mode === 'view'}>
-    <ViewCollection
-      rootMatrixId={props.rootMatrixId}
-      block={{
-        marker_matrix_id: props.subject.matrixId,
-        marker_row_id: props.subject.rowId,
-        sql: props.subject.mode === 'view' ? props.subject.sql : '',
-      }}
-      interiorOnly
-    />
-  </Show>
-)
-
-export const registerViewCollectionRendering = (faceTypeId: string): void => {
-  registerFaceRenderings(faceTypeId, { collection: ViewCollectionRendering })
 }
 
 /**

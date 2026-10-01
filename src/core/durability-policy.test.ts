@@ -13,7 +13,6 @@ import {
   addColumn,
   addFormulaColumn,
   createMatrix,
-  ensureRootMatrix,
   getOrCreateDeviceId,
   initMatrixSchema,
   removeColumn,
@@ -66,6 +65,8 @@ const generateSchemaReport = (db: Database): SchemaTable[] => {
 describe('durability policy inventory', () => {
   let db: Database
   let schemaReport: SchemaTable[]
+  let rootMatrixId: number
+  let rootDataTable: string
 
   beforeAll(async () => {
     resetDeviceIdCache()
@@ -75,7 +76,8 @@ describe('durability policy inventory', () => {
     })
     db = new sqlite3.oo1.DB(':memory:', 'c')
     initMatrixSchema(db)
-    ensureRootMatrix(db)
+    rootMatrixId = createMatrix(db, 'Root', [{ name: 'content', type: 'TEXT' }])
+    rootDataTable = `mx_${rootMatrixId}_data`
     installCoreTableTriggers(db, getOrCreateDeviceId(db))
     schemaReport = generateSchemaReport(db)
   })
@@ -118,15 +120,16 @@ describe('durability policy inventory', () => {
   })
 
   test('dynamic data-table columns match their replicated matrix-column owners', () => {
-    const dynamicTable = schemaReport.find((table) => table.name === 'mx_1_data')
+    const dynamicTable = schemaReport.find((table) => table.name === rootDataTable)
     expect(dynamicTable).toBeDefined()
 
     const registryStmt = db.prepare(
       `SELECT name, type
        FROM matrix_columns
-       WHERE matrix_id = 1 AND formula IS NULL
+       WHERE matrix_id = ? AND formula IS NULL
        ORDER BY "order"`,
     )
+    registryStmt.bind([rootMatrixId])
     const registryColumns: SchemaColumn[] = []
     while (registryStmt.step()) {
       registryColumns.push(registryStmt.get({}) as SchemaColumn)
@@ -175,13 +178,13 @@ describe('durability policy inventory', () => {
   test('guard reports stale tracked columns', () => {
     db.exec('SAVEPOINT durability_stale_fixture')
     try {
-      reinstallDataTableTriggers(db, 1, getOrCreateDeviceId(db), [])
+      reinstallDataTableTriggers(db, rootMatrixId, getOrCreateDeviceId(db), [])
 
       expect(auditDurabilityPolicy(db)).toEqual(
         expect.arrayContaining([
-          expect.stringContaining('Tracked columns differ: mx_1_data.INSERT'),
-          expect.stringContaining('Tracked columns differ: mx_1_data.UPDATE'),
-          expect.stringContaining('Tracked columns differ: mx_1_data.DELETE'),
+          expect.stringContaining(`Tracked columns differ: ${rootDataTable}.INSERT`),
+          expect.stringContaining(`Tracked columns differ: ${rootDataTable}.UPDATE`),
+          expect.stringContaining(`Tracked columns differ: ${rootDataTable}.DELETE`),
         ]),
       )
     } finally {
@@ -193,14 +196,14 @@ describe('durability policy inventory', () => {
   test('guard reports a dynamic column absent from its matrix-column registry', () => {
     db.exec('SAVEPOINT durability_dynamic_registry_fixture')
     try {
-      db.exec('ALTER TABLE mx_1_data ADD COLUMN durability_unregistered TEXT')
-      reinstallDataTableTriggers(db, 1, getOrCreateDeviceId(db), [
+      db.exec(`ALTER TABLE ${rootDataTable} ADD COLUMN durability_unregistered TEXT`)
+      reinstallDataTableTriggers(db, rootMatrixId, getOrCreateDeviceId(db), [
         { name: 'content', type: 'TEXT' },
         { name: 'durability_unregistered', type: 'TEXT' },
       ])
 
       expect(auditDurabilityPolicy(db)).toContain(
-        'Unregistered dynamic column: mx_1_data.durability_unregistered',
+        `Unregistered dynamic column: ${rootDataTable}.durability_unregistered`,
       )
     } finally {
       db.exec('ROLLBACK TO durability_dynamic_registry_fixture')

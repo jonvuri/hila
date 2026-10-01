@@ -4,10 +4,7 @@ import { Dynamic } from 'solid-js/web'
 import FocusPanel from './FocusPanel'
 import StickyNavigation from './StickyNavigation'
 import './workspace.css'
-import type { WorkspacePanel, WorkspaceProps } from './types'
-
-export const shouldShowWorkspaceBreadcrumb = (panels: readonly WorkspacePanel[]): boolean =>
-  panels[0]?.kind === 'focus'
+import type { WorkspaceProps } from './types'
 
 const Workspace = (props: WorkspaceProps): JSX.Element => (
   <Dynamic

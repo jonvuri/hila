@@ -155,56 +155,6 @@ export const getTagType = (db: Database, name: string): TagType | null => {
 }
 
 /**
- * Get a tag type by the type-node's row ID.
- */
-export const getTagTypeById = (db: Database, id: number): TagType | null => {
-  const wsMatrixId = getWorkspaceMatrixId(db)
-
-  const stmt = db.prepare(
-    `SELECT p.row_id, m.title AS name, m.id AS owned_matrix_id
-     FROM promoted_nodes p
-     JOIN matrix m ON m.owner_matrix_id = p.matrix_id AND m.owner_row_id = p.row_id
-     WHERE p.matrix_id = ? AND p.row_id = ?
-     LIMIT 1`,
-  )
-  stmt.bind([wsMatrixId, id])
-
-  if (!stmt.step()) {
-    stmt.finalize()
-    return null
-  }
-
-  const row = stmt.get({}) as TypeNodeRow
-  stmt.finalize()
-  return toTagType(row)
-}
-
-/**
- * Get a tag type by its owned matrix ID.
- */
-export const getTagTypeByMatrixId = (db: Database, matrixId: number): TagType | null => {
-  const wsMatrixId = getWorkspaceMatrixId(db)
-
-  const stmt = db.prepare(
-    `SELECT p.row_id, m.title AS name, m.id AS owned_matrix_id
-     FROM matrix m
-     JOIN promoted_nodes p ON p.matrix_id = m.owner_matrix_id AND p.row_id = m.owner_row_id
-     WHERE m.id = ? AND p.matrix_id = ?
-     LIMIT 1`,
-  )
-  stmt.bind([matrixId, wsMatrixId])
-
-  if (!stmt.step()) {
-    stmt.finalize()
-    return null
-  }
-
-  const row = stmt.get({}) as TypeNodeRow
-  stmt.finalize()
-  return toTagType(row)
-}
-
-/**
  * List all tag types: promoted type-nodes that own a matrix.
  */
 export const getAllTagTypes = (db: Database): TagType[] => {

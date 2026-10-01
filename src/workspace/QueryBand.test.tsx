@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { Show } from 'solid-js'
 import { render } from 'solid-js/web'
 
 const mocks = vi.hoisted(() => ({
@@ -28,13 +29,8 @@ vi.mock('../core/client/sql-client', () => ({
   execQuery: mocks.execQuery,
 }))
 
-vi.mock('../tags/tag-queries', () => ({
-  buildTagTypesWithCountsQuery: () => '',
-}))
-
-const { ViewCollection: ProductionViewCollection, registerViewCollectionRendering } =
-  await import('./QueryBand')
-const { FaceHostSlot } = await import('../core/face-runtime')
+const { ViewCollection: ProductionViewCollection } = await import('./QueryBand')
+const { FaceHostSlot, registerFaceRenderings } = await import('../core/face-runtime')
 
 type ViewCollectionProps = Parameters<typeof ProductionViewCollection>[0]
 const ViewCollection = (
@@ -617,7 +613,23 @@ LIMIT 1000`,
 FROM "mx_30_data" AS d
 ORDER BY d.id ASC
 LIMIT 1000`
-    registerViewCollectionRendering('test.saved-view')
+    registerFaceRenderings('test.saved-view', {
+      collection: (props) => (
+        <Show when={props.subject.mode === 'view' ? props.subject : undefined}>
+          {(subject) => (
+            <ProductionViewCollection
+              rootMatrixId={props.rootMatrixId}
+              block={{
+                marker_matrix_id: subject().matrixId,
+                marker_row_id: subject().rowId,
+                sql: subject().sql,
+              }}
+              interiorOnly
+            />
+          )}
+        </Show>
+      ),
+    })
 
     dispose = render(
       () => (
