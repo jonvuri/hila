@@ -1,13 +1,13 @@
 ---
-title: Full revamp — operation log
+title: Revamp operations and recovery
 kind: working-artifact
 state: proposed
 updated: 2026-10-07
 ---
 
-# Full revamp — operation log
+# Revamp operations and recovery
 
-Companion to [Full revamp changes](Full%20revamp%20changes.md). It proposes a lightweight operation
+Companion to [the architecture proposal](Revamp%20architecture%20proposal.md). It proposes a lightweight operation
 log that gives introspection, recovery, and undo across identity-changing, bulk, automated, and
 structural operations. It does not track field-level history. Conflict resolution stays whole-row
 last-write-wins.

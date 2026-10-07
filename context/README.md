@@ -3,6 +3,10 @@
 Start with [NOW.md](NOW.md). It names the current plan, boundary, and minimum reading. Use this
 index when a task needs wider product or architecture context.
 
+The active work is the [full revamp exploration](explorations/Revamp%20exploration%20guide.md). Its guide
+defines the exploratory patch over the baseline topics below and records how sessions continue.
+Proposals stay in the exploration folder until the architecture is ready to be revised.
+
 ## Reading routes
 
 | Goal                                | Read, in order                                                                       |

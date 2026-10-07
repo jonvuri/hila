@@ -1,46 +1,58 @@
 ---
-title: Full revamp — open issues
+title: Revamp research questions
 kind: working-artifact
 state: active
 updated: 2026-10-07
 ---
 
-# Full revamp — open issues
+# Revamp research questions
 
-Consistency issues and gaps in [Full revamp changes](Full%20revamp%20changes.md) that remain after
-the [operation log](Full%20revamp%20operation%20log.md). The operation log resolves row identity
-across merges, splits, and moves between matrixes; undo and provenance for automated changes; and
-idempotent plugin effects across replicas.
+Research queue for the [full revamp exploration](Revamp%20exploration%20guide.md). The
+[architecture proposal](Revamp%20architecture%20proposal.md) holds the current proposal. The
+[operations and recovery proposal](Revamp%20operations%20and%20recovery.md) proposes identity lineage, undo, provenance,
+and idempotent plugin effects; its open questions still need resolution and validation.
 
-## Resolved in discussion, not yet in the changes doc
+The revised position/lifecycle cycle rules and matrix designation terminology are now incorporated
+in the changes document. Collapse is a provisional display setting; its behavior remains open.
 
-### Cycle rules
+## Next session: plugin semantics and storage
 
-Replace the current cycle section with:
+Selected by the user as the next connected question cluster. Begin with concrete scenarios and
+follow their semantic and storage requirements before designing plugin APIs.
 
-- **Position graph (`own` ∪ `portal`) is acyclic.** A node cannot be positioned, by home or
-  portal, under itself or any of its positional descendants.
-- **Lifecycle graph (`own` ∪ `attach` ∪ matrix membership) is acyclic.** Membership counts as an
-  edge from a matrix node to each member, because deleting a matrix deletes its members. A node
-  cannot be owned by or attached to itself or any node that depends on it through any chain of
-  these edges. This covers attach cycles of any length, mixed `own`/`attach` cycles, and a matrix
-  node homed under one of its own members.
-- **Gathered appearances get a render guard.** View results and a matrix's elsewhere-homed members
-  are not positions. A node already on the current appearance path renders as an opaque indicator
-  that shows only its identity and cannot be expanded or interacted with.
-- **Enforcement.** Check both graph rules when an edge is created or moved by walking up from the
-  new parent. The lifecycle check needs a maintained lifecycle closure or a bounded upward walk.
+### Starting scenarios
 
-### Naming
+- Turn a bullet under a project into a task with status and due date. Also create a task directly
+  in its matrix. Explore how the plugin recognizes both, where fields live, and what a query for
+  tasks under that project returns.
+- Turn a note's label and content into a study card. Explore how the plugin reads those fields,
+  where scheduling state lives, and what happens when the host or plugin is removed.
 
-- Keep **role** for columns.
-- Rename matrix-level roles to **designations**: default item designation and aspect designation.
-- Move "collapsed" out of designations into a matrix **display setting**.
+### Questions and intended outcome
+
+- How does a plugin declare meaning and eligibility? Distinguish storage types, column roles,
+  matrix designations, user enrollment, and role multiplicity.
+- How are fields bound across a host and attached rows? Compare the identity and write targets
+  required for direct rows and attached aspects without assuming the answer.
+- Which data belongs on user rows, attached rows, or plugin-created matrixes? Consider lifecycle,
+  plugin removal, schema evolution, and system/user writes under whole-row last-write-wins.
+- Where are plugin-created matrixes homed and how are they found? Use those requirements to inform
+  provisional collapse and display settings; defer unrelated presentation details explicitly.
+
+Aim for a coherent proposed semantic and storage model traced through these scenarios, with
+rationale, inherited assumptions reviewed, and remaining choices recorded. Do not implement plugin
+APIs or attempt to resolve every plugin and widget question in this session.
+
+### Read first
+
+Read the plugin, designation, attachment, and use-case sections of the
+[architecture proposal](Revamp%20architecture%20proposal.md), then the semantics/plugins and
+systems/sync questions below. Consult [operations and recovery](Revamp%20operations%20and%20recovery.md)
+for automation assumptions. Read baseline `Plugins.md`, `Data-Model.md`, `Sync.md`, and relevant
+code only as evidence needed by a specific question.
 
 ## Consistency issues
 
-- **Membership lifecycle.** The edge section should state that deleting a matrix deletes its
-  members, including members homed elsewhere and their positional subtrees.
 - **Alias uniqueness.** Matrix and view labels must be usable SQL aliases. Decide between global
   uniqueness, uniqueness among aspect matrixes with qualified names elsewhere, or stored SQL that
   references IDs and renders aliases. The last is the most robust against renames.
@@ -50,7 +62,10 @@ Replace the current cycle section with:
   an attached task both count as tasks under X.
 - **Portals in positional queries.** Decide whether a node portaled under X is under X.
 - **Plugin-created matrix homes.** Plugins are not nodes. Decide where their matrixes are homed.
-- **Two bottom regions.** Order collapsed matrixes and the elsewhere-homed member view.
+- **Collapse, placement, and plugin data.** Explore collapsed matrixes, collapsed inline results,
+  and the elsewhere-homed member view together with plugin-created matrix homes. Decide what
+  should be de-emphasized, how users find it, whether bottom regions are needed, and the scope,
+  defaults, overrides, and persistence of display settings.
 - **Tabular presentation.** The personal database use case needs a table arrangement for a matrix
   node's members. The changes doc defines block widgets but not a matrix's own presentation.
 - **Capability gating.** State as a principle that behavior is gated by roles and capabilities,
@@ -78,6 +93,16 @@ Replace the current cycle section with:
   plugin matrixes when a plugin is removed or changes its role set.
 
 ### Systems and sync
+
+- **Operation log and recovery.** Resolve the operation log's retention, split-target,
+  cross-device undo, and editor/structural undo questions. Define how partial undo preserves graph
+  invariants and how lineage resolves references in stored SQL. Current update tracking in
+  `src/core/sync.ts` records after-images, so tagging those records alone cannot supply before
+  snapshots. Verify a complete recovery strategy before treating the proposal as resolved.
+- **Cycle enforcement.** Validate upward traversal or closure maintenance for both graphs,
+  including portal parents and membership changes. Bound total traversal, not just immediate
+  parent counts. Define behavior when a bound is reached and when individually valid offline
+  changes form a cycle after replication.
 
 - **Same-row conflicts.** Set-not-increment and deterministic IDs prevent duplicates, but a system
   write and a user edit to one row still lose one change under whole-row last-write-wins. Keep
