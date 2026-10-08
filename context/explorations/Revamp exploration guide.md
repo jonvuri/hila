@@ -2,7 +2,7 @@
 title: Revamp exploration guide
 kind: working-artifact
 state: active
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Revamp exploration guide
@@ -34,8 +34,9 @@ is ready for that separate step.
 2. [Architecture proposal](Revamp%20architecture%20proposal.md): current architectural patch and motivating use cases.
 3. [Operations and recovery](Revamp%20operations%20and%20recovery.md): proposed operations, lineage, undo, and
    automation recovery.
-4. [Research questions](Revamp%20research%20questions.md): queued next session and unresolved questions.
-5. [Session record](Revamp%20session%20record.md): completed work, rationale, evidence, and handoffs.
+4. [Plugin semantics and storage](Revamp%20plugin%20semantics%20and%20storage.md): accepted application/store model and worked scenarios.
+5. [Research questions](Revamp%20research%20questions.md): queued next session and unresolved questions.
+6. [Session record](Revamp%20session%20record.md): completed work, rationale, evidence, and handoffs.
    Read the latest entry when resuming; older entries are history.
 
 Read baseline topics and code only as needed for the chosen question. Use the
@@ -81,6 +82,11 @@ carry into other branches or later implementation work.
 5. Commit only after that approval, at the end of this agent session. Approval to edit documents or
    start wrapping up is not approval to commit. If the user requests changes, finish and verify
    them before presenting the revised wrap-up for approval. Do not commit on intermediate turns.
+6. Export each approved commit as its own temporary text patch outside the repository, using
+   `git format-patch -1 <commit> --stdout --binary`. Verify that it applies to its parent and
+   reproduces the committed files, then give the user the patch file and parent commit ID. The user
+   stores these files and applies them later in commit order with `git am`. Patch delivery replaces
+   remote pushes while this environment has no GitHub write access; retain earlier patch files.
 
 The user's exploration instructions authorize staging for review and, after explicit wrap-up
 approval, committing despite the repository's default restriction on writing Git operations.
@@ -117,9 +123,23 @@ incorporated. Detailed session history lives in the [session record](Revamp%20se
 
 - Position and lifecycle acyclicity and the gathered-appearance render guard are accepted in the
   exploration. Their implementation and replication behavior still need validation.
-- Matrix designations cover default items and aspects. Column terminology remains roles.
-- Collapse is a provisional display setting. Behavior for matrixes, inline results, and
-  plugin-created matrixes remains open.
+- Matrix designations cover default items and aspects; only user-managed matrixes qualify, regardless
+  of creator. User/plugin management is write authority, distinct from positional `own`. Column
+  terminology remains roles. Core deletion cascades operate above the ordinary helper writer guard.
+- Accepted placement: matrixes position member rows, matrix nodes, and view nodes through `own`
+  or `portal`; foreign-matrix rows are excluded. Parent matrix context determines inserted row types.
+  Pivot helpers are owned beneath their pivots; global stores remain root-homed. See the
+  [accepted rule](Revamp%20plugin%20semantics%20and%20storage.md#narrower-matrix-child-rule).
+- Collapse remains a provisional display setting. Aspect designation does not imply collapse;
+  automatic root sections are set aside as the current recommendation.
 - Operations and recovery remain proposed; the companion's open questions are not resolved.
-- Next session: **plugin semantics and storage**, selected by the user. Start from the scenarios
-  and questions in [the queued session](Revamp%20research%20questions.md#next-session-plugin-semantics-and-storage).
+- Session 2 is complete. The [plugin brief](Revamp%20plugin%20semantics%20and%20storage.md) records
+  accepted bindings, management, helper placement, lifecycle, scoped authorization, and read policy.
+  Independent events survive sync; schedules recompute; reapplication gets a fresh identity and
+  old-identity writes are discarded. Exact schema/runtime enforcement and core recovery remain
+  follow-throughs; content-generation/scheduling algorithms belong to plugin business logic.
+- Next: **Session 3 — attachment context and editor/query behavior**. Follow the
+  [queued scenarios and reading](Revamp%20research%20questions.md#next-session-attachment-context-and-editorquery-behavior):
+  two inline tasks in one note, nested project tasks, and sigil copy/move/removal. Resolve task/host
+  identities, contextual presentation, editing targets, and project-scoped query results.
+- Deliver each approved session commit as a separate patch for later replay; remote push is blocked.

@@ -2,7 +2,7 @@
 title: Revamp operations and recovery
 kind: working-artifact
 state: proposed
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Revamp operations and recovery
@@ -62,6 +62,38 @@ undo stack covers outline gestures.
 Not logged: ordinary field edits and typing. Editor history covers those while the editor is
 mounted.
 
+## Plugin mutation boundary (provisional)
+
+All plugin writes, including authorized global-plugin changes to user data, go through a managed
+operation that wraps the mutations and their log record in one transaction. Structural invariants
+and helper-matrix managing-plugin guards apply inside that boundary. A transaction or log entry
+alone does not grant write authorization.
+
+Distinguish the executing plugin from the initiating user or agent for attribution and write
+checks. User-triggered plugin controls can write the plugin's helpers while retaining the user's
+provenance. Applying a plugin supplies ongoing authorization to use its pivot; no per-operation
+user approval is required in that application scope. Global execution needs authorization for
+each operation changing user-managed data, including a bounded batch or direct user command.
+A plugin's own managed-store updates retain normal manager authority, including background work.
+
+The operation boundary enforces the actual scope. Matrix scope follows row membership rather than
+outline ancestry; it does not silently grant writes to attached hosts or unrelated matrixes.
+Binding columns are inputs, not field-level write permissions. Normal core invariants and other
+plugins' manager guards still apply. Global execution cannot inherit standing authority merely
+because the same plugin also has matrix applications. Logging alone does not authorize a write.
+
+Core deletion cascades operate above the ordinary helper writer guard. Authorize the initiating
+operation, then follow its lifecycle dependencies without checking the writer separately for every
+managed helper. Explicit application/plugin removal likewise uses a core lifecycle operation to
+clear the relevant live records and managed stores, even when plugin code is not executing. Global
+off retains stores; reset clears managed global state. Ordinary ad hoc helper edits/direct deletions
+still follow their writer check. Keep the cascade in the core operation's transaction and provenance.
+
+Recommended follow-through, not yet explicitly agreed: core undo/restore recovers managed helpers
+and their management metadata without requiring the managing plugin to execute. Settle this with
+the broader recovery contract, including restoration after uninstall and preservation of graph
+invariants; do not implement an arbitrary caller-controlled guard bypass.
+
 ## Shape
 
 ```text
@@ -102,6 +134,26 @@ honesty of last-write-wins without a merge engine.
 3. Systems set values and never increment them. A streak is recomputed from check-ins.
 4. Local effects, such as notifications, check the synced log for the key before firing. Offline
    duplicates remain possible and are acceptable for personal use.
+
+### Actual events, derived output, and application identity
+
+The exploration accepts distinct IDs for independent actual reviews and point-in-time dismissals.
+Replaying the same event retains its ID; two independent offline actions must not collapse into
+one event merely because they concern the same card or suggestion. Deterministic occurrence IDs
+above serve a different purpose: duplicate generation of the same system effect.
+
+Scheduling idempotently recomputes from the combined review state after sync, updating in place
+as if both reviews had occurred on one client. Durable events remain the inputs; a persisted
+last-write-wins schedule cannot replace recomputation from the current inputs. Event ordering and
+scheduling algorithms are plugin business logic. Likewise, dismissal events survive sync/refresh;
+the second-brain plugin decides when changed content becomes a new generation and how prior
+dismissals apply to it. Content-generation policy is not sync conflict resolution.
+
+Each matrix application instance has its own identity. Removal revokes that identity and removes
+its live system record/helpers; reapplication uses a new identity. Writes targeting a removed
+identity are discarded and cannot revive old stores or affect the new application. Removal
+tracking across replicas, recomputation triggers, and concurrent application setup remain
+implementation questions in the broader replication design.
 
 ## Durability
 

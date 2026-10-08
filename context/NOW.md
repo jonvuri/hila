@@ -2,7 +2,7 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-10-07
+updated: 2026-10-08
 ---
 
 # Now
@@ -19,11 +19,20 @@ research in `context/explorations/`; inspect existing code for evidence and reus
 proposal overrides the baseline where explicit; compatible unspecified fundamentals provisionally
 carry forward. Implementation and canonical architecture revision come later.
 
-Exploration setup and the cycle/designation edits are complete. The next session is
-[plugin semantics and storage](explorations/Revamp%20research%20questions.md#next-session-plugin-semantics-and-storage),
-starting from task and study-card scenarios. Follow the guide's wrap-up policy: queue the next
-session in the commit and commit only at agent-session end with explicit user approval. Stay on
-`docs/full-revamp` until the exploration is complete and the user is ready to execute the revamp.
+Session 2 is complete: [plugin semantics and storage](explorations/Revamp%20plugin%20semantics%20and%20storage.md).
+The exploration now has an accepted application/store model: explicit bindings, user-managed versus
+plugin-managed data, ordinary helper homes, scoped write authority, full managed-data cleanup,
+durable events, recomputed schedules, and fresh application identities after removal.
+
+Next: [Session 3 — attachment context and editor/query behavior](explorations/Revamp%20research%20questions.md#next-session-attachment-context-and-editorquery-behavior).
+Start with two inline tasks in one note, then nested attachments and moving/copying/removing sigils.
+Resolve task/host identities, context, edit targets, and project-scoped query results. Keep the
+accepted plugin model as the starting point; core recovery/replication enforcement and presentation
+remain separate follow-throughs. No implementation or canonical-contract revision is authorized.
+
+At wrap-up, queue the next session and request explicit approval before committing. Export each
+approved commit as a separate patch for the user to apply later; this task cannot push to GitHub.
+Stay on `docs/full-revamp` through the lightweight exploration.
 
 ## Historical implementation marker
 
