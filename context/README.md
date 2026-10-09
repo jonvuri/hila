@@ -3,9 +3,12 @@
 Start with [NOW.md](NOW.md). It names the current plan, boundary, and minimum reading. Use this
 index when a task needs wider product or architecture context.
 
-The active work is the [full revamp exploration](explorations/Revamp%20exploration%20guide.md). Its guide
-defines the exploratory patch over the baseline topics below and records how sessions continue.
-Proposals stay in the exploration folder until the architecture is ready to be revised.
+The active work is the [relational runtime exploration](explorations/Relational%20runtime%20exploration.md):
+a small runtime, focused standard library, and opinionated Hila composition. Its compact brief
+sets the goals and starting scenarios; prior architectural decisions remain open to reconsideration.
+The [older revamp guide](explorations/Revamp%20exploration%20guide.md) retains the preceding proposal
+and session history as references. Proposals stay in the exploration folder until the architecture
+is ready to be revised.
 
 ## Reading routes
 

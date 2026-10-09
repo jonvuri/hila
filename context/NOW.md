@@ -2,33 +2,30 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Now
 
-The active work is the full revamp exploration on `docs/full-revamp`. Start with the
-[exploration guide](explorations/Revamp%20exploration%20guide.md), then follow its reading map and current
-checkpoint. Session history lives in the separate
-[session record](explorations/Revamp%20session%20record.md).
+The active work on `docs/full-revamp` is the
+[relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
+Start with that compact brief. It explores a small relational runtime, a focused standard library,
+and an opinionated Hila composition; concrete shapes remain open.
 
 ## Boundary and next action
 
-Continue scenario-led exploration, one connected question cluster at a time. Keep proposals and
-research in `context/explorations/`; inspect existing code for evidence and reusable parts. The
-proposal overrides the baseline where explicit; compatible unspecified fundamentals provisionally
-carry forward. Implementation and canonical architecture revision come later.
+Next: conceptually trace two inline tasks in one note. Compare small models for capture, task
+queries, independent completion, and returning to prose context. Then test promising models with
+SRS review history and project deletion involving managed helpers.
 
-Session 2 is complete: [plugin semantics and storage](explorations/Revamp%20plugin%20semantics%20and%20storage.md).
-The exploration now has an accepted application/store model: explicit bindings, user-managed versus
-plugin-managed data, ordinary helper homes, scoped write authority, full managed-data cleanup,
-durable events, recomputed schedules, and fresh application identities after removal.
+The brief governs this exploration. Prior revamp decisions and baseline invariants are references,
+not inherited constraints. Preserve the rough user-facing goals while seeking simplicity,
+elegance, and coherence. Keep proposals in `context/explorations/`; implementation and canonical
+architecture revision come later.
 
-Next: [Session 3 — attachment context and editor/query behavior](explorations/Revamp%20research%20questions.md#next-session-attachment-context-and-editorquery-behavior).
-Start with two inline tasks in one note, then nested attachments and moving/copying/removing sigils.
-Resolve task/host identities, context, edit targets, and project-scoped query results. Keep the
-accepted plugin model as the starting point; core recovery/replication enforcement and presentation
-remain separate follow-throughs. No implementation or canonical-contract revision is authorized.
+The [older revamp guide](explorations/Revamp%20exploration%20guide.md) retains its prior checkpoint
+and session history. Its queued Session 3 and architectural inheritance rule do not direct this
+new exploration.
 
 At wrap-up, queue the next session and request explicit approval before committing. Export each
 approved commit as a separate patch for the user to apply later; this task cannot push to GitHub.
