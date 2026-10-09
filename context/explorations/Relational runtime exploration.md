@@ -56,16 +56,19 @@ Names such as “task,” “attachment,” and “helper” describe the starti
 
 1. **Two tasks in one note.** Capture two actions within prose, find both in a project task queue,
    complete either independently, and return to its exact context. Trace identities, query
-   multiplicity, and editing targets. Try moving or removing the prose reference. Seek clear user
-   outcomes without assuming that a host inherits an attached record's type.
+   multiplicity, and editing targets. Inline-created tasks depend on their owning inline units:
+   copying creates a co-owner of the same task, deleting the last owner deletes the task, and
+   cut-and-paste preserves it at the new location. The owning unit may be a token or atomic range;
+   its shape remains open. The host need not inherit the task's type.
 2. **Study cards and review history.** Use existing front/back fields as cards, record independent
    reviews on two devices, and obtain a useful schedule after sync. Separate durable user actions
    from recomputable results. Discover which machinery is shared and which belongs to SRS, without
    requiring outline homes, a particular store layout, or an event framework.
-3. **Delete a project with managed helpers.** Include ordinary content and automation state, with
-   some related data visible elsewhere. Explain the deletion's scope and recovery, including when
-   module code is inactive. Find understandable lifecycle and authority rules; revisit the current
-   cascades if a simpler policy serves users better.
+3. **Delete cards with owned review history.** Delete a card collection and its cards while SRS
+   is inactive, with review history also displayed elsewhere. Reviews should leave live use with
+   their cards: this lifecycle dependency is agreed. Trace deletion and recovery, then contrast an
+   import receipt that must survive deletion of its imported note to prevent unwanted reimport.
+   Discover which dependencies require ownership and which are ordinary references.
 
 ## How to continue
 
@@ -78,9 +81,47 @@ and correctness enforcement. A small core with a complicated standard library is
 Record candidate shapes, tradeoffs, changed user outcomes, and unresolved questions separately from
 decisions. Keep this brief compact and update the current handoff as exploration advances.
 
-Current checkpoint: direction and proof scenarios agreed; no concrete architecture selected.
-Next: conceptually trace two inline tasks. This is design exploration; implementation, migration
-planning, and canonical contract revisions come later.
+Current checkpoint: the [worked traces](Relational%20runtime%20worked%20traces.md) compare three
+storage models. Inline tasks depend on owning inline content; moving it preserves the task and
+copying creates a co-owner. The task survives until its last owner is deleted. This copy behavior
+and card-owned reviews are agreed exploration outcomes. Import receipts illustrate helpers that
+can outlive referenced user data. Separate task storage does not imply independent lifetime.
+No concrete runtime architecture is selected.
+
+Paused for a WIP checkpoint. Resume with the worked traces'
+[ordered investigations](Relational%20runtime%20worked%20traces.md#next-investigations-in-order),
+starting with inline units and co-owner editing/concurrency. Use those results to explore the
+larger questions below. Implementation, migration planning, and canonical contract revisions
+come later.
+
+## Larger exploration: next investigations
+
+1. **Challenge the proposed layers with two small architectural sketches.** Compare ordinary
+   feature relations plus shared transaction/query functions with a minimal shared identity and
+   lifecycle substrate plus focused libraries. Explain the same capture, copy, completion, and
+   deletion in each. List durable facts, write authority, read paths, and the code that must remain
+   available when a module is inactive. Count the complexity across the whole system; preserve the
+   option that the “runtime” is mostly a disciplined set of functions.
+2. **Discover what a standard library actually contributes.** Sketch one task operation and one
+   SRS operation, including their caller, inputs, atomic writes, and result. Test fixed feature
+   tables against behavior bound to existing user fields. Can ownership, editing targets, and
+   bounded discovery compose without a universal node type or extensive registration metadata?
+   Share only machinery both examples need; keep module packaging and external plugins deferred.
+3. **Explore ownership as a reusable relation without rebuilding the old edge architecture.**
+   Ask whether co-ownership is about a set of appearances keeping data live, while card review
+   ownership is a direct dependency, or whether one smaller rule explains both. Locate the
+   minimum enforcement for local edits, replication, deletion, and recovery. Try counterexamples
+   that would demand multiple owners, cycles, or special cases before accepting a general engine.
+4. **Test the composition from the user's side.** Explain capture, copy, discovery, completion,
+   and deletion without storage vocabulary. Clarify shared task data versus local prose context,
+   and query appearance versus ownership. Ask which distinctions Hila can make intuitive through
+   defaults and which need visible gestures. Revisit an architectural shortcut if it forces users
+   to understand internal rules merely to edit a note.
+
+Keep each sketch small enough to compare directly. The useful outcome is a narrower hypothesis
+and a concrete counterexample that could disprove it, not a complete framework or exhaustive
+feature inventory. Preserve the rough product goals and the agreed gesture behavior while being
+creative about representation and boundaries.
 
 ## References as needed
 

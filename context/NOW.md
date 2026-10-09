@@ -14,9 +14,23 @@ and an opinionated Hila composition; concrete shapes remain open.
 
 ## Boundary and next action
 
-Next: conceptually trace two inline tasks in one note. Compare small models for capture, task
-queries, independent completion, and returning to prose context. Then test promising models with
-SRS review history and project deletion involving managed helpers.
+The [worked traces](explorations/Relational%20runtime%20worked%20traces.md) compare three storage
+models. Inline-created tasks depend on owning inline units: copying creates a co-owner of the same
+task, deleting the last owner deletes it, and cut-and-paste preserves it at the new location.
+Co-ownership is the agreed copy behavior. Card reviews share their cards' lifecycle; import receipts
+may outlive imported notes. No storage model or runtime architecture is selected.
+
+Paused for a WIP checkpoint. Next session: read the brief, then the worked traces and their
+[ordered investigations](explorations/Relational%20runtime%20worked%20traces.md#next-investigations-in-order).
+
+- **Worked traces first:** compare token, atomic range, and shared-fragment ownership; separate
+  shared task content from local prose. Trace copy/cut/delete/undo and concurrent owner changes.
+  Then examine task query scope, non-inline creation, lifecycle reuse, and concrete SRS scheduling.
+- **Larger exploration:** use those results for two competing small runtime/library sketches.
+  Test what belongs in ordinary relations, shared storage enforcement, or reusable behavior, and
+  whether one ownership rule can serve the examples without importing the old edge architecture.
+  The brief's [next investigations](explorations/Relational%20runtime%20exploration.md#larger-exploration-next-investigations)
+  name the questions and expected outputs.
 
 The brief governs this exploration. Prior revamp decisions and baseline invariants are references,
 not inherited constraints. Preserve the rough user-facing goals while seeking simplicity,
@@ -27,9 +41,8 @@ The [older revamp guide](explorations/Revamp%20exploration%20guide.md) retains i
 and session history. Its queued Session 3 and architectural inheritance rule do not direct this
 new exploration.
 
-At wrap-up, queue the next session and request explicit approval before committing. Export each
-approved commit as a separate patch for the user to apply later; this task cannot push to GitHub.
-Stay on `docs/full-revamp` through the lightweight exploration.
+At wrap-up, queue the next session and prepare changes for the user to commit. Do not commit on
+the user's behalf. Stay on `docs/full-revamp` through the lightweight exploration.
 
 ## Historical implementation marker
 

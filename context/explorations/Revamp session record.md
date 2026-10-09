@@ -35,8 +35,7 @@ records approved commits; a session entry records the work and does not itself a
 
 ## Session 2 — 2026-10-07–08 — Plugin semantics and storage
 
-- The user selected continued work in this task. Approved session commits will be exported as
-  separate temporary patches for later sequential replay, rather than pushed from this environment.
+- The user selected continued work in this task.
 - Starting direction: usually apply plugins explicitly to eligible matrixes; offer column setup
   when needed; use each applied matrix as a pivot; allow visible, protected plugin-created child
   matrixes and root matrixes for global state. These are working proposals, not settled contracts.
@@ -157,5 +156,4 @@ records approved commits; a session entry records the work and does not itself a
   promotion occurred. Broader recovery/replication and presentation are explicitly deferred.
 - Verification: touched Markdown formatted; `npm run check:concepts` and `git diff --check` passed.
   No code changed, so code tests were not required.
-- The user explicitly authorized this session's wrap-up commit and patch export. Export the commit
-  as a separate temporary patch, verify replay against its parent, and retain the Session 1 patch.
+- The user explicitly authorized this session's wrap-up commit.

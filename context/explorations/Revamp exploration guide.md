@@ -82,11 +82,6 @@ carry into other branches or later implementation work.
 5. Commit only after that approval, at the end of this agent session. Approval to edit documents or
    start wrapping up is not approval to commit. If the user requests changes, finish and verify
    them before presenting the revised wrap-up for approval. Do not commit on intermediate turns.
-6. Export each approved commit as its own temporary text patch outside the repository, using
-   `git format-patch -1 <commit> --stdout --binary`. Verify that it applies to its parent and
-   reproduces the committed files, then give the user the patch file and parent commit ID. The user
-   stores these files and applies them later in commit order with `git am`. Patch delivery replaces
-   remote pushes while this environment has no GitHub write access; retain earlier patch files.
 
 The user's exploration instructions authorize staging for review and, after explicit wrap-up
 approval, committing despite the repository's default restriction on writing Git operations.
@@ -142,4 +137,3 @@ incorporated. Detailed session history lives in the [session record](Revamp%20se
   [queued scenarios and reading](Revamp%20research%20questions.md#next-session-attachment-context-and-editorquery-behavior):
   two inline tasks in one note, nested project tasks, and sigil copy/move/removal. Resolve task/host
   identities, contextual presentation, editing targets, and project-scoped query results.
-- Deliver each approved session commit as a separate patch for later replay; remote push is blocked.
