@@ -7,8 +7,10 @@ The active work is the [relational runtime exploration](explorations/Relational%
 a small runtime, focused standard library, and opinionated Hila composition. Its compact brief
 sets the goals and starting scenarios; prior architectural decisions remain open to reconsideration.
 The [worked traces](explorations/Relational%20runtime%20worked%20traces.md) compare task models,
-stress-test SRS and deletion, and record agreed gesture behavior and ordered investigations.
-The brief also queues broader runtime/library alternatives for the next session.
+stress-test SRS and deletion, and record items 1–5: atomic labels, co-ownership gestures, view scope
+and standalone creation, provisional lifecycle/LWW/history/undo rules, and sequential SRS reviews
+with simple reset, live computation, and a future performance target. Continue with the brief's two
+small competing runtime/library sketches.
 The [older revamp guide](explorations/Revamp%20exploration%20guide.md) retains the preceding proposal
 and session history as references. Proposals stay in the exploration folder until the architecture
 is ready to be revised.

@@ -2,7 +2,7 @@
 title: Relational runtime exploration
 kind: working-artifact
 state: proposed
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Relational runtime exploration
@@ -58,8 +58,8 @@ Names such as “task,” “attachment,” and “helper” describe the starti
    complete either independently, and return to its exact context. Trace identities, query
    multiplicity, and editing targets. Inline-created tasks depend on their owning inline units:
    copying creates a co-owner of the same task, deleting the last owner deletes the task, and
-   cut-and-paste preserves it at the new location. The owning unit may be a token or atomic range;
-   its shape remains open. The host need not inherit the task's type.
+   cut-and-paste preserves it at the new location. The owner is a stable atomic inline unit with an optional shared
+   task label; inferred surrounding context is outside it. The host need not inherit the task's type.
 2. **Study cards and review history.** Use existing front/back fields as cards, record independent
    reviews on two devices, and obtain a useful schedule after sync. Separate durable user actions
    from recomputable results. Discover which machinery is shared and which belongs to SRS, without
@@ -81,18 +81,27 @@ and correctness enforcement. A small core with a complicated standard library is
 Record candidate shapes, tradeoffs, changed user outcomes, and unresolved questions separately from
 decisions. Keep this brief compact and update the current handoff as exploration advances.
 
-Current checkpoint: the [worked traces](Relational%20runtime%20worked%20traces.md) compare three
-storage models. Inline tasks depend on owning inline content; moving it preserves the task and
-copying creates a co-owner. The task survives until its last owner is deleted. This copy behavior
-and card-owned reviews are agreed exploration outcomes. Import receipts illustrate helpers that
-can outlive referenced user data. Separate task storage does not imply independent lifetime.
-No concrete runtime architecture is selected.
+Current checkpoint: [worked traces](Relational%20runtime%20worked%20traces.md) record items 1–5.
+Atomic inline owners have optional shared task labels; inferred prose context is outside the atom.
+Copy/repeated paste create co-owners, while cut/paste preserves task identity and winning content.
+Queues use ordinary queries; recognized matrix views create standalone rows with matrix defaults,
+without deriving defaults from filters. Row-to-prose transfer gestures are dropped.
 
-Paused for a WIP checkpoint. Resume with the worked traces'
-[ordered investigations](Relational%20runtime%20worked%20traces.md#next-investigations-in-order),
-starting with inline units and co-owner editing/concurrency. Use those results to explore the
-larger questions below. Implementation, migration planning, and canonical contract revisions
-come later.
+Matrix membership plus optional ownership dependencies is the provisional shared lifetime rule.
+Reviews depend on cards; receipts have only non-owning links to imported notes. Task/matrix deletion
+clears inline atoms. Object-level LWW, retained deleted data and content history, longer-lived lifecycle
+evidence, and sequential revision-checked undo form the recovery contract. If required owners cannot
+return, recovery is ineligible with no alternate standalone destination. Physical storage, sync
+mechanisms, and runtime architecture remain open.
+
+SRS processes independent reviews sequentially. Reset deletes locally known reviews; unseen reviews
+arriving after sync participate normally. Begin with live recomputation from applicable review history.
+A future fixture should simulate ten years of daily due-card reviews, targeting roughly 250–500 ms
+for retrieval plus computation; local-only caching is a conditional fallback. Algorithm selection and
+performance measurement remain future work.
+
+The worked-trace starting policies are settled enough to compare the two small sketches below.
+Implementation, migration planning, and canonical revisions come later.
 
 ## Larger exploration: next investigations
 

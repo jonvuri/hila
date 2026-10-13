@@ -2,7 +2,7 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Now
@@ -14,23 +14,26 @@ and an opinionated Hila composition; concrete shapes remain open.
 
 ## Boundary and next action
 
-The [worked traces](explorations/Relational%20runtime%20worked%20traces.md) compare three storage
-models. Inline-created tasks depend on owning inline units: copying creates a co-owner of the same
-task, deleting the last owner deletes it, and cut-and-paste preserves it at the new location.
-Co-ownership is the agreed copy behavior. Card reviews share their cards' lifecycle; import receipts
-may outlive imported notes. No storage model or runtime architecture is selected.
+The [worked traces](explorations/Relational%20runtime%20worked%20traces.md) record items 1–5.
+Atomic inline owners have optional shared labels and inferred local context. Queues are views;
+recognized matrix views can create ordinary standalone rows using matrix defaults, not filter-derived
+defaults. Row-to-prose transfers are dropped. Task/matrix deletion clears atoms from live prose.
 
-Paused for a WIP checkpoint. Next session: read the brief, then the worked traces and their
-[ordered investigations](explorations/Relational%20runtime%20worked%20traces.md#next-investigations-in-order).
+Lifecycle is provisionally matrix membership plus optional ownership dependencies. Reviews depend
+on cards; import receipts only reference imported notes. Object-level LWW and retained content history
+support sequential, revision-checked undo. Lifecycle evidence can be retained longer than content.
+If required owners cannot validly return, skip restoration, potentially the whole changeset; no
+fallback standalone recovery. Physical storage and concrete sync enforcement remain open.
 
-- **Worked traces first:** compare token, atomic range, and shared-fragment ownership; separate
-  shared task content from local prose. Trace copy/cut/delete/undo and concurrent owner changes.
-  Then examine task query scope, non-inline creation, lifecycle reuse, and concrete SRS scheduling.
-- **Larger exploration:** use those results for two competing small runtime/library sketches.
-  Test what belongs in ordinary relations, shared storage enforcement, or reusable behavior, and
-  whether one ownership rule can serve the examples without importing the old edge architecture.
-  The brief's [next investigations](explorations/Relational%20runtime%20exploration.md#larger-exploration-next-investigations)
-  name the questions and expected outputs.
+SRS processes independent reviews sequentially in deterministic order. Reset deletes locally known
+reviews; unseen reviews arriving later survive. Start with live recomputation and test ten years of
+daily due-card reviews against roughly 250–500 ms retrieval-plus-computation time. Local-only caching
+is a conditional fallback; no measurements or algorithm selection are complete.
+
+**Next action:** compare the brief's [two small runtime/library sketches](explorations/Relational%20runtime%20exploration.md#larger-exploration-next-investigations):
+ordinary feature relations plus shared functions versus a minimal identity/lifecycle substrate with
+focused libraries. Use the worked-trace outcomes to compare durable facts, authority, reads,
+always-available enforcement, and total complexity.
 
 The brief governs this exploration. Prior revamp decisions and baseline invariants are references,
 not inherited constraints. Preserve the rough user-facing goals while seeking simplicity,
