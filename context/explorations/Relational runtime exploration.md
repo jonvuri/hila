@@ -2,7 +2,7 @@
 title: Relational runtime exploration
 kind: working-artifact
 state: proposed
-updated: 2026-10-11
+updated: 2026-10-15
 ---
 
 # Relational runtime exploration
@@ -72,9 +72,9 @@ Names such as “task,” “attachment,” and “helper” describe the starti
 
 ## How to continue
 
-Start with the two-task scenario and compare a few small models. Trace the user action, stored
-facts, reads, writes, and visible result. Add failure or concurrent-device cases where they expose
-hidden coupling. Carry promising models through the other two scenarios before fixing boundaries.
+The initial task/SRS pass is complete at the product-policy level. Continue from the recorded
+checkpoint below. Trace user actions, stored facts, reads, writes, and visible results; add failure
+or concurrent-device cases where they expose hidden coupling before fixing architectural boundaries.
 
 Evaluate total conceptual cost, ease of composition, predictable behavior, and feasible performance
 and correctness enforcement. A small core with a complicated standard library is not a success.
@@ -100,32 +100,31 @@ A future fixture should simulate ten years of daily due-card reviews, targeting 
 for retrieval plus computation; local-only caching is a conditional fallback. Algorithm selection and
 performance measurement remain future work.
 
-The worked-trace starting policies are settled enough to compare the two small sketches below.
-Implementation, migration planning, and canonical revisions come later.
+The [runtime sketches](Relational%20runtime%20sketches.md) and their adversarial deletion/edit trace
+favor a narrow shared feature lifecycle runtime provisionally. Explicitly removed known atoms need
+their own eligible restoration; previously unknown offline atoms can become valid when the same
+row identity is restored. Receipt references and SRS reset use the same known-record deletion intuition.
+This is a conceptual result, not a proof of sync implementation.
+
+The [outline exploration](Relational%20outline%20exploration.md) adds shared records across notes,
+outline and tables, ordered placement edges separate from ownership, mirror gesture rules, and
+Unplaced as a discovery candidate. Latest preference is to exclude placement cycles because no
+product need justifies their query hazards. Enforcement during sync remains open.
 
 ## Larger exploration: next investigations
 
-1. **Challenge the proposed layers with two small architectural sketches.** Compare ordinary
-   feature relations plus shared transaction/query functions with a minimal shared identity and
-   lifecycle substrate plus focused libraries. Explain the same capture, copy, completion, and
-   deletion in each. List durable facts, write authority, read paths, and the code that must remain
-   available when a module is inactive. Count the complexity across the whole system; preserve the
-   option that the “runtime” is mostly a disciplined set of functions.
-2. **Discover what a standard library actually contributes.** Sketch one task operation and one
-   SRS operation, including their caller, inputs, atomic writes, and result. Test fixed feature
-   tables against behavior bound to existing user fields. Can ownership, editing targets, and
-   bounded discovery compose without a universal node type or extensive registration metadata?
-   Share only machinery both examples need; keep module packaging and external plugins deferred.
-3. **Explore ownership as a reusable relation without rebuilding the old edge architecture.**
-   Ask whether co-ownership is about a set of appearances keeping data live, while card review
-   ownership is a direct dependency, or whether one smaller rule explains both. Locate the
-   minimum enforcement for local edits, replication, deletion, and recovery. Try counterexamples
-   that would demand multiple owners, cycles, or special cases before accepting a general engine.
-4. **Test the composition from the user's side.** Explain capture, copy, discovery, completion,
-   and deletion without storage vocabulary. Clarify shared task data versus local prose context,
-   and query appearance versus ownership. Ask which distinctions Hila can make intuitive through
-   defaults and which need visible gestures. Revisit an architectural shortcut if it forces users
-   to understand internal rules merely to edit a note.
+The two competing sketches and initial user-facing traces have been compared. The
+[concept review](Relational%20concept%20review.md) records evidence behind older architecture and
+candidate next traces. Pause for user selection before expanding them:
+
+1. Placement acyclicity, concurrent moves, SQL parent deletion, and Unplaced discovery/reattachment.
+2. A mixed project across notes, outline, and table: matrix/view places, title/content bindings,
+   insertion defaults, and whether any cross-matrix child restrictions are needed.
+3. Bounded query/rendering workloads to select derived indexes only after query semantics are clear.
+
+The shared-runtime/library boundary remains provisional. Use these cases to test what truly repeats,
+where fixed functions suffice, and which guarantees must apply while UI or feature code is inactive.
+External plugin packaging, implementation, migration planning, and canonical revisions come later.
 
 Keep each sketch small enough to compare directly. The useful outcome is a narrower hypothesis
 and a concrete counterexample that could disprove it, not a complete framework or exhaustive

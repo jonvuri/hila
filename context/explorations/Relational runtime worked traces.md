@@ -2,7 +2,7 @@
 title: Relational runtime worked traces
 kind: working-artifact
 state: proposed
-updated: 2026-10-11
+updated: 2026-10-15
 ---
 
 # Relational runtime worked traces
@@ -483,8 +483,11 @@ scheduling with a future performance target. No complete runtime architecture is
 
 ### Next investigations, in order
 
-Items 1–5 have starting outcomes recorded above. Next, narrow the
-[larger exploration](Relational%20runtime%20exploration.md#larger-exploration-next-investigations).
+Items 1–5 have starting outcomes recorded above. Subsequent
+[runtime sketches](Relational%20runtime%20sketches.md) record the adversarial deletion/edit trace
+and the agreed treatment of unknown occurrences after restoration.
+[Outlining](Relational%20outline%20exploration.md) is the next product proof already explored; the
+[concept review](Relational%20concept%20review.md) lists candidate follow-ups pending user selection.
 These are exploration questions, not implementation tasks.
 
 1. **Inline unit — resolved at the product level.** Atomic occurrence with optional shared label
@@ -502,6 +505,6 @@ These are exploration questions, not implementation tasks.
    Local-only caching is a conditional fallback. Algorithm selection and measurement remain future
    work; the policy does not establish a proven performance bound.
 
-Keep physical storage provisional. The next session should compare two small runtime/library sketches
-using these outcomes, including durable facts, write authority, read paths, always-available enforcement,
-and total conceptual cost. No implementation or migration planning yet.
+Keep physical storage provisional. The runtime sketches and outline traces are recorded separately
+so these task/SRS outcomes remain easy to find. Follow the concept review for the next checkpoint.
+No implementation or migration planning yet.

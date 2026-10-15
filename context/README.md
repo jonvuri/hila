@@ -3,17 +3,21 @@
 Start with [NOW.md](NOW.md). It names the current plan, boundary, and minimum reading. Use this
 index when a task needs wider product or architecture context.
 
-The active work is the [relational runtime exploration](explorations/Relational%20runtime%20exploration.md):
-a small runtime, focused standard library, and opinionated Hila composition. Its compact brief
-sets the goals and starting scenarios; prior architectural decisions remain open to reconsideration.
-The [worked traces](explorations/Relational%20runtime%20worked%20traces.md) compare task models,
-stress-test SRS and deletion, and record items 1–5: atomic labels, co-ownership gestures, view scope
-and standalone creation, provisional lifecycle/LWW/history/undo rules, and sequential SRS reviews
-with simple reset, live computation, and a future performance target. Continue with the brief's two
-small competing runtime/library sketches.
-The [older revamp guide](explorations/Revamp%20exploration%20guide.md) retains the preceding proposal
-and session history as references. Proposals stay in the exploration folder until the architecture
-is ready to be revised.
+The active work is the [relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
+Its compact brief governs; prior architecture remains open to reconsideration.
+
+- [Task/SRS worked traces](explorations/Relational%20runtime%20worked%20traces.md) record the five initial
+  investigations and agreed starting policies.
+- [Runtime sketches](explorations/Relational%20runtime%20sketches.md) compare feature functions with a
+  shared feature lifecycle runtime and record the two-device deletion/edit/restoration trace.
+- [Outline exploration](explorations/Relational%20outline%20exploration.md) records interchangeable
+  presentations, mirrors, split/merge, placement versus lifetime, Unplaced, and the revised preference
+  against placement cycles.
+- [Concept review](explorations/Relational%20concept%20review.md) separates historical use cases from
+  unproven mechanisms and lists candidate next traces. Await user selection before expanding them.
+
+The [older revamp guide](explorations/Revamp%20exploration%20guide.md) remains prior proposal/history.
+Proposals stay in the exploration folder until architecture revision is explicitly undertaken.
 
 ## Reading routes
 
