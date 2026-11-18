@@ -2,41 +2,36 @@
 title: Current state
 kind: status
 state: active
-updated: 2026-10-15
+updated: 2026-11-18
 ---
 
 # Now
 
-Active work on `docs/full-revamp` is the [relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
-Tasks/SRS have starting policies; runtime sketches and outlining now have recorded provisional outcomes.
+Active work on `docs/full-revamp` is recovering the
+[relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
 No implementation, benchmark, migration, or canonical architecture revision has been performed.
 
 ## Current checkpoint
 
-- [Task/SRS traces](explorations/Relational%20runtime%20worked%20traces.md): atomic owners, shared labels,
-  view semantics, standalone rows, lifecycle/LWW/history/undo, sequential reviews and simple reset.
-- [Runtime sketches](explorations/Relational%20runtime%20sketches.md): a narrow shared feature lifecycle
-  layer is the leading direction. Known atom retirement survives target restoration; unknown offline
-  atoms may become valid after same-identity restoration, regardless of arrival order.
-- [Outline traces](explorations/Relational%20outline%20exploration.md): shared records across notes,
-  outlines, and tables; ordered placement separate from lifetime; mirrors share children; lower-half
-  split identity; guarded merges; gesture-specific subtree deletion; Unplaced discovery candidate.
-  Latest preference is to exclude placement cycles. Concurrent-move enforcement is not settled.
+The [recovery index](archive/recovery/2026-11-17/README.md) distinguishes preserved evidence from
+reconstruction. The first-pass ZIP, decision log, and README were committed and pushed as `5d88dc2`.
+The [second-pass companion](archive/recovery/2026-11-17/decision-context.md) records richer inputs,
+worked scenarios, alternatives, qualifications, and relationships for all 62 decision IDs.
 
-## Next action
+Tasks/SRS and the initial runtime/outline work are in the earlier committed exploration documents.
+Later placement-integrity policies and film-study presentation/editing decisions are recovered in
+the log and companion; the older documents have not yet been reconciled. Preview-only matrix
+navigation was never settled. The next product trace concerns full inline matrix member gestures,
+with discovery and external-impact deletion confirmation already discussed.
 
-Pause for the user to select the next investigation after reviewing the
-[older-concept evidence and candidate traces](explorations/Relational%20concept%20review.md).
-Recommended candidates: placement integrity/Unplaced, then a mixed project across notes/outline/table
-covering matrix and view places, field bindings, insertion defaults, and mixed-schema children.
-Query/cache feasibility follows concrete query shapes. This is a recommendation, not an adopted plan.
+## Next action and boundary
 
-## Boundary
+Review and reconcile the recovered exploration context before resuming product traces. Preserve
+the distinction between agreements, provisional policies, assistant proposals, and implementation
+gaps. Keep canonical `Concepts.md` and `Decisions.md` unchanged during this recovery.
 
-The brief governs. Older revamp decisions and baseline invariants are references, not inherited
-constraints. Keep proposals under `context/explorations/` and preserve rough user-facing goals.
-Stay on `docs/full-revamp`; prepare changes for review and do not commit without instruction.
+The brief governs; older revamp mechanisms are references, not inherited constraints. Stay on
+`docs/full-revamp`; stage changes for review and do not commit/push without applicable instruction.
+Cloud files and staging are temporary; preserve reviewed recovery checkpoints on the remote branch.
 
-The older revamp guide's queued Session 3 does not direct this exploration. Historical implementation
-marker: [Phase 13](phases/Phase-13.md) completed Sessions 1–5 and 5A; Session 5B was next with Session 6
-paused. It remains a reference for eventual implementation planning, not an instruction to resume.
+Historical Phase 13 work remains a reference, not an instruction to resume implementation.

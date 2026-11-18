@@ -1,8 +1,14 @@
-# Hila exploration recovery — first pass
+# Hila exploration recovery
+
+## Second-pass context recovery
+
+[Decision inputs, scenarios, and rationale](decision-context.md) expands every D01–D62 entry with the available discussion context, worked scenarios, alternatives, corrections, and related decisions. It distinguishes committed evidence, quoted user inputs, conversational reconstruction, and unresolved details. This is provisional exploration recovery, not canonical architecture.
+
+The first-pass ZIP below remains unchanged. The second-pass companion is a separate file and is not included in that historical ZIP. The source documents under `context/explorations/` remain older checkpoints until reconciliation; consult the recovery log and companion for later conversational decisions.
 
 ## Repository checkpoint
 
-This directory preserves three recovery deliverables:
+The first repository checkpoint preserved three recovery deliverables:
 
 - [Decision log](decision-log.md): the first-pass decision inventory, formatted for repository reading.
 - [Recovery ZIP](hila-recovery-2026-11-17.zip): the complete evidence package, including original Markdown copies, quoted inputs, recovered draft excerpts, access checks, and committed baseline.
@@ -35,10 +41,9 @@ Remote `docs/full-revamp` was verified on 2026-11-17 at `af1b7d3`. Earlier commi
 
 These files live in a temporary Cloud filesystem. A downloadable archive is provided for preservation outside this environment. Merely writing or staging files does not make them independent of the Cloud VM recovery window. Current official documentation: https://help.openai.com/en/articles/20001545-using-codex-cloud (saved VM state recoverable by default for up to seven days after the last start of a turn or task resume; separate from conversation-history retention).
 
-## Next pass
+## Remaining recovery work
 
-1. Preserve this package outside the Cloud VM.
-2. Compare the decision log against the exact committed baseline and quoted evidence.
-3. Recover richer worked examples, rationales, and links between decisions; do not promote assistant-only recommendations to agreements.
-4. Restore the documentation branch in a suitable checkout and reconcile exploration documents, preserving canonical architecture.
-5. Format/check, then commit and push only under the user's applicable authorization.
+1. Keep new recovery additions independently checkpointed; the original three-file package was committed and pushed as `5d88dc2`.
+2. Review the first-pass log alongside the second-pass qualifications, especially current-winning-revision undo guards, local reset scope, and the remaining open inline-matrix gestures.
+3. Reconcile the exploration documents on `docs/full-revamp`, preserving canonical architecture and marking superseded proposals explicitly.
+4. Format/check, then commit and push only under the user's applicable authorization.
