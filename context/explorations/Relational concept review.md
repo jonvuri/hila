@@ -2,7 +2,7 @@
 title: Relational concept review and next candidates
 kind: working-artifact
 state: proposed
-updated: 2026-10-15
+updated: 2026-11-18
 ---
 
 # Relational concept review and next candidates
@@ -10,7 +10,8 @@ updated: 2026-10-15
 Review at the checkpoint after [runtime sketches](Relational%20runtime%20sketches.md) and
 [outline traces](Relational%20outline%20exploration.md). Separate a concrete user need from the older
 mechanism chosen to serve it. Historical acceptance does not make a mechanism binding. Evidence below
-is documentation and completed-plan evidence, not a fresh code audit or benchmark.
+is documentation and completed-plan evidence, not a fresh code audit or benchmark. Later conversational outcomes are reconciled below;
+[recovery evidence and audit](../archive/recovery/2026-11-17/README.md) preserve their provenance.
 
 ## What the older concepts served
 
@@ -41,7 +42,10 @@ Evidence: [matrix/container contract](../Data-Model.md#matrix-ownership-and-type
 
 **Unproven mechanism:** every matrix must be a separately typed outline node with an owning parent,
 or its navigation link must control the matrix lifetime. The use is supported; exact representation
-and deletion scope need a new trace under placement/lifetime separation.
+and deletion scope require placement/lifetime separation. The later user-favored direction treats
+the whole matrix as a node and permits final-appearance outline deletion to delete its members, without
+making arbitrary SQL parent deletion invoke that gesture. Confirmation is conditional on external
+incoming references/appearances. See the [collection trace](Relational%20film-study%20exploration.md#matrix-and-saved-view-navigation-trace).
 
 ### Restrictions on matrix children
 
@@ -74,8 +78,10 @@ existing front/back fields by identity.
 
 **Unproven mechanism:** a fixed two-column root workspace, exactly one global default matrix, root
 placement granting aspect eligibility, or forbidding derived values from every presentation binding.
-Separate displayable fields from writable fields. The new model must decide per-presentation bindings,
-missing/derived field behavior, and creation rules; old restrictions are candidates, not defaults.
+Separate displayable fields from writable fields. Later traces choose matrix-level title/optional
+longer-notes roles, same-type title insertion, and a default/empty-row escape. Per-view role overrides
+were not justified. Required fields and derived-column writability remain open; see the
+[field/gesture contract](Relational%20film-study%20exploration.md#field-roles-and-shared-editing).
 
 ### Closure, scroll indexes, and batched data flow
 
@@ -93,20 +99,39 @@ easier but many mirror paths can still be expensive. Measure child, ancestor, re
 search, and scroll queries against agreed fixtures before selecting caches. SQL batching addresses
 real N+1 costs; it need not require the previous host architecture in full.
 
-## Candidate next traces, pending user choice
+## Selected next sequence
 
-1. **Placement integrity and discovery.** Decide acyclicity, trace the two-device cycle, parent SQL
-   deletion, invalid placements, and Unplaced reattachment. Outcome: a clear boundary between
-   content-preserving sync repair and data deletion, plus a precise discovery query.
-2. **One mixed project across notes, outline, and table.** Use a project with a note, a task, a card
-   matrix, and a saved Due cards view. Open an empty matrix/view, insert a record, change presentation,
-   and remove a navigation appearance. Outcome: which identities need placement, membership versus
-   position, field bindings, insertion defaults, and whether a matrix-child restriction earns anything.
-3. **Query and rendering feasibility.** Use the selected model for large shallow/deep/mirrored
-   fixtures. Define bounded reads and SQL subtree operations before choosing closure/scroll caches.
-   Concrete performance tests follow implementation, not this documentation review.
+The user selected this sequence and the film-study brief. The original request to await a choice is
+superseded; product policies have advanced through item 1 and much of item 2.
 
-Recommendation, not a newly accepted schedule: settle the placement-cycle preference with a short
-integrity trace, then use the mixed project to evaluate places, roles, and child restrictions together.
-Leave cache design until the necessary query shapes are clear. The task/SRS fixtures remain future
-verification work. External plugins, implementation migration, and canonical revisions remain deferred.
+1. **Placement integrity and discovery — provisional product policies settled.** Exclude placement
+   cycles; reject whole losing moves rather than orphaning records by dropping only the new edge.
+   Wall-clock priority is a placeholder; no automatic retry. Keep other gestures' recorded targets and
+   accept rare concurrent Unplaced outcomes. Unplaced means current unreachability. The convergent
+   protocol, exact discovery scope and query remain implementation obligations. See
+   [outline integrity](Relational%20outline%20exploration.md#placement-integrity-provisional-product-policies).
+2. **Film-study project — active collection boundary trace.** Shared title/body roles, secondary fields,
+   heterogeneous segments and consistent title gestures are recorded. Matrix/view discovery is clarified;
+   full inline member-row gestures and detailed saved-view lifecycle remain open. Start from the
+   [film-study continuation](Relational%20film-study%20exploration.md#next-trace-and-remaining-work).
+3. **Query and rendering feasibility — next after concrete behavior.** Use large shallow/deep/mirrored
+   fixtures to define bounded reads and SQL subtree operations before choosing closure/scroll caches.
+   Acyclic placement does not make all rendering or query recursion bounded. Concrete measurements
+   follow implementation, not the documentation recovery.
+
+## Item 2 brief: film-study project
+
+Keep tasks and SRS as the main exercised features. Add topic notes, film/review records with title,
+year/rating/watched-date/notes, terminology cards, a Films matrix and saved Films to revisit/Due cards
+views. Start with one simple review per film and manually entered metadata. The earlier use-case list
+also included recipes and microjournaling; media logging was selected to expose mixed fields without
+requiring another aggregation, scheduling or automation system.
+
+Trace the same film in notes/outline/table and mirrored under two topics; title editing and creation
+inside mixed content; aligned heterogeneous table segments; empty named collections/views; and removal
+or deletion of their appearances. The detailed [film-study document](Relational%20film-study%20exploration.md)
+separates agreed behavior, provisional directions and remaining questions.
+
+The expected outcome is a presentation/creation contract and evidence for which role, collection and
+placement mechanisms earn their place. It is not automatic promotion of all old node types. External
+plugins, migration, canonical revision and task/SRS performance measurement remain deferred.

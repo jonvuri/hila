@@ -1,0 +1,20 @@
+{
+  "baseline_commit": "af1b7d302f9a07a7f85b1c86fd2e448e88fd19a9",
+  "excerpt_source": "hila-recovery-2026-11-17.zip/evidence/prior-draft-excerpts.md",
+  "method": "Reassembled baseline unchanged passages with exact earlier file-read additions retained in the conversation; two outline transition replacements transcribed from the earlier complete readback. Not a raw transcript export or independently verified original byte hash.",
+  "outline_transition_replacements": [
+    [
+      "cycles or query-result recursion. This is a candidate next investigation, not authorization to build it.",
+      "cycles or query-result recursion. Item 1 below starts this investigation; no implementation is authorized by the conceptual trace."
+    ],
+    [
+      "older concepts and candidate next traces. Pause for user selection before expanding the exploration.",
+      "older concepts and candidate next traces. The user selected item 1 as active and the film-study brief for item 2; follow the concept review."
+    ]
+  ],
+  "readbacks": {
+    "earlier-concept-review-readback.txt": "8630a265793e80b19ad6d0d04e92731aaf611d40d0427c4eb145446f5523f536",
+    "earlier-now-readback.txt": "68ac1412461078697350a0b079d8ba30ab27cfafc4cfa259e22b6ae4bc283290",
+    "earlier-outline-readback.txt": "c1513082c11ad11946d02b174517df31ab5dceef41e96d7f941333de42ebb687"
+  }
+}

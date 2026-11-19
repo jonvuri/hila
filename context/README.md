@@ -9,19 +9,23 @@ Its compact brief governs; prior architecture remains open to reconsideration.
 [Recovery index](archive/recovery/2026-11-17/README.md) preserves the later conversation's
 [decision inventory](archive/recovery/2026-11-17/decision-log.md) and
 [richer inputs, scenarios, and rationale](archive/recovery/2026-11-17/decision-context.md).
-The exploration documents below are older checkpoints pending reconciliation; the recovery files
-distinguish subsequent agreements from proposals without revising canonical architecture.
+The [coverage audit](archive/recovery/2026-11-17/coverage-audit.md) and source addendum preserve
+fidelity limits. The working exploration documents below now incorporate the recovered outcomes;
+canonical architecture has not been revised.
 
 - [Task/SRS worked traces](explorations/Relational%20runtime%20worked%20traces.md) record the five initial
   investigations and agreed starting policies.
 - [Runtime sketches](explorations/Relational%20runtime%20sketches.md) compare feature functions with a
   shared feature lifecycle runtime and record the two-device deletion/edit/restoration trace.
 - [Outline exploration](explorations/Relational%20outline%20exploration.md) records interchangeable
-  presentations, mirrors, split/merge, placement versus lifetime, Unplaced, and the revised preference
-  against placement cycles.
+  presentations, mirrors, split/merge identity, placement versus lifetime, current-reachability Unplaced,
+  and provisional whole-move rejection policies for placement cycles.
+- [Film-study exploration](explorations/Relational%20film-study%20exploration.md) records role bindings,
+  mixed layout, title gestures, and matrix/view discovery/deletion direction. Full inline member-row
+  gestures are the next product trace.
 - [Concept review](explorations/Relational%20concept%20review.md) separates historical use cases from
   unproven mechanisms. The user subsequently selected placement integrity, the film-study project,
-  then query/rendering feasibility; see the recovery files for progress and remaining questions.
+  then query/rendering feasibility; its selected sequence routes to current progress and open questions.
 
 The [older revamp guide](explorations/Revamp%20exploration%20guide.md) remains prior proposal/history.
 Proposals stay in the exploration folder until architecture revision is explicitly undertaken.

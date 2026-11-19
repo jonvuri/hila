@@ -2,7 +2,7 @@
 title: Relational runtime exploration
 kind: working-artifact
 state: proposed
-updated: 2026-10-15
+updated: 2026-11-18
 ---
 
 # Relational runtime exploration
@@ -106,21 +106,25 @@ their own eligible restoration; previously unknown offline atoms can become vali
 row identity is restored. Receipt references and SRS reset use the same known-record deletion intuition.
 This is a conceptual result, not a proof of sync implementation.
 
-The [outline exploration](Relational%20outline%20exploration.md) adds shared records across notes,
-outline and tables, ordered placement edges separate from ownership, mirror gesture rules, and
-Unplaced as a discovery candidate. Latest preference is to exclude placement cycles because no
-product need justifies their query hazards. Enforcement during sync remains open.
+The [outline exploration](Relational%20outline%20exploration.md) records shared records across notes,
+outline and tables, placement separate from lifetime, mirror gestures, and reachability-based Unplaced.
+Placement-cycle outcomes are provisionally settled: reject the whole losing move, prefer the latest
+wall-clock competing move as a placeholder, do not automatically retry, and preserve other gestures'
+recorded targets even when an unlucky combination leaves Unplaced content. A convergent protocol is
+still unproven.
 
-## Larger exploration: next investigations
+## Larger exploration: selected investigations
 
-The two competing sketches and initial user-facing traces have been compared. The
-[concept review](Relational%20concept%20review.md) records evidence behind older architecture and
-candidate next traces. Pause for user selection before expanding them:
+The user selected the sequence recorded in the [concept review](Relational%20concept%20review.md#selected-next-sequence):
 
-1. Placement acyclicity, concurrent moves, SQL parent deletion, and Unplaced discovery/reattachment.
-2. A mixed project across notes, outline, and table: matrix/view places, title/content bindings,
-   insertion defaults, and whether any cross-matrix child restrictions are needed.
-3. Bounded query/rendering workloads to select derived indexes only after query semantics are clear.
+1. Placement integrity/discovery: product-policy trace complete provisionally; implementation remains.
+2. [Film-study project](Relational%20film-study%20exploration.md): role bindings, mixed layout and title
+   gestures agreed; matrix/view navigation and full inline member gestures are the active boundary.
+3. Bounded query/rendering workloads: choose derived indexes only after query semantics are clear.
+
+The [recovery index](../archive/recovery/2026-11-17/README.md) preserves evidence, a 62-entry decision
+inventory, richer rationale and the coverage audit. The working documents above now incorporate later
+conversation outcomes; the historical snapshots retain superseded proposals without making them active.
 
 The shared-runtime/library boundary remains provisional. Use these cases to test what truly repeats,
 where fixed functions suffice, and which guarantees must apply while UI or feature code is inactive.

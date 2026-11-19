@@ -1,10 +1,24 @@
 # Hila exploration recovery
 
+## Source capture, audit, and reconciliation
+
+The [source addendum](source-addendum/README.md) preserves three reassembled full historical file
+readbacks and the original layout-mockup prompt, with provenance and explicit fidelity limits.
+The [coverage and confidence audit](coverage-audit.md) maps all U01–U51 inputs to D/O entries and
+records eight corrections or qualifications. Its final section identifies their reconciliation.
+
+Current working outcomes are now in the [outline exploration](../../../explorations/Relational%20outline%20exploration.md)
+and [film-study exploration](../../../explorations/Relational%20film-study%20exploration.md), with the
+[selected sequence](../../../explorations/Relational%20concept%20review.md#selected-next-sequence) and
+[runtime brief](../../../explorations/Relational%20runtime%20exploration.md) updated to route there.
+Canonical architecture remains unchanged. Historical evidence and the first/second-pass logs retain
+their original wording; consult the audit for later qualifications.
+
 ## Second-pass context recovery
 
 [Decision inputs, scenarios, and rationale](decision-context.md) expands every D01–D62 entry with the available discussion context, worked scenarios, alternatives, corrections, and related decisions. It distinguishes committed evidence, quoted user inputs, conversational reconstruction, and unresolved details. This is provisional exploration recovery, not canonical architecture.
 
-The first-pass ZIP below remains unchanged. The second-pass companion is a separate file and is not included in that historical ZIP. The source documents under `context/explorations/` remain older checkpoints until reconciliation; consult the recovery log and companion for later conversational decisions.
+The first-pass ZIP below remains unchanged. The second-pass companion is a separate file and is not included in that historical ZIP. Its references to unreconciled working documents describe the second-pass checkpoint; the reconciliation above has since carried the recovered outcomes into those documents.
 
 ## Repository checkpoint
 
@@ -33,7 +47,7 @@ The assistant has no functioning full-transcript export on this host. `codex_app
 
 The active context contains user messages from earlier work, a carried-forward summary of older assistant/tool turns, and later visible assistant/tool turns. Therefore this package MUST NOT be described as a full or lossless transcript export. Quoted evidence is distinguished from reconstructed summaries. Missing historical assistant explanations may contain nuance absent from this pass.
 
-The former staged patch is absent from this resumed workspace. Some of its content survives verbatim in earlier tool outputs; those excerpts are retained here before further interpretation. Exact full-file recovery remains a later step.
+The former staged patch is absent from this resumed workspace. Some of its content survives verbatim in earlier tool outputs. The source addendum reassembles three full readbacks from the exact committed baseline and surviving text, but no original-file hash proves byte identity. Complete original transcript, other unexposed staged files, original agent reports and image pixels remain unavailable here.
 
 ## Git and durability
 
@@ -43,7 +57,7 @@ These files live in a temporary Cloud filesystem. A downloadable archive is prov
 
 ## Remaining recovery work
 
-1. Keep new recovery additions independently checkpointed; the original three-file package was committed and pushed as `5d88dc2`.
-2. Review the first-pass log alongside the second-pass qualifications, especially current-winning-revision undo guards, local reset scope, and the remaining open inline-matrix gestures.
-3. Reconcile the exploration documents on `docs/full-revamp`, preserving canonical architecture and marking superseded proposals explicitly.
-4. Format/check, then commit and push only under the user's applicable authorization.
+1. Keep new recovery additions independently checkpointed. The original package was pushed as `5d88dc2`; the second-pass companion and routes were pushed as `f003960`.
+2. If original desktop/service transcripts or the generated image become accessible, compare them against the preserved reconstruction; do not claim their absence here proves permanent loss.
+3. Otherwise resume the film-study inline-matrix gesture trace. Additional recovery prose without new evidence is unlikely to improve fidelity.
+4. Commit/push the latest reconciliation only under applicable user instruction; temporary files and staging are not independent backups.

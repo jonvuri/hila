@@ -7,31 +7,30 @@ updated: 2026-11-18
 
 # Now
 
-Active work on `docs/full-revamp` is recovering the
-[relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
+Active work on `docs/full-revamp` is the [relational runtime exploration](explorations/Relational%20runtime%20exploration.md).
+Available conversation evidence has been recovered, audited, and reconciled into working documents.
 No implementation, benchmark, migration, or canonical architecture revision has been performed.
 
-## Current checkpoint
+## Read next
 
-The [recovery index](archive/recovery/2026-11-17/README.md) distinguishes preserved evidence from
-reconstruction. The first-pass ZIP, decision log, and README were committed and pushed as `5d88dc2`.
-The [second-pass companion](archive/recovery/2026-11-17/decision-context.md) records richer inputs,
-worked scenarios, alternatives, qualifications, and relationships for all 62 decision IDs.
-
-Tasks/SRS and the initial runtime/outline work are in the earlier committed exploration documents.
-Later placement-integrity policies and film-study presentation/editing decisions are recovered in
-the log and companion; the older documents have not yet been reconciled. Preview-only matrix
-navigation was never settled. The next product trace concerns full inline matrix member gestures,
-with discovery and external-impact deletion confirmation already discussed.
+1. [Film-study exploration](explorations/Relational%20film-study%20exploration.md): agreed field/layout/title
+   gestures, collection discovery/deletion direction, and the open full-inline member-row trace.
+2. [Outline exploration](explorations/Relational%20outline%20exploration.md): mirrors, split/merge identity,
+   current-reachability Unplaced, and provisional whole-move rejection policies.
+3. [Selected sequence](explorations/Relational%20concept%20review.md#selected-next-sequence): placement integrity
+   product outcomes are provisionally settled; film study is active; query/rendering feasibility follows.
 
 ## Next action and boundary
 
-Review and reconcile the recovered exploration context before resuming product traces. Preserve
-the distinction between agreements, provisional policies, assistant proposals, and implementation
-gaps. Keep canonical `Concepts.md` and `Decisions.md` unchanged during this recovery.
+Continue the full inline Films collection trace through editing, deleting, and moving a member that also
+has an independent topic appearance. Full inline behavior is not yet settled, and preview-only was never
+a final restriction. Keep membership, positional appearances, discovery routes, and lifecycle distinct.
 
-The brief governs; older revamp mechanisms are references, not inherited constraints. Stay on
-`docs/full-revamp`; stage changes for review and do not commit/push without applicable instruction.
-Cloud files and staging are temporary; preserve reviewed recovery checkpoints on the remote branch.
+The [recovery index](archive/recovery/2026-11-17/README.md) retains the decision inventory, richer context,
+source evidence, and coverage audit. First-pass package and second-pass context were pushed as `5d88dc2`
+and `f003960`. Source capture/audit/reconciliation is the subsequent change set; preserve it remotely under
+applicable user instruction. Temporary files and staging are not independent backups.
 
-Historical Phase 13 work remains a reference, not an instruction to resume implementation.
+The brief governs; older revamp mechanisms are references, not inherited constraints. Preserve provisional
+status and unresolved implementation questions. Keep canonical `Concepts.md` and `Decisions.md` unchanged.
+Historical Phase 13 work is a reference, not an instruction to resume implementation.

@@ -2,7 +2,7 @@
 title: Relational runtime sketches
 kind: working-artifact
 state: proposed
-updated: 2026-10-15
+updated: 2026-11-18
 ---
 
 # Relational runtime sketches
@@ -20,7 +20,7 @@ results, not implementation tests or a convergence proof. Canonical contracts re
 | Shared storage         | Identity, revisions, LWW, transactions, replication, history, bounded queries | Same                                                                              |
 | Ownership and recovery | Permanently installed feature functions reconcile dependencies                | One shared resolver interprets ownership/lifecycle facts and recovery eligibility |
 | Prose and atoms        | Editing library owns atom identity, placement extraction, cleanup             | Same; lifecycle bookkeeping cannot edit prose alone                               |
-| Primary benefit        | Concrete code, little upfront abstraction                                     | Repeated lifecycle rules have one tested implementation                           |
+| Primary benefit        | Concrete code, little upfront abstraction                                     | Repeated lifecycle rules have one shared implementation to test                   |
 | Primary cost           | Repeated rules and sync awareness of feature dependencies                     | Shared metadata and obligations on all writers                                    |
 
 Both sketches retain independent content and lifecycle state. Last-owner inactivity must be

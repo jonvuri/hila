@@ -2,7 +2,7 @@
 title: Relational outline exploration
 kind: working-artifact
 state: proposed
-updated: 2026-10-15
+updated: 2026-11-18
 ---
 
 # Relational outline exploration
@@ -10,6 +10,10 @@ updated: 2026-10-15
 Continuation of the [runtime brief](Relational%20runtime%20exploration.md) and
 [runtime sketches](Relational%20runtime%20sketches.md). This document records conversational product
 outcomes and candidate representations. It does not revise canonical architecture or prescribe schema.
+
+Reconciled with the [recovery decision log](../archive/recovery/2026-11-17/decision-log.md) and
+[scenario companion](../archive/recovery/2026-11-17/decision-context.md). The film-study
+[presentation and collection traces](Relational%20film-study%20exploration.md) continue this work.
 
 ## Shared records across presentations
 
@@ -57,43 +61,50 @@ A subtree deletion encountering a mirrored child removes that appearance without
 its shared target children, just as deleting the mirror directly would. The operation must account
 for overlapping selected appearances together. A naive SQL deletion of every reachable record is
 not the agreed gesture. Record reachability and gesture-specific deletion scope are separate queries.
-Normal outline gestures should not create Unplaced data.
+Normal local outline gestures should preserve placement. Concurrent gestures can leave Unplaced
+data after reconciliation; the accepted exception is traced below.
 
-## Split and merge trace
+## Split and merge identity
 
-The user tested Workflowy's behavior and chose lower-half identity retention:
+The user tested Workflowy and chose lower-half identity retention for a mid-title split:
 
-- Enter in the middle of a title creates an ordinary sibling above with the upper text. The lower
-  text retains the original record identity, children, longer content, fields, and mirrors. Other
-  mirrors show the lower-half title. The new sibling belongs to the focused location.
-- Backspace at the start merges into the upper destination, retaining its identity.
-- Block merging involving mirrors or when retiring the lower item would lose longer content,
-  meaningful fields, children, attachments, or relationships requiring repair/user decisions beyond
-  label text. Embedded atoms must be transferred safely or block the operation.
+- The lower text retains the original record identity, children, longer content, fields, and mirrors.
+  Other mirrors show the lower-half title. Focus enters the lower half.
+- The upper text becomes a new sibling in the focused location. The later film-study trace chooses
+  the same matrix/type with defaults; it need not be an ordinary-note row. Populated fields are not cloned.
+- Enter at the start/end of a nonempty title inserts an empty neighbor while preserving the populated
+  original record. At the start, focus stays on original text; at the end, focus enters the new row below.
+- Backspace at the start merges into the upper destination, retaining its identity. Block merges
+  involving mirrors or loss of longer content, meaningful fields, children, attachments, or relationships
+  requiring repair/user decisions beyond label text. Transfer embedded atoms safely or block the merge.
 
-Minting replacement identities for both halves was rejected as the simple default: incoming links,
-mirrors, feature data, and offline edits would require ambiguous identity transfer. Fine-grained
-boundary keystrokes, schema/default choice for the new sibling, and rich-text atom transfer still
-need concrete traces. This does not select an automatic migration between different matrix schemas.
+Minting replacement identities for both halves was rejected: incoming links, mirrors, feature data,
+and offline edits would need ambiguous identity transfer. Rich-text selections and atom transfer still
+need implementation work. See the [title gesture contract](Relational%20film-study%20exploration.md#title-editing-and-type-boundaries)
+for empty-row escape and consistent outline/table behavior.
 
 ## Discovery without universal homes
 
-**Candidate:** an Unplaced query-backed browsing root for records/subtrees disconnected from the
-chosen outline entry points. Show roots of disconnected structures, not every descendant. Allow
-normal expansion/editing and explicit reattachment. Keep its matrix/discovery scope explicit so
-managed review rows and receipts do not automatically become outline clutter.
+**Agreed product policy:** Unplaced finds records currently unreachable through the outline's browsing
+routes. Show disconnected subtree roots with normal expansion/editing and explicit reattachment.
+It does not audit every broken historical appearance or become a new durable parent/lifecycle owner.
 
-Example: SQL deletes Kitchen's parent record without deleting Kitchen. Its old outer placement is
-invalid; Kitchen and its intact children become discoverable through Unplaced. Reattaching Kitchen
-to Projects removes that disconnected result. A subtree still reachable through another mirror may
-not need to appear. Whether Unplaced tracks unreachable records, disconnected placements, or both
-is still open; avoid silently hiding meaningful detached positions.
+Example: SQL deletes Project from R → Project → Kitchen → Lighting without invoking subtree deletion.
+Kitchen and Lighting remain matrix records. With no other route, show Kitchen once as an Unplaced root,
+with Lighting beneath it. Reattaching Kitchen under R preserves identity and membership.
 
-The user noted that each mirror placement has its own parent. Querying all incoming edges to a
-record as one canonical parent loses that distinction. In a cyclic experiment, a mirror inside a
-record does not repair a separate placement whose parent disappeared. With symmetric edges, fully
-unreachable cycles nevertheless require reachability/component handling rather than only looking
-for parentless records. The latest preference below aims to avoid such placement cycles entirely.
+If a film appears under Cinematography and Favorites, deleting Cinematography does not put it in
+Unplaced while Favorites remains reachable. The lost organizational relationship is not a missing-content
+result. Incoming mirror positions remain distinct even though reachability is evaluated for shared records.
+
+The later collection trace extends the same rules to matrices and saved views. A reachable matrix is
+a discovery route to its members; they do not need separate positional edges merely to avoid Unplaced.
+Preview length or loaded pages do not determine accessibility.
+
+**Still open:** exact browsing entry points and matrix/feature scope, keeping helper reviews/receipts
+out of accidental clutter, and the concrete discovery query. The earlier candidate of selecting unreachable
+records with no accepted parent in that set must now account for membership routes as well. Acyclic
+placement alone does not prove that all membership/query rendering routes are acyclic.
 
 ## Candidate relational representation
 
@@ -114,23 +125,56 @@ edge table with kinds or separate relations are both open. Native SQL/change tra
 transactions/revisions/history; a shared feature runtime can enforce lifecycle; the outline library
 provides structure, gestures, SQL helpers, and discovery. No universal outline home is required.
 
-## Placement cycles: revised preference, not a finished protocol
+## Placement integrity: provisional product policies
 
-Workflowy allows repeated expansion through cyclic mirrors, as observed by the user. We explored
-bounded expand-all plus deduplicated reachability. The latest user concern is broader: cycles are a
-footgun for relational queries and have no identified product need. **Current preference is to
-exclude placement cycles**, even if that differs from Workflowy. Earlier suggestions to allow cycles
-are superseded as the leading candidate; enforcement remains to evaluate rather than declare solved.
+Placement cycles are excluded as the starting direction. Workflowy permits them, but the user found
+no legitimate product need that justified their relational-query hazards. Rendering to a limited depth
+alone would not settle ancestry, deletion, or discovery queries. This constraint does not make a DAG
+cheap: many mirror paths can still grow rapidly.
 
-Acyclicity would simplify ancestry, Unplaced roots, and traversal termination. It still does not
-make queries automatically cheap: multiple mirror paths can grow rapidly in a DAG. Rendering,
-recursive SQL, and counts still need explicit semantics and work bounds.
+### Reject the entire losing move
 
-Before adopting the constraint, trace concurrent valid local moves that form a cycle on merge
-(A under B on one device, B under A on another). Deterministic rejection/suppression and discoverability
-of the displaced placement remain open. First-arrival rejection alone is not a convergence rule.
-SQL mutations need the same invariant boundary. Placement-cycle policy does not settle lifecycle
-cycles or query-result recursion. This is a candidate next investigation, not authorization to build it.
+Baseline R → A and R → B. Device 1 moves A under B; device 2 independently moves B under A.
+Both moves are locally valid, but together they form a cycle.
+
+If B's move wins, omit A's move in full and retain its prior placement. The accepted result is
+R → A → B. The earlier proposal to suppress only the latest B → A edge and make A Unplaced is
+superseded. Querying other current placements needs no history; reconstructing a prior placement
+from a representation that overwrote it requires retained information. That is an implementation
+obligation, not a reason to change the intended outcome.
+
+### Concurrent gestures can still create Unplaced data
+
+Start with R containing P and B, and P containing A:
+
+1. Device 1 moves A under B, then deletes now-empty P using the outline. Its deletion targets only P.
+2. Device 2 independently moves B under A.
+3. Reconciliation chooses B's move and omits A's move, but retains P's recorded deletion.
+
+A retains its former parent P, which is now deleted; B is beneath A. A becomes Unplaced with B below it.
+The user accepted this rare combination of outline gestures. Ordinary direct SQL parent deletion can
+also cause Unplaced, but that simpler example did not answer the question about outline-only races.
+
+Do not re-evaluate the deletion gesture against the revised tree and expand it to A/B, which were never
+selected for deletion locally. Do not track dependent gestures merely to reject P's deletion as well.
+Keep the recorded affected set and accept the discontinuity, consistent with object-level clobbering.
+
+### Priority and retry
+
+Provisionally, the most recent recorded wall-clock competing move wins: it is most likely the user's
+current remembered intention. The assistant proposed stable move-ID tie-breaking to make equal timestamps
+deterministic. Clock skew is an accepted limitation of this placeholder; implementation may justify a
+better resolution. Rejected moves do not automatically retry when later changes make their destinations
+legal. The user can issue a new move.
+
+### Implementation obligations remain
+
+The product outcomes above are agreed provisionally; a convergent, efficient protocol is not established.
+It must handle retained prior placements, multiple competing moves, incomplete delivery, history pruning,
+endpoint deletion/restoration, and the same structural invariant for SQL mutations. First-arrival rejection
+alone is insufficient. Reads for ordinary tree operations must use the accepted structure, not accidentally
+expose pending invalid candidates. No universal lifecycle-cycle or query-recursion policy follows from
+placement acyclicity.
 
 ## Provisional comparison with the older architecture
 
@@ -148,9 +192,10 @@ the earlier revamp adds attach. They are references, not governing constraints h
 | attach implies a host's type/fields plus dependence | Dependencies are useful; type inheritance is not needed by our task trace     |
 | ref                                                 | Keep non-owning associations, including receipts and inline links             |
 | Matrix membership                                   | Keep schema membership and matrix lifetime boundary                           |
-| Placement acyclicity                                | Reconsider favorably under latest preference; sync enforcement remains open   |
+| Placement acyclicity                                | Provisional product policy above; sync enforcement remains open               |
 | Closure and scroll index                            | Preserve bounded-query/rendering goals; select caches from measured workloads |
 
 The direction is a simplified relational edge model, not automatic reinstatement of the old edge
 architecture. See the [concept review](Relational%20concept%20review.md) for evidence behind unproven
-older concepts and candidate next traces. Pause for user selection before expanding the exploration.
+older concepts and the selected next sequence. Placement-integrity product policies are provisionally
+settled; the film-study collection trace is active, followed by query/rendering feasibility.
